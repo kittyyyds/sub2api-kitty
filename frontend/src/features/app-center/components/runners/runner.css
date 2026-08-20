@@ -1,0 +1,25 @@
+.runner-form { display: flex; min-width: 0; flex-direction: column; gap: 18px; }
+.runner-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.runner-heading h2 { margin: 0; color: var(--customer-ink); font-size: 18px; font-weight: 740; line-height: 1.3; }
+.runner-heading p { margin: 5px 0 0; color: var(--customer-muted); font-size: 11px; line-height: 1.55; }
+.runner-code { flex: 0 0 auto; padding: 4px 7px; border: 1px solid var(--customer-line); border-radius: 4px; color: var(--customer-muted); background: var(--customer-surface-soft); font-size: 9px; }
+.runner-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin: 0; padding: 0; border: 0; }
+.runner-field { display: grid; min-width: 0; gap: 6px; }
+.runner-field-wide { grid-column: 1 / -1; }
+.runner-field > span { color: var(--customer-muted); font-size: 10px; font-weight: 750; }
+.runner-field > span em { color: #c2413b; font-style: normal; }
+.runner-field input,
+.runner-field select,
+.runner-field textarea { width: 100%; min-width: 0; border: 1px solid var(--customer-line); border-radius: 5px; color: var(--customer-ink); background: var(--customer-surface); font-size: 12px; line-height: 1.5; }
+.runner-field input,
+.runner-field select { min-height: 40px; padding: 8px 10px; }
+.runner-field textarea { min-height: 112px; resize: vertical; padding: 10px; }
+.runner-field input:focus,
+.runner-field select:focus,
+.runner-field textarea:focus { border-color: var(--customer-cyan); outline: 2px solid var(--customer-cyan-soft); outline-offset: 1px; }
+.runner-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 14px; border-top: 1px solid var(--customer-line); }
+.run-button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 7px; padding: 9px 16px; border-radius: 5px; color: #f5fbfa; background: var(--customer-cyan); font-size: 12px; font-weight: 760; }
+.run-button:hover:not(:disabled) { filter: brightness(0.94); }
+.run-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.runner-error { margin: -6px 0 0; color: #c2413b; font-size: 11px; }
+@media (max-width: 680px) { .runner-fields { grid-template-columns: 1fr; } .runner-field-wide { grid-column: auto; } .runner-heading { flex-direction: column; } .run-button { width: 100%; } }
