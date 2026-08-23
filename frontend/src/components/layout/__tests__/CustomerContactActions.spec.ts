@@ -29,6 +29,7 @@ describe('CustomerContactActions', () => {
       global: {
         stubs: {
           Icon: { props: ['name'], template: '<span :data-icon="name" />' },
+          Teleport: true,
         },
       },
     })
@@ -48,7 +49,7 @@ describe('CustomerContactActions', () => {
       '/images/heyroute/support/qq-qr.png',
       '/images/heyroute/support/wechat-qr.png'
     ])
-    expect(supportImages.every((image) => image.attributes('loading') === 'lazy')).toBe(true)
+    expect(supportImages.every((image) => image.attributes('loading') === 'eager')).toBe(true)
     expect(popover.text()).toContain('1722345668')
     expect(popover.text()).toContain('ALe990411')
 
@@ -56,6 +57,11 @@ describe('CustomerContactActions', () => {
     expect(group.text()).toContain('售后交流群')
     expect(group.find('[data-icon="users"]').exists()).toBe(true)
     expect(group.get('img').attributes('src')).toBe('/qq-group-qr.png')
+
+    await trigger.trigger('click')
+    expect(popover.attributes('data-customer-support-pinned')).toBe('true')
+    await trigger.trigger('click')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
 
     wrapper.unmount()
   })

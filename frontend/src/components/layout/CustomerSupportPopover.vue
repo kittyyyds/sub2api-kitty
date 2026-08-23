@@ -3,10 +3,13 @@ import { nextTick, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Icon from '@/components/icons/Icon.vue'
+import { customerSupportContacts } from '@/config/customerContact'
 
 const { t } = useI18n()
 const rootRef = shallowRef<HTMLElement | null>(null)
+const popoverRef = shallowRef<HTMLElement | null>(null)
 const isOpen = shallowRef(false)
+const isPinned = shallowRef(false)
 const hasOpened = shallowRef(false)
 const popoverStyle = shallowRef<Record<string, string>>({})
 let closeTimer: ReturnType<typeof setTimeout> | undefined
@@ -23,14 +26,22 @@ async function positionPopover(): Promise<void> {
   if (!root || !isOpen.value) return
 
   const rootRect = root.getBoundingClientRect()
-  const width = Math.min(420, Math.max(240, window.innerWidth - 24))
-  const minLeft = 12 - rootRect.left
-  const maxLeft = window.innerWidth - 12 - width - rootRect.left
-  const preferredLeft = (rootRect.width - width) / 2
-  const left = Math.min(Math.max(preferredLeft, minLeft), maxLeft)
+  const width = Math.min(460, Math.max(280, window.innerWidth - 24))
+  const preferredLeft = rootRect.left + (rootRect.width - width) / 2
+  const left = Math.min(Math.max(preferredLeft, 12), window.innerWidth - width - 12)
+  const popoverHeight = popoverRef.value?.offsetHeight ?? 360
+  const spaceBelow = window.innerHeight - rootRect.bottom - 12
+  const spaceAbove = rootRect.top - 12
+  let top = rootRect.bottom + 10
+
+  if (popoverHeight > spaceBelow && spaceAbove > spaceBelow) {
+    top = Math.max(12, rootRect.top - popoverHeight - 10)
+  }
+
   popoverStyle.value = {
     width: `${width}px`,
     left: `${left}px`,
+    top: `${top}px`,
   }
 }
 
@@ -43,22 +54,38 @@ function open(): void {
 
 function close(): void {
   clearCloseTimer()
+  isPinned.value = false
   isOpen.value = false
 }
 
+function togglePinned(): void {
+  if (isOpen.value && isPinned.value) {
+    close()
+    return
+  }
+
+  isPinned.value = true
+  open()
+}
+
 function scheduleClose(): void {
+  if (isPinned.value) return
   clearCloseTimer()
-  closeTimer = setTimeout(close, 120)
+  closeTimer = setTimeout(close, 180)
+}
+
+function containsTarget(target: EventTarget | null): boolean {
+  return target instanceof Node
+    && Boolean(rootRef.value?.contains(target) || popoverRef.value?.contains(target))
 }
 
 function handleFocusOut(event: FocusEvent): void {
-  const nextTarget = event.relatedTarget
-  if (nextTarget instanceof Node && rootRef.value?.contains(nextTarget)) return
+  if (containsTarget(event.relatedTarget) || isPinned.value) return
   close()
 }
 
 function handleDocumentPointerDown(event: PointerEvent): void {
-  if (rootRef.value?.contains(event.target as Node)) return
+  if (containsTarget(event.target)) return
   close()
 }
 
@@ -74,6 +101,7 @@ onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('keydown', handleKeydown)
   window.addEventListener('resize', handleResize, { passive: true })
+  window.addEventListener('scroll', handleResize, true)
 })
 
 onBeforeUnmount(() => {
@@ -81,6 +109,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('scroll', handleResize, true)
 })
 </script>
 
@@ -102,25 +131,29 @@ onBeforeUnmount(() => {
       aria-controls="customer-support-popover"
       :aria-expanded="isOpen"
       data-customer-support-trigger
-      @click="open"
+      @click="togglePinned"
     >
       <Icon name="userPlus" size="sm" />
       <span>{{ t('nav.customerService') }}</span>
     </button>
 
-    <Transition name="customer-support-popover">
-      <section
-        v-if="hasOpened"
-        v-show="isOpen"
-        id="customer-support-popover"
-        class="customer-support__popover"
-        :style="popoverStyle"
-        role="group"
-        :aria-label="t('nav.customerSupportTitle')"
-        data-customer-support-popover
-        @mouseenter="clearCloseTimer"
-        @mouseleave="scheduleClose"
-      >
+    <Teleport to="body">
+      <Transition name="customer-support-popover">
+        <section
+          v-if="hasOpened"
+          v-show="isOpen"
+          id="customer-support-popover"
+          ref="popoverRef"
+          class="customer-support__popover"
+          :style="popoverStyle"
+          role="group"
+          :aria-label="t('nav.customerSupportTitle')"
+          :data-customer-support-pinned="isPinned ? 'true' : 'false'"
+          data-customer-support-popover
+          @mouseenter="clearCloseTimer"
+          @mouseleave="scheduleClose"
+          @focusout="handleFocusOut"
+        >
         <header class="customer-support__header">
           <div>
             <strong>{{ t('nav.customerSupportTitle') }}</strong>
@@ -140,38 +173,39 @@ onBeforeUnmount(() => {
         <div class="customer-support__grid">
           <a
             class="customer-support__card"
-            href="https://qm.qq.com/q/rU9mJYhImA"
+            :href="customerSupportContacts.qq.href"
             target="_blank"
             rel="noopener noreferrer"
           >
             <img
-              src="/images/heyroute/support/qq-qr.png"
+              :src="customerSupportContacts.qq.qrSrc"
               :alt="t('nav.customerSupportQqQrAlt')"
               width="152"
               height="152"
-              loading="lazy"
+              loading="eager"
               decoding="async"
             >
             <strong>{{ t('nav.customerSupportQq') }}</strong>
-            <span>1722345668</span>
+            <span>{{ customerSupportContacts.qq.account }}</span>
           </a>
 
           <div class="customer-support__card">
             <img
-              src="/images/heyroute/support/wechat-qr.png"
+              :src="customerSupportContacts.wechat.qrSrc"
               :alt="t('nav.customerSupportWechatQrAlt')"
               width="152"
               height="152"
-              loading="lazy"
+              loading="eager"
               decoding="async"
             >
             <strong>{{ t('nav.customerSupportWechat') }}</strong>
-            <span>ALe990411</span>
+            <span>{{ customerSupportContacts.wechat.account }}</span>
           </div>
         </div>
         <p>{{ t('nav.customerSupportScanHint') }}</p>
-      </section>
-    </Transition>
+        </section>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -219,9 +253,10 @@ onBeforeUnmount(() => {
 }
 
 .customer-support__popover {
-  position: absolute;
-  z-index: 100;
-  top: calc(100% + 0.7rem);
+  position: fixed;
+  z-index: 1000;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   padding: 0.75rem;
   border: 1px solid rgba(10, 127, 144, 0.24);
   border-radius: 8px;
@@ -229,15 +264,6 @@ onBeforeUnmount(() => {
   background: rgba(250, 251, 248, 0.98);
   box-shadow: 0 20px 48px rgba(20, 29, 26, 0.24), inset 0 1px rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(16px) saturate(130%);
-}
-
-.customer-support__popover::before {
-  position: absolute;
-  right: 0;
-  bottom: 100%;
-  left: 0;
-  height: 0.75rem;
-  content: '';
 }
 
 .customer-support__header {

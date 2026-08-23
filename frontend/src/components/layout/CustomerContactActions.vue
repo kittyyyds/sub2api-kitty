@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import Icon from '@/components/icons/Icon.vue'
 import CustomerSupportPopover from '@/components/layout/CustomerSupportPopover.vue'
+import { afterSalesGroupContact } from '@/config/customerContact'
 
 const { t } = useI18n()
 
@@ -11,8 +12,8 @@ const contactActions = [
     id: 'group',
     labelKey: 'nav.afterSalesGroup',
     hintKey: 'nav.afterSalesGroupQrHint',
-    href: 'https://qm.qq.com/q/oRR8GUdEPK',
-    qrSrc: '/qq-group-qr.png',
+    href: afterSalesGroupContact.href,
+    qrSrc: afterSalesGroupContact.qrSrc,
     icon: 'users' as const,
   },
 ] as const
@@ -141,7 +142,7 @@ const contactActions = [
   width: 100%;
   aspect-ratio: 1;
   border-radius: 4px;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .customer-contact-qr__title {

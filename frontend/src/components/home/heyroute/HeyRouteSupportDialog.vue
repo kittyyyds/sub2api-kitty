@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { customerSupportContacts } from '@/config/customerContact'
+
 import HeyRouteContactDialog, { type HeyRouteContactPlatform } from './HeyRouteContactDialog.vue'
 import type { HeyRouteCopy } from './heyRouteCopy'
 
@@ -23,9 +25,9 @@ const platforms = computed<HeyRouteContactPlatform[]>(() => [
     title: props.copy.dialogQqTitle,
     description: props.copy.dialogQqDescription,
     valueLabel: props.copy.dialogQqNumber,
-    value: '1722345668',
+    value: customerSupportContacts.qq.account,
     copyLabel: props.copy.dialogCopyAccount,
-    qrSrc: '/images/heyroute/support/qq-qr.png',
+    qrSrc: customerSupportContacts.qq.qrSrc,
     qrAlt: props.copy.dialogQqQrAlt,
     qrBackground: '#050a10',
   },
@@ -36,9 +38,9 @@ const platforms = computed<HeyRouteContactPlatform[]>(() => [
     title: props.copy.dialogWechatTitle,
     description: props.copy.dialogWechatDescription,
     valueLabel: props.copy.dialogWechatId,
-    value: 'ALe990411',
+    value: customerSupportContacts.wechat.account,
     copyLabel: props.copy.dialogCopyAccount,
-    qrSrc: '/images/heyroute/support/wechat-qr.png',
+    qrSrc: customerSupportContacts.wechat.qrSrc,
     qrAlt: props.copy.dialogWechatQrAlt,
     qrBackground: '#ffffff',
   },
