@@ -51,7 +51,8 @@ func TestGrokMediaGenerationEligibility(t *testing.T) {
 		{name: "extra paid subscription tier enables media", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: map[string]any{"subscription_tier": "SuperGrok Heavy"}}, want: true, wantReason: "paid_subscription_tier"},
 		{name: "extra plan type is paid evidence", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: map[string]any{"plan_type": "pro"}}, want: true, wantReason: "paid_subscription_tier"},
 		{name: "credentials free tier remains blocked", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"subscription_tier": "x_basic"}}, want: false, wantReason: "billing_free_tier"},
-		{name: "x premium is not media entitlement evidence", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"subscription_tier": "x_premium"}}, want: false, wantReason: "billing_unobserved"},
+		{name: "x premium is explicit paid evidence", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"subscription_tier": "x_premium"}}, want: true, wantReason: "paid_subscription_tier"},
+		{name: "x premium plus is explicit paid evidence", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"subscription_tier": "x_premium_plus"}}, want: true, wantReason: "paid_subscription_tier"},
 		{name: "JWT paid tier wins over stale free credential and billing", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJ0aWVyIjoxfQ.", "subscription_tier": "free"}, Extra: map[string]any{"grok_billing_snapshot": forbiddenBilling}}, want: true, wantReason: "paid_subscription_tier"},
 		{name: "JWT free tier wins over stale paid credential", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJ0aWVyIjowfQ.", "subscription_tier": "SuperGrok"}}, want: false, wantReason: "billing_free_tier"},
 		{name: "weekly paid usage is eligible without inferring from period type", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: map[string]any{grokBillingExtraKey: weeklyAllowance}}, want: true, wantReason: "eligible"},
@@ -69,6 +70,30 @@ func TestGrokMediaGenerationEligibility(t *testing.T) {
 			got, reason := tt.account.GrokMediaGenerationEligibility()
 			require.Equal(t, tt.want, got)
 			require.Equal(t, tt.wantReason, reason)
+		})
+	}
+}
+
+func TestGrokPaidSubscriptionTierEvidenceJWTRecognizesXPremium(t *testing.T) {
+	for _, tier := range []string{"x_premium", "x_premium_plus"} {
+		t.Run(tier, func(t *testing.T) {
+			accessToken := map[string]string{
+				"x_premium":      "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJ0aWVyIjozfQ.",
+				"x_premium_plus": "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJ0aWVyIjo0fQ.",
+			}[tier]
+			account := &Account{
+				Platform: PlatformGrok,
+				Type:     AccountTypeOAuth,
+				Credentials: map[string]any{
+					"access_token":      accessToken,
+					"subscription_tier": "free",
+				},
+				Extra: map[string]any{"grok_billing_snapshot": &xai.BillingSummary{StatusCode: http.StatusForbidden}},
+			}
+
+			eligible, reason := account.GrokMediaGenerationEligibility()
+			require.True(t, eligible)
+			require.Equal(t, "paid_subscription_tier", reason)
 		})
 	}
 }

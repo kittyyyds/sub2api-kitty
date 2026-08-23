@@ -88,7 +88,7 @@ func grokPaidSubscriptionTierEvidence(account *Account) (tier string, free bool)
 		switch {
 		case isGrokFreeSubscriptionTier(normalized):
 			return "", true
-		case isGrokMediaPaidSubscriptionTier(normalized):
+		case !isGrokUnknownSubscriptionTier(normalized):
 			return normalized, false
 		}
 	}
@@ -109,7 +109,7 @@ func grokPaidSubscriptionTierEvidence(account *Account) (tier string, free bool)
 			freeObserved = true
 			continue
 		}
-		if paidTier == "" && isGrokMediaPaidSubscriptionTier(normalized) {
+		if paidTier == "" && !isGrokUnknownSubscriptionTier(normalized) {
 			paidTier = normalized
 		}
 	}
@@ -117,13 +117,4 @@ func grokPaidSubscriptionTierEvidence(account *Account) (tier string, free bool)
 		return paidTier, false
 	}
 	return "", freeObserved
-}
-
-func isGrokMediaPaidSubscriptionTier(tier string) bool {
-	switch xai.NormalizeSubscriptionTier(tier) {
-	case "supergrok", "supergrok_lite", "supergrok_heavy", "supergrok_pro", "supergrok_plus", "paid", "pro":
-		return true
-	default:
-		return false
-	}
 }
