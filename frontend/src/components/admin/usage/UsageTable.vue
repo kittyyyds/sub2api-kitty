@@ -188,6 +188,28 @@
           </div>
         </template>
 
+        <template #cell-cache_hit_rate="{ row }">
+          <div
+            v-if="showCacheHitRate"
+            data-testid="cache-hit-rate"
+            class="inline-flex min-w-16 flex-col items-start gap-0.5"
+            :title="cacheHitRateTitle(row)"
+          >
+            <span
+              class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ring-1 ring-inset"
+              :class="cacheHitRateClass(row)"
+            >
+              {{ formatCacheHitRate(row) }}
+            </span>
+            <span
+              v-if="getCacheHitRate(row) != null"
+              class="text-[10px] tabular-nums text-gray-400 dark:text-gray-500"
+            >
+              {{ formatCacheTokens(row.cache_read_tokens) }} / {{ formatCacheTokens(getPromptTokenCount(row)) }}
+            </span>
+          </div>
+        </template>
+
         <template #cell-cost="{ row }">
           <div class="text-sm">
             <div class="flex items-center gap-1.5">
@@ -506,6 +528,11 @@ import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import {
+  formatCacheHitRate,
+  getCacheHitRate,
+  getPromptTokenCount,
+} from '@/utils/usageCacheHitRate'
+import {
   LATENCY_BAR_CLASSES,
   LATENCY_BAR_FROM_CLASSES,
   LATENCY_BAR_TO_CLASSES,
@@ -560,6 +587,8 @@ interface Props {
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
   showUpstreamEndpoint?: boolean
+  /** 管理员用量明细专用；客户前台保持关闭 */
+  showCacheHitRate?: boolean
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }
@@ -571,6 +600,7 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   showAccountBilling: true,
   showUpstreamEndpoint: true,
+  showCacheHitRate: false,
   flat: false
 })
 const emit = defineEmits<{
@@ -583,6 +613,7 @@ const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
 const showAccountBilling = props.showAccountBilling
 const showUpstreamEndpoint = props.showUpstreamEndpoint
+const showCacheHitRate = props.showCacheHitRate
 const ipGeoBatchLoading = ref(false)
 
 const showIpGeoToolbar = computed(() => props.columns.some((col) => col.key === 'ip_address'))
@@ -607,6 +638,34 @@ const modelAuditTitle = (row: AdminUsageLog): string => [
   `${t('usage.sentUpstreamModel')}: ${sentUpstreamModel(row) || '-'}`,
   `${t('usage.upstreamResponseModel')}: ${row.upstream_response_model || '-'}`,
 ].join('\n')
+
+const cacheHitRateTitle = (row: AdminUsageLog): string => {
+  const rate = getCacheHitRate(row)
+  if (rate == null) return t('admin.usage.cacheHitRateUnavailable')
+
+  return t('admin.usage.cacheHitRateTooltip', {
+    cacheRead: Math.max(0, Number(row.cache_read_tokens) || 0).toLocaleString(),
+    promptTokens: getPromptTokenCount(row).toLocaleString(),
+    rate: rate.toFixed(1),
+  })
+}
+
+const cacheHitRateClass = (row: AdminUsageLog): string => {
+  const rate = getCacheHitRate(row)
+  if (rate == null) {
+    return 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-700/60 dark:text-gray-400 dark:ring-gray-600'
+  }
+  if (rate >= 80) {
+    return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
+  }
+  if (rate >= 50) {
+    return 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30'
+  }
+  if (rate > 0) {
+    return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'
+  }
+  return 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-700/60 dark:text-gray-300 dark:ring-gray-600'
+}
 
 const currentPageIps = computed(() =>
   Array.from(new Set(props.data.map((row) => row.ip_address).filter((ip): ip is string => Boolean(ip))))

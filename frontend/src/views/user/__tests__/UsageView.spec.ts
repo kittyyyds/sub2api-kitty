@@ -95,6 +95,13 @@ vi.mock('vue-i18n', async () => {
 
 const simpleStub = { template: '<div><slot /></div>' }
 const chartStub = { template: '<div />' }
+const usageTableStub = {
+  props: {
+    columns: { type: Array, default: () => [] },
+    showCacheHitRate: { type: Boolean, default: false },
+  },
+  template: '<div data-testid="user-usage-table" />',
+}
 
 const usageLog = {
   id: 1,
@@ -137,7 +144,7 @@ function mountUsageView() {
         DateRangePicker: true,
         Icon: true,
         UsageStatsCards: chartStub,
-        UsageTable: chartStub,
+        UsageTable: usageTableStub,
         ModelDistributionChart: chartStub,
         GroupDistributionChart: chartStub,
         EndpointDistributionChart: chartStub,
@@ -192,7 +199,7 @@ describe('user UsageView', () => {
   })
 
   it('loads logs, stats, model stats, and snapshot on first render', async () => {
-    mountUsageView()
+    const wrapper = mountUsageView()
     await flushPromises()
 
     expect(query).toHaveBeenCalled()
@@ -205,6 +212,12 @@ describe('user UsageView', () => {
     }))
     expect(list).toHaveBeenCalledWith(1, 100)
     expect(getAvailable).toHaveBeenCalled()
+
+    const usageTable = wrapper.findComponent(usageTableStub)
+    expect(usageTable.props('showCacheHitRate')).toBe(false)
+    expect(usageTable.props('columns')).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'cache_hit_rate' })]),
+    )
   })
 
   it('exports csv with current filters and without admin-only fields', async () => {
@@ -249,6 +262,7 @@ describe('user UsageView', () => {
     expect(csvContent).not.toContain('Upstream Endpoint')
     expect(csvContent).not.toContain('account_cost')
     expect(csvContent).not.toContain('account_rate_multiplier')
+    expect(csvContent).not.toContain('Cache Hit Rate')
 
     window.URL.createObjectURL = originalCreateObjectURL
     window.URL.revokeObjectURL = originalRevokeObjectURL

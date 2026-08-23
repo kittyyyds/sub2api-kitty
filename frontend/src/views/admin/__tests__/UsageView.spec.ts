@@ -35,6 +35,7 @@ const messages: Record<string, string> = {
   'admin.dashboard.hour': 'Hour',
   'admin.usage.failedToLoadUser': 'Failed to load user',
 	'admin.usage.requestId': 'Request ID',
+	'admin.usage.cacheHitRate': 'Cache Hit Rate',
 	'usage.requestedModel': 'Requested model',
 	'usage.sentUpstreamModel': 'Sent upstream model',
 	'usage.upstreamResponseModel': 'Upstream response model',
@@ -138,7 +139,7 @@ const UsageFiltersStub = defineComponent({
   template: '<div><span data-test="user-filter-label">{{ userKeyword }}</span><slot name="after-reset" /></div>',
 })
 const UsageTableStub = {
-  props: ['columns'],
+  props: ['columns', 'showCacheHitRate'],
   emits: ['userClick'],
   template: '<div data-test="usage-table"><button class="user-click" @click="$emit(\'userClick\', 2)">user</button></div>',
 }
@@ -399,7 +400,7 @@ describe('admin UsageView distribution metric toggles', () => {
   })
 })
 
-describe('admin UsageView request ID column visibility', () => {
+describe('admin UsageView column visibility', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(localStorage.getItem).mockReset().mockReturnValue(null)
@@ -417,7 +418,7 @@ describe('admin UsageView request ID column visibility', () => {
     vi.useRealTimers()
   })
 
-  it('keeps request ID hidden by default and allows enabling it from column settings', async () => {
+  it('shows the admin-only cache hit rate by default and allows toggling columns', async () => {
     const wrapper = mount(UsageView, {
       global: {
         stubs: {
@@ -444,13 +445,23 @@ describe('admin UsageView request ID column visibility', () => {
     await wrapper.vm.$nextTick()
 
     const usageTable = wrapper.findComponent(UsageTableStub)
+    expect(usageTable.props('showCacheHitRate')).toBe(true)
+    expect(usageTable.props('columns')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'cache_hit_rate', label: 'Cache Hit Rate' })]),
+    )
     expect(usageTable.props('columns')).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ key: 'request_id' })]),
     )
 
     await wrapper.get('button[title="admin.users.columnSettings"]').trigger('click')
+    const cacheHitRateToggle = wrapper.findAll('button').find((button) => button.text() === 'Cache Hit Rate')
     const requestIdToggle = wrapper.findAll('button').find((button) => button.text() === 'Request ID')
+    expect(cacheHitRateToggle).toBeDefined()
     expect(requestIdToggle).toBeDefined()
+    await cacheHitRateToggle!.trigger('click')
+    expect(usageTable.props('columns')).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'cache_hit_rate' })]),
+    )
     await requestIdToggle!.trigger('click')
 
     expect(usageTable.props('columns')).toEqual(
@@ -730,8 +741,8 @@ describe('admin UsageView model audit export', () => {
 				request_type: 'sync',
 				input_tokens: 1,
 				output_tokens: 1,
-				cache_read_tokens: 0,
-				cache_creation_tokens: 0,
+				cache_read_tokens: 80,
+				cache_creation_tokens: 10,
 				duration_ms: 10,
 			}],
 			total: 1,
@@ -770,6 +781,9 @@ describe('admin UsageView model audit export', () => {
 		])
 		const row = sheetAddAoa.mock.calls[0][1][0]
 		expect(row.slice(4, 8)).toEqual(['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4', 'Yes'])
+		const cacheHitRateIndex = headers.indexOf('Cache Hit Rate')
+		expect(cacheHitRateIndex).toBeGreaterThan(-1)
+		expect(row[cacheHitRateIndex]).toBe('87.9%')
 		expect(saveAs).toHaveBeenCalledTimes(1)
 	})
 })
