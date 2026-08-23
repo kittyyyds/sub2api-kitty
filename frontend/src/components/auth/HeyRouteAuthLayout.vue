@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Icon from '@/components/icons/Icon.vue'
-import HeyRouteGlassCursor from '@/components/home/heyroute/HeyRouteGlassCursor.vue'
 import { useTheme } from '@/composables/useTheme'
 import { setLocale } from '@/i18n'
 import { useAppStore } from '@/stores'
@@ -167,7 +166,6 @@ onBeforeUnmount(() => {
       </section>
     </main>
 
-    <HeyRouteGlassCursor />
   </div>
 </template>
 

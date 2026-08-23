@@ -170,6 +170,38 @@ describe('RegisterView security settings bootstrap', () => {
     wrapper.unmount()
   })
 
+  it('keeps registration fields editable and checks the agreement only on submit', async () => {
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
+      turnstile_enabled: false,
+      login_agreement_enabled: true,
+      login_agreement_mode: 'checkbox',
+      login_agreement_revision: 'agreement-v1',
+      login_agreement_documents: [{ id: 'terms', title: 'Terms of service' }]
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const email = wrapper.get('#email')
+    const password = wrapper.get('#password')
+    const submit = wrapper.get('button[type="submit"]')
+    expect(email.attributes('disabled')).toBeUndefined()
+    expect(password.attributes('disabled')).toBeUndefined()
+    expect(submit.attributes('disabled')).toBeUndefined()
+
+    await email.setValue('user@example.com')
+    await password.setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(showWarningMock).toHaveBeenCalledWith(
+      'legal.loginAgreementPrompt.registerRequiredWarning'
+    )
+    expect(registerMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('uses the mandatory invitation field without duplicating the affiliate field', async () => {
     fetchPublicSettingsMock.mockResolvedValueOnce({
       ...enabledSettings,

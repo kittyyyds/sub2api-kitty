@@ -2,13 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
 
 import type { HomePricingSummary } from '@/composables/useHomePricingPreview'
-import { useHeyRoutePointerEffects } from '@/composables/useHeyRoutePointerEffects'
 import { useHeyRouteSmoothScroll } from '@/composables/useHeyRouteSmoothScroll'
 import HeyRouteCommunityDialog from './HeyRouteCommunityDialog.vue'
 import HeyRouteFaq from './HeyRouteFaq.vue'
 import HeyRouteFinalCta from './HeyRouteFinalCta.vue'
 import HeyRouteFooter from './HeyRouteFooter.vue'
-import HeyRouteGlassCursor from './HeyRouteGlassCursor.vue'
 import HeyRouteHeader from './HeyRouteHeader.vue'
 import HeyRouteHero from './HeyRouteHero.vue'
 import HeyRouteIntegrations from './HeyRouteIntegrations.vue'
@@ -57,7 +55,6 @@ let observer: IntersectionObserver | null = null
 let visibilityObserver: IntersectionObserver | null = null
 let desktopQuery: MediaQueryList | null = null
 
-useHeyRoutePointerEffects(rootRef)
 useHeyRouteSmoothScroll(rootRef)
 
 function updateActiveSection(): void {
@@ -206,7 +203,6 @@ onBeforeUnmount(() => {
       @close="supportDialogOpen = false"
     />
     <HeyRouteSupportWidget :copy="copy.support" :doc-url="docUrl" />
-    <HeyRouteGlassCursor />
   </div>
 </template>
 
