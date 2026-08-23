@@ -1632,19 +1632,19 @@ type ImagePriceConfig struct {
 	Price1K *float64 // 1K 尺寸价格（nil 表示使用默认值）
 	Price2K *float64 // 2K 尺寸价格（nil 表示使用默认值）
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
-	// ModelPrices is an optional model x resolution override in USD per image.
+	// ModelPrices is an optional model x resolution override in final CNY/image.
 	// A populated model cell is the final customer price: it wins over the flat
 	// Price* columns and is not multiplied by any group/image rate.
 	ModelPrices map[string]map[string]float64
 }
 
-// VideoPriceConfig 视频生成计费配置。所有字段均为每秒单价（USD/s）。
-// ModelPrices 中已填写的模型单元格是客户最终每秒价，不再叠加倍率。
+// VideoPriceConfig 视频生成计费配置。Price* 字段为 USD/s 回退价；
+// ModelPrices 中已填写的模型单元格是客户最终 CNY/s 价，不再叠加倍率。
 type VideoPriceConfig struct {
 	Price480P  *float64 // 480p 每秒价格（nil 表示使用默认值）
 	Price720P  *float64 // 720p 每秒价格（nil 表示使用默认值）
 	Price1080P *float64 // 1080p 每秒价格（nil 表示使用默认值）
-	// ModelPrices is an optional model-family x resolution override in USD/s.
+	// ModelPrices is an optional model-family x resolution override in final CNY/s.
 	// A populated model cell is the final customer per-second rate: it wins over
 	// the flat Price* columns and is not multiplied by any group/video rate.
 	ModelPrices map[string]map[string]float64

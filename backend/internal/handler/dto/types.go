@@ -119,12 +119,12 @@ type Group struct {
 	ImagePrice1K       *float64 `json:"image_price_1k"`
 	ImagePrice2K       *float64 `json:"image_price_2k"`
 	ImagePrice4K       *float64 `json:"image_price_4k"`
-	// ImageModelPrices 可选按模型×分辨率覆盖图片单张价格 (USD/image)。
+	// ImageModelPrices 可选按模型×分辨率覆盖客户最终图片单张价格 (CNY/image)。
 	ImageModelPrices map[string]map[string]float64 `json:"image_model_prices,omitempty"`
 	VideoPrice480P   *float64                      `json:"video_price_480p"`
 	VideoPrice720P   *float64                      `json:"video_price_720p"`
 	VideoPrice1080P  *float64                      `json:"video_price_1080p"`
-	// VideoModelPrices 可选按模型族×分辨率设置客户最终每秒价格 (USD/s)。
+	// VideoModelPrices 可选按模型族×分辨率设置客户最终每秒价格 (CNY/s)。
 	VideoModelPrices map[string]map[string]float64 `json:"video_model_prices,omitempty"`
 	// Codex alpha/search 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
 	WebSearchPricePerCall        *float64 `json:"web_search_price_per_call"`

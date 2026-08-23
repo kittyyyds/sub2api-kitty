@@ -975,6 +975,12 @@ func (s *GatewayService) calculateRecordUsageCost(
 	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
 		sizeTier := NormalizeImageBillingTierOrDefault(result.ImageSize)
+		apiKey = s.apiKeyWithFreshImageModelPricing(ctx, apiKey, sizeTier,
+			requestedModel,
+			result.Model,
+			billingModel,
+			result.UpstreamModel,
+		)
 		if model, ok := configuredImagePriceModel(apiKey, sizeTier, requestedModel, result.Model, billingModel, result.UpstreamModel); ok {
 			return s.billingService.CalculateImageCost(model, sizeTier, result.ImageCount, imagePriceConfigFromAPIKey(apiKey), imageMultiplier)
 		}
@@ -1019,6 +1025,29 @@ func (s *GatewayService) calculateRecordUsageCost(
 		}
 	}
 	return tokenCost
+}
+
+// apiKeyWithFreshImageModelPricing mirrors the OpenAI gateway's media snapshot
+// guard for the legacy gateway path. This path can also receive an auth
+// projection with flat prices but without image_model_prices; allowing it to
+// continue into token/default pricing would undercharge configured final CNY
+// image prices.
+func (s *GatewayService) apiKeyWithFreshImageModelPricing(
+	ctx context.Context,
+	apiKey *APIKey,
+	imageSize string,
+	candidates ...string,
+) *APIKey {
+	if apiKey == nil {
+		return apiKey
+	}
+	if imageModelPriceMayBeMissing(apiKey, imageSize, candidates...) {
+		if apiKey.GroupID == nil || !allowMediaPricingRefresh("image", *apiKey.GroupID) {
+			return apiKey
+		}
+		return refreshGroupMediaPricing(ctx, s.groupRepo, apiKey)
+	}
+	return apiKey
 }
 
 // compositeBillableModel 决定 composite 分组请求的计费模型：来源覆盖把计费模型

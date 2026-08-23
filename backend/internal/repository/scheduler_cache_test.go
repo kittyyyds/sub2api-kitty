@@ -10,14 +10,30 @@ import (
 
 func TestFilterSchedulerCredentialsKeepsSubscriptionPlanType(t *testing.T) {
 	filtered := filterSchedulerCredentials(map[string]any{
-		"plan_type":     "plus",
-		"access_token":  "secret-access-token",
-		"refresh_token": "secret-refresh-token",
+		"plan_type":         "plus",
+		"subscription_tier": "SuperGrok Heavy",
+		"access_token":      "secret-access-token",
+		"refresh_token":     "secret-refresh-token",
 	})
 
 	require.Equal(t, "plus", filtered["plan_type"])
+	require.Equal(t, "SuperGrok Heavy", filtered["subscription_tier"])
 	require.NotContains(t, filtered, "access_token")
 	require.NotContains(t, filtered, "refresh_token")
+}
+
+func TestSchedulerMetadataAccountKeepsGrokSubscriptionFieldsInExtra(t *testing.T) {
+	metadata := buildSchedulerMetadataAccount(service.Account{
+		Platform: service.PlatformGrok,
+		Type:     service.AccountTypeOAuth,
+		Extra: map[string]any{
+			"subscription_tier": "SuperGrok",
+			"plan_type":         "pro",
+		},
+	})
+
+	require.Equal(t, "SuperGrok", metadata.GetExtraString("subscription_tier"))
+	require.Equal(t, "pro", metadata.GetExtraString("plan_type"))
 }
 
 func TestSchedulerMetadataAccountKeepsOpenAISubscriptionIdentity(t *testing.T) {

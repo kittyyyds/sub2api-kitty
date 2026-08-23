@@ -1883,6 +1883,11 @@ func (a *Account) GrokMediaGenerationEligibility() (bool, string) {
 	if a.Type != AccountTypeOAuth {
 		return true, "non_oauth"
 	}
+	if tier, free := grokPaidSubscriptionTierEvidence(a); free {
+		return false, "billing_free_tier"
+	} else if tier != "" {
+		return true, "paid_subscription_tier"
+	}
 
 	billing, err := grokBillingSnapshotFromExtra(a.Extra)
 	if err != nil || billing == nil {

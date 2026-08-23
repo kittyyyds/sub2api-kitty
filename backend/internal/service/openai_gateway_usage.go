@@ -548,6 +548,13 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	}
 	if isGrokVideoUsageResult(result, billingModels) {
 		resolution := NormalizeVideoBillingResolutionOrDefault(result.VideoResolution)
+		apiKey = s.apiKeyWithFreshVideoModelPricing(ctx, apiKey, resolution,
+			requestedModel,
+			result.Model,
+			billingModel,
+			result.BillingModel,
+			result.UpstreamModel,
+		)
 		if model, ok := configuredVideoPriceModel(
 			apiKey,
 			resolution,
@@ -579,6 +586,13 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 
 	if result != nil && result.ImageCount > 0 {
 		sizeTier := NormalizeImageBillingTierOrDefault(result.ImageSize)
+		apiKey = s.apiKeyWithFreshImageModelPricing(ctx, apiKey, sizeTier,
+			requestedModel,
+			result.Model,
+			billingModel,
+			result.BillingModel,
+			result.UpstreamModel,
+		)
 		if model, ok := configuredImagePriceModel(apiKey, sizeTier, requestedModel, result.Model, billingModel, result.BillingModel, result.UpstreamModel); ok {
 			return s.calculateOpenAIImageCost(ctx, model, requestedModel, apiKey, result, imageMultiplier), nil
 		}
@@ -731,6 +745,13 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	multiplier float64,
 ) *CostBreakdown {
 	sizeTier := NormalizeImageBillingTierOrDefault(result.ImageSize)
+	apiKey = s.apiKeyWithFreshImageModelPricing(ctx, apiKey, sizeTier,
+		requestedModel,
+		result.Model,
+		billingModel,
+		result.BillingModel,
+		result.UpstreamModel,
+	)
 	groupConfig := imagePriceConfigFromAPIKey(apiKey)
 	if model, ok := configuredImagePriceModel(apiKey, sizeTier, requestedModel, result.Model, billingModel, result.BillingModel, result.UpstreamModel); ok {
 		return s.billingService.CalculateImageCost(model, sizeTier, result.ImageCount, groupConfig, multiplier)
@@ -799,6 +820,13 @@ func (s *OpenAIGatewayService) calculateOpenAIVideoCost(
 	}
 	resolution := NormalizeVideoBillingResolutionOrDefault(result.VideoResolution)
 	durationSeconds := NormalizeVideoBillingDurationSecondsOrDefault(result.VideoDurationSeconds)
+	apiKey = s.apiKeyWithFreshVideoModelPricing(ctx, apiKey, resolution,
+		requestedModel,
+		result.Model,
+		billingModel,
+		result.BillingModel,
+		result.UpstreamModel,
+	)
 	groupConfig := videoPriceConfigFromAPIKey(apiKey)
 	if model, ok := configuredVideoPriceModel(
 		apiKey,
@@ -911,13 +939,52 @@ func (s *OpenAIGatewayService) apiKeyWithFreshGroupMediaPricing(ctx context.Cont
 	if s == nil || s.channelService == nil || s.channelService.groupRepo == nil {
 		return apiKey
 	}
-	group, err := s.channelService.groupRepo.GetByIDLite(ctx, *apiKey.GroupID)
-	if err != nil || group == nil {
+	return refreshGroupMediaPricing(ctx, s.channelService.groupRepo, apiKey)
+}
+
+// apiKeyWithFreshImageModelPricing performs the normal incomplete-snapshot
+// refresh plus a request-aware check for the legacy-flat/absent-model-map
+// shape. The latter is the important boundary for model-level final prices:
+// an old snapshot can contain ImagePrice* and still omit the newer
+// image_model_prices map, causing a model override to fall back to defaults.
+func (s *OpenAIGatewayService) apiKeyWithFreshImageModelPricing(
+	ctx context.Context,
+	apiKey *APIKey,
+	imageSize string,
+	candidates ...string,
+) *APIKey {
+	if apiKey == nil {
 		return apiKey
 	}
-	clone := *apiKey
-	clone.Group = group
-	return &clone
+	if imageModelPriceMayBeMissing(apiKey, imageSize, candidates...) {
+		if apiKey.GroupID == nil || !allowMediaPricingRefresh("image", *apiKey.GroupID) {
+			return apiKey
+		}
+		if s != nil && s.channelService != nil && s.channelService.groupRepo != nil {
+			return refreshGroupMediaPricing(ctx, s.channelService.groupRepo, apiKey)
+		}
+	}
+	return s.apiKeyWithFreshGroupMediaPricing(ctx, apiKey)
+}
+
+func (s *OpenAIGatewayService) apiKeyWithFreshVideoModelPricing(
+	ctx context.Context,
+	apiKey *APIKey,
+	resolution string,
+	candidates ...string,
+) *APIKey {
+	if apiKey == nil {
+		return apiKey
+	}
+	if videoModelPriceMayBeMissing(apiKey, resolution, candidates...) {
+		if apiKey.GroupID == nil || !allowMediaPricingRefresh("video", *apiKey.GroupID) {
+			return apiKey
+		}
+		if s != nil && s.channelService != nil && s.channelService.groupRepo != nil {
+			return refreshGroupMediaPricing(ctx, s.channelService.groupRepo, apiKey)
+		}
+	}
+	return s.apiKeyWithFreshGroupMediaPricing(ctx, apiKey)
 }
 
 // groupMediaPricingLooksIncomplete 判断分组对象是否可能缺失媒体/搜索/语音计费字段
