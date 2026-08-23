@@ -381,7 +381,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <PlazaPricePair
                   :reference-price="row.price.reference"
                   :charged-price="row.price.charged"
-                  :price-currency="row.finalPrice ? 'cny' : 'usd'"
+                  price-currency="usd"
                 />
               </td>
               <td class="savings-cell">
@@ -430,7 +430,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <PlazaPricePair
                   :reference-price="row.price.reference"
                   :charged-price="row.price.charged"
-                  :price-currency="row.finalPrice ? 'cny' : 'usd'"
+                  price-currency="usd"
                 />
                 <small class="video-price-unit">
                   {{ t(row.finalPrice ? 'modelPlaza.table.finalPerSecond' : 'modelPlaza.table.perSecondFallback') }}
@@ -440,7 +440,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <PlazaPricePair
                   :reference-price="durationPair(row, seconds).reference"
                   :charged-price="durationPair(row, seconds).charged"
-                  :price-currency="row.finalPrice ? 'cny' : 'usd'"
+                  price-currency="usd"
                 />
               </td>
               <td class="savings-cell">

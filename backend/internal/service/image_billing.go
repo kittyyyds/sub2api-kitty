@@ -85,7 +85,7 @@ func NormalizeImageModelPrices(in map[string]map[string]float64) map[string]map[
 	return out
 }
 
-// LookupImageModelPrice returns a configured final CNY-per-image price, or nil when
+// LookupImageModelPrice returns a configured final USD-per-image price, or nil when
 // the model or resolution has no override.
 func LookupImageModelPrice(prices map[string]map[string]float64, model, imageSize string) *float64 {
 	if len(prices) == 0 {

@@ -116,7 +116,7 @@ describe('PlazaModelPricingTable customer pricing ledger', () => {
     const rows = wrapper.findAll('tbody tr')
 
     expect(rows[0].text()).toContain('1K')
-    expect(rows[0].text()).toContain('¥0.01')
+    expect(rows[0].text()).toContain('¥0.07')
     expect(rows[0].find('.reference-price').exists()).toBe(false)
     expect(rows[1].text()).toContain('2K')
     expect(rows[1].text()).toContain('¥0.021')
@@ -148,10 +148,10 @@ describe('PlazaModelPricingTable customer pricing ledger', () => {
 
     expect(row.text()).toContain('modelPlaza.table.finalPerSecond')
     expect(row.findAll('.customer-price').map((cell) => cell.text())).toEqual([
-      '¥0.01',
-      '¥0.05',
-      '¥0.10',
-      '¥0.15'
+      '¥0.07',
+      '¥0.35',
+      '¥0.70',
+      '¥1.05'
     ])
     expect(row.text()).not.toContain('¥0.011')
   })

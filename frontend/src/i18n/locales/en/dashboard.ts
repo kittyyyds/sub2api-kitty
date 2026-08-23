@@ -684,7 +684,7 @@ export default {
       fiveSeconds: '5 sec',
       tenSeconds: '10 sec',
       fifteenSeconds: '15 sec',
-      actualPriceNote: 'Per-model image/video overrides are final CNY prices and are displayed unchanged without multipliers. Other USD prices use $1 = ¥7 for display. Video totals still use duration and count; usage records are authoritative.'
+      actualPriceNote: 'Per-model image/video overrides are final USD prices without multipliers. The catalog converts all USD prices for display at $1 = ¥7. Video totals still use duration and count; usage records are authoritative.'
     },
     nav: {
       login: 'Sign In',

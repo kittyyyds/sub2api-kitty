@@ -58,7 +58,7 @@ type PlazaGroup struct {
 //   - 模型展示定价优先级为分组定价 > 渠道定价 > LiteLLM 官方参考价；
 //   - 渠道按 lower(name) 排序后遍历，保证同名模型去重结果确定；
 //   - 同分组同平台同名模型按大小写不敏感去重；
-//   - 图片和视频计费模型的档位价按实收口径合成；按模型价格是人民币最终单张/每秒价，
+//   - 图片和视频计费模型的档位价按实收口径合成；按模型价格是美元最终单张/每秒价，
 //     通用视频价与渠道视频价仍是按秒价（见 plazaMediaDisplayPricing）；
 //   - 每个模型附带 LiteLLM 官方参考价（查不到为 nil）；
 //   - 只返回 Models 非空的分组；分组按 RateMultiplier 升序（同倍率按名称），
@@ -300,7 +300,7 @@ func plazaMediaDisplayPricing(p *ChannelModelPricing, g *Group, model string) *C
 }
 
 // plazaImageDisplayPricing 为图片计费模型合成展示定价，使档位价与实收口径一致：
-// 每档（1K/2K/4K）单价 = 按模型人民币最终价 > 分组图片价 > 渠道同档位价 >
+// 每档（1K/2K/4K）单价 = 按模型美元最终价 > 分组图片价 > 渠道同档位价 >
 // 渠道默认按次价 > Grok 模型默认价，无价的档不展示。显式模型价可把原本
 // 为 token 模式的目录条目提升为图片模式。返回克隆，不修改缓存共享入参。
 func plazaImageDisplayPricing(p *ChannelModelPricing, g *Group, model string) *ChannelModelPricing {
@@ -388,7 +388,7 @@ func plazaFinalImagePriceTiers(g *Group, model string) []string {
 }
 
 // plazaVideoDisplayPricing 为视频模型合成客户实际看到的每秒档位价格：按模型配置是
-// 人民币最终每秒价；分组平面价、渠道价和内置默认价仍需应用有效倍率。FinalVideoPriceTiers
+// 美元最终每秒价；分组平面价、渠道价和内置默认价仍需应用有效倍率。FinalVideoPriceTiers
 // 让前端避免对模型最终每秒价再次叠加倍率，视频时长始终参与总价计算。
 func plazaVideoDisplayPricing(p *ChannelModelPricing, g *Group, model string) *ChannelModelPricing {
 	if g == nil {

@@ -52,8 +52,8 @@ func TestGatewayImageModelPriceOverridesTokenModeRouting(t *testing.T) {
 	)
 
 	require.Equal(t, string(BillingModeImage), cost.BillingMode)
-	require.InDelta(t, 0.062/fixedMediaPriceCNYPerUSD, cost.TotalCost, 1e-12)
-	require.InDelta(t, 0.062/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, 0.062, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.062, cost.ActualCost, 1e-12)
 }
 
 func TestOpenAIGatewayImageModelPriceOverridesTokenModeRouting(t *testing.T) {
@@ -89,11 +89,11 @@ func TestOpenAIGatewayImageModelPriceOverridesTokenModeRouting(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, string(BillingModeImage), cost.BillingMode)
-	require.InDelta(t, 0.093/fixedMediaPriceCNYPerUSD, cost.TotalCost, 1e-12)
-	require.InDelta(t, 0.093/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, 0.093, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.093, cost.ActualCost, 1e-12)
 }
 
-func TestOpenAIGatewayGPTImageModelPriceIsFinalCNYCustomerPrice(t *testing.T) {
+func TestOpenAIGatewayGPTImageModelPriceIsFinalUSDCustomerPrice(t *testing.T) {
 	t.Parallel()
 	groupID := int64(304)
 	group := &Group{
@@ -134,8 +134,8 @@ func TestOpenAIGatewayGPTImageModelPriceIsFinalCNYCustomerPrice(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, string(BillingModeImage), cost.BillingMode)
-	require.InDelta(t, 0.01/fixedMediaPriceCNYPerUSD, cost.TotalCost, 1e-12)
-	require.InDelta(t, 0.01/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, 0.01, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.01, cost.ActualCost, 1e-12)
 	require.True(t, cost.FinalPriceApplied)
 }
 
@@ -189,8 +189,8 @@ func TestOpenAIGatewayVideoModelPriceOverridesTokenModeAsFinalPerSecondPrice(t *
 
 	require.NoError(t, err)
 	require.Equal(t, string(BillingModeVideo), cost.BillingMode)
-	require.InDelta(t, 0.30/fixedMediaPriceCNYPerUSD, cost.TotalCost, 1e-12)
-	require.InDelta(t, 0.30/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, 0.30, cost.TotalCost, 1e-12)
+	require.InDelta(t, 0.30, cost.ActualCost, 1e-12)
 	require.True(t, cost.FinalPriceApplied)
 }
 

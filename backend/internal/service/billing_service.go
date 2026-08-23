@@ -1632,19 +1632,19 @@ type ImagePriceConfig struct {
 	Price1K *float64 // 1K 尺寸价格（nil 表示使用默认值）
 	Price2K *float64 // 2K 尺寸价格（nil 表示使用默认值）
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
-	// ModelPrices is an optional model x resolution override in final CNY/image.
+	// ModelPrices is an optional model x resolution override in final USD/image.
 	// A populated model cell is the final customer price: it wins over the flat
 	// Price* columns and is not multiplied by any group/image rate.
 	ModelPrices map[string]map[string]float64
 }
 
 // VideoPriceConfig 视频生成计费配置。Price* 字段为 USD/s 回退价；
-// ModelPrices 中已填写的模型单元格是客户最终 CNY/s 价，不再叠加倍率。
+// ModelPrices 中已填写的模型单元格是客户最终 USD/s 价，不再叠加倍率。
 type VideoPriceConfig struct {
 	Price480P  *float64 // 480p 每秒价格（nil 表示使用默认值）
 	Price720P  *float64 // 720p 每秒价格（nil 表示使用默认值）
 	Price1080P *float64 // 1080p 每秒价格（nil 表示使用默认值）
-	// ModelPrices is an optional model-family x resolution override in final CNY/s.
+	// ModelPrices is an optional model-family x resolution override in final USD/s.
 	// A populated model cell is the final customer per-second rate: it wins over
 	// the flat Price* columns and is not multiplied by any group/video rate.
 	ModelPrices map[string]map[string]float64
@@ -1783,7 +1783,7 @@ func (s *BillingService) CalculateAudioCost(mode string, durationOrUnits float64
 // model: 请求的模型名称（用于获取 LiteLLM 默认价格）
 // imageSize: 图片尺寸 "1K", "2K", "4K"
 // imageCount: 生成的图片数量
-// groupConfig: 分组配置的价格（可能为 nil，表示使用默认值）；按模型价格为人民币最终价
+// groupConfig: 分组配置的价格（可能为 nil，表示使用默认值）；按模型价格为美元最终价
 // rateMultiplier: 费率倍数
 func (s *BillingService) CalculateImageCost(model string, imageSize string, imageCount int, groupConfig *ImagePriceConfig, rateMultiplier float64) *CostBreakdown {
 	if imageCount <= 0 {
@@ -1791,7 +1791,7 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	}
 	imageSize = NormalizeImageBillingTierOrDefault(imageSize)
 
-	// 获取内部 USD 单价。按模型填写的单元格是客户人民币最终单张价；通用价和默认价仍叠加倍率。
+	// 获取内部 USD 单价。按模型填写的单元格是客户美元最终单张价；通用价和默认价仍叠加倍率。
 	unitPrice, isFinalModelPrice := s.getImageUnitPrice(model, imageSize, groupConfig)
 
 	// 计算总费用
@@ -1819,7 +1819,7 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 // resolution: 视频分辨率 "480p", "720p", "1080p"
 // videoCount: 生成的视频数量
 // durationSeconds: 单个视频时长（秒），<=0 时按上游默认时长计
-// groupConfig: 分组配置；模型单元格是人民币最终每秒价，平面字段是应用倍率的 USD/秒回退价
+// groupConfig: 分组配置；模型单元格是美元最终每秒价，平面字段是应用倍率的 USD/秒回退价
 // rateMultiplier: 费率倍数
 func (s *BillingService) CalculateVideoCost(model string, resolution string, videoCount int, durationSeconds int, groupConfig *VideoPriceConfig, rateMultiplier float64) *CostBreakdown {
 	if videoCount <= 0 {
@@ -1848,10 +1848,10 @@ func (s *BillingService) CalculateVideoCost(model string, resolution string, vid
 
 // getImageUnitPrice 获取图片单价，并返回该价格是否为不叠加倍率的最终模型价。
 func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) (float64, bool) {
-	// 优先级：按模型人民币最终价 > 分组通用 USD 价 > 模型默认 USD 价。
+	// 优先级：按模型美元最终价 > 分组通用 USD 价 > 模型默认 USD 价。
 	if groupConfig != nil {
 		if price := LookupImageModelPrice(groupConfig.ModelPrices, model, imageSize); price != nil {
-			return fixedMediaPriceCNYToUSD(*price), true
+			return *price, true
 		}
 		switch imageSize {
 		case "1K":
@@ -1875,10 +1875,10 @@ func (s *BillingService) getImageUnitPrice(model string, imageSize string, group
 
 // getVideoUnitPrice 获取视频每秒单价，并返回该价格是否为不叠加倍率的最终模型价。
 func (s *BillingService) getVideoUnitPrice(model string, resolution string, groupConfig *VideoPriceConfig) (float64, bool) {
-	// Order: (a) final per-model CNY/s map (b) flat group USD/s columns (c) model-aware USD/s defaults.
+	// Order: (a) final per-model USD/s map (b) flat group USD/s columns (c) model-aware USD/s defaults.
 	if groupConfig != nil {
 		if price := LookupVideoModelPrice(groupConfig.ModelPrices, model, resolution); price != nil {
-			return fixedMediaPriceCNYToUSD(*price), true
+			return *price, true
 		}
 		switch NormalizeVideoBillingResolutionOrDefault(resolution) {
 		case VideoBillingResolution480P:

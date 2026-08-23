@@ -47,7 +47,7 @@ func TestOpenAIGatewayRefreshesMissingImageModelPriceFromPartialSnapshot(t *test
 
 	require.NoError(t, err)
 	require.True(t, cost.FinalPriceApplied)
-	require.InDelta(t, finalPrice/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, finalPrice, cost.ActualCost, 1e-12)
 }
 
 func TestOpenAIGatewayRefreshesModelOnlyImagePriceFromPartialSnapshot(t *testing.T) {
@@ -83,7 +83,7 @@ func TestOpenAIGatewayRefreshesModelOnlyImagePriceFromPartialSnapshot(t *testing
 
 	require.NoError(t, err)
 	require.True(t, cost.FinalPriceApplied)
-	require.InDelta(t, finalPrice/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, finalPrice, cost.ActualCost, 1e-12)
 }
 
 func TestOpenAIGatewayRefreshesMissingVideoModelPriceFromPartialSnapshot(t *testing.T) {
@@ -128,7 +128,7 @@ func TestOpenAIGatewayRefreshesMissingVideoModelPriceFromPartialSnapshot(t *test
 
 	require.NoError(t, err)
 	require.True(t, cost.FinalPriceApplied)
-	require.InDelta(t, finalPrice*15/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, finalPrice*15, cost.ActualCost, 1e-12)
 }
 
 func TestOpenAIGatewayRefreshesModelOnlyVideoPriceFromPartialSnapshot(t *testing.T) {
@@ -167,7 +167,7 @@ func TestOpenAIGatewayRefreshesModelOnlyVideoPriceFromPartialSnapshot(t *testing
 
 	require.NoError(t, err)
 	require.True(t, cost.FinalPriceApplied)
-	require.InDelta(t, finalPrice*15/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, finalPrice*15, cost.ActualCost, 1e-12)
 }
 
 func TestGatewayRefreshesMissingImageModelPriceFromPartialSnapshot(t *testing.T) {
@@ -197,7 +197,7 @@ func TestGatewayRefreshesMissingImageModelPriceFromPartialSnapshot(t *testing.T)
 	)
 
 	require.True(t, cost.FinalPriceApplied)
-	require.InDelta(t, finalPrice/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+	require.InDelta(t, finalPrice, cost.ActualCost, 1e-12)
 }
 
 func TestImageModelPriceMayBeMissingSkipsRefreshForConfiguredCell(t *testing.T) {

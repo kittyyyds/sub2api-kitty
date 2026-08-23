@@ -130,7 +130,7 @@ func NormalizeVideoModelPrices(in map[string]map[string]float64) map[string]map[
 	return out
 }
 
-// LookupVideoModelPrice returns a final CNY-per-second customer price from a
+// LookupVideoModelPrice returns a final USD-per-second customer price from a
 // model×resolution map, or nil.
 func LookupVideoModelPrice(prices map[string]map[string]float64, model, resolution string) *float64 {
 	if len(prices) == 0 {

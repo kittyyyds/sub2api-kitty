@@ -124,7 +124,7 @@ func TestVideoModelPriceMissingTierFallsBackToFlatTierPrice(t *testing.T) {
 	require.False(t, result.FinalPriceApplied)
 }
 
-func TestVideoModelPriceIsFinalCNYPerSecondCustomerPrice(t *testing.T) {
+func TestVideoModelPriceIsFinalUSDPerSecondCustomerPrice(t *testing.T) {
 	t.Parallel()
 	service := &BillingService{}
 	config := &VideoPriceConfig{
@@ -141,8 +141,8 @@ func TestVideoModelPriceIsFinalCNYPerSecondCustomerPrice(t *testing.T) {
 		config,
 		0.15,
 	)
-	require.InDelta(t, 0.56/fixedMediaPriceCNYPerUSD, oneVideo.TotalCost, 1e-12)
-	require.InDelta(t, 0.56/fixedMediaPriceCNYPerUSD, oneVideo.ActualCost, 1e-12)
+	require.InDelta(t, 0.56, oneVideo.TotalCost, 1e-12)
+	require.InDelta(t, 0.56, oneVideo.ActualCost, 1e-12)
 	require.True(t, oneVideo.FinalPriceApplied)
 
 	twoVideos := service.CalculateVideoCost(
@@ -153,8 +153,8 @@ func TestVideoModelPriceIsFinalCNYPerSecondCustomerPrice(t *testing.T) {
 		config,
 		3,
 	)
-	require.InDelta(t, 0.70/fixedMediaPriceCNYPerUSD, twoVideos.TotalCost, 1e-12)
-	require.InDelta(t, 0.70/fixedMediaPriceCNYPerUSD, twoVideos.ActualCost, 1e-12)
+	require.InDelta(t, 0.70, twoVideos.TotalCost, 1e-12)
+	require.InDelta(t, 0.70, twoVideos.ActualCost, 1e-12)
 	require.True(t, twoVideos.FinalPriceApplied)
 }
 

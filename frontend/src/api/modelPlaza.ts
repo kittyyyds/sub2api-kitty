@@ -23,9 +23,9 @@ export interface PlazaModel {
   platform: string
   pricing: UserSupportedModelPricing | null
   official_pricing: PlazaOfficialPricing | null
-  /** Image tiers whose configured CNY price is already the final customer charge. */
+  /** Image tiers whose configured USD price is already the final customer charge. */
   final_image_price_tiers?: string[]
-  /** Video tiers whose configured CNY price is the final customer per-second rate. */
+  /** Video tiers whose configured USD price is the final customer per-second rate. */
   final_video_price_tiers?: string[]
 }
 

@@ -1,5 +1,3 @@
-import { DISPLAY_USD_TO_CNY_RATE } from '@/utils/pricing'
-
 export const grokImagePriceResolutions = [
   { key: '1K', label: '1K' },
   { key: '2K', label: '2K' },
@@ -39,7 +37,7 @@ export function supportsImageModelPricingPlatform(platform: string): boolean {
 export type ImageModelPrices = Record<string, Record<string, number>>
 export type ImageModelPricesForm = Record<string, Record<string, number | string | null>>
 
-// Inherited defaults remain USD. Populated model cells are final CNY prices.
+// All prices are USD. Populated model cells are final customer prices.
 const defaultPrices: ImageModelPrices = {
   'grok-imagine': { '1K': 0.05, '2K': 0.07, '4K': 0.07 },
   'grok-imagine-image': { '1K': 0.02, '2K': 0.02, '4K': 0.02 },
@@ -123,7 +121,7 @@ export function imageModelPriceRows(
 export function getImageModelPricePlaceholder(model: string, resolution: string): string {
   const price = defaultPrices[normalizeModel(model)]?.[normalizeResolution(resolution)]
   if (price === undefined) return ''
-  return String(Math.round(price * DISPLAY_USD_TO_CNY_RATE * 1_000_000) / 1_000_000)
+  return String(price)
 }
 
 export function getConfiguredImageModelPrice(
@@ -176,5 +174,5 @@ export function resolveImageModelCustomerPrice(
   if (inheritedPrice === null) return null
 
   const effectiveMultiplier = Number.isFinite(multiplier) && multiplier >= 0 ? multiplier : 0
-  return inheritedPrice * effectiveMultiplier * DISPLAY_USD_TO_CNY_RATE
+  return inheritedPrice * effectiveMultiplier
 }

@@ -51,9 +51,9 @@ describe('Grok image model pricing form', () => {
   })
 
   it('shows model-aware default price placeholders', () => {
-    expect(getImageModelPricePlaceholder('grok-imagine-image', '2K')).toBe('0.14')
-    expect(getImageModelPricePlaceholder('grok-imagine-image-quality', '2K')).toBe('0.49')
-    expect(getImageModelPricePlaceholder('grok-imagine-image-2.0', '1K')).toBe('0.42')
+    expect(getImageModelPricePlaceholder('grok-imagine-image', '2K')).toBe('0.02')
+    expect(getImageModelPricePlaceholder('grok-imagine-image-quality', '2K')).toBe('0.07')
+    expect(getImageModelPricePlaceholder('grok-imagine-image-2.0', '1K')).toBe('0.06')
   })
 
   it('resolves final preview prices in billing priority order', () => {
@@ -97,14 +97,14 @@ describe('Grok image model pricing form', () => {
       '1K',
       0.02,
       0.15
-    )).toBeCloseTo(0.021)
+    )).toBeCloseTo(0.003)
     expect(resolveImageModelCustomerPrice(
       form,
       'grok-imagine-image-2.0',
       '2K',
       null,
       0.15
-    )).toBeCloseTo(0.084)
+    )).toBeCloseTo(0.012)
   })
 
   it('provides independent rows for every supported OpenAI image model', () => {
@@ -149,6 +149,6 @@ describe('Grok image model pricing form', () => {
       null,
       0.5,
       0.201
-    )).toBeCloseTo(0.7035)
+    )).toBeCloseTo(0.1005)
   })
 })

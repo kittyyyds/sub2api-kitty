@@ -2608,8 +2608,8 @@ func TestOpenAIGatewayServiceRecordUsage_GroupVideoModelPerSecondPriceIsFinalAnd
 
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
-	require.InDelta(t, modelVideoPrice720P*15/fixedMediaPriceCNYPerUSD, usageRepo.lastLog.TotalCost, 1e-12)
-	require.InDelta(t, modelVideoPrice720P*15/fixedMediaPriceCNYPerUSD, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, modelVideoPrice720P*15, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, modelVideoPrice720P*15, usageRepo.lastLog.ActualCost, 1e-12)
 	require.InDelta(t, 1.0, usageRepo.lastLog.RateMultiplier, 1e-12)
 	require.NotNil(t, usageRepo.lastLog.BillingMode)
 	require.Equal(t, string(BillingModeVideo), *usageRepo.lastLog.BillingMode)

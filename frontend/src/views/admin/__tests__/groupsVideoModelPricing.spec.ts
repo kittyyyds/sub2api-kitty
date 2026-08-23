@@ -73,7 +73,7 @@ describe('Grok video model pricing form', () => {
       0.2,
       0.5,
       0.07
-    )).toBeCloseTo(0.7)
+    )).toBeCloseTo(0.1)
     expect(resolveVideoModelCustomerPrice(
       form,
       'grok-imagine-video-1.5',
@@ -81,6 +81,6 @@ describe('Grok video model pricing form', () => {
       null,
       0.5,
       0.07
-    )).toBeCloseTo(0.875)
+    )).toBeCloseTo(0.125)
   })
 })

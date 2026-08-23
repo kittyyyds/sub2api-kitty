@@ -49,7 +49,7 @@ type Group struct {
 	ImagePrice2K              *float64
 	ImagePrice4K              *float64
 	// ImageModelPrices is optional per-model per-image pricing.
-	// Shape: model ID -> 1K/2K/4K -> final CNY/image.
+	// Shape: model ID -> 1K/2K/4K -> final USD/image.
 	ImageModelPrices             map[string]map[string]float64
 	BatchImageDiscountMultiplier float64
 	BatchImageHoldMultiplier     float64
@@ -59,7 +59,7 @@ type Group struct {
 	VideoPrice720P               *float64
 	VideoPrice1080P              *float64
 	// VideoModelPrices is optional final per-second pricing
-	// (groups.video_model_prices JSONB). Shape: family → resolution → final CNY/s.
+	// (groups.video_model_prices JSONB). Shape: family → resolution → final USD/s.
 	// A populated model tier overrides VideoPrice* and does not receive rate multipliers.
 	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；
@@ -219,7 +219,7 @@ func (g *Group) GetVideoPrice(resolution string) *float64 {
 	}
 }
 
-// GetVideoPriceForModel prefers the final CNY/s model price, then flat USD/s columns.
+// GetVideoPriceForModel prefers the final USD/s model price, then flat USD/s columns.
 func (g *Group) GetVideoPriceForModel(model, resolution string) *float64 {
 	if g == nil {
 		return nil

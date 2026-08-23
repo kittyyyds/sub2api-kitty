@@ -1030,7 +1030,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 // apiKeyWithFreshImageModelPricing mirrors the OpenAI gateway's media snapshot
 // guard for the legacy gateway path. This path can also receive an auth
 // projection with flat prices but without image_model_prices; allowing it to
-// continue into token/default pricing would undercharge configured final CNY
+// continue into token/default pricing would undercharge configured final USD
 // image prices.
 func (s *GatewayService) apiKeyWithFreshImageModelPricing(
 	ctx context.Context,

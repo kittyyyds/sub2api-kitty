@@ -1,5 +1,3 @@
-import { DISPLAY_USD_TO_CNY_RATE } from '@/utils/pricing'
-
 export const grokVideoPriceResolutions = [
   { key: '480p', label: '480p' },
   { key: '720p', label: '720p' },
@@ -14,7 +12,7 @@ export const grokVideoPriceFamilies = [
 export type VideoModelPrices = Record<string, Record<string, number>>
 export type VideoModelPricesForm = Record<string, Record<string, number | string | null>>
 
-// Inherited defaults remain USD/s. Populated model cells are final CNY/s prices.
+// All prices are USD/s. Populated model cells are final customer rates.
 const defaultPrices: VideoModelPrices = {
   'grok-imagine-video': { '480p': 0.05, '720p': 0.07, '1080p': 0.07 },
   'grok-imagine-video-1.5': { '480p': 0.08, '720p': 0.14, '1080p': 0.25 }
@@ -113,5 +111,5 @@ export function resolveVideoModelCustomerPrice(
   if (inheritedPerSecondPrice === null) return null
 
   const effectiveMultiplier = Number.isFinite(multiplier) && multiplier >= 0 ? multiplier : 0
-  return inheritedPerSecondPrice * effectiveMultiplier * DISPLAY_USD_TO_CNY_RATE
+  return inheritedPerSecondPrice * effectiveMultiplier
 }

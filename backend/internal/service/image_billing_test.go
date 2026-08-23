@@ -34,7 +34,7 @@ func TestNormalizeAndLookupImageModelPricesKeepsModelsIndependent(t *testing.T) 
 	require.Zero(t, *free)
 }
 
-func TestImageModelCNYPriceOverridesFlatPriceAndMissingTierFallsBack(t *testing.T) {
+func TestImageModelUSDPriceOverridesFlatPriceAndMissingTierFallsBack(t *testing.T) {
 	t.Parallel()
 	flat1K := 0.4
 	flat2K := 0.5
@@ -52,18 +52,18 @@ func TestImageModelCNYPriceOverridesFlatPriceAndMissingTierFallsBack(t *testing.
 	standard := service.CalculateImageCost("grok-imagine-image", "1K", 2, config, 0.15)
 	fallback := service.CalculateImageCost("grok-imagine", "2K", 1, config, 0.15)
 
-	require.InDelta(t, 0.02/fixedMediaPriceCNYPerUSD, imagine.TotalCost, 1e-12)
-	require.InDelta(t, 0.02/fixedMediaPriceCNYPerUSD, imagine.ActualCost, 1e-12)
+	require.InDelta(t, 0.02, imagine.TotalCost, 1e-12)
+	require.InDelta(t, 0.02, imagine.ActualCost, 1e-12)
 	require.True(t, imagine.FinalPriceApplied)
-	require.InDelta(t, 0.04/fixedMediaPriceCNYPerUSD, standard.TotalCost, 1e-12)
-	require.InDelta(t, 0.04/fixedMediaPriceCNYPerUSD, standard.ActualCost, 1e-12)
+	require.InDelta(t, 0.04, standard.TotalCost, 1e-12)
+	require.InDelta(t, 0.04, standard.ActualCost, 1e-12)
 	require.True(t, standard.FinalPriceApplied)
 	require.InDelta(t, flat2K, fallback.TotalCost, 1e-12)
 	require.InDelta(t, flat2K*0.15, fallback.ActualCost, 1e-12)
 	require.False(t, fallback.FinalPriceApplied)
 }
 
-func TestOpenAIImageModelPricesAreIndependentFinalCNYCustomerPrices(t *testing.T) {
+func TestOpenAIImageModelPricesAreIndependentFinalUSDCustomerPrices(t *testing.T) {
 	t.Parallel()
 	service := &BillingService{}
 	config := &ImagePriceConfig{
@@ -87,8 +87,8 @@ func TestOpenAIImageModelPricesAreIndependentFinalCNYCustomerPrices(t *testing.T
 	for _, tt := range tests {
 		t.Run(tt.model+"/"+tt.tier, func(t *testing.T) {
 			cost := service.CalculateImageCost(tt.model, tt.tier, 1, config, 0.15)
-			require.InDelta(t, tt.want/fixedMediaPriceCNYPerUSD, cost.TotalCost, 1e-12)
-			require.InDelta(t, tt.want/fixedMediaPriceCNYPerUSD, cost.ActualCost, 1e-12)
+			require.InDelta(t, tt.want, cost.TotalCost, 1e-12)
+			require.InDelta(t, tt.want, cost.ActualCost, 1e-12)
 			require.True(t, cost.FinalPriceApplied)
 		})
 	}
