@@ -280,6 +280,58 @@ func TestForwardCompatibleGrokMediaImageEditPreservesMultipartContract(t *testin
 	require.Equal(t, []byte("b64_json"), fields["response_format"])
 }
 
+func TestForwardCompatibleGrokMediaPreservesExplicitMappedImageAlias(t *testing.T) {
+	t.Setenv(xai.EnvAllowUnsafeURLOverrides, "true")
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	body := []byte(`{"model":"grok-imagine-image","prompt":"draw","size":"1024x1024","resolution":"1k","aspect_ratio":"1:1","background":"auto"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	account := &Account{
+		ID:          12351,
+		Name:        "third-party-grok",
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Extra:       map[string]any{GrokMediaCompatibilityExtraKey: GrokMediaCompatibilityOpenAI},
+		Credentials: map[string]any{
+			"api_key":  "api-key",
+			"base_url": "https://xai.test/v1",
+			"model_mapping": map[string]any{
+				"grok-imagine-image": "grok-imagine",
+			},
+		},
+	}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"data":[{"b64_json":"aW1hZ2U="}]}`)),
+	}}
+	service := &OpenAIGatewayService{httpUpstream: upstream}
+
+	result, err := service.ForwardGrokMedia(
+		context.Background(),
+		c,
+		account,
+		GrokMediaEndpointImagesGenerations,
+		"",
+		body,
+		"application/json",
+	)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "grok-imagine", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, "1024x1024", gjson.GetBytes(upstream.lastBody, "size").String())
+	require.Equal(t, "1k", gjson.GetBytes(upstream.lastBody, "resolution").String())
+	require.Equal(t, "b64_json", gjson.GetBytes(upstream.lastBody, "response_format").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "background").Exists())
+	require.Equal(t, "grok-imagine-image", result.Model)
+	require.Equal(t, "grok-imagine", result.UpstreamModel)
+}
+
 func TestNormalizeOpenAICompatibleGrokVideoPayloadValidatesRatioAndFiltersFields(t *testing.T) {
 	body, _, err := normalizeOpenAICompatibleGrokMediaBody(
 		GrokMediaEndpointVideosGenerations,

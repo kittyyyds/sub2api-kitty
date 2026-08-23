@@ -728,8 +728,11 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	requestInfo.Model = billingModel
 
+	mappedModel := ""
+	mappedModelMatched := false
 	if endpoint.RequiresRequestBody() {
-		mappedModel := strings.TrimSpace(account.GetMappedModel(originalModel))
+		mappedModel, mappedModelMatched = account.ResolveMappedModel(originalModel)
+		mappedModel = strings.TrimSpace(mappedModel)
 		if mappedModel != "" && mappedModel != originalModel {
 			body, contentType, err = rewriteGrokMediaModel(body, contentType, mappedModel)
 			if err != nil {
@@ -741,6 +744,16 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if err != nil {
 		writeGrokMediaRequestValidationError(c, err)
 		return nil, err
+	}
+	// For OpenAI-compatible relays, an explicit account mapping is the wire
+	// contract. Compatibility normalization still filters and reshapes fields,
+	// but must not canonicalize a mapped relay ID such as grok-imagine back to
+	// the official xAI grok-imagine-image-quality model.
+	if endpoint.RequiresRequestBody() && account.IsGrokOpenAICompatibleMedia() && mappedModelMatched && mappedModel != "" {
+		body, contentType, err = rewriteGrokMediaModel(body, contentType, mappedModel)
+		if err != nil {
+			return nil, fmt.Errorf("restore OpenAI-compatible grok media mapped model: %w", err)
+		}
 	}
 	upstreamModel := ParseGrokMediaRequest(contentType, body).Model
 	body, contentType, err = sanitizeGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
