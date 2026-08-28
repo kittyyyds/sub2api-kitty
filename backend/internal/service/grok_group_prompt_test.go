@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -53,6 +54,17 @@ func TestApplyGrokGroupPromptToMessagesSupportsStringAndBlocks(t *testing.T) {
 	require.Equal(t, "client rules", gjson.GetBytes(got, "system.1.text").String())
 }
 
+func TestNormalizeGrokPromptSettingsEnforces36KiBByteLimit(t *testing.T) {
+	atLimit := strings.Repeat("a", 36*1024)
+	enabled, mode, content, err := NormalizeGrokPromptSettings(PlatformGrok, true, GrokPromptModePrepend, atLimit)
+	require.NoError(t, err)
+	require.True(t, enabled)
+	require.Equal(t, GrokPromptModePrepend, mode)
+	require.Equal(t, atLimit, content)
+
+	_, _, _, err = NormalizeGrokPromptSettings(PlatformGrok, true, GrokPromptModePrepend, atLimit+"a")
+	require.EqualError(t, err, "grok_prompt_content exceeds 36864 bytes")
+}
 func TestNormalizeGrokPromptSettingsClearsOtherPlatforms(t *testing.T) {
 	enabled, mode, content, err := NormalizeGrokPromptSettings(PlatformOpenAI, true, GrokPromptModeAppend, "secret")
 	require.NoError(t, err)

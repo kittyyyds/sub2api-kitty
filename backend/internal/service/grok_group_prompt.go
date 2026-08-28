@@ -14,7 +14,7 @@ const (
 	GrokPromptModePrepend = "prepend"
 	GrokPromptModeAppend  = "append"
 
-	maxGrokPromptBytes = 32 * 1024
+	maxGrokPromptBytes = 36 * 1024
 	grokPromptMarker   = "[SUB2API_GROK_ENHANCEMENT_V1]"
 )
 

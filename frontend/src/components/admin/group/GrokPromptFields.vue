@@ -35,7 +35,7 @@ const { t } = useI18n();
         <textarea
           v-model="content"
           rows="9"
-          maxlength="32768"
+          maxlength="36864"
           class="input min-h-48 resize-y font-mono text-xs leading-5"
           :placeholder="t('admin.groups.form.grokPromptPlaceholder')"
         />
