@@ -628,7 +628,11 @@ func (s *ChannelMonitorService) RunCheck(ctx context.Context, id int64) ([]*Chec
 	default:
 		results = s.runChecksConcurrent(ctx, m)
 	}
-	s.applyFailureThresholds(ctx, m.ID, results)
+	// Failure streak dampening applies to active probe results. Pure quota
+	// checks have no probe history and must not call ListHistory on the repo.
+	if checkMode != MonitorCheckModeQuota {
+		s.applyFailureThresholds(ctx, m.ID, results)
+	}
 	s.persistCheckResults(ctx, m, results)
 	return results, nil
 }
