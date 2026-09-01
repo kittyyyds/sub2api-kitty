@@ -93,6 +93,76 @@ func TestChannelMonitorV2WhereRejectsGroupFilterOutsideConfiguredScope(t *testin
 	require.Len(t, args, 3)
 }
 
+func TestChannelMonitorV2ScopedGroupIDsIntersectsEveryAuthorizationLayer(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter service.ChannelMonitorV2Filter
+		cfg    service.ChannelMonitorV2Config
+		want   []int64
+		empty  bool
+	}{
+		{
+			name:   "ordinary viewer gets server-derived groups when operator scope is global",
+			filter: service.ChannelMonitorV2Filter{RestrictGroups: true, AllowedGroupIDs: []int64{2, 4}},
+			want:   []int64{2, 4},
+		},
+		{
+			name:   "operator and viewer scopes are intersected",
+			filter: service.ChannelMonitorV2Filter{RestrictGroups: true, AllowedGroupIDs: []int64{2, 4}},
+			cfg:    service.ChannelMonitorV2Config{GroupIDs: []int64{4, 5}},
+			want:   []int64{4},
+		},
+		{
+			name:   "request picker further narrows the viewer scope",
+			filter: service.ChannelMonitorV2Filter{RestrictGroups: true, AllowedGroupIDs: []int64{2, 4}, GroupIDs: []int64{2}},
+			want:   []int64{2},
+		},
+		{
+			name:   "forged request group fails closed",
+			filter: service.ChannelMonitorV2Filter{RestrictGroups: true, AllowedGroupIDs: []int64{2, 4}, GroupIDs: []int64{5}},
+			empty:  true,
+		},
+		{
+			name:   "ordinary viewer with no available groups fails closed",
+			filter: service.ChannelMonitorV2Filter{RestrictGroups: true},
+			empty:  true,
+		},
+		{
+			name:   "administrator with global operator scope remains unrestricted",
+			filter: service.ChannelMonitorV2Filter{},
+		},
+		{
+			name:   "administrator request picker still narrows configured scope",
+			filter: service.ChannelMonitorV2Filter{GroupIDs: []int64{3}},
+			cfg:    service.ChannelMonitorV2Config{GroupIDs: []int64{3, 4}},
+			want:   []int64{3},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, empty := channelMonitorV2ScopedGroupIDs(tt.filter, tt.cfg)
+			require.Equal(t, tt.want, got)
+			require.Equal(t, tt.empty, empty)
+		})
+	}
+}
+
+func TestChannelMonitorV2WhereFailsClosedForEmptyOrForgedViewerScope(t *testing.T) {
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+	}
+	for _, filter := range []service.ChannelMonitorV2Filter{
+		{Start: time.Unix(1, 0), End: time.Unix(2, 0), RestrictGroups: true},
+		{Start: time.Unix(1, 0), End: time.Unix(2, 0), RestrictGroups: true, AllowedGroupIDs: []int64{2, 4}, GroupIDs: []int64{5}},
+	} {
+		where, args := channelMonitorV2Where(filter, cfg, "m")
+		require.Contains(t, where, "FALSE")
+		require.NotContains(t, where, "m.group_id = ANY")
+		require.Len(t, args, 3)
+	}
+}
+
 func TestChannelMonitorV2ErrorAggregationCountsFinalUserErrorsOnly(t *testing.T) {
 	query := strings.ToLower(channelMonitorV2ErrorAggregationSQL)
 	require.Contains(t, query, "not current_error.is_count_tokens")
