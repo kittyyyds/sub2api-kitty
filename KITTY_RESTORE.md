@@ -11,6 +11,29 @@
 
 The repository intentionally excludes `.env`, `config.yaml`, database dumps, API keys, payment secrets, and Cloudflare credentials.
 
+## Production backup retention
+
+`UPGRADE_BACKUP_POLICY.md` is mandatory for every upgrade. This repository
+retains only the two newest successful production release units for its bound
+site. A release unit is not merely a branch: it is an annotated production tag,
+an immutable image digest, a sanitized deployment manifest, and the checksummed
+off-repository PostgreSQL/Redis recovery set.
+
+Create the third production tag only after the candidate passes production and
+rollback acceptance. Then make `main` point to that candidate,
+`rollback/previous` point to the immediately preceding production tag, preview
+the rotation, and explicitly apply it:
+
+```sh
+./deploy/rotate-production-backups.sh <site-id> <primary-domain>
+./deploy/rotate-production-backups.sh <site-id> <primary-domain> --apply
+```
+
+The rotation script deletes only older `prod/<site-id>/...` Git tags. Delete the
+matching off-repository recovery set only after its manifest checksum and exact
+path have been verified. Operational/PITR/compliance backups are outside this
+policy and must never be pruned by release rotation.
+
 ## Upgrade workflow
 
 1. Create a new Kitty branch from the latest verified Kitty branch.
