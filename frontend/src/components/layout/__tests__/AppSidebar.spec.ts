@@ -55,6 +55,15 @@ describe('AppSidebar scroll position persistence', () => {
   })
 })
 
+describe('AppSidebar collapsible groups', () => {
+  it('lets the user collapse a group even while a child route is active', () => {
+    // The expand state must come from the user's override first, falling back
+    // to the active-route heuristic only when the user has not clicked yet.
+    expect(componentSource).toContain('const groupExpandOverrides = ref<Map<string, boolean>>(new Map())')
+    expect(componentSource).not.toContain('expandedGroups.value.has(item.path) || isGroupActive(item)')
+  })
+})
+
 describe('AppSidebar header styles', () => {
   it('does not clip the version badge dropdown', () => {
     const sidebarHeaderBlockMatch = styleSource.match(/\.sidebar-header\s*\{[\s\S]*?\n {2}\}/)
@@ -103,7 +112,7 @@ describe('AppSidebar regular-user flat navigation contract', () => {
 
   it('keeps mobile close behavior without customer-only group state', () => {
     expect(componentSource).toContain('appStore.setMobileOpen(false)')
-    expect(componentSource).toContain('const expandedGroups = ref<Set<string>>(new Set())')
+    expect(componentSource).toContain('const groupExpandOverrides = ref<Map<string, boolean>>(new Map())')
     expect(componentSource).not.toContain('groupUserNavItems')
     expect(componentSource).not.toContain('collapsedPath')
   })

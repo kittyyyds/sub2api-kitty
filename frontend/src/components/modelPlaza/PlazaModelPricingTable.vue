@@ -59,6 +59,7 @@ interface TokenPriceRow {
   tier: string
   period: PlazaTimePricingPeriod | null
   longContextBasis?: PlazaModel['long_context_basis']
+  maxReasoningEffortMultiplier?: number | null
   input: PricePair
   output: PricePair
   cacheWrite: PricePair
@@ -260,6 +261,7 @@ function buildTokenRow(
     tier: tokenPairLabel(intervalPair),
     period,
     longContextBasis: model.long_context_basis,
+    maxReasoningEffortMultiplier: model.pricing?.max_reasoning_effort_multiplier,
     input,
     output,
     cacheWrite,
@@ -418,6 +420,13 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
               <td class="model-name">
                 <div class="model-identity">
                   <span>{{ row.model }}</span>
+                  <span
+                    v-if="row.maxReasoningEffortMultiplier"
+                    class="reasoning-badge"
+                    :title="t('modelPlaza.table.maxReasoningMultiplierHint', { multiplier: row.maxReasoningEffortMultiplier })"
+                  >
+                    {{ t('modelPlaza.table.maxReasoningMultiplierBadge', { multiplier: row.maxReasoningEffortMultiplier }) }}
+                  </span>
                   <span
                     v-if="row.period"
                     class="period-badge"
@@ -805,7 +814,8 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
 
 .platform-badge,
 .period-badge,
-.context-badge {
+.context-badge,
+.reasoning-badge {
   display: inline-flex;
   min-height: 19px;
   align-items: center;
@@ -821,6 +831,16 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
 .context-badge {
   color: var(--plaza-muted);
   background: var(--plaza-surface-soft);
+}
+
+.reasoning-badge {
+  color: #a16207;
+  background: #fef9c3;
+}
+
+.dark .reasoning-badge {
+  color: #fde68a;
+  background: rgb(120 53 15 / 32%);
 }
 
 .tier-value {

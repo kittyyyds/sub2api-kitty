@@ -69,7 +69,7 @@ const (
 	ModelGrokImagineImage        = DefaultImagineImageFastModel
 	ModelGrokImagineImageQuality = DefaultImagineImageQualityModel
 	ModelGrokImagineVideo        = DefaultImagineVideoModel
-	ModelGrokImagineVideo15      = DefaultImagineVideo15LegacyModel
+	ModelGrokImagineVideo15      = DefaultImagineVideo15Model
 )
 
 // ModelMappingOptions controls optional expansions of the default mapping.
@@ -365,7 +365,7 @@ func CanonicalVideoGenerationModel(model string) (string, bool) {
 	case ModelGrokImagineVideo:
 		return ModelGrokImagineVideo, true
 	case ModelGrokImagineVideo15,
-		DefaultImagineVideo15Model,
+		DefaultImagineVideo15LegacyModel,
 		"grok-imagine-video-1.5-2026-05-30",
 		"grok-video-1.5":
 		return ModelGrokImagineVideo15, true

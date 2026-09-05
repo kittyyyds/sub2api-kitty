@@ -29,6 +29,7 @@ export interface PricingFormEntry {
   cache_read_price: number | string | null
   fast_multiplier?: number | string | null
   flex_multiplier?: number | string | null
+  max_reasoning_effort_multiplier?: number | string | null
   image_input_price: number | string | null
   image_output_price: number | string | null
   per_request_price: number | string | null
@@ -360,9 +361,6 @@ function validateIntervalPrices(
     ['cacheReadPrice', iv.cache_read_price],
     ['perRequestPrice', iv.per_request_price],
   ]
-  if (prices.every(([, val]) => val == null || val === '')) {
-    return intervalValidationMessage(t, 'missingPrice', { index })
-  }
   for (const [key, val] of prices) {
     if (val != null && val !== '' && Number(val) < 0) {
       const priceKey = key === 'perRequestPrice' && mode === 'video' ? 'perSecondPrice' : key
@@ -387,6 +385,11 @@ function validateIntervalPrices(
         field: intervalPriceLabel(t, key),
       })
     }
+  }
+  const hasPrice = prices.some(([, val]) => val != null && val !== '')
+  const hasMultiplier = multipliers.some(([, val]) => val != null && val !== '')
+  if (!hasPrice && !hasMultiplier) {
+    return intervalValidationMessage(t, 'missingPrice', { index })
   }
   return null
 }
