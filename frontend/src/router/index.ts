@@ -573,6 +573,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/model-capability',
+    name: 'AdminModelCapability',
+    component: () => import('@/views/admin/ModelCapabilityView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Model Capability',
+      titleKey: 'modelCapability.title',
+      descriptionKey: 'modelCapability.description'
+    }
+  },
+  {
     path: '/admin/plugins',
     name: 'AdminPlugins',
     component: () => import('@/views/admin/PluginsView.vue'),

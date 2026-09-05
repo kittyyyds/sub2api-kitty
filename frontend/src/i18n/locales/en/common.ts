@@ -203,6 +203,7 @@ export default {
     modelPlaza: 'Model Pricing',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
+    modelCapability: 'Model Capability',
     plugins: 'Plugins',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',

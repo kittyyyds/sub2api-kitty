@@ -28,6 +28,33 @@ import type {
   OllamaCloudUsageState
 } from '@/types'
 
+export type ModelCapabilityProbeProtocol = 'chat_completions' | 'responses' | 'responses_tools'
+
+export interface ModelCapabilityProbeResult {
+  protocol: ModelCapabilityProbeProtocol
+  status: 'verified' | 'model_mismatch' | 'unsupported' | 'timeout' | 'error' | 'needs_retest' | string
+  capability: string
+  requested_model: string
+  upstream_model?: string
+  http_status: number
+  latency_ms: number
+  tool_name?: string
+  tool_call_found: boolean
+  tool_arguments_valid: boolean
+  error?: string
+  evidence: string
+}
+
+export interface ModelCapabilityProbeResponse {
+  account_id: number
+  account_name: string
+  platform: string
+  requested_model: string
+  upstream_model?: string
+  results: ModelCapabilityProbeResult[]
+  disclaimer: string
+}
+
 /**
  * List all accounts with pagination
  * @param page - Page number (default: 1)
@@ -169,6 +196,17 @@ export async function listWithEtag(
  */
 export async function getById(id: number): Promise<Account> {
   const { data } = await apiClient.get<Account>(`/admin/accounts/${id}`)
+  return data
+}
+
+export async function probeModelCapabilities(
+  id: number,
+  payload: { model_id?: string; protocols?: ModelCapabilityProbeProtocol[] }
+): Promise<ModelCapabilityProbeResponse> {
+  const { data } = await apiClient.post<ModelCapabilityProbeResponse>(
+    `/admin/accounts/${id}/capability-probe`,
+    payload
+  )
   return data
 }
 
@@ -1050,6 +1088,7 @@ export const accountsAPI = {
   listWithEtag,
   getUpstreamBillingRatesWithEtag,
   getById,
+  probeModelCapabilities,
   create,
   duplicate,
   update,
