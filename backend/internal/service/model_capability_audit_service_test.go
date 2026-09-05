@@ -52,6 +52,57 @@ type barrierModelCapabilityAuditUpstream struct {
 	barrier  int32
 }
 
+type modelCapabilityAuditRetryCache struct {
+	ConcurrencyCache
+	failAttempts int32
+	attempts     atomic.Int32
+	releases     atomic.Int32
+}
+
+type modelCapabilityAuditExclusiveCache struct {
+	ConcurrencyCache
+	mu       sync.Mutex
+	held     int
+	maxHeld  int
+	attempts int
+}
+
+func (c *modelCapabilityAuditRetryCache) AcquireAccountSlot(context.Context, int64, int, string) (bool, error) {
+	return c.attempts.Add(1) > c.failAttempts, nil
+}
+
+func (c *modelCapabilityAuditRetryCache) ReleaseAccountSlot(context.Context, int64, string) error {
+	c.releases.Add(1)
+	return nil
+}
+
+func (c *modelCapabilityAuditExclusiveCache) AcquireAccountSlot(context.Context, int64, int, string) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.attempts++
+	if c.held >= 1 {
+		return false, nil
+	}
+	c.held++
+	if c.held > c.maxHeld {
+		c.maxHeld = c.held
+	}
+	return true, nil
+}
+
+func (c *modelCapabilityAuditExclusiveCache) ReleaseAccountSlot(context.Context, int64, string) error {
+	c.mu.Lock()
+	c.held--
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *modelCapabilityAuditExclusiveCache) snapshot() (attempts, held, maxHeld int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.attempts, c.held, c.maxHeld
+}
+
 func (u *barrierModelCapabilityAuditUpstream) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
 	return u.DoWithTLS(req, proxyURL, accountID, accountConcurrency, nil)
 }
@@ -132,6 +183,16 @@ type modelCapabilityAuditAccountsRepo struct {
 
 func (r *modelCapabilityAuditAccountsRepo) GetByIDs(context.Context, []int64) ([]*Account, error) {
 	return r.accounts, nil
+}
+
+func (r *modelCapabilityAuditAccountsRepo) ListAllWithFilters(context.Context, string, string, string, string, int64, string) ([]Account, error) {
+	accounts := make([]Account, 0, len(r.accounts))
+	for _, account := range r.accounts {
+		if account != nil {
+			accounts = append(accounts, *account)
+		}
+	}
+	return accounts, nil
 }
 
 func (r *modelCapabilityAuditAccountRepo) GetByIDs(context.Context, []int64) ([]*Account, error) {
@@ -282,6 +343,155 @@ func TestEstimateModelCapabilityAuditSkipsUnsupportedAccounts(t *testing.T) {
 	}
 	if estimate.TargetCount != 1 || estimate.ProtocolCount != 2 || estimate.RequestCount != 2 {
 		t.Fatalf("estimate = %+v, want 1 target / 2 protocols / 2 requests", estimate)
+	}
+}
+
+func TestModelCapabilityAuditRejectsChangedPreviewTargets(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sql mock: %v", err)
+	}
+	defer db.Close()
+
+	accountOne := &Account{ID: 1, Status: StatusActive, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	accountTwo := &Account{ID: 2, Status: StatusActive, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	repo := &modelCapabilityAuditAccountsRepo{accounts: []*Account{accountOne}}
+	service := &ModelCapabilityAuditService{db: db, accountRepo: repo, accountTestService: &AccountTestService{}}
+	options := ModelCapabilityAuditOptions{
+		ModelIDs:  []string{"gpt-5"},
+		Protocols: []string{ModelCapabilityProtocolResponses}, ActiveOnly: true, MaxItems: 10,
+	}
+	estimate, err := service.Estimate(context.Background(), options)
+	if err != nil {
+		t.Fatalf("estimate audit: %v", err)
+	}
+	if estimate.TargetCount != 1 || estimate.RequestCount != 1 {
+		t.Fatalf("estimate = %+v, want one target/request", estimate)
+	}
+
+	// A fresh all-account resolution would now expand this run to two paid
+	// requests, so Start must require a new confirmation instead.
+	repo.accounts = []*Account{accountOne, accountTwo}
+	_, _, err = service.prepareRun(context.Background(), options, nil)
+	if err == nil || !strings.Contains(err.Error(), "MODEL_CAPABILITY_AUDIT_PREVIEW_STALE") {
+		t.Fatalf("error = %v, want stale-preview conflict", err)
+	}
+}
+
+func TestModelCapabilityAuditWaitsForAccountSlot(t *testing.T) {
+	account := &Account{
+		ID: 31, Name: "slot-retry", Status: StatusActive, Platform: PlatformOpenAI,
+		Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "secret", "base_url": "http://upstream.test/v1"},
+	}
+	cache := &modelCapabilityAuditRetryCache{failAttempts: 2}
+	upstream := &countingModelCapabilityAuditUpstream{upstream: &modelCapabilityProbeUpstream{model: "gpt-4o-mini"}}
+	audit := &ModelCapabilityAuditService{
+		accountTestService: newModelCapabilityProbeService(upstream, account),
+		concurrencyService: NewConcurrencyService(cache),
+	}
+	results, err := audit.probeAuditTarget(context.Background(), modelCapabilityAuditTarget{
+		Account: account, ModelID: "gpt-4o-mini", Protocols: []string{ModelCapabilityProtocolResponses},
+	})
+	if err != nil {
+		t.Fatalf("probe target: %v", err)
+	}
+	if len(results) != 1 || results[0].Status != "verified" {
+		t.Fatalf("unexpected probe results: %+v", results)
+	}
+	if got := cache.attempts.Load(); got != 3 {
+		t.Fatalf("slot attempts = %d, want 3", got)
+	}
+	if got := cache.releases.Load(); got != 1 {
+		t.Fatalf("slot releases = %d, want 1", got)
+	}
+	if got := upstream.calls.Load(); got != 1 {
+		t.Fatalf("upstream calls = %d, want 1", got)
+	}
+}
+
+func TestModelCapabilityAuditSerializesCompetingTargetsAtAccountLimit(t *testing.T) {
+	account := &Account{
+		ID: 33, Name: "slot-contention", Status: StatusActive, Platform: PlatformOpenAI,
+		Type: AccountTypeAPIKey, Concurrency: 1,
+		Credentials: map[string]any{"api_key": "secret", "base_url": "http://upstream.test/v1"},
+	}
+	cache := &modelCapabilityAuditExclusiveCache{}
+	blocking := &blockingModelCapabilityAuditUpstream{started: make(chan struct{}), release: make(chan struct{})}
+	upstream := &countingModelCapabilityAuditUpstream{upstream: blocking}
+	audit := &ModelCapabilityAuditService{
+		accountTestService: newModelCapabilityProbeService(upstream, account),
+		concurrencyService: NewConcurrencyService(cache),
+	}
+	target := modelCapabilityAuditTarget{
+		Account: account, ModelID: "gpt-4o-mini", Protocols: []string{ModelCapabilityProtocolResponses},
+	}
+	type probeOutcome struct {
+		results []ModelCapabilityProbeResult
+		err     error
+	}
+	done := make(chan probeOutcome, 2)
+	probe := func() {
+		results, probeErr := audit.probeAuditTarget(context.Background(), target)
+		done <- probeOutcome{results: results, err: probeErr}
+	}
+	go probe()
+	select {
+	case <-blocking.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first probe did not occupy the account slot")
+	}
+	go probe()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		attempts, _, _ := cache.snapshot()
+		if attempts >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("second probe never attempted the occupied slot")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	close(blocking.release)
+	for i := 0; i < 2; i++ {
+		select {
+		case outcome := <-done:
+			if outcome.err != nil || len(outcome.results) != 1 || outcome.results[0].Status != "verified" {
+				t.Fatalf("probe outcome = %+v", outcome)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("competing probe did not finish after slot release")
+		}
+	}
+	attempts, held, maxHeld := cache.snapshot()
+	if attempts < 3 {
+		t.Fatalf("slot attempts = %d, want a failed attempt followed by retry", attempts)
+	}
+	if held != 0 || maxHeld != 1 {
+		t.Fatalf("slot occupancy = held:%d max:%d, want 0/1", held, maxHeld)
+	}
+	if got := upstream.calls.Load(); got != 2 {
+		t.Fatalf("upstream calls = %d, want 2", got)
+	}
+}
+
+func TestModelCapabilityAuditSlotWaitHonorsContext(t *testing.T) {
+	cache := &modelCapabilityAuditRetryCache{failAttempts: 1 << 30}
+	audit := &ModelCapabilityAuditService{concurrencyService: NewConcurrencyService(cache)}
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+
+	release, err := audit.acquireAuditAccountSlot(ctx, 32, 1)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want context deadline exceeded", err)
+	}
+	if release != nil {
+		t.Fatal("release function must be nil when no slot was acquired")
+	}
+	if got := cache.attempts.Load(); got < 1 {
+		t.Fatalf("slot attempts = %d, want at least one", got)
 	}
 }
 
@@ -629,14 +839,14 @@ func TestModelCapabilitySummaryReportsTrueTotalsBeforeRowLimit(t *testing.T) {
 	defer db.Close()
 	now := time.Now().UTC()
 
-	mock.ExpectQuery("FROM usage_logs").
-		WithArgs(30).
+	mock.ExpectQuery("(?s)top_keys AS.*LIMIT \\$2.*selected_keys AS").
+		WithArgs(30, 2).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"account_id", "name", "platform", "requested_model", "mapped_model", "response_models",
-			"requests", "mismatches", "last_seen",
-		}).AddRow(1, "one", PlatformOpenAI, "model-a", "model-a", "model-a", 1, 0, now).
-			AddRow(1, "one", PlatformOpenAI, "model-b", "model-b", "model-b", 2, 0, now.Add(-time.Minute)).
-			AddRow(2, "two", PlatformOpenAI, "model-c", "model-c", "model-c", 3, 0, now.Add(-2*time.Minute)))
+			"requests", "mismatches", "last_seen", "needs_model_match", "total_models", "total_accounts",
+			"passive_requests", "passive_only_mismatch_models", "passive_only_self_report_models", "passive_only_unverified_models",
+		}).AddRow(1, "one", PlatformOpenAI, "model-a", "model-a", "model-a", 1, 0, now, false, 3, 2, 6, 0, 2, 0).
+			AddRow(1, "one", PlatformOpenAI, "model-b", "model-b", "model-b", 2, 0, now.Add(-time.Minute), false, 3, 2, 6, 0, 2, 0))
 	mock.ExpectQuery("WITH ranked AS").
 		WithArgs(30).
 		WillReturnRows(sqlmock.NewRows([]string{
@@ -659,6 +869,9 @@ func TestModelCapabilitySummaryReportsTrueTotalsBeforeRowLimit(t *testing.T) {
 	}
 	if summary.TotalAccounts != 2 || summary.PassiveRequests != 6 || summary.Stats.Models != 3 || summary.Stats.ActiveChecks != 5 {
 		t.Fatalf("unexpected aggregate totals: %+v", summary.Stats)
+	}
+	if summary.SelfReportConsistent != 3 || summary.Stats.SelfReported != 3 || summary.MismatchSuspected != 0 || summary.Unverified != 0 {
+		t.Fatalf("unexpected identity totals: %+v", summary)
 	}
 	if len(summary.RecentEvidence) != 1 || summary.RecentEvidence[0].Platform != PlatformOpenAI ||
 		summary.RecentEvidence[0].GroupID == nil || *summary.RecentEvidence[0].GroupID != 10 || summary.RecentEvidence[0].GroupName != "group-a" {

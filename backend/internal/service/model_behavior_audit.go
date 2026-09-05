@@ -497,16 +497,15 @@ func (s *ModelCapabilityAuditService) probeBehaviorEndpoint(ctx context.Context,
 	}
 	var release func()
 	if s.concurrencyService != nil && s.concurrencyService.cache != nil {
-		acquired, acquireErr := s.concurrencyService.AcquireAccountSlot(probeCtx, account.ID, account.Concurrency)
-		if acquireErr != nil || acquired == nil || !acquired.Acquired {
-			if errors.Is(acquireErr, context.DeadlineExceeded) || errors.Is(probeCtx.Err(), context.DeadlineExceeded) {
+		release, err = s.acquireAuditAccountSlot(probeCtx, account.ID, account.Concurrency)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(probeCtx.Err(), context.DeadlineExceeded) {
 				result.Status, result.Error = "timeout", "timed out waiting for account concurrency"
 			} else {
-				result.Error = "account concurrency limit reached"
+				result.Error = "failed to acquire account concurrency"
 			}
 			return result
 		}
-		release = acquired.ReleaseFunc
 	}
 	if release != nil {
 		defer release()

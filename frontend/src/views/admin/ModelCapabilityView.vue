@@ -83,7 +83,7 @@
                 </td>
                 <td class="px-4 py-3">
                   <span v-if="item.evidence" class="rounded px-2 py-1 text-xs font-medium" :class="statusClass(item.evidence.status)">{{ protocolStatus(item.evidence.status) }}</span>
-                  <span v-else class="text-xs text-gray-400">未主动探测</span>
+                  <span v-else class="text-xs text-gray-500 dark:text-gray-400">{{ item.row.passive_requests > 0 ? '已观测请求' : '尚无证据' }}</span>
                   <div class="mt-2 text-xs" :class="capabilityClass(itemCapabilityStatus(item))">{{ capabilityLabel(itemCapabilityStatus(item)) }}</div>
                   <div class="mt-1 max-w-56 text-xs" :class="identityTextClass(itemIdentityStatus(item))">{{ identityLabel(itemIdentityStatus(item)) }}</div>
                   <div class="mt-0.5 text-[11px] text-gray-400">{{ confidenceLabel(itemConfidence(item)) }}</div>
@@ -94,7 +94,7 @@
                   <div class="mt-1">真实流量：{{ item.row.passive_requests }} 次<span v-if="item.row.passive_mismatches" class="ml-1 text-amber-600">· 偏差 {{ item.row.passive_mismatches }}</span></div>
                 </td>
                 <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
-                  <div>{{ formatTime(item.evidence?.checked_at || item.row.active_last_seen || item.row.passive_last_seen) }}</div>
+                  <div>{{ formatTime(evidenceTime(item)) }}</div>
                   <div v-if="item.evidence?.run_id" class="mt-1 font-mono text-[11px]">运行 #{{ item.evidence.run_id }}</div>
                 </td>
                 <td class="max-w-80 px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
@@ -201,7 +201,7 @@
             <p v-if="Object.keys(selectedRow.protocols).length === 0" class="text-sm text-gray-500">尚无主动探测证据</p>
           </div>
           <div v-if="selectedRow.passive_response_models?.length" class="mt-5">
-            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">真实响应模型</h3>
+            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">被动流量返回模型</h3>
             <div class="flex flex-wrap gap-2"><span v-for="model in selectedRow.passive_response_models" :key="model" class="break-all rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:bg-dark-700 dark:text-gray-200">{{ model }}</span></div>
           </div>
         </div>
@@ -232,7 +232,12 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { adminAPI } from '@/api/admin'
-import { normalizeCapabilityIdentityStatus } from './modelCapabilityPresentation'
+import {
+  normalizeCapabilityIdentityStatus,
+  passiveCapabilityStatus,
+  passiveConfidence,
+  passiveIdentityStatus,
+} from './modelCapabilityPresentation'
 import type {
   BehaviorAuditDetail,
   BehaviorAuditEstimate,
@@ -328,11 +333,11 @@ const summaryCards = computed(() => [
 ])
 function formatTime(value?: string | null): string { if (!value) return '-'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString() }
 function protocolLabel(value: string): string { return value === 'chat_completions' ? 'Chat Completions' : value === 'responses_tools' ? 'Responses + Tools' : value === 'responses' ? 'Responses' : value }
-function protocolStatus(value: string): string { return value === 'verified' ? '通过' : value === 'model_mismatch' ? '偏差' : value === 'unsupported' ? '不支持' : value === 'timeout' ? '超时' : value === 'error' ? '异常' : '待复测' }
-function statusClass(value: string): string { return value === 'verified' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : value === 'model_mismatch' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : value === 'unsupported' ? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' }
-function statusTextClass(value: string): string { return value === 'verified' ? 'text-emerald-600' : value === 'model_mismatch' ? 'text-amber-600' : 'text-red-600' }
-function capabilityLabel(value: string): string { return value === 'verified' ? '能力支持' : value === 'unsupported' ? '能力不支持' : '能力未验证' }
-function capabilityClass(value: string): string { return value === 'verified' ? 'text-emerald-600' : value === 'unsupported' ? 'text-gray-500' : 'text-amber-600' }
+function protocolStatus(value: string): string { return value === 'verified' ? '通过' : value === 'model_mismatch' ? '偏差' : value === 'unsupported' ? '不支持' : value === 'needs_retest' ? '结论不足' : value === 'timeout' ? '超时' : value === 'error' ? '异常' : '待复测' }
+function statusClass(value: string): string { return value === 'verified' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : value === 'model_mismatch' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : value === 'unsupported' || value === 'needs_retest' ? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' }
+function statusTextClass(value: string): string { return value === 'verified' ? 'text-emerald-600' : value === 'model_mismatch' ? 'text-amber-600' : value === 'unsupported' || value === 'needs_retest' ? 'text-gray-500' : 'text-red-600' }
+function capabilityLabel(value: string): string { return value === 'verified' ? '能力支持' : value === 'observed' ? '真实请求已完成' : value === 'unsupported' ? '能力不支持' : '能力未验证' }
+function capabilityClass(value: string): string { return value === 'verified' || value === 'observed' ? 'text-emerald-600' : value === 'unsupported' ? 'text-gray-500' : 'text-amber-600' }
 function identityLabel(value: string): string { const normalized = normalizeCapabilityIdentityStatus(value); return normalized === 'consistent' || normalized === 'self_report_consistent' ? '目录与自报一致，身份未验真' : normalized === 'mismatch_suspected' ? '疑似模型替换' : normalized === 'evidence_only' ? '仅有能力证据' : '未验证' }
 function identityTextClass(value: string): string { const normalized = normalizeCapabilityIdentityStatus(value); return normalized === 'consistent' || normalized === 'self_report_consistent' ? 'text-blue-600' : normalized === 'mismatch_suspected' ? 'text-amber-600' : 'text-gray-600' }
 function confidenceLabel(value: string): string { return value === 'high' ? '较强异常信号' : value === 'medium' ? '弱一致性证据' : '证据不足' }
@@ -343,10 +348,11 @@ function evidenceSourceLabel(value?: string): string { return value === 'active_
 function evidenceAttempts(evidence: CapabilityAuditEvidence): number { return evidence.attempt_count === undefined ? 1 : Math.max(0, evidence.attempt_count) }
 function evidenceSuccesses(evidence: CapabilityAuditEvidence): number { return evidence.success_count === undefined ? (evidence.status === 'verified' || evidence.status === 'model_mismatch' ? 1 : 0) : Math.max(0, evidence.success_count) }
 function evidenceFailures(evidence: CapabilityAuditEvidence): number { return evidence.failure_count === undefined ? Math.max(0, evidenceAttempts(evidence) - evidenceSuccesses(evidence)) : Math.max(0, evidence.failure_count) }
-function evidenceResponseModel(item: CapabilityProtocolRow): string { return item.evidence?.response_model || item.evidence?.upstream_model || item.row.observed_model || item.row.passive_response_models?.join(', ') || '-' }
-function itemCapabilityStatus(item: CapabilityProtocolRow): string { return item.evidence?.capability_status || item.row.capability_status }
-function itemIdentityStatus(item: CapabilityProtocolRow): string { return normalizeCapabilityIdentityStatus(item.evidence?.identity_status || item.row.identity_status) }
-function itemConfidence(item: CapabilityProtocolRow): string { return item.evidence?.confidence || item.row.confidence }
+function evidenceResponseModel(item: CapabilityProtocolRow): string { return item.evidence ? (item.evidence.response_model || item.evidence.upstream_model || '-') : (item.row.passive_response_models?.join(', ') || '-') }
+function evidenceTime(item: CapabilityProtocolRow): string | null | undefined { return item.evidence?.checked_at || item.row.passive_last_seen }
+function itemCapabilityStatus(item: CapabilityProtocolRow): string { return item.evidence?.capability_status || (item.evidence ? item.row.capability_status : passiveCapabilityStatus(item.row.passive_requests)) }
+function itemIdentityStatus(item: CapabilityProtocolRow): string { return item.evidence ? normalizeCapabilityIdentityStatus(item.evidence.identity_status) : passiveIdentityStatus(item.row.passive_requests, item.row.passive_mismatches, item.row.passive_response_models) }
+function itemConfidence(item: CapabilityProtocolRow): string { return item.evidence?.confidence || (item.evidence ? item.row.confidence : passiveConfidence(item.row.passive_requests, item.row.passive_mismatches, item.row.passive_response_models)) }
 function behaviorStatusLabel(value: string): string { return value === 'matched' ? '一致' : value === 'diverged' ? '偏离' : value === 'inconclusive' ? '待复核' : value === 'error' ? '异常' : value }
 function behaviorStatusClass(value: string): string { return value === 'matched' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : value === 'diverged' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : value === 'inconclusive' ? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' }
 function behaviorObservationLabel(value: string): string { return value === 'correct' ? '正确' : value === 'incorrect' ? '错误答案' : value === 'inconclusive' ? '结论不足' : value === 'invalid' ? '工具结构无效' : value === 'timeout' ? '超时' : value === 'error' ? '异常' : value || '未执行' }

@@ -138,7 +138,7 @@ func TestProbeBehaviorEndpointDisablesRedirects(t *testing.T) {
 	account := behaviorAuditTestAccount(5, "relay", "http://upstream.test/v1")
 	upstream := &modelCapabilityProbeContextUpstream{}
 	audit := &ModelCapabilityAuditService{accountTestService: newModelCapabilityProbeService(upstream, &account)}
-	result := audit.probeBehaviorEndpoint(context.Background(), &account, "gpt-5", "low", "audit_tool", modelBehaviorCases[0])
+	result := audit.probeBehaviorEndpoint(context.Background(), &account, "gpt-5", "low", modelBehaviorToolNamePrefix+"test", modelBehaviorCases[0])
 	if !upstream.redirectsDisabled || !result.Attempted {
 		t.Fatalf("redirect policy was not applied: result=%+v disabled=%v", result, upstream.redirectsDisabled)
 	}
@@ -205,6 +205,40 @@ func TestProbeBehaviorEndpointTreatsBudgetExhaustionAsInconclusive(t *testing.T)
 	comparison := compareBehaviorObservations(result, modelBehaviorObservation{Status: "skipped"})
 	if comparison != "inconclusive" {
 		t.Fatalf("comparison=%q, want inconclusive", comparison)
+	}
+}
+
+func TestProbeBehaviorEndpointWaitsForAccountSlot(t *testing.T) {
+	account := behaviorAuditTestAccount(10, "relay", "http://upstream.test/v1")
+	account.Concurrency = 1
+	cache := &modelCapabilityAuditRetryCache{failAttempts: 2}
+	audit := &ModelCapabilityAuditService{
+		accountTestService: newModelCapabilityProbeService(&modelCapabilityProbeUpstream{}, &account),
+		concurrencyService: NewConcurrencyService(cache),
+	}
+	result := audit.probeBehaviorEndpoint(context.Background(), &account, "gpt-5", "low", modelBehaviorToolNamePrefix+"test", modelBehaviorCases[0])
+	if result.Status != "correct" || !result.Attempted {
+		t.Fatalf("unexpected behavior result: %+v", result)
+	}
+	if got := cache.attempts.Load(); got != 3 {
+		t.Fatalf("slot attempts = %d, want 3", got)
+	}
+	if got := cache.releases.Load(); got != 1 {
+		t.Fatalf("slot releases = %d, want 1", got)
+	}
+}
+
+func TestProbeBehaviorEndpointDoesNotExposeCredentialEcho(t *testing.T) {
+	account := behaviorAuditTestAccount(11, "relay", "http://upstream.test/v1")
+	account.Credentials["api_key"] = "behavior-secret-token"
+	upstream := &modelCapabilityProbeUpstream{
+		status:       400,
+		responseBody: `{"error":{"message":"Authorization: Bearer behavior-secret-token"}}`,
+	}
+	audit := &ModelCapabilityAuditService{accountTestService: newModelCapabilityProbeService(upstream, &account)}
+	result := audit.probeBehaviorEndpoint(context.Background(), &account, "gpt-5", "low", "audit_tool", modelBehaviorCases[0])
+	if strings.Contains(result.Error, "behavior-secret-token") || result.Error != "upstream returned an error" {
+		t.Fatalf("unsafe upstream error persisted: %q", result.Error)
 	}
 }
 
