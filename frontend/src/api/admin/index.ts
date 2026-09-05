@@ -36,6 +36,7 @@ import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
 import pluginsAPI from './plugins'
+import modelCapabilityAuditAPI from './modelCapabilityAudit'
 
 /**
  * Unified admin API object for convenient access
@@ -73,7 +74,8 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   audit: auditAPI,
-  plugins: pluginsAPI
+  plugins: pluginsAPI,
+  modelCapabilityAudit: modelCapabilityAuditAPI
 }
 
 export {
@@ -109,7 +111,8 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   auditAPI,
-  pluginsAPI
+  pluginsAPI,
+  modelCapabilityAuditAPI
 }
 
 export default adminAPI
@@ -132,3 +135,18 @@ export type {
   PluginUISession,
   PluginTestResult
 } from './plugins'
+export type {
+  CapabilityAuditProtocol,
+  CapabilityAuditStatus,
+  CapabilityAuditCapabilityStatus,
+  CapabilityAuditIdentityStatus,
+  CapabilityAuditEvidence,
+  CapabilityAuditRow,
+  CapabilityAuditStats,
+  CapabilityAuditSummary,
+  CapabilityAuditRun,
+  CapabilityAuditRunDetail,
+  CapabilityAuditProbeRequest,
+  CapabilityAuditSummaryParams,
+  CapabilityAuditRunsParams
+} from './modelCapabilityAudit'

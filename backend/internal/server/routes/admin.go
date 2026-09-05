@@ -46,6 +46,9 @@ func RegisterAdminRoutes(
 		// 账号管理
 		registerAccountRoutes(admin, h, stepUpAuth)
 
+		// 模型能力与身份审计
+		registerModelCapabilityAuditRoutes(admin, h)
+
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)
 
@@ -426,6 +429,19 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/exchange-setup-token-code", h.Admin.OAuth.ExchangeSetupTokenCode)
 		accounts.POST("/cookie-auth", h.Admin.OAuth.CookieAuth)
 		accounts.POST("/setup-token-cookie-auth", h.Admin.OAuth.SetupTokenCookieAuth)
+	}
+}
+
+func registerModelCapabilityAuditRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	audit := admin.Group("/model-capability-audit")
+	{
+		audit.GET("/summary", h.Admin.ModelCapabilityAudit.Summary)
+		audit.GET("/runs", h.Admin.ModelCapabilityAudit.Runs)
+		audit.GET("/runs/:id", h.Admin.ModelCapabilityAudit.Run)
+		// Singular form is the stable public contract; keep /probes for clients
+		// that used the initial development build.
+		audit.POST("/probe", h.Admin.ModelCapabilityAudit.Probe)
+		audit.POST("/probes", h.Admin.ModelCapabilityAudit.Probe)
 	}
 }
 
