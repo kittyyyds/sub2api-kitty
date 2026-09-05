@@ -2186,6 +2186,17 @@
             <Select v-model="openAICompactMode" :options="openAICompactModeOptions" />
           </div>
         </div>
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.gpt5VariantLock') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.gpt5VariantLockDesc') }}
+            </p>
+          </div>
+          <div class="w-44 flex-shrink-0">
+            <Select v-model="openAIGPT5VariantLock" :options="openAIGPT5VariantLockOptions" />
+          </div>
+        </div>
         <div class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">
           <span class="font-medium">{{ t(openAICompactStatusKey) }}</span>
           <span
@@ -2916,6 +2927,7 @@ import type {
   AdminGroup,
   CheckMixedChannelResponse,
   OpenAICompactMode,
+  OpenAIGPT5VariantLock,
   OpenAIResponsesMode,
   OpenAIEndpointCapability,
   OllamaCloudUsageState
@@ -3312,6 +3324,7 @@ const openAILongContextBillingEnabled = ref(false)
 // OpenAI 订阅档位（Plus/Pro/Free）手动覆盖值,存于 credentials.plan_type;'' 表示清空/自动识别
 const editPlanType = ref<string>('')
 const openAICompactMode = ref<OpenAICompactMode>('auto')
+const openAIGPT5VariantLock = ref<OpenAIGPT5VariantLock>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
@@ -3448,6 +3461,12 @@ const openAICompactModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.compactModeAuto') },
   { value: 'force_on', label: t('admin.accounts.openai.compactModeForceOn') },
   { value: 'force_off', label: t('admin.accounts.openai.compactModeForceOff') }
+])
+const openAIGPT5VariantLockOptions = computed(() => [
+  { value: 'auto', label: t('admin.accounts.openai.gpt5VariantLockAuto') },
+  { value: 'sol', label: t('admin.accounts.openai.gpt5VariantLockSol') },
+  { value: 'terra', label: t('admin.accounts.openai.gpt5VariantLockTerra') },
+  { value: 'luna', label: t('admin.accounts.openai.gpt5VariantLockLuna') }
 ])
 // OpenAI 订阅档位手动覆盖选项(清空 + Plus/Pro/Free;别名/自定义值友好显示且保留 canonical)
 const planTypeOptions = computed(() =>
@@ -3799,6 +3818,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAILongContextBillingEnabled.value = false
   editPlanType.value = ''
   openAICompactMode.value = 'auto'
+  openAIGPT5VariantLock.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
   openAICompactModelMappings.value = []
@@ -3822,6 +3842,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       ? readPlanType(newAccount.credentials as Record<string, unknown> | undefined)
       : ''
     openAICompactMode.value = (extra?.openai_compact_mode as OpenAICompactMode) || 'auto'
+    openAIGPT5VariantLock.value = (['auto', 'sol', 'terra', 'luna'].includes(String(extra?.openai_gpt5_variant_lock))
+      ? String(extra?.openai_gpt5_variant_lock)
+      : 'auto') as OpenAIGPT5VariantLock
     if (newAccount.type === 'apikey') {
       openAIResponsesMode.value = normalizeOpenAIResponsesMode(extra?.openai_responses_mode)
       openAIEndpointCapabilities.value = readOpenAIEndpointCapabilities(
@@ -5258,6 +5281,11 @@ const handleSubmit = async () => {
         delete newExtra.openai_compact_mode
       } else {
         newExtra.openai_compact_mode = openAICompactMode.value
+      }
+      if (openAIGPT5VariantLock.value === 'auto') {
+        delete newExtra.openai_gpt5_variant_lock
+      } else {
+        newExtra.openai_gpt5_variant_lock = openAIGPT5VariantLock.value
       }
 		if (props.account.type === 'apikey') {
         if (!openAITextGenerationCapabilityEnabled.value || openAIResponsesMode.value === 'auto') {

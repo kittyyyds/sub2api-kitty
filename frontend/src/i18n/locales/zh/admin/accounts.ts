@@ -745,6 +745,12 @@ export default {
         compactModeAuto: '自动',
         compactModeForceOn: '强制开启',
         compactModeForceOff: '强制关闭',
+        gpt5VariantLock: 'GPT-5.x Model Variant Lock',
+        gpt5VariantLockDesc: '固定 GPT-5.6 请求使用指定变体。仅影响中转层模型路由，无法控制上游内部隐藏调度。',
+        gpt5VariantLockAuto: '自动（不覆写）',
+        gpt5VariantLockSol: '固定 gpt-5.6-sol',
+        gpt5VariantLockTerra: '固定 gpt-5.6-terra',
+        gpt5VariantLockLuna: '固定 gpt-5.6-luna',
         compactModelMapping: 'Compact 专属模型映射',
         compactModelMappingDesc:
           '仅在 /responses/compact 请求中生效。当上游 compact 端点需要特殊 compact 模型时使用。',

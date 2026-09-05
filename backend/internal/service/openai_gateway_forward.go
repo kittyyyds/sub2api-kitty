@@ -557,6 +557,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if codexResult.NormalizedModel != "" {
 			upstreamModel = codexResult.NormalizedModel
 		}
+		if lockedModel := account.ApplyOpenAIGPT5VariantLock(upstreamModel); lockedModel != upstreamModel {
+			decoded["model"] = lockedModel
+			upstreamModel = lockedModel
+			markDecodedModified()
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] GPT-5.6 variant lock applied: %s -> %s (account: %s)", codexResult.NormalizedModel, lockedModel, account.Name)
+		}
 		if strings.TrimSpace(clientPromptCacheKey) != "" {
 			// The body now carries an account-scoped value. Keep the original here
 			// so the header builder derives the same namespace exactly once.

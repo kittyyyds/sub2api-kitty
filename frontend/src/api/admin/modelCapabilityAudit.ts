@@ -105,6 +105,7 @@ export interface CapabilityAuditStats {
   unverified: number
   passive_requests: number
   active_checks: number
+  active_errors?: number
 }
 
 export interface CapabilityAuditSummary {
@@ -118,6 +119,7 @@ export interface CapabilityAuditSummary {
   self_report_consistent?: number
   mismatch_suspected: number
   unverified: number
+  active_errors?: number
   passive_requests: number
   total_accounts?: number
   stats: CapabilityAuditStats

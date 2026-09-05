@@ -1218,8 +1218,11 @@ func normalizeOpenAIResponsesImageOnlyModel(reqBody map[string]any) bool {
 }
 
 func normalizeOpenAIModelForUpstream(account *Account, model string) string {
-	if account == nil || account.UsesOpenAICodexProtocol() {
+	if account == nil {
 		return normalizeCodexModel(model)
+	}
+	if account.UsesOpenAICodexProtocol() {
+		return account.ApplyOpenAIGPT5VariantLock(normalizeCodexModel(model))
 	}
 	return strings.TrimSpace(model)
 }

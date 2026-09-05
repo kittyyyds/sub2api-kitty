@@ -3240,6 +3240,17 @@
             <Select v-model="openAICompactMode" :options="openAICompactModeOptions" />
           </div>
         </div>
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.gpt5VariantLock') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.gpt5VariantLockDesc') }}
+            </p>
+          </div>
+          <div class="w-44 flex-shrink-0">
+            <Select v-model="openAIGPT5VariantLock" :options="openAIGPT5VariantLockOptions" />
+          </div>
+        </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.openai.compactModelMapping') }}</label>
           <p class="input-hint">{{ t('admin.accounts.openai.compactModelMappingDesc') }}</p>
@@ -3828,6 +3839,7 @@ import type {
   CreateAccountRequest,
   CodexSessionImportMessage,
   OpenAICompactMode,
+  OpenAIGPT5VariantLock,
   OpenAIResponsesMode,
   OpenAIEndpointCapability
 } from '@/types'
@@ -4276,6 +4288,7 @@ const openaiFlattenNamespacesEnabled = ref(false)
 const openAILongContextBillingEnabled = ref(false)
 const openAILongContextBillingTouched = ref(false)
 const openAICompactMode = ref<OpenAICompactMode>('auto')
+const openAIGPT5VariantLock = ref<OpenAIGPT5VariantLock>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
@@ -4353,6 +4366,12 @@ const openAICompactModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.compactModeAuto') },
   { value: 'force_on', label: t('admin.accounts.openai.compactModeForceOn') },
   { value: 'force_off', label: t('admin.accounts.openai.compactModeForceOff') }
+])
+const openAIGPT5VariantLockOptions = computed(() => [
+  { value: 'auto', label: t('admin.accounts.openai.gpt5VariantLockAuto') },
+  { value: 'sol', label: t('admin.accounts.openai.gpt5VariantLockSol') },
+  { value: 'terra', label: t('admin.accounts.openai.gpt5VariantLockTerra') },
+  { value: 'luna', label: t('admin.accounts.openai.gpt5VariantLockLuna') }
 ])
 const openAIResponsesModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.responsesModeAuto') },
@@ -5196,6 +5215,7 @@ const resetForm = () => {
   openAILongContextBillingEnabled.value = false
   openAILongContextBillingTouched.value = false
   openAICompactMode.value = 'auto'
+  openAIGPT5VariantLock.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
@@ -5313,6 +5333,11 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     extra.openai_compact_mode = openAICompactMode.value
   } else {
     delete extra.openai_compact_mode
+  }
+  if (openAIGPT5VariantLock.value !== 'auto') {
+    extra.openai_gpt5_variant_lock = openAIGPT5VariantLock.value
+  } else {
+    delete extra.openai_gpt5_variant_lock
   }
 
   if (

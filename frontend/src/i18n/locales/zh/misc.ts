@@ -660,8 +660,8 @@ export default {
   },
 
   modelCapability: {
-    title: '模型能力探测',
-    description: '用真实上游请求验证协议、文本响应和工具调用能力',
+    title: 'Kitty检测',
+    description: '用真实流量和受控上游请求核验模型能力与映射一致性',
     account: '账号',
     accountPlaceholder: '选择 OpenAI 兼容 API Key 账号',
     model: '模型',

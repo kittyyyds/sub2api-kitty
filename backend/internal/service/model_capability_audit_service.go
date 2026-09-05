@@ -148,6 +148,7 @@ type ModelCapabilityAuditSummary struct {
 	SelfReportConsistent int                            `json:"self_report_consistent"`
 	MismatchSuspected    int                            `json:"mismatch_suspected"`
 	Unverified           int                            `json:"unverified"`
+	ActiveErrors         int                            `json:"active_errors"`
 	PassiveRequests      int64                          `json:"passive_requests"`
 	TotalAccounts        int                            `json:"total_accounts,omitempty"`
 	Stats                ModelCapabilityAuditStats      `json:"stats"`
@@ -164,6 +165,7 @@ type ModelCapabilityAuditStats struct {
 	Unverified      int   `json:"unverified"`
 	PassiveRequests int64 `json:"passive_requests"`
 	ActiveChecks    int64 `json:"active_checks"`
+	ActiveErrors    int   `json:"active_errors"`
 }
 
 type modelCapabilityAuditTarget struct {
@@ -1826,6 +1828,10 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 		default:
 			summary.Unverified++
 			summary.Stats.Unverified++
+		}
+		if row.ActiveStatus == "error" {
+			summary.ActiveErrors++
+			summary.Stats.ActiveErrors++
 		}
 	}
 	summary.MismatchSuspected += passiveTotals.PassiveOnlyMismatchModels

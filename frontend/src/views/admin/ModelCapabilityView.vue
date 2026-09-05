@@ -5,7 +5,7 @@
         <div>
           <div class="flex items-center gap-2">
             <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"><Icon name="shield" size="sm" /></span>
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white">神机</h1>
+            <h1 class="text-xl font-bold text-gray-900 dark:text-white">Kitty检测</h1>
           </div>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">汇总真实流量证据，并对账号映射后的模型执行受控主动探测。能力支持与身份可信度分开判断。</p>
         </div>
@@ -29,7 +29,13 @@
         <span v-if="lastRun" class="pb-2 text-xs text-gray-500 dark:text-gray-400">上次运行 #{{ lastRun.id }}：{{ runStatusLabel(lastRun.status) }}，{{ lastRun.completed_items ?? lastRun.completed_count }}/{{ lastRun.total_items ?? lastRun.total_count }} 项协议证据</span>
       </section>
 
-      <section class="grid grid-cols-2 gap-3 md:grid-cols-5"><div v-for="card in summaryCards" :key="card.label" class="border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800"><p class="text-xs text-gray-500 dark:text-gray-400">{{ card.label }}</p><p class="mt-1 text-2xl font-semibold" :class="card.color">{{ card.value }}</p></div></section>
+      <section class="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div v-for="card in summaryCards" :key="card.label" class="border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800">
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ card.label }}</p>
+          <p class="mt-1 text-2xl font-semibold" :class="card.color">{{ card.value }}</p>
+          <p v-if="card.hint" class="mt-1 text-[11px] text-gray-400 dark:text-gray-500">{{ card.hint }}</p>
+        </div>
+      </section>
 
       <section class="border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-dark-700">
@@ -71,7 +77,7 @@
                 <td class="px-4 py-3">
                   <div class="font-medium text-gray-900 dark:text-white">{{ item.row.account_name || ('账号 #' + item.row.account_id) }}</div>
                   <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ item.row.platform }} · {{ item.row.group_name || '未分组' }}</div>
-                  <div class="mt-2 font-mono text-xs text-gray-800 dark:text-gray-200">{{ item.row.requested_model }}</div>
+                  <div class="mt-2 font-mono text-xs text-gray-800 dark:text-gray-200">请求：{{ item.row.requested_model }}</div>
                   <div class="mt-0.5 font-mono text-[11px] text-gray-500 dark:text-gray-400">映射：{{ item.row.mapped_model || '直通' }}</div>
                 </td>
                 <td class="px-4 py-3">
@@ -90,8 +96,8 @@
                 </td>
                 <td class="px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
                   <div class="font-medium text-gray-800 dark:text-gray-200">{{ evidenceSourceLabel(item.evidence?.evidence_source || item.evidence?.source) }}</div>
-                  <div v-if="item.evidence" class="mt-1">累计：尝试 {{ evidenceAttempts(item.evidence) }} / 成功 {{ evidenceSuccesses(item.evidence) }} / 失败 {{ evidenceFailures(item.evidence) }}</div>
-                  <div class="mt-1">真实流量：{{ item.row.passive_requests }} 次<span v-if="item.row.passive_mismatches" class="ml-1 text-amber-600">· 偏差 {{ item.row.passive_mismatches }}</span></div>
+                  <div v-if="item.evidence" class="mt-1">主动：尝试 {{ evidenceAttempts(item.evidence) }} / 成功 {{ evidenceSuccesses(item.evidence) }} / 失败 {{ evidenceFailures(item.evidence) }}</div>
+                  <div class="mt-1">被动：{{ item.row.passive_requests }} 次<span v-if="item.row.passive_mismatches" class="ml-1 text-amber-600">· 偏差 {{ item.row.passive_mismatches }}</span></div>
                 </td>
                 <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
                   <div>{{ formatTime(evidenceTime(item)) }}</div>
@@ -325,12 +331,13 @@ const protocolRows = computed<CapabilityProtocolRow[]>(() => {
 })
 const latestBehaviorRun = computed(() => behaviorRuns.value[0] ?? null)
 const summaryCards = computed(() => [
-  { label: '审计模型', value: summary.value?.total_models ?? 0, color: 'text-gray-900 dark:text-white' },
-  { label: '能力已验证', value: summary.value?.capability_verified ?? 0, color: 'text-emerald-600' },
-  { label: '自报一致（弱证据）', value: summary.value?.self_report_consistent ?? 0, color: 'text-sky-600' },
-  { label: '疑似替换', value: summary.value?.mismatch_suspected ?? 0, color: 'text-amber-600' },
-  { label: '未验证', value: summary.value?.unverified ?? 0, color: 'text-gray-500' },
+  { label: '高度疑似模型替换', value: summary.value?.mismatch_suspected ?? 0, color: 'text-red-600', hint: '请求 / 映射 / 上游返回不一致' },
+  { label: '异常需复核', value: summary.value?.active_errors ?? 0, color: 'text-amber-600', hint: '超时、失败或结论不足' },
+  { label: '能力支持', value: summary.value?.capability_verified ?? 0, color: 'text-emerald-600', hint: '主动协议探测通过' },
+  { label: '主动探测', value: summary.value?.stats.active_checks ?? 0, color: 'text-sky-600', hint: '已完成的协议检查次数' },
+  { label: '最近检查', value: latestCheckTime.value, color: 'text-gray-700 dark:text-gray-200', hint: `观察窗口：${days.value} 天` },
 ])
+const latestCheckTime = computed(() => formatTime(lastRun.value?.finished_at || lastRun.value?.created_at))
 function formatTime(value?: string | null): string { if (!value) return '-'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString() }
 function protocolLabel(value: string): string { return value === 'chat_completions' ? 'Chat Completions' : value === 'responses_tools' ? 'Responses + Tools' : value === 'responses' ? 'Responses' : value }
 function protocolStatus(value: string): string { return value === 'verified' ? '通过' : value === 'model_mismatch' ? '偏差' : value === 'unsupported' ? '不支持' : value === 'needs_retest' ? '结论不足' : value === 'timeout' ? '超时' : value === 'error' ? '异常' : '待复测' }

@@ -667,6 +667,12 @@ export default {
         compactModeAuto: 'Auto',
         compactModeForceOn: 'Force On',
         compactModeForceOff: 'Force Off',
+        gpt5VariantLock: 'GPT-5.x Model Variant Lock',
+        gpt5VariantLockDesc: 'Pin GPT-5.6 requests to one variant at the gateway. This cannot control hidden upstream routing.',
+        gpt5VariantLockAuto: 'Auto (no override)',
+        gpt5VariantLockSol: 'Pin gpt-5.6-sol',
+        gpt5VariantLockTerra: 'Pin gpt-5.6-terra',
+        gpt5VariantLockLuna: 'Pin gpt-5.6-luna',
         compactModelMapping: 'Compact-only model mapping',
         compactModelMappingDesc:
           'Only applies to /responses/compact. Use this when the upstream compact endpoint requires a special compact model.',
