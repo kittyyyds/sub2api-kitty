@@ -84,7 +84,8 @@
               <template v-if="model.pricing.billing_mode === BILLING_MODE_TOKEN">
                 <PricingRow :label="t(prefixKey('inputPrice'))" :value="model.pricing.input_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
                 <PricingRow :label="t(prefixKey('outputPrice'))" :value="model.pricing.output_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
-                <PricingRow :label="t(prefixKey('cacheWritePrice'))" :value="model.pricing.cache_write_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow :label="t(prefixKey('cacheWrite5mPrice'))" :value="model.pricing.cache_write_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow v-if="model.pricing.cache_write_1h_price != null" :label="t(prefixKey('cacheWrite1hPrice'))" :value="model.pricing.cache_write_1h_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
                 <PricingRow :label="t(prefixKey('cacheReadPrice'))" :value="model.pricing.cache_read_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
                 <PricingRow v-if="model.pricing.image_input_price != null && model.pricing.image_input_price > 0" :label="t(prefixKey('imageInputPrice'))" :value="model.pricing.image_input_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
                 <PricingRow v-if="model.pricing.image_output_price != null && model.pricing.image_output_price > 0" :label="t(prefixKey('imageOutputPrice'))" :value="model.pricing.image_output_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />

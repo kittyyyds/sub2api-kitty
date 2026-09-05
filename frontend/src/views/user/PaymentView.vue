@@ -94,7 +94,7 @@
                         {{ t('payment.rechargeBonus') }} +{{ activeBonusRule.bonus_amount.toFixed(2) }} / {{ activeBonusRule.validity_days }} {{ t('payment.days') }}
                       </p>
                       <p v-if="balanceRechargeMultiplier !== 1">
-                        {{ t('payment.rechargeRatePreview', { usd: balanceRechargeMultiplier.toFixed(2) }) }}
+                        {{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}
                       </p>
                     </div>
                   </div>

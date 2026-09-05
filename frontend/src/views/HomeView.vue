@@ -30,7 +30,7 @@
         </div>
         <div class="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
           <router-link
-            v-if="modelPlazaEnabled"
+            v-if="showModelPlazaEntry"
             to="/model-plaza"
             class="inline-flex min-h-10 shrink-0 items-center justify-center px-2 text-sm font-medium text-gray-600 hover:text-primary-600 dark:text-dark-300 dark:hover:text-primary-400"
           >
@@ -125,7 +125,7 @@
         <!-- Nav Actions -->
         <div class="flex items-center gap-3">
           <router-link
-            v-if="modelPlazaEnabled"
+            v-if="showModelPlazaEntry"
             to="/model-plaza"
             class="hidden text-sm font-medium text-gray-600 transition-colors hover:text-primary-600 dark:text-dark-300 dark:hover:text-primary-400 sm:inline-flex"
           >
@@ -220,7 +220,7 @@
                 <Icon name="arrowRight" size="md" class="ml-2" :stroke-width="2" />
               </router-link>
               <router-link
-                v-if="modelPlazaEnabled"
+                v-if="showModelPlazaEntry"
                 to="/model-plaza"
                 class="btn border border-gray-200 bg-white/80 px-6 py-3 text-base text-gray-700 shadow-sm hover:border-primary-300 hover:text-primary-600 dark:border-dark-700 dark:bg-dark-800/80 dark:text-dark-200 dark:hover:border-primary-700 dark:hover:text-primary-400"
               >
@@ -473,7 +473,7 @@
         </p>
         <div class="flex items-center gap-4">
           <router-link
-            v-if="modelPlazaEnabled"
+            v-if="showModelPlazaEntry"
             to="/model-plaza"
             class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
           >
@@ -510,6 +510,7 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { injectModelPricingLinks } from '@/utils/homeContent'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 const { t } = useI18n()
 
@@ -522,9 +523,9 @@ const siteLogo = computed(() => appStore.brandLogoUrl)
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
 const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
-const modelPlazaEnabled = computed(() => appStore.cachedPublicSettings?.model_plaza_enabled === true)
 const hasHomeContent = computed(() => homeContent.value.trim().length > 0)
 const compactHomeEnabled = computed(() => appStore.cachedPublicSettings?.compact_home_enabled === true)
+const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 
 // Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => {
@@ -545,6 +546,12 @@ const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
 
 // Auth state
 const isAuthenticated = computed(() => authStore.isAuthenticated)
+const modelPlazaRequiresAuth = computed(
+  () => appStore.cachedPublicSettings?.model_plaza_require_auth === true,
+)
+const showModelPlazaEntry = computed(
+  () => modelPlazaEnabled.value && (isAuthenticated.value || !modelPlazaRequiresAuth.value),
+)
 const isAdmin = computed(() => authStore.isAdmin)
 const dashboardPath = computed(() => isAdmin.value ? '/admin/dashboard' : '/dashboard')
 const userInitial = computed(() => {

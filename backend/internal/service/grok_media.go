@@ -63,8 +63,9 @@ type GrokMediaRequestInfo struct {
 	ResponseFormat      string
 	SizeTier            string
 	RequestedResolution string
-	Resolution          string
 	AspectRatio         string
+	ImageResolution     string
+	Resolution          string
 	DurationSeconds     int
 	InputImageURLs      []string
 	ReferenceImageURLs  []string
@@ -141,7 +142,8 @@ func ParseGrokMediaRequest(contentType string, body []byte) GrokMediaRequestInfo
 	info.RequestedResolution = strings.TrimSpace(info.RequestedResolution)
 	info.AspectRatio = strings.TrimSpace(info.AspectRatio)
 	info.SizeTier = NormalizeImageBillingTierOrDefault(info.Size)
-	info.Resolution = NormalizeVideoBillingResolutionOrDefault(info.RequestedResolution)
+	info.ImageResolution = grokImagineImageResolution(info.ImageResolution)
+	info.Resolution = NormalizeVideoBillingResolutionOrDefault(info.Resolution)
 	info.DurationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(info.DurationSeconds)
 	if info.N <= 0 {
 		info.N = 1
@@ -162,6 +164,7 @@ func parseGrokMediaJSONRequest(body []byte, info *GrokMediaRequestInfo) {
 	if info.AspectRatio == "" {
 		info.AspectRatio = strings.TrimSpace(gjson.GetBytes(body, "ratio").String())
 	}
+	assignGrokMediaResolution(info.RequestedResolution, info)
 	if duration := gjson.GetBytes(body, "duration"); duration.Exists() && duration.Type == gjson.Number {
 		info.DurationSeconds = int(duration.Int())
 	}
@@ -278,6 +281,7 @@ func parseGrokMediaMultipartRequest(contentType string, body []byte, info *GrokM
 			info.ResponseFormat = value
 		case "resolution":
 			info.RequestedResolution = value
+			assignGrokMediaResolution(value, info)
 		case "aspect_ratio", "ratio":
 			info.AspectRatio = value
 		case "duration":
@@ -1044,8 +1048,8 @@ func prepareGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conten
 	if info.Size != "" {
 		payload["size"] = info.Size
 	}
-	if info.RequestedResolution != "" {
-		payload["resolution"] = info.RequestedResolution
+	if info.ImageResolution != "" {
+		payload["resolution"] = info.ImageResolution
 	}
 	if info.AspectRatio != "" {
 		payload["aspect_ratio"] = info.AspectRatio
@@ -1271,10 +1275,7 @@ func sanitizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conte
 	}
 	switch endpoint {
 	case GrokMediaEndpointImagesGenerations, GrokMediaEndpointImagesEdits:
-		if !gjson.GetBytes(body, "size").Exists() {
-			return body, contentType, nil
-		}
-		out, err := sjson.DeleteBytes(body, "size")
+		out, err := applyGrokImagineImageGeometry(body)
 		if err != nil {
 			return nil, "", fmt.Errorf("sanitize grok media size: %w", err)
 		}
@@ -1914,11 +1915,16 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 		Detail:             upstreamDetail,
 	})
 	if kind == "failover" {
+		retryable, retryDelay, retryDeadline, retryMax := grokSameAccountRetryMetadata(account, resp.StatusCode, body)
 		return nil, &UpstreamFailoverError{
-			StatusCode:             resp.StatusCode,
-			ResponseBody:           body,
-			ResponseHeaders:        resp.Header.Clone(),
-			RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
+			StatusCode:               resp.StatusCode,
+			ResponseBody:             body,
+			ResponseHeaders:          resp.Header.Clone(),
+			RetryableOnSameAccount:   retryable,
+			RequestScopedTransient:   retryable && resp.StatusCode == http.StatusTooManyRequests,
+			SameAccountRetryDelay:    retryDelay,
+			SameAccountRetryDeadline: retryDeadline,
+			SameAccountRetryMax:      retryMax,
 		}
 	}
 

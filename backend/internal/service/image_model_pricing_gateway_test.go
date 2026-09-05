@@ -219,7 +219,6 @@ func TestGatewayUsageLogShowsOneXForFinalImageModelPrice(t *testing.T) {
 		0,
 		false,
 		cost,
-		nil,
 	)
 
 	require.InDelta(t, 1.0, usageLog.RateMultiplier, 1e-12)

@@ -30,16 +30,28 @@ const videoRate = computed(() => (
   props.group.video_rate_independent ? props.group.video_rate_multiplier : textRate.value
 ))
 
-const peakNote = computed(() => {
+const peakWindow = computed(() => {
   if (!hasPeakRate(props.group)) return ''
-  const window = formatPeakRateWindow(
+  return formatPeakRateWindow(
     props.group,
     serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset)
   )
+})
+
+const peakNote = computed(() => {
+  if (!peakWindow.value) return ''
   return t('modelPlaza.detail.peakNote', {
-    window,
+    window: peakWindow.value,
     multiplier: props.group.peak_rate_multiplier
   })
+})
+
+const longContextNote = computed(() => {
+  if (props.group.long_context_pricing_enabled !== false) return ''
+  const hasOfficialLadder = props.group.models.some(
+    (model) => (model.official_pricing?.intervals?.length ?? 0) > 1
+  )
+  return hasOfficialLadder ? t('modelPlaza.detail.longContextDisabledNote') : ''
 })
 
 function rateLabel(value: number): string {
@@ -94,6 +106,11 @@ function rateLabel(value: number): string {
       {{ peakNote }}
     </p>
 
+    <p v-if="longContextNote" class="personal-rate-note">
+      <Icon name="infoCircle" size="xs" />
+      {{ longContextNote }}
+    </p>
+
     <PlazaModelPricingTable
       v-if="group.models.length > 0"
       :models="group.models"
@@ -104,6 +121,8 @@ function rateLabel(value: number): string {
       :image-rate-multiplier="group.image_rate_multiplier"
       :video-rate-independent="group.video_rate_independent"
       :video-rate-multiplier="group.video_rate_multiplier"
+      :peak-window="peakWindow"
+      :peak-rate-multiplier="group.peak_rate_multiplier"
     />
     <p v-else class="no-models">
       {{ t('modelPlaza.detail.noModels') }}
