@@ -5,13 +5,23 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+)
+
+const (
+	modelCapabilityAuditPersistenceTimeout = 10 * time.Second
+	modelCapabilityAuditTargetTimeout      = 75 * time.Second
+	modelCapabilityAuditWorkerCount        = 4
+	modelCapabilityAuditStaleAfter         = 2 * time.Minute
+	modelBehaviorAuditStaleAfter           = 90 * time.Second
 )
 
 // ModelCapabilityAuditOptions controls one bounded, administrator-triggered
@@ -23,6 +33,14 @@ type ModelCapabilityAuditOptions struct {
 	Protocols  []string `json:"protocols,omitempty"`
 	ActiveOnly bool     `json:"active_only"`
 	MaxItems   int      `json:"max_items,omitempty"`
+}
+
+type ModelCapabilityAuditEstimate struct {
+	TargetCount         int   `json:"target_count"`
+	ProtocolCount       int   `json:"protocol_count"`
+	RequestCount        int   `json:"request_count"`
+	EstimatedMaxSeconds int64 `json:"estimated_max_seconds"`
+	MaxItems            int   `json:"max_items"`
 }
 
 type ModelCapabilityAuditRun struct {
@@ -74,6 +92,9 @@ type ModelCapabilityAuditEvidence struct {
 	IdentityStatus     string    `json:"identity_status,omitempty"`
 	Confidence         string    `json:"confidence,omitempty"`
 	EvidenceSource     string    `json:"evidence_source,omitempty"`
+	AttemptCount       int       `json:"attempt_count"`
+	SuccessCount       int       `json:"success_count"`
+	FailureCount       int       `json:"failure_count"`
 	CheckedAt          time.Time `json:"checked_at"`
 }
 
@@ -103,24 +124,28 @@ type ModelCapabilityAuditRow struct {
 }
 
 type ModelCapabilityAuditSummary struct {
-	Days               int                            `json:"days"`
-	GeneratedAt        time.Time                      `json:"generated_at"`
-	TotalModels        int                            `json:"total_models"`
-	CapabilityVerified int                            `json:"capability_verified"`
-	IdentityConsistent int                            `json:"identity_consistent"`
-	MismatchSuspected  int                            `json:"mismatch_suspected"`
-	Unverified         int                            `json:"unverified"`
-	PassiveRequests    int64                          `json:"passive_requests"`
-	TotalAccounts      int                            `json:"total_accounts,omitempty"`
-	Stats              ModelCapabilityAuditStats      `json:"stats"`
-	RecentEvidence     []ModelCapabilityAuditEvidence `json:"recent_evidence,omitempty"`
-	Rows               []ModelCapabilityAuditRow      `json:"rows"`
+	Days                 int                            `json:"days"`
+	GeneratedAt          time.Time                      `json:"generated_at"`
+	TotalModels          int                            `json:"total_models"`
+	ReturnedModels       int                            `json:"returned_models"`
+	RowsTruncated        bool                           `json:"rows_truncated"`
+	CapabilityVerified   int                            `json:"capability_verified"`
+	IdentityConsistent   int                            `json:"identity_consistent"`
+	SelfReportConsistent int                            `json:"self_report_consistent"`
+	MismatchSuspected    int                            `json:"mismatch_suspected"`
+	Unverified           int                            `json:"unverified"`
+	PassiveRequests      int64                          `json:"passive_requests"`
+	TotalAccounts        int                            `json:"total_accounts,omitempty"`
+	Stats                ModelCapabilityAuditStats      `json:"stats"`
+	RecentEvidence       []ModelCapabilityAuditEvidence `json:"recent_evidence,omitempty"`
+	Rows                 []ModelCapabilityAuditRow      `json:"rows"`
 }
 
 type ModelCapabilityAuditStats struct {
 	Models          int   `json:"models"`
 	Accounts        int   `json:"accounts"`
 	Verified        int   `json:"verified"`
+	SelfReported    int   `json:"self_reported"`
 	Suspect         int   `json:"suspect"`
 	Unverified      int   `json:"unverified"`
 	PassiveRequests int64 `json:"passive_requests"`
@@ -153,17 +178,21 @@ type ModelCapabilityAuditService struct {
 	db                 *sql.DB
 	accountRepo        AccountRepository
 	accountTestService *AccountTestService
+	concurrencyService *ConcurrencyService
 }
 
-func NewModelCapabilityAuditService(db *sql.DB, accountRepo AccountRepository, accountTestService *AccountTestService) *ModelCapabilityAuditService {
-	return &ModelCapabilityAuditService{db: db, accountRepo: accountRepo, accountTestService: accountTestService}
+func NewModelCapabilityAuditService(db *sql.DB, accountRepo AccountRepository, accountTestService *AccountTestService, concurrencyService *ConcurrencyService) *ModelCapabilityAuditService {
+	return &ModelCapabilityAuditService{
+		db: db, accountRepo: accountRepo, accountTestService: accountTestService,
+		concurrencyService: concurrencyService,
+	}
 }
 
 func (s *ModelCapabilityAuditService) normalizeOptions(input ModelCapabilityAuditOptions) (ModelCapabilityAuditOptions, []string, error) {
 	if s == nil || s.db == nil || s.accountRepo == nil {
 		return input, nil, errors.New("model capability audit service unavailable")
 	}
-	if input.ActiveOnly && s.accountTestService == nil {
+	if s.accountTestService == nil {
 		return input, nil, errors.New("model capability active probe service unavailable")
 	}
 	protocols, err := normalizeModelCapabilityProtocols(input.Protocols)
@@ -178,6 +207,15 @@ func (s *ModelCapabilityAuditService) normalizeOptions(input ModelCapabilityAudi
 	}
 	input.AccountIDs = uniquePositiveIDs(input.AccountIDs)
 	input.ModelIDs = uniqueNonEmpty(input.ModelIDs)
+	for _, modelID := range input.ModelIDs {
+		if modelCapabilityAuditTextTooLong(modelID) {
+			return input, nil, infraerrors.BadRequest("MODEL_CAPABILITY_MODEL_INVALID", "model ID must not exceed 200 characters")
+		}
+	}
+	sort.Slice(input.AccountIDs, func(i, j int) bool { return input.AccountIDs[i] < input.AccountIDs[j] })
+	sort.Strings(input.ModelIDs)
+	sort.Strings(protocols)
+	input.Protocols = append([]string(nil), protocols...)
 	return input, protocols, nil
 }
 
@@ -232,20 +270,17 @@ func (s *ModelCapabilityAuditService) loadAccounts(ctx context.Context, options 
 		}
 		return out, nil
 	}
-	status := ""
-	if options.ActiveOnly {
-		status = StatusActive
-	}
-	accounts, err := s.accountRepo.ListAllWithFilters(ctx, "", "", status, "", 0, "")
+	accounts, err := s.accountRepo.ListAllWithFilters(ctx, "", "", "", "", 0, "")
 	if err != nil {
 		return nil, err
 	}
 	out := make([]*Account, 0, len(accounts))
 	for i := range accounts {
 		account := &accounts[i]
-		if account != nil {
-			out = append(out, account)
+		if account == nil || (options.ActiveOnly && !strings.EqualFold(account.Status, StatusActive)) {
+			continue
 		}
+		out = append(out, account)
 	}
 	return out, nil
 }
@@ -267,13 +302,13 @@ func (s *ModelCapabilityAuditService) modelsForAccount(ctx context.Context, acco
 	}
 	set := make(map[string]struct{})
 	for model := range account.GetModelMapping() {
-		if model != "" && model != "*" && !strings.Contains(model, "*") {
+		if model != "" && model != "*" && !strings.Contains(model, "*") && !modelCapabilityAuditTextTooLong(model) {
 			set[model] = struct{}{}
 		}
 	}
 	for _, model := range account.GetModelMapping() {
 		model = strings.TrimSpace(model)
-		if model != "" && model != "*" && !strings.Contains(model, "*") {
+		if model != "" && model != "*" && !strings.Contains(model, "*") && !modelCapabilityAuditTextTooLong(model) {
 			set[model] = struct{}{}
 		}
 	}
@@ -291,7 +326,7 @@ func (s *ModelCapabilityAuditService) modelsForAccount(ctx context.Context, acco
 		defer rows.Close()
 		for rows.Next() {
 			var model string
-			if rows.Scan(&model) == nil && strings.TrimSpace(model) != "" {
+			if rows.Scan(&model) == nil && strings.TrimSpace(model) != "" && !modelCapabilityAuditTextTooLong(model) {
 				set[strings.TrimSpace(model)] = struct{}{}
 			}
 		}
@@ -339,6 +374,9 @@ func (s *ModelCapabilityAuditService) buildTargets(ctx context.Context, options 
 	}
 	targets := make([]modelCapabilityAuditTarget, 0, options.MaxItems)
 	for _, account := range accounts {
+		if !isCapabilityProbeAccount(account) {
+			continue
+		}
 		for _, model := range s.modelsForAccount(ctx, account, options.ModelIDs) {
 			targets = append(targets, modelCapabilityAuditTarget{
 				Account:   account,
@@ -354,38 +392,58 @@ func (s *ModelCapabilityAuditService) buildTargets(ctx context.Context, options 
 	return targets, nil
 }
 
-func (s *ModelCapabilityAuditService) createRun(ctx context.Context, options ModelCapabilityAuditOptions, requestedBy *int64, total int) (*ModelCapabilityAuditRun, error) {
+// Estimate resolves exactly the same bounded target set as Start without
+// creating a run or sending traffic. It lets the admin UI obtain informed
+// confirmation before a potentially billable batch.
+func (s *ModelCapabilityAuditService) Estimate(ctx context.Context, input ModelCapabilityAuditOptions) (*ModelCapabilityAuditEstimate, error) {
+	options, protocols, err := s.normalizeOptions(input)
+	if err != nil {
+		return nil, err
+	}
+	targets, err := s.buildTargets(ctx, options, protocols)
+	if err != nil {
+		return nil, err
+	}
+	requestCount := 0
+	for _, target := range targets {
+		requestCount += len(target.Protocols)
+	}
+	maxSeconds := int64(0)
+	if len(targets) > 0 {
+		maxSeconds = int64(modelCapabilityAuditRunTimeout(len(targets)) / time.Second)
+	}
+	return &ModelCapabilityAuditEstimate{
+		TargetCount:         len(targets),
+		ProtocolCount:       len(protocols),
+		RequestCount:        requestCount,
+		EstimatedMaxSeconds: maxSeconds,
+		MaxItems:            options.MaxItems,
+	}, nil
+}
+
+func (s *ModelCapabilityAuditService) createRun(ctx context.Context, options ModelCapabilityAuditOptions, requestedBy *int64, totalTargets, totalItems int) (*ModelCapabilityAuditRun, error) {
 	encoded, err := json.Marshal(options)
 	if err != nil {
 		return nil, err
 	}
-	var run ModelCapabilityAuditRun
 	var requested sql.NullInt64
 	if requestedBy != nil {
 		requested = sql.NullInt64{Int64: *requestedBy, Valid: true}
 	}
-	err = s.db.QueryRowContext(ctx, `
+	row := s.db.QueryRowContext(ctx, `
 		INSERT INTO model_capability_probe_runs
-			(status, requested_by, total_count, total_items, options, requested_scope)
-		VALUES ('running', $1, $2, $2, $3::jsonb, $3::jsonb)
-		RETURNING id, status, requested_by, total_count, completed_count, verified_count,
+			("trigger", status, requested_by, created_by, total_count, total_items, request_key, options, requested_scope)
+		VALUES ('manual', 'running', $1, $1, $2, $3, $4, $5::jsonb, $5::jsonb)
+		ON CONFLICT DO NOTHING
+		RETURNING id, status, requested_by, total_count, total_items, completed_count, completed_items, verified_count,
 		          mismatch_count, unsupported_count, error_count, options, error_message,
-		          started_at, finished_at, created_at`, requested, total, string(encoded)).Scan(
-		&run.ID, &run.Status, &requested, &run.TotalCount, &run.CompletedCount,
-		&run.VerifiedCount, &run.MismatchCount, &run.UnsupportedCount, &run.ErrorCount,
-		&run.Options, &run.ErrorMessage, &run.StartedAt, &run.FinishedAt, &run.CreatedAt)
-	if err != nil {
-		return nil, err
+		          started_at, finished_at, created_at`, requested, totalTargets, totalItems,
+		auditRequestKey("manual", encoded), string(encoded))
+	run, err := scanCapabilityAuditRun(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, infraerrors.Conflict("MODEL_CAPABILITY_AUDIT_ALREADY_RUNNING", "an identical model capability audit is already running")
 	}
-	if requested.Valid {
-		run.RequestedBy = &requested.Int64
-		run.CreatedBy = &requested.Int64
-	}
-	run.Trigger = "manual"
-	run.TotalItems = run.TotalCount
-	run.CompletedItems = run.CompletedCount
-	run.RequestedScope = run.Options
-	return &run, nil
+	return run, err
 }
 
 func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID int64, target modelCapabilityAuditTarget, result ModelCapabilityProbeResult, checkedAt time.Time, source string) error {
@@ -396,22 +454,23 @@ func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID in
 	if strings.TrimSpace(source) == "" {
 		source = "active"
 	}
-	identityStatus := "unobserved"
-	mappedModel := strings.TrimSpace(target.Account.GetMappedModel(result.RequestedModel))
-	if mappedModel == "" {
-		mappedModel = strings.TrimSpace(result.RequestedModel)
+	evidenceSource := source
+	if source == "active" {
+		evidenceSource = "active_probe"
 	}
-	observedModel := strings.TrimSpace(result.UpstreamModel)
+	identityStatus := "unobserved"
+	mappedModel := capabilityAuditResultMappedModel(target, result)
+	observedModel := truncateModelCapabilityAuditText(result.UpstreamModel)
 	if observedModel != "" {
-		if mappedModel != "" && strings.EqualFold(observedModel, mappedModel) {
-			identityStatus = "consistent"
+		if mappedModel != "" && upstreamModelsMatchForAudit(mappedModel, observedModel) {
+			identityStatus = "self_report_consistent"
 		} else {
 			identityStatus = "mismatch"
 		}
 	}
 	capabilityStatus := "unknown"
 	switch result.Status {
-	case "verified":
+	case "verified", "model_mismatch":
 		capabilityStatus = "verified"
 	case "unsupported":
 		capabilityStatus = "unsupported"
@@ -427,9 +486,10 @@ func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID in
 	confidence := "low"
 	if identityStatus == "mismatch" {
 		confidence = "high"
-	} else if identityStatus == "consistent" && capabilityStatus == "verified" {
+	} else if identityStatus == "self_report_consistent" {
 		confidence = "medium"
 	}
+	attemptCount, successCount, failureCount := capabilityProbeAttemptCounts(result)
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO model_capability_probe_results
 		(run_id, account_id, group_id, account_name, platform, requested_model, mapped_model,
@@ -438,16 +498,37 @@ func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID in
 		 success_count, failure_count, tool_name, tool_call_found, tool_arguments_valid,
 		 error_message, evidence, evidence_code, response_summary, checked_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,''),NULLIF($8,''),$9,$10,$11,$12,$13,$14,$15,$16,
-		 NULLIF($17,0),NULLIF($18,0),1,CASE WHEN $10='verified' THEN 1 ELSE 0 END,
-		 CASE WHEN $10='verified' THEN 0 ELSE 1 END,NULLIF($19,''),$20,$21,
-		 NULLIF($22,''),NULLIF($23,''),NULLIF($24,''),NULLIF($25,''),$26)`,
+		 NULLIF($17,0),NULLIF($18,0),$19,$20,$21,NULLIF($22,''),$23,$24,
+		 NULLIF($25,''),NULLIF($26,''),NULLIF($27,''),NULLIF($28,''),$29)`,
 		runID, target.Account.ID, groupID, target.Account.Name, target.Account.Platform,
-		result.RequestedModel, mappedModel, observedModel, result.Protocol, result.Status,
-		result.Capability, capabilityStatus, identityStatus, confidence, source, source,
-		result.HTTPStatus, result.LatencyMS, result.ToolName, result.ToolCallFound,
-		result.ToolArgumentsValid, nullableText(result.Error), result.Evidence, result.Evidence,
-		nullableText(result.Error), checkedAt)
+		truncateModelCapabilityAuditText(result.RequestedModel), mappedModel, observedModel, result.Protocol, result.Status,
+		result.Capability, capabilityStatus, identityStatus, confidence, evidenceSource, source,
+		result.HTTPStatus, result.LatencyMS, attemptCount, successCount, failureCount,
+		truncateModelCapabilityAuditText(result.ToolName), result.ToolCallFound, result.ToolArgumentsValid, nullableText(result.Error),
+		result.Evidence, result.Evidence, nullableText(result.Error), checkedAt)
 	return err
+}
+
+func capabilityProbeAttemptCounts(result ModelCapabilityProbeResult) (attempts, successes, failures int) {
+	if !result.Attempted {
+		return 0, 0, 0
+	}
+	if result.Status == "verified" || result.Status == "model_mismatch" {
+		return 1, 1, 0
+	}
+	return 1, 0, 1
+}
+
+func capabilityAuditResultMappedModel(target modelCapabilityAuditTarget, result ModelCapabilityProbeResult) string {
+	if mappedModel := strings.TrimSpace(result.MappedModel); mappedModel != "" {
+		return truncateModelCapabilityAuditText(mappedModel)
+	}
+	if target.Account != nil {
+		if mappedModel := strings.TrimSpace(target.Account.GetMappedModel(result.RequestedModel)); mappedModel != "" {
+			return truncateModelCapabilityAuditText(mappedModel)
+		}
+	}
+	return truncateModelCapabilityAuditText(result.RequestedModel)
 }
 
 func nullableText(value string) any {
@@ -457,42 +538,229 @@ func nullableText(value string) any {
 	return value
 }
 
-// Run executes a bounded batch and persists every protocol observation. It is
-// synchronous by design: the caller receives a complete run ID and can
-// immediately refresh the aggregate table. The per-target workers keep normal
-// upstream traffic bounded.
-func (s *ModelCapabilityAuditService) Run(ctx context.Context, input ModelCapabilityAuditOptions, requestedBy *int64) (*ModelCapabilityAuditRun, error) {
+func (s *ModelCapabilityAuditService) prepareRun(ctx context.Context, input ModelCapabilityAuditOptions, requestedBy *int64) (*ModelCapabilityAuditRun, []modelCapabilityAuditTarget, error) {
 	options, protocols, err := s.normalizeOptions(input)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	targets, err := s.buildTargets(ctx, options, protocols)
 	if err != nil {
+		return nil, nil, err
+	}
+	totalItems := 0
+	for _, target := range targets {
+		totalItems += len(target.Protocols)
+	}
+	run, err := s.createRun(ctx, options, requestedBy, len(targets), totalItems)
+	if err != nil {
+		return nil, nil, err
+	}
+	return run, targets, nil
+}
+
+// Start persists a run synchronously, then executes non-empty batches outside
+// the HTTP request lifetime. The returned run is normally in "running" state;
+// callers can follow it through ListRuns/GetRun.
+func (s *ModelCapabilityAuditService) Start(ctx context.Context, input ModelCapabilityAuditOptions, requestedBy *int64) (*ModelCapabilityAuditRun, error) {
+	if err := s.recoverStaleAuditRuns(ctx, "manual"); err != nil {
 		return nil, err
 	}
-	run, err := s.createRun(ctx, options, requestedBy, len(targets))
+	run, targets, err := s.prepareRun(ctx, input, requestedBy)
 	if err != nil {
 		return nil, err
 	}
 	if len(targets) == 0 {
+		return s.executeRun(ctx, run, targets)
+	}
+
+	backgroundRun := *run
+	runCtx, cancel := context.WithTimeout(context.Background(), modelCapabilityAuditRunTimeout(len(targets)))
+	go s.executeRunInBackground(runCtx, cancel, &backgroundRun, targets)
+	return run, nil
+}
+
+// Run executes a bounded batch synchronously. The admin HTTP endpoint uses
+// Start so reverse-proxy and browser timeouts cannot cancel a long batch.
+func (s *ModelCapabilityAuditService) Run(ctx context.Context, input ModelCapabilityAuditOptions, requestedBy *int64) (*ModelCapabilityAuditRun, error) {
+	if err := s.recoverStaleAuditRuns(ctx, "manual"); err != nil {
+		return nil, err
+	}
+	run, targets, err := s.prepareRun(ctx, input, requestedBy)
+	if err != nil {
+		return nil, err
+	}
+	return s.executeRun(ctx, run, targets)
+}
+
+func modelCapabilityAuditRunTimeout(targetCount int) time.Duration {
+	if targetCount <= 0 {
+		return 2 * time.Minute
+	}
+	waves := (targetCount + modelCapabilityAuditWorkerCount - 1) / modelCapabilityAuditWorkerCount
+	timeout := time.Duration(waves)*modelCapabilityAuditTargetTimeout + 30*time.Second
+	if timeout < 2*time.Minute {
+		return 2 * time.Minute
+	}
+	return timeout
+}
+
+func (s *ModelCapabilityAuditService) executeRunInBackground(ctx context.Context, cancel context.CancelFunc, run *ModelCapabilityAuditRun, targets []modelCapabilityAuditTarget) {
+	defer cancel()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			slog.Error("model_capability_audit.background_panic", "run_id", run.ID, "recover", recovered)
+			s.markRunFailed(run.ID, "background capability audit panicked")
+		}
+	}()
+	if _, err := s.executeRun(ctx, run, targets); err != nil {
+		slog.Error("model_capability_audit.background_failed", "run_id", run.ID, "error", err)
+		s.markRunFailed(run.ID, "background capability audit failed")
+	}
+}
+
+func (s *ModelCapabilityAuditService) markRunFailed(runID int64, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), modelCapabilityAuditPersistenceTimeout)
+	defer cancel()
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE model_capability_probe_runs
+		SET status=CASE WHEN completed_count > 0 OR completed_items > 0 THEN 'partial' ELSE 'failed' END,
+		    error_count=error_count+1, error_message=$2,
+		    error_summary=$2, heartbeat_at=NOW(), finished_at=NOW()
+		WHERE id=$1 AND status='running'`, runID, message); err != nil {
+		slog.Error("model_capability_audit.mark_failed", "run_id", runID, "error", err)
+	}
+}
+
+// recoverStaleAuditRuns closes runs left behind by a process restart. Counts
+// are rebuilt from durable result rows so a recovered run never claims work
+// that was only held in memory.
+func (s *ModelCapabilityAuditService) recoverStaleAuditRuns(ctx context.Context, trigger string) error {
+	if s == nil || s.db == nil {
+		return errors.New("model capability audit service unavailable")
+	}
+	staleAfter := modelCapabilityAuditStaleAfter
+	if trigger == modelBehaviorAuditTrigger {
+		staleAfter = modelBehaviorAuditStaleAfter
+	}
+	if trigger != "manual" && trigger != modelBehaviorAuditTrigger {
+		return errors.New("unsupported model audit trigger")
+	}
+
+	var query string
+	if trigger == modelBehaviorAuditTrigger {
+		query = `
+			WITH stale AS (
+				SELECT id
+				FROM model_capability_probe_runs
+				WHERE "trigger"=$1 AND status='running'
+				  AND heartbeat_at < NOW() - ($2 * INTERVAL '1 second')
+			), totals AS (
+				SELECT s.id,
+				       COUNT(r.id)::integer AS completed_count,
+				       COALESCE(SUM(r.attempt_count), 0)::integer AS completed_items,
+				       COUNT(r.id) FILTER (WHERE r.comparison_status='matched')::integer AS verified_count,
+				       COUNT(r.id) FILTER (WHERE r.comparison_status='diverged')::integer AS mismatch_count,
+				       COUNT(r.id) FILTER (WHERE r.comparison_status='inconclusive')::integer AS unsupported_count,
+				       COUNT(r.id) FILTER (WHERE r.comparison_status='error')::integer AS result_error_count
+				FROM stale s
+				LEFT JOIN model_behavior_audit_results r ON r.run_id=s.id
+				GROUP BY s.id
+			)
+			UPDATE model_capability_probe_runs AS runs
+			SET status=CASE WHEN totals.completed_count > 0 THEN 'partial' ELSE 'failed' END,
+			    completed_count=totals.completed_count,
+			    completed_items=totals.completed_items,
+			    verified_count=totals.verified_count,
+			    mismatch_count=totals.mismatch_count,
+			    unsupported_count=totals.unsupported_count,
+			    error_count=totals.result_error_count + CASE WHEN totals.completed_count=0 THEN 1 ELSE 0 END,
+			    error_message='paired behavior audit interrupted; recovered from persisted results',
+			    error_summary='paired behavior audit interrupted; recovered from persisted results',
+			    heartbeat_at=NOW(), finished_at=NOW()
+			FROM totals
+			WHERE runs.id=totals.id AND runs.status='running'
+			  AND runs.heartbeat_at < NOW() - ($2 * INTERVAL '1 second')`
+	} else {
+		query = `
+			WITH stale AS (
+				SELECT id, GREATEST(1, COALESCE(CEIL(total_items::numeric / NULLIF(total_count, 0))::integer, 1)) AS expected_items
+				FROM model_capability_probe_runs
+				WHERE "trigger"=$1 AND status='running'
+				  AND heartbeat_at < NOW() - ($2 * INTERVAL '1 second')
+			), latest_results AS (
+				SELECT DISTINCT ON (r.run_id, r.account_id, r.requested_model,
+				                    COALESCE(NULLIF(r.mapped_model, ''), r.requested_model), r.protocol)
+				       r.*
+				FROM model_capability_probe_results r
+				JOIN stale s ON s.id=r.run_id
+				ORDER BY r.run_id, r.account_id, r.requested_model,
+				         COALESCE(NULLIF(r.mapped_model, ''), r.requested_model), r.protocol,
+				         r.checked_at DESC, r.id DESC
+			), per_target AS (
+				SELECT r.run_id, r.account_id, r.requested_model,
+				       COALESCE(NULLIF(r.mapped_model, ''), r.requested_model) AS mapped_model,
+				       COUNT(DISTINCT r.protocol)::integer AS result_count
+				FROM latest_results r
+				GROUP BY r.run_id, r.account_id, r.requested_model,
+				         COALESCE(NULLIF(r.mapped_model, ''), r.requested_model)
+			), totals AS (
+				SELECT s.id,
+				       COUNT(r.id)::integer AS completed_items,
+				       (SELECT COUNT(*)::integer FROM per_target target
+				        WHERE target.run_id=s.id AND target.result_count >= s.expected_items) AS completed_count,
+				       COUNT(r.id) FILTER (WHERE r.status IN ('verified','model_mismatch'))::integer AS verified_count,
+				       COUNT(r.id) FILTER (WHERE r.status='model_mismatch' OR r.identity_status='mismatch')::integer AS mismatch_count,
+				       COUNT(r.id) FILTER (WHERE r.status='unsupported')::integer AS unsupported_count,
+				       COUNT(r.id) FILTER (WHERE r.status IN ('error','timeout','needs_retest'))::integer AS result_error_count
+				FROM stale s
+				LEFT JOIN latest_results r ON r.run_id=s.id
+				GROUP BY s.id, s.expected_items
+			)
+			UPDATE model_capability_probe_runs AS runs
+			SET status=CASE WHEN totals.completed_items > 0 THEN 'partial' ELSE 'failed' END,
+			    completed_count=totals.completed_count,
+			    completed_items=totals.completed_items,
+			    verified_count=totals.verified_count,
+			    mismatch_count=totals.mismatch_count,
+			    unsupported_count=totals.unsupported_count,
+			    error_count=totals.result_error_count + CASE WHEN totals.completed_items=0 THEN 1 ELSE 0 END,
+			    error_message='capability audit interrupted; recovered from persisted results',
+			    error_summary='capability audit interrupted; recovered from persisted results',
+			    heartbeat_at=NOW(), finished_at=NOW()
+			FROM totals
+			WHERE runs.id=totals.id AND runs.status='running'
+			  AND runs.heartbeat_at < NOW() - ($2 * INTERVAL '1 second')`
+	}
+	_, err := s.db.ExecContext(ctx, query, trigger, int64(staleAfter/time.Second))
+	return err
+}
+
+func (s *ModelCapabilityAuditService) executeRun(ctx context.Context, run *ModelCapabilityAuditRun, targets []modelCapabilityAuditTarget) (*ModelCapabilityAuditRun, error) {
+	if len(targets) == 0 {
 		now := time.Now()
 		run.Status = "completed"
 		run.Trigger = "manual"
-		run.TotalItems = run.TotalCount
-		run.CompletedItems = run.CompletedCount
 		run.FinishedAt = &now
-		_, _ = s.db.ExecContext(context.Background(), `UPDATE model_capability_probe_runs SET status='completed', finished_at=$2, completed_items=total_items, completed_count=total_count WHERE id=$1`, run.ID, now)
+		persistCtx, cancel := context.WithTimeout(context.Background(), modelCapabilityAuditPersistenceTimeout)
+		_, updateErr := s.db.ExecContext(persistCtx, `UPDATE model_capability_probe_runs SET status='completed', heartbeat_at=NOW(), finished_at=$2, completed_items=total_items, completed_count=total_count WHERE id=$1 AND status='running'`, run.ID, now)
+		cancel()
+		if updateErr != nil {
+			return nil, updateErr
+		}
 		return run, nil
 	}
 
+	runCtx, stopRun := context.WithCancel(ctx)
+	defer stopRun()
 	type outcome struct {
 		target  modelCapabilityAuditTarget
 		results []ModelCapabilityProbeResult
 		err     error
+		ack     chan bool
 	}
 	jobs := make(chan modelCapabilityAuditTarget)
 	outcomes := make(chan outcome, len(targets))
-	workerCount := 4
+	workerCount := modelCapabilityAuditWorkerCount
 	if len(targets) < workerCount {
 		workerCount = len(targets)
 	}
@@ -502,33 +770,32 @@ func (s *ModelCapabilityAuditService) Run(ctx context.Context, input ModelCapabi
 		go func() {
 			defer workers.Done()
 			for target := range jobs {
-				if ctx.Err() != nil {
-					outcomes <- outcome{target: target, err: ctx.Err()}
-					continue
+				ack := make(chan bool, 1)
+				if runCtx.Err() != nil {
+					outcomes <- outcome{target: target, err: runCtx.Err(), ack: ack}
+					return
 				}
-				probeCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
-				if s.accountTestService == nil {
-					cancel()
-					outcomes <- outcome{target: target, err: errors.New("active probe service unavailable")}
-					continue
+				results, err := s.probeAuditTarget(runCtx, target)
+				outcomes <- outcome{target: target, results: results, err: err, ack: ack}
+				select {
+				case proceed := <-ack:
+					if !proceed {
+						return
+					}
+				case <-runCtx.Done():
+					return
 				}
-				response, probeErr := s.accountTestService.ProbeModelCapabilities(probeCtx, target.Account.ID, ModelCapabilityProbeInput{
-					ModelID:   target.ModelID,
-					Protocols: target.Protocols,
-				})
-				cancel()
-				if probeErr != nil || response == nil {
-					outcomes <- outcome{target: target, err: probeErr}
-					continue
-				}
-				outcomes <- outcome{target: target, results: response.Results}
 			}
 		}()
 	}
 	go func() {
 		defer close(jobs)
 		for _, target := range targets {
-			jobs <- target
+			select {
+			case jobs <- target:
+			case <-runCtx.Done():
+				return
+			}
 		}
 	}()
 	go func() {
@@ -536,12 +803,12 @@ func (s *ModelCapabilityAuditService) Run(ctx context.Context, input ModelCapabi
 		close(outcomes)
 	}()
 
-	completed, verified, mismatch, unsupported, errorsCount := 0, 0, 0, 0, 0
+	completedTargets, completedItems, verified, mismatch, unsupported, errorsCount := 0, 0, 0, 0, 0, 0
+	persistenceFailed := false
 	for item := range outcomes {
 		checkedAt := time.Now()
 		results := item.results
 		if len(results) == 0 {
-			errorsCount++
 			message := "probe failed"
 			if item.err != nil {
 				message = item.err.Error()
@@ -552,60 +819,149 @@ func (s *ModelCapabilityAuditService) Run(ctx context.Context, input ModelCapabi
 					RequestedModel: item.target.ModelID, Error: message, Evidence: "probe_error",
 				})
 			}
-		} else {
-			completed++
 		}
+		persistedForTarget := 0
 		for _, result := range results {
-			if result.Status == "verified" {
-				verified++
-			}
-			if result.Status == "model_mismatch" {
-				mismatch++
-			}
-			if result.Status == "unsupported" {
-				unsupported++
-			}
-			if result.Status == "error" || result.Status == "timeout" {
+			persistCtx, cancel := context.WithTimeout(context.Background(), modelCapabilityAuditPersistenceTimeout)
+			err := s.insertResult(persistCtx, run.ID, item.target, result, checkedAt, "active")
+			cancel()
+			if err != nil {
 				errorsCount++
-			}
-			if err := s.insertResult(context.Background(), run.ID, item.target, result, checkedAt, "active"); err != nil {
-				errorsCount++
+				persistenceFailed = true
+				stopRun()
+			} else {
+				persistedForTarget++
+				if result.Status == "verified" || result.Status == "model_mismatch" {
+					verified++
+				}
+				mappedModel := capabilityAuditResultMappedModel(item.target, result)
+				observedModel := strings.TrimSpace(result.UpstreamModel)
+				if result.Status == "model_mismatch" || (observedModel != "" && !upstreamModelsMatchForAudit(mappedModel, observedModel)) {
+					mismatch++
+				}
+				if result.Status == "unsupported" {
+					unsupported++
+				}
+				if result.Status == "error" || result.Status == "timeout" || result.Status == "needs_retest" {
+					errorsCount++
+				}
 			}
 		}
+		completedItems += persistedForTarget
+		if persistedForTarget == len(results) {
+			completedTargets++
+		}
+		if err := s.updateCapabilityRunProgress(run.ID, completedTargets, completedItems, verified, mismatch, unsupported, errorsCount); err != nil {
+			slog.Warn("model_capability_audit.progress_update_failed", "run_id", run.ID, "error", err)
+			persistenceFailed = true
+			errorsCount++
+			stopRun()
+		}
+		item.ack <- !persistenceFailed && runCtx.Err() == nil
 	}
 	status := "completed"
-	if ctx.Err() != nil {
+	errorMessage := ""
+	if persistenceFailed {
+		errorMessage = "one or more probe results could not be persisted"
+	}
+	if ctx.Err() != nil || completedTargets < run.TotalCount || completedItems < run.TotalItems || persistenceFailed {
 		status = "partial"
 	}
 	finished := time.Now()
-	_, updateErr := s.db.ExecContext(context.Background(), `
+	persistCtx, cancel := context.WithTimeout(context.Background(), modelCapabilityAuditPersistenceTimeout)
+	_, updateErr := s.db.ExecContext(persistCtx, `
 		UPDATE model_capability_probe_runs
-		SET status=$2, completed_count=$3, completed_items=$3, verified_count=$4, mismatch_count=$5,
-		    unsupported_count=$6, error_count=$7, finished_at=$8
-		WHERE id=$1`, run.ID, status, completed, verified, mismatch, unsupported, errorsCount, finished)
+		SET status=$2, completed_count=$3, completed_items=$4, verified_count=$5, mismatch_count=$6,
+		    unsupported_count=$7, error_count=$8, heartbeat_at=NOW(), finished_at=$9,
+		    error_message=NULLIF($10,''), error_summary=NULLIF($10,'')
+		WHERE id=$1 AND status='running'`, run.ID, status, completedTargets, completedItems, verified, mismatch, unsupported, errorsCount, finished, errorMessage)
+	cancel()
 	if updateErr != nil {
 		return nil, updateErr
 	}
-	run.Status, run.CompletedCount, run.VerifiedCount, run.MismatchCount = status, completed, verified, mismatch
+	run.Status, run.CompletedCount, run.CompletedItems = status, completedTargets, completedItems
+	run.VerifiedCount, run.MismatchCount = verified, mismatch
 	run.UnsupportedCount, run.ErrorCount, run.FinishedAt = unsupported, errorsCount, &finished
+	run.ErrorMessage, run.ErrorSummary = errorMessage, errorMessage
 	run.Trigger = "manual"
-	run.TotalItems = run.TotalCount
-	run.CompletedItems = run.CompletedCount
 	return run, nil
+}
+
+func (s *ModelCapabilityAuditService) updateCapabilityRunProgress(runID int64, completedTargets, completedItems, verified, mismatch, unsupported, errorCount int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), modelCapabilityAuditPersistenceTimeout)
+	defer cancel()
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE model_capability_probe_runs
+		SET completed_count=$2, completed_items=$3, verified_count=$4, mismatch_count=$5,
+		    unsupported_count=$6, error_count=$7, heartbeat_at=NOW()
+		WHERE id=$1 AND status='running'`, runID, completedTargets, completedItems, verified, mismatch, unsupported, errorCount)
+	return err
+}
+
+func (s *ModelCapabilityAuditService) probeAuditTarget(ctx context.Context, target modelCapabilityAuditTarget) (results []ModelCapabilityProbeResult, err error) {
+	// This boundary runs inside a worker goroutine, so it must recover locally;
+	// a recover in the parent background goroutine cannot catch worker panics.
+	accountID := int64(0)
+	if target.Account != nil {
+		accountID = target.Account.ID
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			slog.Error("model_capability_audit.target_panic", "account_id", accountID, "model", target.ModelID)
+			results = nil
+			err = errors.New("active capability probe panicked")
+		}
+	}()
+
+	probeCtx, cancel := context.WithTimeout(ctx, modelCapabilityAuditTargetTimeout)
+	defer cancel()
+	if s.accountTestService == nil {
+		return nil, errors.New("active probe service unavailable")
+	}
+	if target.Account == nil {
+		return nil, errors.New("audit target account unavailable")
+	}
+	if s.concurrencyService != nil && s.concurrencyService.cache != nil {
+		acquired, acquireErr := s.concurrencyService.AcquireAccountSlot(probeCtx, accountID, target.Account.Concurrency)
+		if acquireErr != nil {
+			return nil, acquireErr
+		}
+		if acquired == nil || !acquired.Acquired {
+			return nil, errors.New("account concurrency limit reached")
+		}
+		if acquired.ReleaseFunc != nil {
+			defer acquired.ReleaseFunc()
+		}
+	}
+	response, probeErr := s.accountTestService.ProbeModelCapabilities(probeCtx, accountID, ModelCapabilityProbeInput{
+		ModelID:   target.ModelID,
+		Protocols: target.Protocols,
+	})
+	if probeErr != nil {
+		return nil, probeErr
+	}
+	if response == nil {
+		return nil, errors.New("active probe returned no response")
+	}
+	return response.Results, nil
 }
 
 func (s *ModelCapabilityAuditService) ListRuns(ctx context.Context, limit int) ([]ModelCapabilityAuditRun, error) {
 	if s == nil || s.db == nil {
 		return nil, errors.New("model capability audit service unavailable")
 	}
+	if err := s.recoverStaleAuditRuns(ctx, "manual"); err != nil {
+		return nil, err
+	}
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, status, requested_by, total_count, completed_count, verified_count,
+		SELECT id, status, requested_by, total_count, total_items, completed_count, completed_items, verified_count,
 		       mismatch_count, unsupported_count, error_count, options, error_message,
 		       started_at, finished_at, created_at
 		FROM model_capability_probe_runs
+		WHERE "trigger" = 'manual'
 		ORDER BY created_at DESC, id DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
@@ -630,7 +986,7 @@ func scanCapabilityAuditRun(scanner rowScanner) (*ModelCapabilityAuditRun, error
 	var finished sql.NullTime
 	var options []byte
 	var errorMessage sql.NullString
-	if err := scanner.Scan(&run.ID, &run.Status, &requested, &run.TotalCount, &run.CompletedCount,
+	if err := scanner.Scan(&run.ID, &run.Status, &requested, &run.TotalCount, &run.TotalItems, &run.CompletedCount, &run.CompletedItems,
 		&run.VerifiedCount, &run.MismatchCount, &run.UnsupportedCount, &run.ErrorCount,
 		&options, &errorMessage, &run.StartedAt, &finished, &run.CreatedAt); err != nil {
 		return nil, err
@@ -653,8 +1009,12 @@ func scanCapabilityAuditRun(scanner rowScanner) (*ModelCapabilityAuditRun, error
 		}
 	}
 	run.Trigger = "manual"
-	run.TotalItems = run.TotalCount
-	run.CompletedItems = run.CompletedCount
+	if run.TotalItems == 0 && run.TotalCount > 0 {
+		run.TotalItems = run.TotalCount
+	}
+	if run.CompletedItems == 0 && run.CompletedCount > 0 {
+		run.CompletedItems = run.CompletedCount
+	}
 	run.CreatedBy = run.RequestedBy
 	return &run, nil
 }
@@ -663,19 +1023,26 @@ func (s *ModelCapabilityAuditService) GetRun(ctx context.Context, id int64) (*Mo
 	if id <= 0 || s == nil || s.db == nil {
 		return nil, nil, errors.New("invalid model capability audit run")
 	}
+	if err := s.recoverStaleAuditRuns(ctx, "manual"); err != nil {
+		return nil, nil, err
+	}
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, status, requested_by, total_count, completed_count, verified_count,
+		SELECT id, status, requested_by, total_count, total_items, completed_count, completed_items, verified_count,
 		       mismatch_count, unsupported_count, error_count, options, error_message,
 		       started_at, finished_at, created_at
-		FROM model_capability_probe_runs WHERE id=$1`, id)
+		FROM model_capability_probe_runs WHERE id=$1 AND "trigger"='manual'`, id)
 	run, err := scanCapabilityAuditRun(row)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, infraerrors.NotFound("MODEL_CAPABILITY_AUDIT_RUN_NOT_FOUND", "model capability audit run not found")
+		}
 		return nil, nil, err
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, run_id, account_id, account_name, platform, group_id, requested_model, mapped_model,
 		       response_model, upstream_model, protocol, status, capability, capability_status,
 		       identity_status, confidence, evidence_source, http_status, latency_ms,
+		       attempt_count, success_count, failure_count,
 		       tool_call_found, tool_arguments_valid, error_message, evidence,
 		       evidence_code, checked_at
 		FROM model_capability_probe_results WHERE run_id=$1 ORDER BY checked_at ASC, id ASC`, id)
@@ -693,6 +1060,7 @@ func (s *ModelCapabilityAuditService) GetRun(ctx context.Context, id int64) (*Mo
 		if err := rows.Scan(&item.ID, &item.RunID, &item.AccountID, &item.AccountName, &item.Platform, &groupID, &item.RequestedModel,
 			&mapped, &responseModel, &upstream, &item.Protocol, &item.Status, &capability, &capabilityStatus,
 			&identityStatus, &confidence, &evidenceSource, &httpStatus, &latency,
+			&item.AttemptCount, &item.SuccessCount, &item.FailureCount,
 			&item.ToolCallFound, &item.ToolArgumentsValid, &errorMessage, &evidenceText,
 			&evidenceCode, &item.CheckedAt); err != nil {
 			return nil, nil, err
@@ -746,21 +1114,19 @@ func (s *ModelCapabilityAuditService) GetRun(ctx context.Context, id int64) (*Mo
 	return run, evidence, rows.Err()
 }
 
-func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days, limit int) ([]modelCapabilityPassive, error) {
+func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days int) ([]modelCapabilityPassive, error) {
 	if days <= 0 {
 		days = 30
 	}
 	if days > 365 {
 		days = 365
 	}
-	if limit <= 0 || limit > 5000 {
-		limit = 2000
-	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT u.account_id, a.name, a.platform,
 		       COALESCE(NULLIF(u.requested_model, ''), NULLIF(u.model, ''), ''),
 		       COALESCE(NULLIF(u.upstream_model, ''), ''),
-		       COALESCE(NULLIF(u.upstream_response_model, ''), ''),
+		       COALESCE(STRING_AGG(DISTINCT NULLIF(u.upstream_response_model, ''), ','
+		         ORDER BY NULLIF(u.upstream_response_model, '')), ''),
 		       COUNT(*)::bigint,
 		       COUNT(*) FILTER (WHERE COALESCE(u.upstream_model_mismatch, FALSE))::bigint,
 		       MAX(u.created_at)
@@ -769,10 +1135,8 @@ func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days, lim
 		WHERE u.created_at >= NOW() - ($1 * INTERVAL '1 day')
 		GROUP BY u.account_id, a.name, a.platform,
 		         COALESCE(NULLIF(u.requested_model, ''), NULLIF(u.model, ''), ''),
-		         COALESCE(NULLIF(u.upstream_model, ''), ''),
-		         COALESCE(NULLIF(u.upstream_response_model, ''), '')
-		ORDER BY MAX(u.created_at) DESC
-		LIMIT $2`, days, limit)
+		         COALESCE(NULLIF(u.upstream_model, ''), '')
+		ORDER BY MAX(u.created_at) DESC`, days)
 	if err != nil {
 		return nil, err
 	}
@@ -829,14 +1193,28 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 		days = 365
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT DISTINCT ON (account_id, requested_model, protocol)
-		       id, run_id, account_id, account_name, platform, group_id, requested_model, mapped_model,
-		       response_model, protocol, status, capability, capability_status, identity_status,
+		WITH ranked AS (
+			SELECT results.*,
+			       SUM(attempt_count) OVER audit_window AS cumulative_attempt_count,
+			       SUM(success_count) OVER audit_window AS cumulative_success_count,
+			       SUM(failure_count) OVER audit_window AS cumulative_failure_count,
+			       ROW_NUMBER() OVER (audit_window ORDER BY checked_at DESC, results.id DESC) AS row_rank
+			FROM model_capability_probe_results AS results
+			JOIN model_capability_probe_runs AS runs ON runs.id=results.run_id AND runs."trigger"='manual'
+			WHERE checked_at >= NOW() - ($1 * INTERVAL '1 day')
+			  AND evidence_source <> 'paired_behavior' AND source <> 'paired_behavior'
+			WINDOW audit_window AS (
+				PARTITION BY account_id, requested_model,
+				             COALESCE(NULLIF(mapped_model, ''), requested_model), protocol
+			)
+		)
+		SELECT id, run_id, account_id, account_name, platform, group_id, requested_model, mapped_model,
+		       COALESCE(NULLIF(response_model, ''), upstream_model), protocol, status, capability, capability_status, identity_status,
 		       confidence, evidence_source, http_status, latency_ms, tool_call_found,
-		       tool_arguments_valid, error_message, evidence, evidence_code, checked_at
-		FROM model_capability_probe_results
-		WHERE checked_at >= NOW() - ($1 * INTERVAL '1 day')
-		ORDER BY account_id, requested_model, protocol, checked_at DESC, id DESC`, days)
+		       tool_arguments_valid, error_message, evidence, evidence_code,
+		       cumulative_attempt_count, cumulative_success_count, cumulative_failure_count, checked_at
+		FROM ranked WHERE row_rank=1
+		ORDER BY account_id, requested_model, COALESCE(NULLIF(mapped_model, ''), requested_model), protocol`, days)
 	if err != nil {
 		return nil, err
 	}
@@ -850,23 +1228,26 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 		var capability sql.NullString
 		var mappedModel, upstreamModel, capabilityStatus, identityStatus, confidence, evidenceSource, evidenceCode sql.NullString
 		var groupID sql.NullInt64
-		var httpStatus, latency sql.NullInt64
+		var httpStatus, latency, attemptCount, successCount, failureCount sql.NullInt64
 		var toolFound, toolValid bool
 		var errorMessage sql.NullString
 		var checkedAt time.Time
 		if err := rows.Scan(&evidenceID, &runID, &accountID, &accountName, &platform, &groupID, &requestedModel, &mappedModel,
 			&upstreamModel, &protocol, &status, &capability, &capabilityStatus, &identityStatus,
 			&confidence, &evidenceSource, &httpStatus, &latency, &toolFound, &toolValid,
-			&errorMessage, &evidence, &evidenceCode, &checkedAt); err != nil {
+			&errorMessage, &evidence, &evidenceCode, &attemptCount, &successCount, &failureCount, &checkedAt); err != nil {
 			return nil, err
 		}
-		key := auditRowKey(accountID, requestedModel)
+		key := auditRowKey(accountID, requestedModel, mappedModel.String)
 		idx, exists := byKey[key]
 		if !exists {
 			row := ModelCapabilityAuditRow{Key: key, AccountID: accountID, AccountName: accountName, Platform: platform,
 				RequestedModel: requestedModel, Protocols: make(map[string]ModelCapabilityAuditEvidence)}
 			if mappedModel.Valid {
 				row.MappedModel = mappedModel.String
+			}
+			if strings.TrimSpace(row.MappedModel) == "" {
+				row.MappedModel = requestedModel
 			}
 			if groupID.Valid {
 				row.GroupID = &groupID.Int64
@@ -876,9 +1257,13 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 			byKey[key] = idx
 		}
 		item := ModelCapabilityAuditEvidence{ID: evidenceID, RunID: runID, AccountID: accountID,
-			AccountName: accountName, RequestedModel: requestedModel, Protocol: protocol, Status: status,
+			AccountName: accountName, Platform: platform, RequestedModel: requestedModel, Protocol: protocol, Status: status,
 			HTTPStatus: int(httpStatus.Int64), LatencyMS: latency.Int64,
 			ToolCallFound: toolFound, ToolArgumentsValid: toolValid, CheckedAt: checkedAt}
+		if groupID.Valid {
+			id := groupID.Int64
+			item.GroupID = &id
+		}
 		if evidence.Valid {
 			item.Evidence = evidence.String
 		}
@@ -888,6 +1273,9 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 		}
 		if mappedModel.Valid {
 			item.MappedModel = mappedModel.String
+		}
+		if strings.TrimSpace(item.MappedModel) == "" {
+			item.MappedModel = requestedModel
 		}
 		if capability.Valid {
 			item.Capability = capability.String
@@ -910,6 +1298,9 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 		if errorMessage.Valid {
 			item.Error = errorMessage.String
 		}
+		item.AttemptCount = int(attemptCount.Int64)
+		item.SuccessCount = int(successCount.Int64)
+		item.FailureCount = int(failureCount.Int64)
 		result[idx].Protocols[protocol] = item
 		if result[idx].ActiveLastSeen == nil || checkedAt.After(*result[idx].ActiveLastSeen) {
 			t := checkedAt
@@ -919,8 +1310,11 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 	return result, rows.Err()
 }
 
-func auditRowKey(accountID int64, model string) string {
-	return strconv.FormatInt(accountID, 10) + ":" + model
+func auditRowKey(accountID int64, requestedModel, mappedModel string) string {
+	if strings.TrimSpace(mappedModel) == "" {
+		mappedModel = requestedModel
+	}
+	return strconv.FormatInt(accountID, 10) + ":" + strings.ToLower(strings.TrimSpace(requestedModel)) + ":" + strings.ToLower(strings.TrimSpace(mappedModel))
 }
 
 func splitResponseModels(value string) []string {
@@ -944,7 +1338,7 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 	if limit <= 0 || limit > 500 {
 		limit = 200
 	}
-	passive, err := s.passiveRows(ctx, days, limit*8)
+	passive, err := s.passiveRows(ctx, days)
 	if err != nil {
 		return nil, err
 	}
@@ -963,11 +1357,17 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 			item.GroupID = &group.id
 			item.GroupName = group.name
 		}
+		for protocol, evidence := range item.Protocols {
+			evidence.Platform = item.Platform
+			evidence.GroupID = item.GroupID
+			evidence.GroupName = item.GroupName
+			item.Protocols[protocol] = evidence
+		}
 		rowsByKey[item.Key] = len(rows)
 		rows = append(rows, item)
 	}
 	for _, item := range passive {
-		key := auditRowKey(item.AccountID, item.RequestedModel)
+		key := auditRowKey(item.AccountID, item.RequestedModel, item.MappedModel)
 		idx, ok := rowsByKey[key]
 		if !ok {
 			row := ModelCapabilityAuditRow{Key: key, AccountID: item.AccountID, AccountName: item.AccountName,
@@ -1030,16 +1430,15 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 		}
 		return left.After(*right)
 	})
-	if len(rows) > limit {
-		rows = rows[:limit]
-	}
 	accounts := make(map[int64]struct{}, len(rows))
 	activeChecks := int64(0)
 	for _, row := range rows {
 		accounts[row.AccountID] = struct{}{}
-		activeChecks += int64(len(row.Protocols))
+		for _, evidence := range row.Protocols {
+			activeChecks += int64(evidence.AttemptCount)
+		}
 	}
-	summary := &ModelCapabilityAuditSummary{Days: days, GeneratedAt: time.Now(), Rows: rows, TotalModels: len(rows), TotalAccounts: len(accounts)}
+	summary := &ModelCapabilityAuditSummary{Days: days, GeneratedAt: time.Now(), TotalModels: len(rows), TotalAccounts: len(accounts)}
 	summary.Stats = ModelCapabilityAuditStats{Models: len(rows), Accounts: len(accounts), PassiveRequests: summary.PassiveRequests, ActiveChecks: activeChecks}
 	for _, row := range rows {
 		summary.PassiveRequests += row.PassiveRequests
@@ -1051,6 +1450,9 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 		switch row.IdentityStatus {
 		case "consistent":
 			summary.IdentityConsistent++
+		case "self_report_consistent":
+			summary.SelfReportConsistent++
+			summary.Stats.SelfReported++
 		case "mismatch_suspected":
 			summary.MismatchSuspected++
 			summary.Stats.Suspect++
@@ -1060,9 +1462,16 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 		}
 	}
 	summary.Stats.PassiveRequests = summary.PassiveRequests
+	if len(rows) > limit {
+		summary.Rows = rows[:limit]
+		summary.RowsTruncated = true
+	} else {
+		summary.Rows = rows
+	}
+	summary.ReturnedModels = len(summary.Rows)
 	// Include a compact, redacted evidence tail for dashboards that do not
 	// need to load a separate run detail endpoint.
-	for _, row := range rows {
+	for _, row := range summary.Rows {
 		for protocol, evidence := range row.Protocols {
 			evidence.Protocol = protocol
 			summary.RecentEvidence = append(summary.RecentEvidence, evidence)
@@ -1103,18 +1512,24 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 		if evidence.ResponseModel != "" {
 			row.ObservedModel = evidence.ResponseModel
 			row.PassiveResponseModels = append(row.PassiveResponseModels, evidence.ResponseModel)
-			if row.MappedModel == "" || !strings.EqualFold(evidence.ResponseModel, row.MappedModel) {
+			if row.MappedModel == "" || !upstreamModelsMatchForAudit(row.MappedModel, evidence.ResponseModel) {
 				activeMismatch = true
 			}
 		} else if evidence.UpstreamModel != "" {
 			row.ObservedModel = evidence.UpstreamModel
 			row.PassiveResponseModels = append(row.PassiveResponseModels, evidence.UpstreamModel)
-			if row.MappedModel == "" || !strings.EqualFold(evidence.UpstreamModel, row.MappedModel) {
+			if row.MappedModel == "" || !upstreamModelsMatchForAudit(row.MappedModel, evidence.UpstreamModel) {
 				activeMismatch = true
 			}
 		}
 	}
 	row.PassiveResponseModels = uniqueNonEmpty(row.PassiveResponseModels)
+	for _, model := range row.PassiveResponseModels {
+		if row.MappedModel != "" && !upstreamModelsMatchForAudit(row.MappedModel, model) {
+			activeMismatch = true
+			break
+		}
+	}
 	switch {
 	case verified > 0:
 		row.CapabilityStatus = "verified"
@@ -1132,17 +1547,17 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 	} else {
 		row.ActiveStatus = "not_checked"
 	}
-	consistent := row.PassiveMismatches == 0 && !activeMismatch
-	responseMatches := false
+	noMismatch := row.PassiveMismatches == 0 && !activeMismatch
+	selfReportMatches := false
 	for _, model := range row.PassiveResponseModels {
-		if row.MappedModel != "" && strings.EqualFold(model, row.MappedModel) {
-			responseMatches = true
+		if row.MappedModel != "" && upstreamModelsMatchForAudit(row.MappedModel, model) {
+			selfReportMatches = true
 			break
 		}
 	}
-	if consistent && responseMatches {
-		row.IdentityStatus = "consistent"
-		row.Confidence = "high"
+	if noMismatch && selfReportMatches {
+		row.IdentityStatus = "self_report_consistent"
+		row.Confidence = "medium"
 	} else if row.PassiveMismatches > 0 || activeMismatch {
 		row.IdentityStatus = "mismatch_suspected"
 		row.Confidence = "high"

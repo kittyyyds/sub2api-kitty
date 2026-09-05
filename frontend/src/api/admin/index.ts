@@ -147,6 +147,12 @@ export type {
   CapabilityAuditRun,
   CapabilityAuditRunDetail,
   CapabilityAuditProbeRequest,
+  CapabilityAuditEstimate,
   CapabilityAuditSummaryParams,
-  CapabilityAuditRunsParams
+  CapabilityAuditRunsParams,
+  BehaviorAuditRequest,
+  BehaviorAuditEstimate,
+  BehaviorAuditRun,
+  BehaviorAuditResult,
+  BehaviorAuditDetail
 } from './modelCapabilityAudit'

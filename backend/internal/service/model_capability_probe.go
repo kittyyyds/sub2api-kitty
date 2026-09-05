@@ -25,6 +25,8 @@ const (
 	ModelCapabilityProtocolResponsesTools  = "responses_tools"
 	modelCapabilityProbeTimeout            = 20 * time.Second
 	modelCapabilityProbeMaxBodyBytes       = 256 * 1024
+	modelCapabilityProbeMaxOutputTokens    = 512
+	modelCapabilityAuditTextMaxRunes       = 200
 )
 
 // ModelCapabilityProbeInput describes one administrator-triggered probe.
@@ -39,12 +41,14 @@ type ModelCapabilityProbeResult struct {
 	Status             string `json:"status"`
 	Capability         string `json:"capability"`
 	RequestedModel     string `json:"requested_model"`
+	MappedModel        string `json:"mapped_model,omitempty"`
 	UpstreamModel      string `json:"upstream_model,omitempty"`
 	HTTPStatus         int    `json:"http_status"`
 	LatencyMS          int64  `json:"latency_ms"`
 	ToolName           string `json:"tool_name,omitempty"`
 	ToolCallFound      bool   `json:"tool_call_found"`
 	ToolArgumentsValid bool   `json:"tool_arguments_valid"`
+	Attempted          bool   `json:"attempted"`
 	Error              string `json:"error,omitempty"`
 	Evidence           string `json:"evidence"`
 }
@@ -102,14 +106,14 @@ func capabilityProbePayload(protocol, modelID, toolName string) ([]byte, error) 
 		return json.Marshal(map[string]any{
 			"model":      modelID,
 			"messages":   []map[string]any{{"role": "user", "content": "Reply with the single word pong."}},
-			"max_tokens": 8,
+			"max_tokens": modelCapabilityProbeMaxOutputTokens,
 			"stream":     false,
 		})
 	case ModelCapabilityProtocolResponses:
 		return json.Marshal(map[string]any{
 			"model":             modelID,
 			"input":             "Reply with the single word pong.",
-			"max_output_tokens": 8,
+			"max_output_tokens": modelCapabilityProbeMaxOutputTokens,
 			"stream":            false,
 		})
 	case ModelCapabilityProtocolResponsesTools:
@@ -133,7 +137,7 @@ func capabilityProbePayload(protocol, modelID, toolName string) ([]byte, error) 
 				},
 			}},
 			"tool_choice":       "required",
-			"max_output_tokens": 64,
+			"max_output_tokens": modelCapabilityProbeMaxOutputTokens,
 			"stream":            false,
 		})
 	default:
@@ -141,18 +145,10 @@ func capabilityProbePayload(protocol, modelID, toolName string) ([]byte, error) 
 	}
 }
 
-func capabilityProbeError(body []byte) string {
-	message := strings.TrimSpace(gjson.GetBytes(body, "error.message").String())
-	if message == "" {
-		message = strings.TrimSpace(gjson.GetBytes(body, "message").String())
-	}
-	if message == "" {
-		return "upstream returned an error"
-	}
-	if len(message) > 240 {
-		message = message[:240]
-	}
-	return message
+func capabilityProbeError(_ []byte) string {
+	// Upstream error text is attacker-controlled and can echo request headers.
+	// Persist only a generic message; the HTTP status remains available separately.
+	return "upstream returned an error"
 }
 
 func capabilityProbeResponseModel(body []byte) string {
@@ -164,15 +160,105 @@ func capabilityProbeJSONBody(body []byte) bool {
 	return json.Unmarshal(body, &value) == nil
 }
 
+func modelCapabilityAuditTextTooLong(value string) bool {
+	return len([]rune(strings.TrimSpace(value))) > modelCapabilityAuditTextMaxRunes
+}
+
+func truncateModelCapabilityAuditText(value string) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) > modelCapabilityAuditTextMaxRunes {
+		return string(runes[:modelCapabilityAuditTextMaxRunes])
+	}
+	return value
+}
+
+func redactCapabilityProbeMetadata(value string, secrets ...string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	for _, secret := range secrets {
+		secret = strings.TrimSpace(secret)
+		if secret == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(secret), "bearer ") {
+			secret = strings.TrimSpace(secret[len("bearer "):])
+		}
+		if secret != "" && strings.Contains(value, secret) {
+			return "[redacted]"
+		}
+	}
+	return truncateModelCapabilityAuditText(value)
+}
+
+func capabilityProbeInconclusive(protocol string, body []byte) (evidence, message string, inconclusive bool) {
+	if protocol == ModelCapabilityProtocolChatCompletions {
+		for _, choice := range gjson.GetBytes(body, "choices").Array() {
+			if strings.EqualFold(strings.TrimSpace(choice.Get("finish_reason").String()), "length") {
+				return "output_budget_exhausted", "probe output budget was exhausted before a conclusive response", true
+			}
+		}
+		return "", "", false
+	}
+
+	status := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "status").String()))
+	if status == "failed" {
+		return "upstream_response_failed", "upstream reported a failed response; retry the probe", true
+	}
+	if status == "incomplete" && strings.EqualFold(strings.TrimSpace(gjson.GetBytes(body, "incomplete_details.reason").String()), "max_output_tokens") {
+		return "output_budget_exhausted", "probe output budget was exhausted before a conclusive response", true
+	}
+	return "", "", false
+}
+
+func capabilityForProtocol(protocol string) string {
+	switch protocol {
+	case ModelCapabilityProtocolChatCompletions:
+		return "chat_completions_text"
+	case ModelCapabilityProtocolResponses:
+		return "responses_text"
+	case ModelCapabilityProtocolResponsesTools:
+		return "responses_tools"
+	default:
+		return "unknown"
+	}
+}
+
 func capabilityProbeTextResponseValid(protocol string, body []byte) bool {
 	switch protocol {
 	case ModelCapabilityProtocolChatCompletions:
-		return len(gjson.GetBytes(body, "choices").Array()) > 0
+		for _, choice := range gjson.GetBytes(body, "choices").Array() {
+			content := choice.Get("message.content")
+			if content.Type == gjson.String && strings.TrimSpace(content.String()) != "" {
+				return true
+			}
+			for _, part := range content.Array() {
+				text := part.Get("text")
+				if part.Get("type").String() == "text" && text.Type == gjson.String && strings.TrimSpace(text.String()) != "" {
+					return true
+				}
+			}
+		}
+		return false
 	case ModelCapabilityProtocolResponses:
-		if strings.TrimSpace(gjson.GetBytes(body, "output_text").String()) != "" {
+		outputText := gjson.GetBytes(body, "output_text")
+		if outputText.Type == gjson.String && strings.TrimSpace(outputText.String()) != "" {
 			return true
 		}
-		return len(gjson.GetBytes(body, "output").Array()) > 0
+		for _, output := range gjson.GetBytes(body, "output").Array() {
+			if output.Get("type").String() != "message" {
+				continue
+			}
+			for _, part := range output.Get("content").Array() {
+				text := part.Get("text")
+				if part.Get("type").String() == "output_text" && text.Type == gjson.String && strings.TrimSpace(text.String()) != "" {
+					return true
+				}
+			}
+		}
+		return false
 	default:
 		return true
 	}
@@ -194,8 +280,8 @@ func capabilityProbeToolCall(body []byte, expectedName string) (found, valid boo
 			continue
 		}
 		found = true
-		name = item.Name
-		if name != expectedName {
+		name = truncateModelCapabilityAuditText(item.Name)
+		if item.Name != expectedName {
 			return true, false, name
 		}
 		var args map[string]any
@@ -245,9 +331,15 @@ func (s *AccountTestService) ProbeModelCapabilities(ctx context.Context, account
 	if requestedModel == "" {
 		requestedModel = openai.DefaultTestModel
 	}
+	if modelCapabilityAuditTextTooLong(requestedModel) {
+		return nil, infraerrors.BadRequest("MODEL_CAPABILITY_MODEL_INVALID", "model ID must not exceed 200 characters")
+	}
 	upstreamModel := strings.TrimSpace(account.GetMappedModel(requestedModel))
 	if upstreamModel == "" {
 		upstreamModel = requestedModel
+	}
+	if modelCapabilityAuditTextTooLong(upstreamModel) {
+		return nil, infraerrors.BadRequest("MODEL_CAPABILITY_MAPPED_MODEL_INVALID", "mapped model ID must not exceed 200 characters")
 	}
 	response := &ModelCapabilityProbeResponse{
 		AccountID:      account.ID,
@@ -266,15 +358,24 @@ func (s *AccountTestService) ProbeModelCapabilities(ctx context.Context, account
 	return response, nil
 }
 
-func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context, account *Account, requestedModel, upstreamModel, authToken, protocol string) ModelCapabilityProbeResult {
-	result := ModelCapabilityProbeResult{
+func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context, account *Account, requestedModel, upstreamModel, authToken, protocol string) (result ModelCapabilityProbeResult) {
+	result = ModelCapabilityProbeResult{
 		Protocol:       protocol,
 		Status:         "error",
 		Capability:     "unknown",
 		RequestedModel: requestedModel,
+		MappedModel:    upstreamModel,
 		HTTPStatus:     0,
 		Evidence:       "no_response",
 	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result.Status = "error"
+			result.Capability = "unknown"
+			result.Evidence = "probe_panic"
+			result.Error = "capability probe panicked"
+		}
+	}()
 	toolName := ""
 	if protocol == ModelCapabilityProtocolResponsesTools {
 		toolName = "probe_lookup_weather_" + capabilityProbeNonce()
@@ -317,7 +418,8 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 		result.Error = "failed to create probe request"
 		return result
 	}
-	request = request.WithContext(WithHTTPUpstreamProfile(request.Context(), HTTPUpstreamProfileOpenAI))
+	requestCtx := WithHTTPUpstreamProfile(request.Context(), HTTPUpstreamProfileOpenAI)
+	request = request.WithContext(WithHTTPUpstreamRedirectsDisabled(requestCtx))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Authorization", "Bearer "+authToken)
@@ -331,6 +433,7 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 	}
 
 	started := time.Now()
+	result.Attempted = true
 	resp, err := s.httpUpstream.DoWithTLS(request, proxyURL, account.ID, account.Concurrency, capabilityProbeTLSProfile(s, account))
 	result.LatencyMS = time.Since(started).Milliseconds()
 	if err != nil {
@@ -357,7 +460,6 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 		result.Error = "failed to read upstream response"
 		return result
 	}
-	result.UpstreamModel = capabilityProbeResponseModel(responseBody)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
 			result.Status = "unsupported"
@@ -376,6 +478,15 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 		result.Error = "upstream returned invalid JSON"
 		return result
 	}
+	responseModel := capabilityProbeResponseModel(responseBody)
+	result.UpstreamModel = redactCapabilityProbeMetadata(responseModel, authToken)
+	if evidence, message, inconclusive := capabilityProbeInconclusive(protocol, responseBody); inconclusive {
+		result.Status = "needs_retest"
+		result.Capability = capabilityForProtocol(protocol)
+		result.Evidence = evidence
+		result.Error = message
+		return result
+	}
 	if protocol != ModelCapabilityProtocolResponsesTools && !capabilityProbeTextResponseValid(protocol, responseBody) {
 		result.Status = "unsupported"
 		if protocol == ModelCapabilityProtocolResponses {
@@ -388,16 +499,18 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 		return result
 	}
 
-	if result.UpstreamModel != "" && !strings.EqualFold(result.UpstreamModel, requestedModel) && !strings.EqualFold(result.UpstreamModel, upstreamModel) {
-		result.Status = "model_mismatch"
-		result.Capability = "verified"
-		result.Evidence = "response_model_mismatch"
-		result.Error = "upstream response model differs from requested model"
-		return result
-	}
+	modelMismatch := responseModel != "" && !upstreamModelsMatchForAudit(upstreamModel, responseModel)
 	if protocol == ModelCapabilityProtocolResponsesTools {
 		result.ToolCallFound, result.ToolArgumentsValid, result.ToolName = capabilityProbeToolCall(responseBody, toolName)
+		result.ToolName = redactCapabilityProbeMetadata(result.ToolName, authToken)
 		if result.ToolCallFound && result.ToolArgumentsValid {
+			if modelMismatch {
+				result.Status = "model_mismatch"
+				result.Capability = "responses_tools"
+				result.Evidence = "verified_tool_call_response_model_mismatch"
+				result.Error = "upstream response model differs from mapped model"
+				return result
+			}
 			result.Status = "verified"
 			result.Capability = "responses_tools"
 			result.Evidence = "verified_tool_call"
@@ -407,6 +520,13 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 		result.Capability = "responses_tools"
 		result.Evidence = "missing_or_invalid_tool_call"
 		result.Error = "response did not contain the expected tool call and valid JSON arguments"
+		return result
+	}
+	if modelMismatch {
+		result.Status = "model_mismatch"
+		result.Capability = "verified"
+		result.Evidence = "response_model_mismatch"
+		result.Error = "upstream response model differs from mapped model"
 		return result
 	}
 

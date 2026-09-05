@@ -438,6 +438,11 @@ func registerModelCapabilityAuditRoutes(admin *gin.RouterGroup, h *handler.Handl
 		audit.GET("/summary", h.Admin.ModelCapabilityAudit.Summary)
 		audit.GET("/runs", h.Admin.ModelCapabilityAudit.Runs)
 		audit.GET("/runs/:id", h.Admin.ModelCapabilityAudit.Run)
+		audit.POST("/probe-preview", h.Admin.ModelCapabilityAudit.Estimate)
+		audit.GET("/behavior-runs", h.Admin.ModelCapabilityAudit.BehaviorRuns)
+		audit.GET("/behavior-runs/:id", h.Admin.ModelCapabilityAudit.BehaviorRun)
+		audit.POST("/behavior-preview", h.Admin.ModelCapabilityAudit.EstimateBehavior)
+		audit.POST("/behavior", h.Admin.ModelCapabilityAudit.ProbeBehavior)
 		// Singular form is the stable public contract; keep /probes for clients
 		// that used the initial development build.
 		audit.POST("/probe", h.Admin.ModelCapabilityAudit.Probe)

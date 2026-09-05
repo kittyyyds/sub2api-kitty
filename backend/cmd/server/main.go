@@ -4,9 +4,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -19,9 +21,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
+	_ "github.com/lib/pq"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,11 +62,22 @@ func main() {
 
 	// Parse command line flags
 	setupMode := flag.Bool("setup", false, "Run setup wizard in CLI mode")
+	migrateOnly := flag.Bool("migrate-only", false, "Apply database migrations and exit")
 	showVersion := flag.Bool("version", false, "Show version information")
 	flag.Parse()
 
 	if *showVersion {
 		log.Printf("Sub2API %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		return
+	}
+	if *setupMode && *migrateOnly {
+		log.Fatal("--setup and --migrate-only cannot be used together")
+	}
+	if *migrateOnly {
+		if err := runMigrationsOnly(); err != nil {
+			log.Fatalf("Database migration failed: %v", err)
+		}
+		log.Println("Database migrations completed")
 		return
 	}
 
@@ -92,6 +107,36 @@ func main() {
 
 	// Normal server mode
 	runMainServer()
+}
+
+func runMigrationsOnly() error {
+	return runMigrationsOnlyWith(config.LoadForBootstrap, sql.Open, repository.ApplyMigrations)
+}
+
+func runMigrationsOnlyWith(
+	loadConfig func() (*config.Config, error),
+	openDatabase func(driverName, dataSourceName string) (*sql.DB, error),
+	applyMigrations func(context.Context, *sql.DB) error,
+) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("load bootstrap config: %w", err)
+	}
+	if cfg == nil {
+		return errors.New("load bootstrap config: empty config")
+	}
+	db, err := openDatabase("postgres", cfg.Database.DSNWithTimezone(cfg.Timezone))
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if err := applyMigrations(ctx, db); err != nil {
+		return fmt.Errorf("apply migrations: %w", err)
+	}
+	return nil
 }
 
 func runSetupServer() {

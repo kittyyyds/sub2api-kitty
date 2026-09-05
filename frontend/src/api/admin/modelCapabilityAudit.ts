@@ -32,6 +32,7 @@ export type CapabilityAuditCapabilityStatus =
 
 export type CapabilityAuditIdentityStatus =
   | 'consistent'
+  | 'self_report_consistent'
   | 'mismatch_suspected'
   | 'evidence_only'
   | 'unverified'
@@ -61,6 +62,12 @@ export interface CapabilityAuditEvidence {
   identity_status?: CapabilityAuditIdentityStatus
   confidence?: string
   evidence_source?: string
+  source?: string
+  attempt_count?: number
+  success_count?: number
+  failure_count?: number
+  tool_name?: string
+  response_summary?: string
   checked_at: string
 }
 
@@ -93,6 +100,7 @@ export interface CapabilityAuditStats {
   models: number
   accounts: number
   verified: number
+  self_reported?: number
   suspect: number
   unverified: number
   passive_requests: number
@@ -103,8 +111,11 @@ export interface CapabilityAuditSummary {
   days: number
   generated_at: string
   total_models: number
+  returned_models?: number
+  rows_truncated?: boolean
   capability_verified: number
   identity_consistent: number
+  self_report_consistent?: number
   mismatch_suspected: number
   unverified: number
   passive_requests: number
@@ -148,6 +159,91 @@ export interface CapabilityAuditProbeRequest {
   protocols?: CapabilityAuditProtocol[]
   active_only?: boolean
   max_items?: number
+}
+
+export interface CapabilityAuditEstimate {
+  target_count: number
+  protocol_count: number
+  request_count: number
+  estimated_max_seconds: number
+  max_items: number
+}
+
+export interface BehaviorAuditRequest {
+  target_account_ids?: number[]
+  model_id: string
+  case_count?: number
+  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+}
+
+export interface BehaviorAuditEstimate {
+  target_count: number
+  available_target_count: number
+  anchor_count: number
+  pair_count: number
+  request_count: number
+  estimated_max_seconds: number
+  can_run: boolean
+  targets_truncated: boolean
+  reason?: string
+}
+
+export interface BehaviorAuditRun {
+  id: number
+  status: string
+  requested_by?: number | null
+  model_id: string
+  case_count: number
+  reasoning_effort: string
+  total_pairs: number
+  completed_pairs: number
+  matched_count: number
+  diverged_count: number
+  inconclusive_count: number
+  error_count: number
+  total_requests: number
+  attempt_count: number
+  error_message?: string
+  started_at: string
+  finished_at?: string | null
+  created_at: string
+}
+
+export interface BehaviorAuditResult {
+  id: number
+  target_account_id: number
+  target_account_name: string
+  anchor_account_id: number
+  anchor_account_name: string
+  case_key: string
+  case_label: string
+  requested_model: string
+  target_mapped_model: string
+  anchor_mapped_model: string
+  target_response_model?: string
+  anchor_response_model?: string
+  comparison_status: 'matched' | 'diverged' | 'inconclusive' | 'error' | string
+  target_correct: boolean
+  anchor_correct: boolean
+  target_http_status: number
+  anchor_http_status: number
+  target_latency_ms: number
+  anchor_latency_ms: number
+  target_output_hash?: string
+  anchor_output_hash?: string
+  expected_output_hash: string
+  target_status: string
+  anchor_status: string
+  attempt_count: number
+  success_count: number
+  failure_count: number
+  error?: string
+  checked_at: string
+}
+
+export interface BehaviorAuditDetail {
+  run: BehaviorAuditRun
+  results: BehaviorAuditResult[]
 }
 
 export interface CapabilityAuditSummaryParams {
@@ -195,6 +291,47 @@ export async function runProbes(
   return data
 }
 
+export async function estimateProbes(
+  request: CapabilityAuditProbeRequest = {}
+): Promise<CapabilityAuditEstimate> {
+  const { data } = await apiClient.post<CapabilityAuditEstimate>(
+    '/admin/model-capability-audit/probe-preview',
+    request
+  )
+  return data
+}
+
+export async function estimateBehavior(request: BehaviorAuditRequest): Promise<BehaviorAuditEstimate> {
+  const { data } = await apiClient.post<BehaviorAuditEstimate>(
+    '/admin/model-capability-audit/behavior-preview',
+    request
+  )
+  return data
+}
+
+export async function runBehavior(request: BehaviorAuditRequest): Promise<BehaviorAuditRun> {
+  const { data } = await apiClient.post<BehaviorAuditRun>(
+    '/admin/model-capability-audit/behavior',
+    request
+  )
+  return data
+}
+
+export async function listBehaviorRuns(limit = 20): Promise<BehaviorAuditRun[]> {
+  const { data } = await apiClient.get<BehaviorAuditRun[]>(
+    '/admin/model-capability-audit/behavior-runs',
+    { params: { limit } }
+  )
+  return data ?? []
+}
+
+export async function getBehaviorRun(id: number): Promise<BehaviorAuditDetail> {
+  const { data } = await apiClient.get<BehaviorAuditDetail>(
+    `/admin/model-capability-audit/behavior-runs/${id}`
+  )
+  return data
+}
+
 // Short aliases make the module convenient for callers that mirror endpoint
 // names while retaining the explicit names used by the audit view.
 export const summary = getSummary
@@ -207,6 +344,11 @@ export const modelCapabilityAuditAPI = {
   listRuns,
   getRun,
   runProbes,
+  estimateProbes,
+  estimateBehavior,
+  runBehavior,
+  listBehaviorRuns,
+  getBehaviorRun,
   summary,
   runs,
   run,

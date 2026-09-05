@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -27,6 +28,33 @@ type modelCapabilityAuditProbeRequest struct {
 	MaxItems   int      `json:"max_items"`
 }
 
+type modelBehaviorAuditRequest struct {
+	TargetAccountIDs []int64 `json:"target_account_ids"`
+	ModelID          string  `json:"model_id"`
+	CaseCount        int     `json:"case_count"`
+	ReasoningEffort  string  `json:"reasoning_effort"`
+}
+
+func (req modelBehaviorAuditRequest) options() service.ModelBehaviorAuditOptions {
+	return service.ModelBehaviorAuditOptions{
+		TargetAccountIDs: req.TargetAccountIDs,
+		ModelID:          req.ModelID,
+		CaseCount:        req.CaseCount,
+		ReasoningEffort:  req.ReasoningEffort,
+	}
+}
+
+func (req modelCapabilityAuditProbeRequest) options() service.ModelCapabilityAuditOptions {
+	activeOnly := true
+	if req.ActiveOnly != nil {
+		activeOnly = *req.ActiveOnly
+	}
+	return service.ModelCapabilityAuditOptions{
+		AccountIDs: req.AccountIDs, ModelIDs: req.ModelIDs, Protocols: req.Protocols,
+		ActiveOnly: activeOnly, MaxItems: req.MaxItems,
+	}
+}
+
 func (h *ModelCapabilityAuditHandler) unavailable(c *gin.Context) bool {
 	if h == nil || h.auditService == nil {
 		response.Error(c, http.StatusServiceUnavailable, "Model capability audit service unavailable")
@@ -45,19 +73,110 @@ func (h *ModelCapabilityAuditHandler) Probe(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
-	activeOnly := true
-	if req.ActiveOnly != nil {
-		activeOnly = *req.ActiveOnly
+	var requestedBy *int64
+	if subject, ok := middleware2.GetAuthSubjectFromContext(c); ok && subject.UserID > 0 {
+		id := subject.UserID
+		requestedBy = &id
 	}
-	run, err := h.auditService.Run(c.Request.Context(), service.ModelCapabilityAuditOptions{
-		AccountIDs: req.AccountIDs, ModelIDs: req.ModelIDs, Protocols: req.Protocols,
-		ActiveOnly: activeOnly, MaxItems: req.MaxItems,
-	}, nil)
+	run, err := h.auditService.Start(c.Request.Context(), req.options(), requestedBy)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 	response.Success(c, run)
+}
+
+// Estimate returns the exact bounded target/request count without contacting
+// any upstream. The UI uses it for an explicit cost confirmation.
+func (h *ModelCapabilityAuditHandler) Estimate(c *gin.Context) {
+	if h.unavailable(c) {
+		return
+	}
+	var req modelCapabilityAuditProbeRequest
+	if err := c.ShouldBindJSON(&req); err != nil && err.Error() != "EOF" {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	estimate, err := h.auditService.Estimate(c.Request.Context(), req.options())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, estimate)
+}
+
+func (h *ModelCapabilityAuditHandler) EstimateBehavior(c *gin.Context) {
+	if h.unavailable(c) {
+		return
+	}
+	var req modelBehaviorAuditRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	estimate, err := h.auditService.EstimateBehavior(c.Request.Context(), req.options())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, estimate)
+}
+
+func (h *ModelCapabilityAuditHandler) ProbeBehavior(c *gin.Context) {
+	if h.unavailable(c) {
+		return
+	}
+	var req modelBehaviorAuditRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	var requestedBy *int64
+	if subject, ok := middleware2.GetAuthSubjectFromContext(c); ok && subject.UserID > 0 {
+		id := subject.UserID
+		requestedBy = &id
+	}
+	run, err := h.auditService.StartBehavior(c.Request.Context(), req.options(), requestedBy)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, run)
+}
+
+func (h *ModelCapabilityAuditHandler) BehaviorRuns(c *gin.Context) {
+	if h.unavailable(c) {
+		return
+	}
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	runs, err := h.auditService.ListBehaviorRuns(c.Request.Context(), limit)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, runs)
+}
+
+func (h *ModelCapabilityAuditHandler) BehaviorRun(c *gin.Context) {
+	if h.unavailable(c) {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.BadRequest(c, "Invalid run id")
+		return
+	}
+	detail, err := h.auditService.GetBehaviorRun(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, detail)
 }
 
 // Summary combines passive usage-log evidence and latest active results.

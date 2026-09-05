@@ -97,6 +97,29 @@ func TestUpstreamModelMismatchTreatsGrokBuildRuntimeIDsAsAliases(t *testing.T) {
 	}
 }
 
+func TestUpstreamModelMismatchTreatsOfficialOpenAISnapshotsAsAliases(t *testing.T) {
+	for _, tt := range []struct {
+		sent, response string
+	}{
+		{"gpt-4o", "gpt-4o-2024-08-06"},
+		{"gpt-4o-latest", "gpt-4o-2024-08-06"},
+		{"o3-mini", "o3-mini-2025-01-31"},
+		{"gpt-4", "gpt-4-0613"},
+	} {
+		mismatch := upstreamModelMismatch(tt.sent, tt.response)
+		require.NotNil(t, mismatch)
+		require.False(t, *mismatch, "%s should match %s", tt.sent, tt.response)
+	}
+}
+
+func TestUpstreamModelMismatchRejectsNonSnapshotSuffixes(t *testing.T) {
+	for _, response := range []string{"gpt-5-mini", "gpt-5-build", "gpt-5-2025-99-99"} {
+		mismatch := upstreamModelMismatch("gpt-5", response)
+		require.NotNil(t, mismatch)
+		require.True(t, *mismatch, "gpt-5 must not match %s", response)
+	}
+}
+
 func TestUpstreamModelMismatchDoesNotCollapseDifferentModels(t *testing.T) {
 	tests := []struct {
 		name          string

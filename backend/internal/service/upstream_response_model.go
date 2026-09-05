@@ -2,6 +2,7 @@ package service
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -285,12 +286,57 @@ func upstreamModelsMatchForAudit(sentModel, responseModel string) bool {
 	if strings.EqualFold(sentModel, responseModel) {
 		return true
 	}
+	if openAIModelSnapshotMatches(sentModel, responseModel) {
+		return true
+	}
 
 	// xAI reports the runtime build ID for these supported public aliases.
 	// Canonicalize only for mismatch auditing; keep the raw response model for
 	// observability and for the separate response-model billing safeguards.
 	sentGrokModel := canonicalGrokBuildRuntimeModel(sentModel)
 	return sentGrokModel != "" && sentGrokModel == canonicalGrokBuildRuntimeModel(responseModel)
+}
+
+func openAIModelSnapshotMatches(sentModel, responseModel string) bool {
+	sentModel = strings.ToLower(strings.TrimSpace(sentModel))
+	responseModel = strings.ToLower(strings.TrimSpace(responseModel))
+	aliases := []string{sentModel}
+	if base, ok := strings.CutSuffix(sentModel, "-latest"); ok {
+		aliases = append(aliases, base)
+	}
+	for _, alias := range aliases {
+		if !isOpenAIModelFamily(alias) {
+			continue
+		}
+		if responseModel == alias || isOpenAIModelSnapshotSuffix(strings.TrimPrefix(responseModel, alias+"-"), strings.HasPrefix(responseModel, alias+"-")) {
+			return true
+		}
+	}
+	return false
+}
+
+func isOpenAIModelFamily(model string) bool {
+	return strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "codex-") ||
+		strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
+}
+
+func isOpenAIModelSnapshotSuffix(suffix string, hasPrefix bool) bool {
+	if !hasPrefix {
+		return false
+	}
+	if len(suffix) == len("2006-01-02") {
+		_, err := time.Parse("2006-01-02", suffix)
+		return err == nil
+	}
+	if len(suffix) == len("20060102") {
+		_, err := time.Parse("20060102", suffix)
+		return err == nil
+	}
+	if len(suffix) == len("0102") {
+		_, err := time.Parse("0102", suffix)
+		return err == nil
+	}
+	return false
 }
 
 func canonicalGrokBuildRuntimeModel(model string) string {
