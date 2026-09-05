@@ -292,7 +292,11 @@ func TestProbeModelCapabilitiesTreatsBudgetExhaustionAsInconclusive(t *testing.T
 func TestProbeModelCapabilitiesRedactsCredentialEchoes(t *testing.T) {
 	account := &Account{
 		ID: 16, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
-		Credentials: map[string]any{"api_key": "top-secret-token", "base_url": "http://upstream.test/v1"},
+		Credentials: map[string]any{
+			"api_key": "top-secret-token", "base_url": "http://upstream.test/v1",
+			"header_override_enabled": true,
+			"header_overrides":        map[string]any{"x-relay-token": "override-secret-token"},
+		},
 	}
 	service := newModelCapabilityProbeService(&modelCapabilityProbeUpstream{
 		status:       http.StatusBadRequest,
@@ -313,6 +317,40 @@ func TestProbeModelCapabilitiesRedactsCredentialEchoes(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "[redacted]", result.Results[0].UpstreamModel)
+	require.NotNil(t, result.Results[0].responseModelMatch)
+	require.False(t, *result.Results[0].responseModelMatch)
+
+	headerEchoService := newModelCapabilityProbeService(&modelCapabilityProbeUpstream{
+		responseBody: `{"model":"gpt-5","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}]}`,
+	}, account)
+	account.Credentials["header_overrides"] = map[string]any{"x-relay-token": "gpt"}
+	result, err = headerEchoService.ProbeModelCapabilities(context.Background(), account.ID, ModelCapabilityProbeInput{
+		ModelID: "gpt-5", Protocols: []string{ModelCapabilityProtocolResponses},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "[redacted]", result.Results[0].UpstreamModel)
+	require.Equal(t, "verified", result.Results[0].Status)
+	require.NotNil(t, result.Results[0].responseModelMatch)
+	require.True(t, *result.Results[0].responseModelMatch)
+
+	longOverride := strings.Repeat("R", maxHeaderOverrideValueLength)
+	account.Credentials["header_overrides"] = map[string]any{"x-relay-token": longOverride}
+	truncatedEcho := string([]rune(longOverride)[:upstreamResponseModelMaxLength])
+	longEchoService := newModelCapabilityProbeService(&modelCapabilityProbeUpstream{
+		responseBody: `{"model":"` + truncatedEcho + `","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}]}`,
+	}, account)
+	result, err = longEchoService.ProbeModelCapabilities(context.Background(), account.ID, ModelCapabilityProbeInput{
+		ModelID: "gpt-5", Protocols: []string{ModelCapabilityProtocolResponses},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "[redacted]", result.Results[0].UpstreamModel)
+}
+
+func TestRedactCapabilityProbeMetadataRejectsTruncatedCredentialPrefix(t *testing.T) {
+	credential := strings.Repeat("T", maxHeaderOverrideValueLength)
+	truncatedEcho := "relay:" + credential[:modelCapabilityAuditTextMaxRunes-len("relay:")]
+
+	require.Equal(t, "[redacted]", redactCapabilityProbeMetadata(truncatedEcho, credential))
 }
 
 func TestCapabilityProbeTextResponseRequiresActualText(t *testing.T) {

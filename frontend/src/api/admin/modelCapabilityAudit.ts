@@ -159,6 +159,7 @@ export interface CapabilityAuditProbeRequest {
   protocols?: CapabilityAuditProtocol[]
   active_only?: boolean
   max_items?: number
+  preview_token?: string
 }
 
 export interface CapabilityAuditEstimate {
@@ -167,6 +168,8 @@ export interface CapabilityAuditEstimate {
   request_count: number
   estimated_max_seconds: number
   max_items: number
+  preview_token: string
+  expires_at: string
 }
 
 export interface BehaviorAuditRequest {
@@ -174,6 +177,7 @@ export interface BehaviorAuditRequest {
   model_id: string
   case_count?: number
   reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+  preview_token?: string
 }
 
 export interface BehaviorAuditEstimate {
@@ -186,6 +190,8 @@ export interface BehaviorAuditEstimate {
   can_run: boolean
   targets_truncated: boolean
   reason?: string
+  preview_token: string
+  expires_at: string
 }
 
 export interface BehaviorAuditRun {

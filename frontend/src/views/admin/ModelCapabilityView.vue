@@ -438,14 +438,17 @@ async function prepareBatchProbe() {
   try {
     const estimate = await adminAPI.modelCapabilityAudit.estimateProbes(pendingProbeRequest)
     if (estimate.target_count === 0) { errorMessage.value = '没有符合条件的启用账号模型可供主动探测。'; pendingProbeRequest = null; return }
+    if (!estimate.preview_token) { errorMessage.value = '预览确认令牌缺失，请刷新页面后重试。'; pendingProbeRequest = null; return }
+    pendingProbeRequest = { ...pendingProbeRequest, preview_token: estimate.preview_token }
     pendingEstimate.value = estimate
   } catch (error) { errorMessage.value = extractApiErrorMessage(error); pendingProbeRequest = null }
   finally { previewing.value = false }
 }
 async function confirmBatchProbe() {
-  const request = pendingProbeRequest ?? currentProbeRequest()
+  const request = pendingProbeRequest
   pendingEstimate.value = null
   pendingProbeRequest = null
+  if (!request?.preview_token) { errorMessage.value = '预览已失效，请重新计算探测范围。'; return }
   running.value = true
   errorMessage.value = ''
   try {
@@ -538,6 +541,12 @@ async function prepareBehaviorAudit() {
       pendingBehaviorRequest = null
       return
     }
+    if (!estimate.preview_token) {
+      behaviorErrorMessage.value = '预览确认令牌缺失，请刷新页面后重试。'
+      pendingBehaviorRequest = null
+      return
+    }
+    pendingBehaviorRequest = { ...pendingBehaviorRequest, preview_token: estimate.preview_token }
     pendingBehaviorEstimate.value = estimate
   } catch (error) {
     behaviorErrorMessage.value = extractApiErrorMessage(error)
@@ -547,9 +556,10 @@ async function prepareBehaviorAudit() {
   }
 }
 async function confirmBehaviorAudit() {
-  const request = pendingBehaviorRequest ?? currentBehaviorRequest()
+  const request = pendingBehaviorRequest
   pendingBehaviorEstimate.value = null
   pendingBehaviorRequest = null
+  if (!request?.preview_token) { behaviorErrorMessage.value = '预览已失效，请重新计算审计范围。'; return }
   behaviorRunning.value = true
   behaviorErrorMessage.value = ''
   try {

@@ -76,6 +76,57 @@ func TestRedactAuditBody_BareSessionKeyRedacted(t *testing.T) {
 	}
 }
 
+func TestRedactAuditBody_HeaderOverridesObjectRedacted(t *testing.T) {
+	const canary = "relay-canary-must-not-reach-audit-log"
+	raw := []byte(`{
+		"name": "relay-account",
+		"credentials": {
+			"header_override_enabled": true,
+			"header_overrides": {
+				"x-relay-key": "` + canary + `",
+				"user-agent": "private-relay-client"
+			}
+		}
+	}`)
+	out := RedactAuditBody(raw, "application/json")
+
+	if strings.Contains(out, canary) || strings.Contains(out, "private-relay-client") {
+		t.Fatalf("redacted body still contains a header override value: %s", out)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
+	}
+	credentials, ok := parsed["credentials"].(map[string]any)
+	if !ok {
+		t.Fatalf("credentials structure was not preserved: %s", out)
+	}
+	if got := credentials["header_overrides"]; got != auditRedactedPlaceholder {
+		t.Fatalf("header_overrides = %#v, want %q", got, auditRedactedPlaceholder)
+	}
+	if got := credentials["header_override_enabled"]; got != true {
+		t.Fatalf("header_override_enabled = %#v, want true", got)
+	}
+	if !strings.Contains(out, "relay-account") {
+		t.Fatalf("non-sensitive account name should be preserved: %s", out)
+	}
+}
+
+func TestRedactAuditBody_PreviewTokenRedacted(t *testing.T) {
+	const canary = "one-time-preview-token-canary"
+	out := RedactAuditBody([]byte(`{"account_id":42,"preview_token":"`+canary+`"}`), "application/json")
+
+	if strings.Contains(out, canary) {
+		t.Fatalf("redacted body still contains preview_token: %s", out)
+	}
+	if !strings.Contains(out, `"preview_token":"`+auditRedactedPlaceholder+`"`) {
+		t.Fatalf("preview_token placeholder missing: %s", out)
+	}
+	if !strings.Contains(out, `"account_id":42`) {
+		t.Fatalf("non-sensitive account_id should be preserved: %s", out)
+	}
+}
+
 // TestRedactAuditBody_AuthoritativeTablesSynced 覆盖曾经漏网的凭证字段：
 // 账号 credentials 敏感子键、支付渠道无分隔符密钥、字符串值内嵌凭证的 proxy_key / custom_key，
 // 以及 camelCase 等命名变体（归一化比对）。

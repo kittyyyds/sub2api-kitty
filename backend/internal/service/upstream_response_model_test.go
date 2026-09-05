@@ -218,6 +218,62 @@ func TestUpstreamResponseModelObserverBoundsUntrustedModelName(t *testing.T) {
 	require.Len(t, []rune(observer.Model()), upstreamResponseModelMaxLength)
 }
 
+func TestRedactUpstreamResponseModelSecrets(t *testing.T) {
+	longOverride := strings.Repeat("L", maxHeaderOverrideValueLength)
+	longOverridePrefix := string([]rune(longOverride)[:upstreamResponseModelMaxLength])
+	prefixedTruncatedLeak := "relay:" + longOverridePrefix[:upstreamResponseModelMaxLength-len("relay:")]
+	longCredential := strings.Repeat("C", maxHeaderOverrideValueLength)
+	longCredentialPrefix := string([]rune(longCredential)[:upstreamResponseModelMaxLength])
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":                    "api-key-secret-canary",
+			"access_token":               "access-token-secret-canary",
+			"refresh_token":              "Bearer refresh-token-secret-canary",
+			"id_token":                   longCredential,
+			credKeyHeaderOverrideEnabled: true,
+			credKeyHeaderOverrides: map[string]any{
+				"x-relay-key":     "relay-secret-canary",
+				"x-bearer-secret": "Bearer bearer-secret-canary",
+				"x-long-secret":   longOverride,
+			},
+		},
+	}
+
+	tests := []struct {
+		name  string
+		model string
+		want  string
+	}{
+		{name: "exact override", model: "relay-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "embedded override", model: "model-relay-secret-canary-runtime", want: upstreamResponseModelRedacted},
+		{name: "bearer token without scheme", model: "bearer-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "long override truncated by observer", model: longOverridePrefix, want: upstreamResponseModelRedacted},
+		{name: "prefixed long override truncated by observer", model: prefixedTruncatedLeak, want: upstreamResponseModelRedacted},
+		{name: "API key", model: "runtime-api-key-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "access token", model: "access-token-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "refresh token without scheme", model: "refresh-token-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "long credential truncated by observer", model: longCredentialPrefix, want: upstreamResponseModelRedacted},
+		{name: "ordinary model", model: "gpt-5.5", want: "gpt-5.5"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, redactUpstreamResponseModelSecrets(account, tt.model))
+		})
+	}
+}
+
+func TestRedactUpstreamResponseModelCoversSensitiveCredentialTable(t *testing.T) {
+	for _, key := range SensitiveCredentialKeys {
+		t.Run(key, func(t *testing.T) {
+			secret := "credential-secret-canary-" + key
+			account := &Account{Credentials: map[string]any{key: secret}}
+			require.Equal(t, upstreamResponseModelRedacted, redactUpstreamResponseModelSecrets(account, "relay:"+secret))
+		})
+	}
+}
+
 func TestUpstreamResponseModelObserverServiceTierTerminalEventWins(t *testing.T) {
 	observer := &upstreamResponseModelObserver{}
 

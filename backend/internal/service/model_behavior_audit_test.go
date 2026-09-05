@@ -61,6 +61,84 @@ func TestEstimateBehaviorPairsThirdPartyWithOfficialAnchor(t *testing.T) {
 	if !estimate.CanRun || estimate.AnchorCount != 1 || estimate.TargetCount != 1 || estimate.PairCount != 3 || estimate.RequestCount != 6 {
 		t.Fatalf("unexpected estimate: %+v", estimate)
 	}
+	if estimate.PreviewToken == "" || !estimate.ExpiresAt.After(time.Now()) {
+		t.Fatalf("estimate did not return a live preview token: %+v", estimate)
+	}
+}
+
+func TestBehaviorAuditRequiresFreshExplicitPreviewToken(t *testing.T) {
+	newService := func(t *testing.T) (*ModelCapabilityAuditService, *modelBehaviorAuditAccountRepo, *sql.DB) {
+		t.Helper()
+		db, _, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("create sql mock: %v", err)
+		}
+		repo := &modelBehaviorAuditAccountRepo{accounts: []Account{
+			behaviorAuditTestAccount(1, "official", "https://api.openai.com/v1"),
+			behaviorAuditTestAccount(2, "relay", "https://relay.example/v1"),
+		}}
+		return &ModelCapabilityAuditService{db: db, accountRepo: repo, accountTestService: &AccountTestService{}}, repo, db
+	}
+	baseOptions := func() ModelBehaviorAuditOptions {
+		return ModelBehaviorAuditOptions{ModelID: "gpt-5", CaseCount: 3, ReasoningEffort: "low"}
+	}
+
+	t.Run("missing", func(t *testing.T) {
+		service, _, db := newService(t)
+		defer db.Close()
+		if _, _, err := service.prepareBehaviorRun(context.Background(), baseOptions(), nil); err == nil || !strings.Contains(err.Error(), "MODEL_BEHAVIOR_AUDIT_PREVIEW_REQUIRED") {
+			t.Fatalf("missing-token error = %v", err)
+		}
+	})
+
+	t.Run("expired", func(t *testing.T) {
+		service, _, db := newService(t)
+		defer db.Close()
+		options := baseOptions()
+		estimate, err := service.EstimateBehavior(context.Background(), options)
+		if err != nil {
+			t.Fatalf("estimate behavior audit: %v", err)
+		}
+		options.PreviewToken = estimate.PreviewToken
+		service.previewMu.Lock()
+		snapshot := service.previewSnapshots[estimate.PreviewToken]
+		snapshot.expiresAt = time.Now().Add(-time.Second)
+		service.previewSnapshots[estimate.PreviewToken] = snapshot
+		service.previewMu.Unlock()
+		if _, _, err := service.prepareBehaviorRun(context.Background(), options, nil); err == nil || !strings.Contains(err.Error(), "MODEL_BEHAVIOR_AUDIT_PREVIEW_EXPIRED") {
+			t.Fatalf("expired-token error = %v", err)
+		}
+	})
+
+	t.Run("restart", func(t *testing.T) {
+		service, repo, db := newService(t)
+		defer db.Close()
+		options := baseOptions()
+		estimate, err := service.EstimateBehavior(context.Background(), options)
+		if err != nil {
+			t.Fatalf("estimate behavior audit: %v", err)
+		}
+		options.PreviewToken = estimate.PreviewToken
+		restarted := &ModelCapabilityAuditService{db: db, accountRepo: repo, accountTestService: &AccountTestService{}}
+		if _, _, err := restarted.prepareBehaviorRun(context.Background(), options, nil); err == nil || !strings.Contains(err.Error(), "MODEL_BEHAVIOR_AUDIT_PREVIEW_INVALID") {
+			t.Fatalf("restart-token error = %v", err)
+		}
+	})
+
+	t.Run("stale targets", func(t *testing.T) {
+		service, repo, db := newService(t)
+		defer db.Close()
+		options := baseOptions()
+		estimate, err := service.EstimateBehavior(context.Background(), options)
+		if err != nil {
+			t.Fatalf("estimate behavior audit: %v", err)
+		}
+		options.PreviewToken = estimate.PreviewToken
+		repo.accounts = append(repo.accounts, behaviorAuditTestAccount(3, "relay-two", "https://relay-two.example/v1"))
+		if _, _, err := service.prepareBehaviorRun(context.Background(), options, nil); err == nil || !strings.Contains(err.Error(), "MODEL_BEHAVIOR_AUDIT_PREVIEW_STALE") {
+			t.Fatalf("stale-target error = %v", err)
+		}
+	})
 }
 
 func TestOfficialOpenAIEndpointRequiresExactHTTPSHost(t *testing.T) {
@@ -231,6 +309,8 @@ func TestProbeBehaviorEndpointWaitsForAccountSlot(t *testing.T) {
 func TestProbeBehaviorEndpointDoesNotExposeCredentialEcho(t *testing.T) {
 	account := behaviorAuditTestAccount(11, "relay", "http://upstream.test/v1")
 	account.Credentials["api_key"] = "behavior-secret-token"
+	account.Credentials["header_override_enabled"] = true
+	account.Credentials["header_overrides"] = map[string]any{"x-relay-token": "behavior-header-secret"}
 	upstream := &modelCapabilityProbeUpstream{
 		status:       400,
 		responseBody: `{"error":{"message":"Authorization: Bearer behavior-secret-token"}}`,
@@ -239,6 +319,15 @@ func TestProbeBehaviorEndpointDoesNotExposeCredentialEcho(t *testing.T) {
 	result := audit.probeBehaviorEndpoint(context.Background(), &account, "gpt-5", "low", "audit_tool", modelBehaviorCases[0])
 	if strings.Contains(result.Error, "behavior-secret-token") || result.Error != "upstream returned an error" {
 		t.Fatalf("unsafe upstream error persisted: %q", result.Error)
+	}
+
+	modelEchoUpstream := &modelCapabilityProbeUpstream{
+		responseBody: `{"model":"behavior-header-secret","output":[{"type":"function_call","name":"audit_tool","arguments":"{\"answer\":\"319\"}"}]}`,
+	}
+	audit = &ModelCapabilityAuditService{accountTestService: newModelCapabilityProbeService(modelEchoUpstream, &account)}
+	result = audit.probeBehaviorEndpoint(context.Background(), &account, "gpt-5", "low", "audit_tool", modelBehaviorCases[0])
+	if result.ResponseModel != "[redacted]" {
+		t.Fatalf("header override value leaked through response model: %+v", result)
 	}
 }
 

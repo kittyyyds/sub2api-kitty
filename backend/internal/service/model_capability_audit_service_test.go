@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -279,12 +280,18 @@ func TestStartModelCapabilityAuditReturnsBeforeProbeAndDetachesFromRequest(t *te
 	upstream := &blockingModelCapabilityAuditUpstream{started: make(chan struct{}), release: make(chan struct{})}
 	accountTestService := newModelCapabilityProbeService(upstream, account)
 	auditService := &ModelCapabilityAuditService{db: db, accountRepo: repo, accountTestService: accountTestService}
-
-	requestCtx, cancelRequest := context.WithCancel(context.Background())
-	run, err := auditService.Start(requestCtx, ModelCapabilityAuditOptions{
+	options := ModelCapabilityAuditOptions{
 		AccountIDs: []int64{account.ID}, ModelIDs: []string{"gpt-4o-mini"},
 		Protocols: []string{ModelCapabilityProtocolResponses}, ActiveOnly: true, MaxItems: 1,
-	}, nil)
+	}
+	estimate, err := auditService.Estimate(context.Background(), options)
+	if err != nil {
+		t.Fatalf("estimate audit: %v", err)
+	}
+	options.PreviewToken = estimate.PreviewToken
+
+	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	run, err := auditService.Start(requestCtx, options, nil)
 	if err != nil {
 		t.Fatalf("start audit: %v", err)
 	}
@@ -344,6 +351,9 @@ func TestEstimateModelCapabilityAuditSkipsUnsupportedAccounts(t *testing.T) {
 	if estimate.TargetCount != 1 || estimate.ProtocolCount != 2 || estimate.RequestCount != 2 {
 		t.Fatalf("estimate = %+v, want 1 target / 2 protocols / 2 requests", estimate)
 	}
+	if estimate.PreviewToken == "" || !estimate.ExpiresAt.After(time.Now()) {
+		t.Fatalf("estimate did not return a live preview token: %+v", estimate)
+	}
 }
 
 func TestModelCapabilityAuditRejectsChangedPreviewTargets(t *testing.T) {
@@ -368,6 +378,7 @@ func TestModelCapabilityAuditRejectsChangedPreviewTargets(t *testing.T) {
 	if estimate.TargetCount != 1 || estimate.RequestCount != 1 {
 		t.Fatalf("estimate = %+v, want one target/request", estimate)
 	}
+	options.PreviewToken = estimate.PreviewToken
 
 	// A fresh all-account resolution would now expand this run to two paid
 	// requests, so Start must require a new confirmation instead.
@@ -375,6 +386,121 @@ func TestModelCapabilityAuditRejectsChangedPreviewTargets(t *testing.T) {
 	_, _, err = service.prepareRun(context.Background(), options, nil)
 	if err == nil || !strings.Contains(err.Error(), "MODEL_CAPABILITY_AUDIT_PREVIEW_STALE") {
 		t.Fatalf("error = %v, want stale-preview conflict", err)
+	}
+}
+
+func TestModelCapabilityAuditAcceptsUnchangedPreviewTargets(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sql mock: %v", err)
+	}
+	defer db.Close()
+
+	account := &Account{
+		ID: 4, Status: StatusActive, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"model_mapping": map[string]any{"public-model": "upstream-model"}},
+		UpdatedAt:   time.Unix(1700000000, 0).UTC(),
+	}
+	repo := &modelCapabilityAuditAccountsRepo{accounts: []*Account{account}}
+	service := &ModelCapabilityAuditService{db: db, accountRepo: repo, accountTestService: &AccountTestService{}}
+	options := ModelCapabilityAuditOptions{
+		ModelIDs: []string{"public-model"}, Protocols: []string{ModelCapabilityProtocolResponses},
+		ActiveOnly: true, MaxItems: 10,
+	}
+	estimate, err := service.Estimate(context.Background(), options)
+	if err != nil {
+		t.Fatalf("estimate audit: %v", err)
+	}
+	options.PreviewToken = estimate.PreviewToken
+
+	now := time.Now().UTC()
+	mock.ExpectQuery("INSERT INTO model_capability_probe_runs").
+		WithArgs(sql.NullInt64{}, 1, 1, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "status", "requested_by", "total_count", "total_items", "completed_count", "completed_items", "verified_count",
+			"mismatch_count", "unsupported_count", "error_count", "options", "error_message",
+			"started_at", "finished_at", "created_at",
+		}).AddRow(13, "running", nil, 1, 1, 0, 0, 0, 0, 0, 0,
+			[]byte(`{"model_ids":["public-model"],"protocols":["responses"],"active_only":true,"max_items":10}`), nil, now, nil, now))
+
+	run, targets, err := service.prepareRun(context.Background(), options, nil)
+	if err != nil {
+		t.Fatalf("prepare run: %v", err)
+	}
+	if run.TotalCount != 1 || len(targets) != 1 || targets[0].Account.ID != account.ID {
+		t.Fatalf("unexpected run/targets: run=%+v targets=%+v", run, targets)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sql expectations: %v", err)
+	}
+}
+
+func TestModelCapabilityAuditRequiresFreshExplicitPreviewToken(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sql mock: %v", err)
+	}
+	defer db.Close()
+
+	account := &Account{ID: 8, Status: StatusActive, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	repo := &modelCapabilityAuditAccountsRepo{accounts: []*Account{account}}
+	service := &ModelCapabilityAuditService{db: db, accountRepo: repo, accountTestService: &AccountTestService{}}
+	options := ModelCapabilityAuditOptions{
+		ModelIDs: []string{"gpt-5"}, Protocols: []string{ModelCapabilityProtocolResponses},
+		ActiveOnly: true, MaxItems: 10,
+	}
+
+	if _, _, err := service.prepareRun(context.Background(), options, nil); err == nil || !strings.Contains(err.Error(), "MODEL_CAPABILITY_AUDIT_PREVIEW_REQUIRED") {
+		t.Fatalf("missing-token error = %v", err)
+	}
+
+	estimate, err := service.Estimate(context.Background(), options)
+	if err != nil {
+		t.Fatalf("estimate audit: %v", err)
+	}
+	options.PreviewToken = estimate.PreviewToken
+	service.previewMu.Lock()
+	snapshot := service.previewSnapshots[estimate.PreviewToken]
+	snapshot.expiresAt = time.Now().Add(-time.Second)
+	service.previewSnapshots[estimate.PreviewToken] = snapshot
+	service.previewMu.Unlock()
+	if _, _, err := service.prepareRun(context.Background(), options, nil); err == nil || !strings.Contains(err.Error(), "MODEL_CAPABILITY_AUDIT_PREVIEW_EXPIRED") {
+		t.Fatalf("expired-token error = %v", err)
+	}
+
+	estimate, err = service.Estimate(context.Background(), ModelCapabilityAuditOptions{
+		ModelIDs: []string{"gpt-5"}, Protocols: []string{ModelCapabilityProtocolResponses},
+		ActiveOnly: true, MaxItems: 10,
+	})
+	if err != nil {
+		t.Fatalf("second estimate audit: %v", err)
+	}
+	restarted := &ModelCapabilityAuditService{db: db, accountRepo: repo, accountTestService: &AccountTestService{}}
+	options.PreviewToken = estimate.PreviewToken
+	if _, _, err := restarted.prepareRun(context.Background(), options, nil); err == nil || !strings.Contains(err.Error(), "MODEL_CAPABILITY_AUDIT_PREVIEW_INVALID") {
+		t.Fatalf("restart-token error = %v", err)
+	}
+}
+
+func TestModelAuditPreviewTokenIsSingleUseAndAuditTypeBound(t *testing.T) {
+	service := &ModelCapabilityAuditService{}
+	token, _, err := service.issueModelAuditPreview(modelCapabilityAuditPreviewKindManual, "options", "targets")
+	if err != nil {
+		t.Fatalf("issue preview token: %v", err)
+	}
+	if err := service.consumeModelAuditPreview(modelCapabilityAuditPreviewKindManual, "MODEL_CAPABILITY_AUDIT", token, "options", "targets"); err != nil {
+		t.Fatalf("consume preview token: %v", err)
+	}
+	if err := service.consumeModelAuditPreview(modelCapabilityAuditPreviewKindManual, "MODEL_CAPABILITY_AUDIT", token, "options", "targets"); err == nil || !strings.Contains(err.Error(), "MODEL_CAPABILITY_AUDIT_PREVIEW_INVALID") {
+		t.Fatalf("replayed-token error = %v", err)
+	}
+
+	behaviorToken, _, err := service.issueModelAuditPreview(modelCapabilityAuditPreviewKindBehavior, "options", "targets")
+	if err != nil {
+		t.Fatalf("issue behavior preview token: %v", err)
+	}
+	if err := service.consumeModelAuditPreview(modelCapabilityAuditPreviewKindManual, "MODEL_CAPABILITY_AUDIT", behaviorToken, "options", "targets"); err == nil || !strings.Contains(err.Error(), "MODEL_CAPABILITY_AUDIT_PREVIEW_INVALID") {
+		t.Fatalf("cross-audit token error = %v", err)
 	}
 }
 
@@ -672,6 +798,48 @@ func TestDeriveAuditVerdictRequiresMappedModelResponseForConsistency(t *testing.
 	}
 }
 
+func TestDeriveAuditVerdictKeepsActiveModelsOutOfPassiveEvidence(t *testing.T) {
+	row := ModelCapabilityAuditRow{
+		RequestedModel: "public-alias",
+		MappedModel:    "upstream-model",
+		Protocols: map[string]ModelCapabilityAuditEvidence{
+			ModelCapabilityProtocolResponses: {
+				Status:        "verified",
+				ResponseModel: "upstream-model",
+			},
+		},
+	}
+
+	deriveAuditVerdict(&row)
+
+	if row.ObservedModel != "upstream-model" || row.IdentityStatus != "self_report_consistent" {
+		t.Fatalf("unexpected active verdict: %+v", row)
+	}
+	if len(row.PassiveResponseModels) != 0 {
+		t.Fatalf("active response leaked into passive evidence: %+v", row.PassiveResponseModels)
+	}
+}
+
+func TestDeriveAuditVerdictUsesPersistedIdentityForRedactedActiveModel(t *testing.T) {
+	row := ModelCapabilityAuditRow{
+		RequestedModel: "gpt-5",
+		MappedModel:    "gpt-5",
+		Protocols: map[string]ModelCapabilityAuditEvidence{
+			ModelCapabilityProtocolResponses: {
+				Status:         "verified",
+				ResponseModel:  "[redacted]",
+				IdentityStatus: "self_report_consistent",
+			},
+		},
+	}
+
+	deriveAuditVerdict(&row)
+
+	if row.ObservedModel != "[redacted]" || row.IdentityStatus != "self_report_consistent" || row.Confidence != "medium" {
+		t.Fatalf("unexpected redacted active verdict: %+v", row)
+	}
+}
+
 func TestDeriveAuditVerdictPassiveMismatchRemainsSuspected(t *testing.T) {
 	row := ModelCapabilityAuditRow{
 		RequestedModel:    "public-alias",
@@ -773,6 +941,34 @@ func TestCapabilityProbeAttemptCountsRequireTransportAttempt(t *testing.T) {
 	}
 }
 
+func TestCapabilityProbeResponseModelMatchUsesPreRedactionVerdict(t *testing.T) {
+	matches, observed := capabilityProbeResponseModelMatch(ModelCapabilityProbeResult{
+		UpstreamModel:      "[redacted]",
+		responseModelMatch: boolPointerForModelCapabilityAudit(true),
+	}, "gpt-5", "[redacted]")
+	if !observed || !matches {
+		t.Fatalf("pre-redaction match = %v/%v, want true/true", matches, observed)
+	}
+
+	matches, observed = capabilityProbeResponseModelMatch(ModelCapabilityProbeResult{
+		UpstreamModel:      "[redacted]",
+		responseModelMatch: boolPointerForModelCapabilityAudit(false),
+	}, "gpt-5", "[redacted]")
+	if !observed || matches {
+		t.Fatalf("pre-redaction mismatch = %v/%v, want false/true", matches, observed)
+	}
+
+	if matches, observed = capabilityProbeResponseModelMatch(ModelCapabilityProbeResult{
+		UpstreamModel: "[redacted]",
+	}, "gpt-5", "[redacted]"); observed || matches {
+		t.Fatalf("legacy redacted placeholder = %v/%v, want false/false", matches, observed)
+	}
+}
+
+func boolPointerForModelCapabilityAudit(value bool) *bool {
+	return &value
+}
+
 func TestCapabilityAuditPersistsMappedModelActuallySentByProbe(t *testing.T) {
 	oldSnapshot := &Account{
 		ID: 19, Name: "mapping-change", Status: StatusActive, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
@@ -839,8 +1035,8 @@ func TestModelCapabilitySummaryReportsTrueTotalsBeforeRowLimit(t *testing.T) {
 	defer db.Close()
 	now := time.Now().UTC()
 
-	mock.ExpectQuery("(?s)top_keys AS.*LIMIT \\$2.*selected_keys AS").
-		WithArgs(30, 2).
+	mock.ExpectQuery("(?s)selected_keys AS.*LIMIT \\$2.*STRING_AGG.*LIMIT \\$3.*passive_only_legacy_unselected AS").
+		WithArgs(30, 2, modelCapabilityAuditPassiveModelLimit).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"account_id", "name", "platform", "requested_model", "mapped_model", "response_models",
 			"requests", "mismatches", "last_seen", "needs_model_match", "total_models", "total_accounts",
@@ -879,5 +1075,16 @@ func TestModelCapabilitySummaryReportsTrueTotalsBeforeRowLimit(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("sql expectations: %v", err)
+	}
+}
+
+func TestSplitResponseModelsEnforcesEvidenceLimit(t *testing.T) {
+	models := make([]string, 0, modelCapabilityAuditPassiveModelLimit+5)
+	for i := 0; i < modelCapabilityAuditPassiveModelLimit+5; i++ {
+		models = append(models, fmt.Sprintf("model-%02d", i))
+	}
+	got := splitResponseModels(strings.Join(models, ","))
+	if len(got) != modelCapabilityAuditPassiveModelLimit {
+		t.Fatalf("response models = %d, want strict limit %d", len(got), modelCapabilityAuditPassiveModelLimit)
 	}
 }

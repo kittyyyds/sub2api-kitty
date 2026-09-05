@@ -51,6 +51,7 @@ type ModelCapabilityProbeResult struct {
 	Attempted          bool   `json:"attempted"`
 	Error              string `json:"error,omitempty"`
 	Evidence           string `json:"evidence"`
+	responseModelMatch *bool
 }
 
 type ModelCapabilityProbeResponse struct {
@@ -179,18 +180,36 @@ func redactCapabilityProbeMetadata(value string, secrets ...string) string {
 		return ""
 	}
 	for _, secret := range secrets {
-		secret = strings.TrimSpace(secret)
-		if secret == "" {
-			continue
-		}
-		if strings.HasPrefix(strings.ToLower(secret), "bearer ") {
-			secret = strings.TrimSpace(secret[len("bearer "):])
-		}
-		if secret != "" && strings.Contains(value, secret) {
+		if upstreamResponseModelContainsCredential(value, secret) {
 			return "[redacted]"
 		}
 	}
 	return truncateModelCapabilityAuditText(value)
+}
+
+func capabilityProbeMetadataIsRedacted(value string) bool {
+	return strings.EqualFold(strings.TrimSpace(value), "[redacted]")
+}
+
+func redactCapabilityProbeResponseModel(account *Account, value, authToken string) string {
+	value = redactCapabilityProbeMetadata(value, authToken)
+	if capabilityProbeMetadataIsRedacted(value) {
+		return value
+	}
+	return redactUpstreamResponseModelSecrets(account, value)
+}
+
+func capabilityProbeMetadataSecrets(account *Account, authToken string) []string {
+	secrets := []string{authToken}
+	if account == nil {
+		return secrets
+	}
+	for _, value := range account.GetHeaderOverrides() {
+		if strings.TrimSpace(value) != "" {
+			secrets = append(secrets, value)
+		}
+	}
+	return secrets
 }
 
 func capabilityProbeInconclusive(protocol string, body []byte) (evidence, message string, inconclusive bool) {
@@ -479,7 +498,12 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 		return result
 	}
 	responseModel := capabilityProbeResponseModel(responseBody)
-	result.UpstreamModel = redactCapabilityProbeMetadata(responseModel, authToken)
+	if responseModel != "" {
+		matches := upstreamModelsMatchForAudit(upstreamModel, responseModel)
+		result.responseModelMatch = &matches
+	}
+	metadataSecrets := capabilityProbeMetadataSecrets(account, authToken)
+	result.UpstreamModel = redactCapabilityProbeResponseModel(account, responseModel, authToken)
 	if evidence, message, inconclusive := capabilityProbeInconclusive(protocol, responseBody); inconclusive {
 		result.Status = "needs_retest"
 		result.Capability = capabilityForProtocol(protocol)
@@ -502,7 +526,7 @@ func (s *AccountTestService) probeModelCapabilityProtocol(parent context.Context
 	modelMismatch := responseModel != "" && !upstreamModelsMatchForAudit(upstreamModel, responseModel)
 	if protocol == ModelCapabilityProtocolResponsesTools {
 		result.ToolCallFound, result.ToolArgumentsValid, result.ToolName = capabilityProbeToolCall(responseBody, toolName)
-		result.ToolName = redactCapabilityProbeMetadata(result.ToolName, authToken)
+		result.ToolName = redactCapabilityProbeMetadata(result.ToolName, metadataSecrets...)
 		if result.ToolCallFound && result.ToolArgumentsValid {
 			if modelMismatch {
 				result.Status = "model_mismatch"

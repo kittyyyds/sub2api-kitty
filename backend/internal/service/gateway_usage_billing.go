@@ -780,11 +780,12 @@ func logResponseModelBillingApplied(component string, account *Account, requestI
 	if strings.EqualFold(baselineModel, responseModel) {
 		return
 	}
+	safeResponseModel := redactUpstreamResponseModelSecrets(account, responseModel)
 	attrs := []any{
 		"component", component,
 		"request_id", strings.TrimSpace(requestID),
 		"baseline_model", baselineModel,
-		"response_model", responseModel,
+		"response_model", safeResponseModel,
 	}
 	if baselineCost != nil && responseCost != nil {
 		attrs = append(attrs, "baseline_cost", baselineCost.TotalCost, "billed_cost", responseCost.TotalCost)
@@ -1271,13 +1272,15 @@ func (s *GatewayService) buildRecordUsageLog(
 	durationMs := int(result.Duration.Milliseconds())
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
 	sentModel := upstreamSentModel(result.Model, result.UpstreamModel)
+	responseModelMismatch := upstreamModelMismatch(sentModel, result.UpstreamResponseModel)
+	safeResponseModel := redactUpstreamResponseModelSecrets(account, result.UpstreamResponseModel)
 	if result.UpstreamResponseModelConflict {
 		slog.Warn("upstream_response_model_conflict",
 			"platform", account.Platform,
 			"account_id", account.ID,
 			"request_id", requestID,
 			"sent_model", sentModel,
-			"selected_response_model", strings.TrimSpace(result.UpstreamResponseModel),
+			"selected_response_model", safeResponseModel,
 		)
 	}
 	usageLog := &UsageLog{
@@ -1288,8 +1291,8 @@ func (s *GatewayService) buildRecordUsageLog(
 		Model:                    result.Model,
 		RequestedModel:           requestedModel,
 		UpstreamModel:            optionalTrimmedStringPtr(result.UpstreamModel),
-		UpstreamResponseModel:    optionalTrimmedStringPtr(result.UpstreamResponseModel),
-		UpstreamModelMismatch:    upstreamModelMismatch(sentModel, result.UpstreamResponseModel),
+		UpstreamResponseModel:    optionalTrimmedStringPtr(safeResponseModel),
+		UpstreamModelMismatch:    responseModelMismatch,
 		ServiceTier:              result.ServiceTier,
 		ReasoningEffort:          result.ReasoningEffort,
 		RequestedReasoningEffort: coalesceRequestedReasoningEffort(result.RequestedReasoningEffort, result.ReasoningEffort),

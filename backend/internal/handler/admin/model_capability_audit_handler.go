@@ -21,11 +21,12 @@ func NewModelCapabilityAuditHandler(auditService *service.ModelCapabilityAuditSe
 }
 
 type modelCapabilityAuditProbeRequest struct {
-	AccountIDs []int64  `json:"account_ids"`
-	ModelIDs   []string `json:"model_ids"`
-	Protocols  []string `json:"protocols"`
-	ActiveOnly *bool    `json:"active_only"`
-	MaxItems   int      `json:"max_items"`
+	AccountIDs   []int64  `json:"account_ids"`
+	ModelIDs     []string `json:"model_ids"`
+	Protocols    []string `json:"protocols"`
+	ActiveOnly   *bool    `json:"active_only"`
+	MaxItems     int      `json:"max_items"`
+	PreviewToken string   `json:"preview_token"`
 }
 
 type modelBehaviorAuditRequest struct {
@@ -33,6 +34,7 @@ type modelBehaviorAuditRequest struct {
 	ModelID          string  `json:"model_id"`
 	CaseCount        int     `json:"case_count"`
 	ReasoningEffort  string  `json:"reasoning_effort"`
+	PreviewToken     string  `json:"preview_token"`
 }
 
 func (req modelBehaviorAuditRequest) options() service.ModelBehaviorAuditOptions {
@@ -41,6 +43,7 @@ func (req modelBehaviorAuditRequest) options() service.ModelBehaviorAuditOptions
 		ModelID:          req.ModelID,
 		CaseCount:        req.CaseCount,
 		ReasoningEffort:  req.ReasoningEffort,
+		PreviewToken:     req.PreviewToken,
 	}
 }
 
@@ -51,7 +54,7 @@ func (req modelCapabilityAuditProbeRequest) options() service.ModelCapabilityAud
 	}
 	return service.ModelCapabilityAuditOptions{
 		AccountIDs: req.AccountIDs, ModelIDs: req.ModelIDs, Protocols: req.Protocols,
-		ActiveOnly: activeOnly, MaxItems: req.MaxItems,
+		ActiveOnly: activeOnly, MaxItems: req.MaxItems, PreviewToken: req.PreviewToken,
 	}
 }
 

@@ -45,18 +45,21 @@ type ModelBehaviorAuditOptions struct {
 	ModelID          string  `json:"model_id"`
 	CaseCount        int     `json:"case_count"`
 	ReasoningEffort  string  `json:"reasoning_effort"`
+	PreviewToken     string  `json:"-"`
 }
 
 type ModelBehaviorAuditEstimate struct {
-	TargetCount          int    `json:"target_count"`
-	AvailableTargetCount int    `json:"available_target_count"`
-	AnchorCount          int    `json:"anchor_count"`
-	PairCount            int    `json:"pair_count"`
-	RequestCount         int    `json:"request_count"`
-	EstimatedMaxSeconds  int64  `json:"estimated_max_seconds"`
-	CanRun               bool   `json:"can_run"`
-	TargetsTruncated     bool   `json:"targets_truncated"`
-	Reason               string `json:"reason,omitempty"`
+	TargetCount          int       `json:"target_count"`
+	AvailableTargetCount int       `json:"available_target_count"`
+	AnchorCount          int       `json:"anchor_count"`
+	PairCount            int       `json:"pair_count"`
+	RequestCount         int       `json:"request_count"`
+	EstimatedMaxSeconds  int64     `json:"estimated_max_seconds"`
+	CanRun               bool      `json:"can_run"`
+	TargetsTruncated     bool      `json:"targets_truncated"`
+	Reason               string    `json:"reason,omitempty"`
+	PreviewToken         string    `json:"preview_token"`
+	ExpiresAt            time.Time `json:"expires_at"`
 }
 
 type ModelBehaviorAuditRun struct {
@@ -154,6 +157,7 @@ type modelBehaviorObservation struct {
 }
 
 func normalizeModelBehaviorOptions(input ModelBehaviorAuditOptions) (ModelBehaviorAuditOptions, error) {
+	input.PreviewToken = strings.TrimSpace(input.PreviewToken)
 	input.ModelID = strings.TrimSpace(input.ModelID)
 	if input.ModelID == "" || modelCapabilityAuditTextTooLong(input.ModelID) {
 		return input, infraerrors.BadRequest("MODEL_BEHAVIOR_MODEL_INVALID", "a target model is required")
@@ -176,6 +180,61 @@ func normalizeModelBehaviorOptions(input ModelBehaviorAuditOptions) (ModelBehavi
 	input.TargetAccountIDs = uniquePositiveIDs(input.TargetAccountIDs)
 	sort.Slice(input.TargetAccountIDs, func(i, j int) bool { return input.TargetAccountIDs[i] < input.TargetAccountIDs[j] })
 	return input, nil
+}
+
+func modelBehaviorAuditOptionsFingerprint(options ModelBehaviorAuditOptions) (string, error) {
+	encoded, err := json.Marshal(options)
+	if err != nil {
+		return "", err
+	}
+	return auditRequestKey("paired-behavior-preview-options", encoded), nil
+}
+
+func modelBehaviorAuditTargetsFingerprint(targets []modelBehaviorAuditTarget) (string, error) {
+	type accountFingerprint struct {
+		ID                  int64  `json:"id"`
+		Platform            string `json:"platform"`
+		Type                string `json:"type"`
+		Status              string `json:"status"`
+		Concurrency         int    `json:"concurrency"`
+		UpdatedAt           int64  `json:"updated_at"`
+		MappedModel         string `json:"mapped_model"`
+		EndpointFingerprint string `json:"endpoint_fingerprint"`
+		CredentialPresent   bool   `json:"credential_present"`
+	}
+	type targetFingerprint struct {
+		Target accountFingerprint `json:"target"`
+		Anchor accountFingerprint `json:"anchor"`
+	}
+	accountValue := func(account *Account, mappedModel string) accountFingerprint {
+		if account == nil {
+			return accountFingerprint{MappedModel: strings.TrimSpace(mappedModel)}
+		}
+		return accountFingerprint{
+			ID: account.ID, Platform: account.Platform, Type: account.Type,
+			Status: account.Status, Concurrency: account.Concurrency,
+			UpdatedAt: account.UpdatedAt.UnixNano(), MappedModel: strings.TrimSpace(mappedModel),
+			EndpointFingerprint: auditRequestKey("paired-behavior-endpoint", []byte(strings.TrimSpace(account.GetOpenAIBaseURL()))),
+			CredentialPresent:   strings.TrimSpace(account.GetOpenAIProtocolAPIKey()) != "",
+		}
+	}
+	encodedTargets := make([]string, 0, len(targets))
+	for _, target := range targets {
+		encoded, err := json.Marshal(targetFingerprint{
+			Target: accountValue(target.Target, target.TargetMappedModel),
+			Anchor: accountValue(target.Anchor, target.AnchorMappedModel),
+		})
+		if err != nil {
+			return "", err
+		}
+		encodedTargets = append(encodedTargets, string(encoded))
+	}
+	sort.Strings(encodedTargets)
+	encoded, err := json.Marshal(encodedTargets)
+	if err != nil {
+		return "", err
+	}
+	return auditRequestKey("paired-behavior-preview-targets", encoded), nil
 }
 
 func isOfficialOpenAIAPIEndpoint(account *Account) bool {
@@ -283,11 +342,28 @@ func (s *ModelCapabilityAuditService) EstimateBehavior(ctx context.Context, inpu
 	if pairs > 0 {
 		seconds = int64(modelBehaviorAuditRunTimeout(pairs) / time.Second)
 	}
+	optionsFingerprint, err := modelBehaviorAuditOptionsFingerprint(options)
+	if err != nil {
+		return nil, err
+	}
+	targetsFingerprint, err := modelBehaviorAuditTargetsFingerprint(targets)
+	if err != nil {
+		return nil, err
+	}
+	previewToken, expiresAt, err := s.issueModelAuditPreview(
+		modelCapabilityAuditPreviewKindBehavior,
+		optionsFingerprint,
+		targetsFingerprint,
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &ModelBehaviorAuditEstimate{
 		TargetCount: len(targets), AvailableTargetCount: availableTargets,
 		AnchorCount: anchorCount, PairCount: pairs, RequestCount: pairs * 2,
 		EstimatedMaxSeconds: seconds, CanRun: pairs > 0,
 		TargetsTruncated: availableTargets > len(targets), Reason: reason,
+		PreviewToken: previewToken, ExpiresAt: expiresAt,
 	}, nil
 }
 
@@ -349,26 +425,56 @@ func modelBehaviorAuditRunTimeout(pairCount int) time.Duration {
 	return time.Duration(waves)*2*modelBehaviorProbeTimeout + 30*time.Second
 }
 
-func (s *ModelCapabilityAuditService) StartBehavior(ctx context.Context, input ModelBehaviorAuditOptions, requestedBy *int64) (*ModelBehaviorAuditRun, error) {
+func (s *ModelCapabilityAuditService) prepareBehaviorRun(ctx context.Context, input ModelBehaviorAuditOptions, requestedBy *int64) (*ModelBehaviorAuditRun, []modelBehaviorAuditTarget, error) {
 	options, err := normalizeModelBehaviorOptions(input)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.recoverStaleAuditRuns(ctx, modelBehaviorAuditTrigger); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	targets, _, _, reason, err := s.prepareBehaviorTargets(ctx, options)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	optionsFingerprint, err := modelBehaviorAuditOptionsFingerprint(options)
+	if err != nil {
+		return nil, nil, err
+	}
+	targetsFingerprint, err := modelBehaviorAuditTargetsFingerprint(targets)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.consumeModelAuditPreview(
+		modelCapabilityAuditPreviewKindBehavior,
+		"MODEL_BEHAVIOR_AUDIT",
+		options.PreviewToken,
+		optionsFingerprint,
+		targetsFingerprint,
+	); err != nil {
+		return nil, nil, err
 	}
 	if len(targets) == 0 {
-		return nil, infraerrors.BadRequest("MODEL_BEHAVIOR_TARGETS_EMPTY", reason)
+		return nil, nil, infraerrors.BadRequest("MODEL_BEHAVIOR_TARGETS_EMPTY", reason)
 	}
 	pairCount := len(targets) * options.CaseCount
 	run, err := s.createBehaviorRun(ctx, options, requestedBy, pairCount)
 	if err != nil {
+		return nil, nil, err
+	}
+	return run, targets, nil
+}
+
+func (s *ModelCapabilityAuditService) StartBehavior(ctx context.Context, input ModelBehaviorAuditOptions, requestedBy *int64) (*ModelBehaviorAuditRun, error) {
+	if err := s.recoverStaleAuditRuns(ctx, modelBehaviorAuditTrigger); err != nil {
 		return nil, err
 	}
+	run, targets, err := s.prepareBehaviorRun(ctx, input, requestedBy)
+	if err != nil {
+		return nil, err
+	}
+	options, err := normalizeModelBehaviorOptions(input)
+	if err != nil {
+		return nil, err
+	}
+	pairCount := len(targets) * options.CaseCount
 	backgroundRun := *run
 	runCtx, cancel := context.WithTimeout(context.Background(), modelBehaviorAuditRunTimeout(pairCount))
 	go func() {
@@ -541,7 +647,7 @@ func (s *ModelCapabilityAuditService) probeBehaviorEndpoint(ctx context.Context,
 		result.Error = "upstream returned invalid JSON"
 		return result
 	}
-	result.ResponseModel = redactCapabilityProbeMetadata(capabilityProbeResponseModel(responseBody), authToken)
+	result.ResponseModel = redactCapabilityProbeResponseModel(account, capabilityProbeResponseModel(responseBody), authToken)
 	if _, message, inconclusive := capabilityProbeInconclusive(ModelCapabilityProtocolResponsesTools, responseBody); inconclusive {
 		result.Status, result.Error = "inconclusive", message
 		return result

@@ -360,13 +360,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		requestedModel = input.OriginalModel
 	}
 	sentModel := upstreamSentModel(result.Model, result.UpstreamModel)
+	responseModelMismatch := upstreamModelMismatch(sentModel, result.UpstreamResponseModel)
+	safeResponseModel := redactUpstreamResponseModelSecrets(account, result.UpstreamResponseModel)
 	if result.UpstreamResponseModelConflict {
 		logger.L().Warn("upstream_response_model_conflict",
 			zap.String("platform", account.Platform),
 			zap.Int64("account_id", account.ID),
 			zap.String("request_id", requestID),
 			zap.String("sent_model", sentModel),
-			zap.String("selected_response_model", strings.TrimSpace(result.UpstreamResponseModel)),
+			zap.String("selected_response_model", safeResponseModel),
 		)
 	}
 
@@ -378,8 +380,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		Model:                    result.Model,
 		RequestedModel:           requestedModel,
 		UpstreamModel:            optionalTrimmedStringPtr(result.UpstreamModel),
-		UpstreamResponseModel:    optionalTrimmedStringPtr(result.UpstreamResponseModel),
-		UpstreamModelMismatch:    upstreamModelMismatch(sentModel, result.UpstreamResponseModel),
+		UpstreamResponseModel:    optionalTrimmedStringPtr(safeResponseModel),
+		UpstreamModelMismatch:    responseModelMismatch,
 		ServiceTier:              result.ServiceTier,
 		ReasoningEffort:          result.ReasoningEffort,
 		RequestedReasoningEffort: coalesceRequestedReasoningEffort(result.RequestedReasoningEffort, result.ReasoningEffort),

@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -17,34 +19,41 @@ import (
 )
 
 const (
-	modelCapabilityAuditPersistenceTimeout = 10 * time.Second
-	modelCapabilityAuditTargetTimeout      = 75 * time.Second
-	modelCapabilityAuditWorkerCount        = 4
-	modelCapabilityAuditStaleAfter         = 2 * time.Minute
-	modelBehaviorAuditStaleAfter           = 90 * time.Second
-	modelCapabilityAuditSlotRetryInitial   = 25 * time.Millisecond
-	modelCapabilityAuditSlotRetryMax       = 250 * time.Millisecond
-	modelCapabilityAuditPreviewTTL         = 5 * time.Minute
-	modelCapabilityAuditPreviewMaxEntries  = 128
+	modelCapabilityAuditPersistenceTimeout  = 10 * time.Second
+	modelCapabilityAuditTargetTimeout       = 75 * time.Second
+	modelCapabilityAuditWorkerCount         = 4
+	modelCapabilityAuditStaleAfter          = 2 * time.Minute
+	modelBehaviorAuditStaleAfter            = 90 * time.Second
+	modelCapabilityAuditSlotRetryInitial    = 25 * time.Millisecond
+	modelCapabilityAuditSlotRetryMax        = 250 * time.Millisecond
+	modelCapabilityAuditPreviewTTL          = 5 * time.Minute
+	modelCapabilityAuditPreviewMaxEntries   = 128
+	modelCapabilityAuditPreviewTokenBytes   = 32
+	modelCapabilityAuditPreviewKindManual   = "manual"
+	modelCapabilityAuditPreviewKindBehavior = "paired_behavior"
+	modelCapabilityAuditPassiveModelLimit   = 16
 )
 
 // ModelCapabilityAuditOptions controls one bounded, administrator-triggered
 // audit run. The bounds are intentional: an audit must never turn into an
 // unbounded upstream traffic generator.
 type ModelCapabilityAuditOptions struct {
-	AccountIDs []int64  `json:"account_ids,omitempty"`
-	ModelIDs   []string `json:"model_ids,omitempty"`
-	Protocols  []string `json:"protocols,omitempty"`
-	ActiveOnly bool     `json:"active_only"`
-	MaxItems   int      `json:"max_items,omitempty"`
+	AccountIDs   []int64  `json:"account_ids,omitempty"`
+	ModelIDs     []string `json:"model_ids,omitempty"`
+	Protocols    []string `json:"protocols,omitempty"`
+	ActiveOnly   bool     `json:"active_only"`
+	MaxItems     int      `json:"max_items,omitempty"`
+	PreviewToken string   `json:"-"`
 }
 
 type ModelCapabilityAuditEstimate struct {
-	TargetCount         int   `json:"target_count"`
-	ProtocolCount       int   `json:"protocol_count"`
-	RequestCount        int   `json:"request_count"`
-	EstimatedMaxSeconds int64 `json:"estimated_max_seconds"`
-	MaxItems            int   `json:"max_items"`
+	TargetCount         int       `json:"target_count"`
+	ProtocolCount       int       `json:"protocol_count"`
+	RequestCount        int       `json:"request_count"`
+	EstimatedMaxSeconds int64     `json:"estimated_max_seconds"`
+	MaxItems            int       `json:"max_items"`
+	PreviewToken        string    `json:"preview_token"`
+	ExpiresAt           time.Time `json:"expires_at"`
 }
 
 type ModelCapabilityAuditRun struct {
@@ -187,8 +196,10 @@ type modelCapabilityPassiveTotals struct {
 }
 
 type modelCapabilityAuditPreviewSnapshot struct {
-	fingerprint string
-	expiresAt   time.Time
+	kind               string
+	optionsFingerprint string
+	targetsFingerprint string
+	expiresAt          time.Time
 }
 
 // ModelCapabilityAuditService combines durable active probes with passive
@@ -218,6 +229,7 @@ func (s *ModelCapabilityAuditService) normalizeOptions(input ModelCapabilityAudi
 	if s.accountTestService == nil {
 		return input, nil, errors.New("model capability active probe service unavailable")
 	}
+	input.PreviewToken = strings.TrimSpace(input.PreviewToken)
 	protocols, err := normalizeModelCapabilityProtocols(input.Protocols)
 	if err != nil {
 		return input, nil, err
@@ -467,63 +479,82 @@ func modelCapabilityAuditTargetsFingerprint(targets []modelCapabilityAuditTarget
 	return auditRequestKey("manual-preview-targets", encoded), nil
 }
 
-// rememberPreviewTargets keeps a credential-free fingerprint of the exact
-// bounded target set shown in the cost confirmation. Start rejects a changed
-// set instead of silently expanding it. The cache is intentionally short-lived
-// and bounded; callers that skip Estimate retain the existing direct-start API.
-func (s *ModelCapabilityAuditService) rememberPreviewTargets(options ModelCapabilityAuditOptions, targets []modelCapabilityAuditTarget) error {
-	key, err := modelCapabilityAuditPreviewKey(options)
-	if err != nil {
-		return err
+// issueModelAuditPreview creates a short-lived, one-time bearer token bound to
+// both the normalized request and the credential-free target fingerprint.
+func (s *ModelCapabilityAuditService) issueModelAuditPreview(kind, optionsFingerprint, targetsFingerprint string) (string, time.Time, error) {
+	random := make([]byte, modelCapabilityAuditPreviewTokenBytes)
+	if _, err := rand.Read(random); err != nil {
+		return "", time.Time{}, err
 	}
-	fingerprint, err := modelCapabilityAuditTargetsFingerprint(targets)
-	if err != nil {
-		return err
-	}
+	token := base64.RawURLEncoding.EncodeToString(random)
 	now := time.Now()
+	expiresAt := now.Add(modelCapabilityAuditPreviewTTL)
+
 	s.previewMu.Lock()
 	defer s.previewMu.Unlock()
 	if s.previewSnapshots == nil {
 		s.previewSnapshots = make(map[string]modelCapabilityAuditPreviewSnapshot)
 	}
-	for existingKey, snapshot := range s.previewSnapshots {
+	for existingToken, snapshot := range s.previewSnapshots {
 		if !snapshot.expiresAt.After(now) {
-			delete(s.previewSnapshots, existingKey)
+			delete(s.previewSnapshots, existingToken)
 		}
 	}
 	if len(s.previewSnapshots) >= modelCapabilityAuditPreviewMaxEntries {
-		var oldestKey string
+		var oldestToken string
 		var oldestExpiry time.Time
-		for existingKey, snapshot := range s.previewSnapshots {
-			if oldestKey == "" || snapshot.expiresAt.Before(oldestExpiry) {
-				oldestKey, oldestExpiry = existingKey, snapshot.expiresAt
+		for existingToken, snapshot := range s.previewSnapshots {
+			if oldestToken == "" || snapshot.expiresAt.Before(oldestExpiry) {
+				oldestToken, oldestExpiry = existingToken, snapshot.expiresAt
 			}
 		}
-		delete(s.previewSnapshots, oldestKey)
+		delete(s.previewSnapshots, oldestToken)
 	}
-	s.previewSnapshots[key] = modelCapabilityAuditPreviewSnapshot{
-		fingerprint: fingerprint, expiresAt: now.Add(modelCapabilityAuditPreviewTTL),
+	s.previewSnapshots[token] = modelCapabilityAuditPreviewSnapshot{
+		kind: kind, optionsFingerprint: optionsFingerprint,
+		targetsFingerprint: targetsFingerprint, expiresAt: expiresAt,
+	}
+	return token, expiresAt, nil
+}
+
+func (s *ModelCapabilityAuditService) consumeModelAuditPreview(kind, errorPrefix, token, optionsFingerprint, targetsFingerprint string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return infraerrors.BadRequest(errorPrefix+"_PREVIEW_REQUIRED", "a fresh preview token is required before starting this audit")
+	}
+
+	now := time.Now()
+	s.previewMu.Lock()
+	snapshot, ok := s.previewSnapshots[token]
+	if ok {
+		delete(s.previewSnapshots, token)
+	}
+	s.previewMu.Unlock()
+	if !ok {
+		return infraerrors.Conflict(errorPrefix+"_PREVIEW_INVALID", "the preview token is invalid or was lost after a server restart; refresh the confirmation")
+	}
+	if !snapshot.expiresAt.After(now) {
+		return infraerrors.Conflict(errorPrefix+"_PREVIEW_EXPIRED", "the preview token expired; refresh the confirmation")
+	}
+	if snapshot.kind != kind {
+		return infraerrors.Conflict(errorPrefix+"_PREVIEW_INVALID", "the preview token is not valid for this audit type")
+	}
+	if snapshot.optionsFingerprint != optionsFingerprint || snapshot.targetsFingerprint != targetsFingerprint {
+		return infraerrors.Conflict(errorPrefix+"_PREVIEW_STALE", "audit options or targets changed after preview; refresh the confirmation")
 	}
 	return nil
 }
 
-func (s *ModelCapabilityAuditService) previewFingerprint(options ModelCapabilityAuditOptions) (string, bool, error) {
-	key, err := modelCapabilityAuditPreviewKey(options)
+func (s *ModelCapabilityAuditService) rememberPreviewTargets(options ModelCapabilityAuditOptions, targets []modelCapabilityAuditTarget) (string, time.Time, error) {
+	optionsFingerprint, err := modelCapabilityAuditPreviewKey(options)
 	if err != nil {
-		return "", false, err
+		return "", time.Time{}, err
 	}
-	now := time.Now()
-	s.previewMu.Lock()
-	defer s.previewMu.Unlock()
-	snapshot, ok := s.previewSnapshots[key]
-	if !ok {
-		return "", false, nil
+	targetsFingerprint, err := modelCapabilityAuditTargetsFingerprint(targets)
+	if err != nil {
+		return "", time.Time{}, err
 	}
-	if !snapshot.expiresAt.After(now) {
-		delete(s.previewSnapshots, key)
-		return "", false, nil
-	}
-	return snapshot.fingerprint, true, nil
+	return s.issueModelAuditPreview(modelCapabilityAuditPreviewKindManual, optionsFingerprint, targetsFingerprint)
 }
 
 // Estimate resolves exactly the same bounded target set as Start without
@@ -538,7 +569,8 @@ func (s *ModelCapabilityAuditService) Estimate(ctx context.Context, input ModelC
 	if err != nil {
 		return nil, err
 	}
-	if err := s.rememberPreviewTargets(options, targets); err != nil {
+	previewToken, expiresAt, err := s.rememberPreviewTargets(options, targets)
+	if err != nil {
 		return nil, err
 	}
 	requestCount := 0
@@ -555,6 +587,8 @@ func (s *ModelCapabilityAuditService) Estimate(ctx context.Context, input ModelC
 		RequestCount:        requestCount,
 		EstimatedMaxSeconds: maxSeconds,
 		MaxItems:            options.MaxItems,
+		PreviewToken:        previewToken,
+		ExpiresAt:           expiresAt,
 	}, nil
 }
 
@@ -598,8 +632,8 @@ func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID in
 	identityStatus := "unobserved"
 	mappedModel := capabilityAuditResultMappedModel(target, result)
 	observedModel := truncateModelCapabilityAuditText(result.UpstreamModel)
-	if observedModel != "" {
-		if mappedModel != "" && upstreamModelsMatchForAudit(mappedModel, observedModel) {
+	if matches, observed := capabilityProbeResponseModelMatch(result, mappedModel, observedModel); observed {
+		if matches {
 			identityStatus = "self_report_consistent"
 		} else {
 			identityStatus = "mismatch"
@@ -668,6 +702,17 @@ func capabilityAuditResultMappedModel(target modelCapabilityAuditTarget, result 
 	return truncateModelCapabilityAuditText(result.RequestedModel)
 }
 
+func capabilityProbeResponseModelMatch(result ModelCapabilityProbeResult, mappedModel, observedModel string) (bool, bool) {
+	if result.responseModelMatch != nil {
+		return *result.responseModelMatch, true
+	}
+	observedModel = strings.TrimSpace(observedModel)
+	if observedModel == "" || capabilityProbeMetadataIsRedacted(observedModel) {
+		return false, false
+	}
+	return strings.TrimSpace(mappedModel) != "" && upstreamModelsMatchForAudit(mappedModel, observedModel), true
+}
+
 func nullableText(value string) any {
 	if strings.TrimSpace(value) == "" {
 		return nil
@@ -680,22 +725,26 @@ func (s *ModelCapabilityAuditService) prepareRun(ctx context.Context, input Mode
 	if err != nil {
 		return nil, nil, err
 	}
-	previewFingerprint, previewed, err := s.previewFingerprint(options)
-	if err != nil {
-		return nil, nil, err
-	}
 	targets, err := s.buildTargets(ctx, options, protocols)
 	if err != nil {
 		return nil, nil, err
 	}
-	if previewed {
-		currentFingerprint, fingerprintErr := modelCapabilityAuditTargetsFingerprint(targets)
-		if fingerprintErr != nil {
-			return nil, nil, fingerprintErr
-		}
-		if currentFingerprint != previewFingerprint {
-			return nil, nil, infraerrors.Conflict("MODEL_CAPABILITY_AUDIT_PREVIEW_STALE", "model capability audit targets changed after estimate; refresh the confirmation")
-		}
+	optionsFingerprint, err := modelCapabilityAuditPreviewKey(options)
+	if err != nil {
+		return nil, nil, err
+	}
+	targetsFingerprint, err := modelCapabilityAuditTargetsFingerprint(targets)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.consumeModelAuditPreview(
+		modelCapabilityAuditPreviewKindManual,
+		"MODEL_CAPABILITY_AUDIT",
+		options.PreviewToken,
+		optionsFingerprint,
+		targetsFingerprint,
+	); err != nil {
+		return nil, nil, err
 	}
 	totalItems := 0
 	for _, target := range targets {
@@ -986,7 +1035,9 @@ func (s *ModelCapabilityAuditService) executeRun(ctx context.Context, run *Model
 				}
 				mappedModel := capabilityAuditResultMappedModel(item.target, result)
 				observedModel := strings.TrimSpace(result.UpstreamModel)
-				if result.Status == "model_mismatch" || (observedModel != "" && !upstreamModelsMatchForAudit(mappedModel, observedModel)) {
+				responseModelMatches, responseModelObserved := capabilityProbeResponseModelMatch(result, mappedModel, observedModel)
+				responseModelMismatch := responseModelObserved && !responseModelMatches
+				if result.Status == "model_mismatch" || responseModelMismatch {
 					mismatch++
 				}
 				if result.Status == "unsupported" {
@@ -1339,21 +1390,15 @@ func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days, lim
 				) normalized
 			) source
 			GROUP BY source.account_id, source.requested_key, source.mapped_key
-		), top_keys AS (
-			SELECT account_id, requested_key, mapped_key
-			FROM passive_groups
-			ORDER BY last_seen DESC, account_id, requested_key, mapped_key
-			LIMIT $2
 		), selected_keys AS (
-			SELECT account_id, requested_key, mapped_key FROM top_keys
-			UNION
 			SELECT p.account_id, p.requested_key, p.mapped_key
 			FROM passive_groups p
-			WHERE p.needs_model_match
-			   OR EXISTS (
+			ORDER BY CASE WHEN EXISTS (
 				SELECT 1 FROM active_keys a
 				WHERE a.account_id=p.account_id AND a.requested_key=p.requested_key AND a.mapped_key=p.mapped_key
-			   )
+			) THEN 0 ELSE 1 END,
+			p.last_seen DESC, p.account_id, p.requested_key, p.mapped_key
+			LIMIT $2
 		), selected_groups AS (
 			SELECT p.*
 			FROM passive_groups p
@@ -1364,16 +1409,20 @@ func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days, lim
 			       p.requests, p.mismatches, p.last_seen, p.needs_model_match
 			FROM selected_groups p
 			LEFT JOIN LATERAL (
-				SELECT STRING_AGG(DISTINCT NULLIF(u.upstream_response_model, ''), ','
-				         ORDER BY NULLIF(u.upstream_response_model, '')) AS response_model_list
-				FROM usage_logs u
-				WHERE u.account_id=p.account_id
-				  AND u.created_at >= NOW() - ($1 * INTERVAL '1 day')
-				  AND LOWER(BTRIM(COALESCE(NULLIF(u.requested_model, ''), NULLIF(u.model, ''), '')))=p.requested_key
-				  AND LOWER(BTRIM(COALESCE(
-				        NULLIF(BTRIM(COALESCE(NULLIF(u.upstream_model, ''), '')), ''),
-				        COALESCE(NULLIF(u.requested_model, ''), NULLIF(u.model, ''), '')
-				      )))=p.mapped_key
+				SELECT STRING_AGG(bounded.response_model, ',' ORDER BY bounded.response_model) AS response_model_list
+				FROM (
+					SELECT DISTINCT NULLIF(u.upstream_response_model, '') AS response_model
+					FROM usage_logs u
+					WHERE u.account_id=p.account_id
+					  AND u.created_at >= NOW() - ($1 * INTERVAL '1 day')
+					  AND LOWER(BTRIM(COALESCE(NULLIF(u.requested_model, ''), NULLIF(u.model, ''), '')))=p.requested_key
+					  AND LOWER(BTRIM(COALESCE(
+					        NULLIF(BTRIM(COALESCE(NULLIF(u.upstream_model, ''), '')), ''),
+					        COALESCE(NULLIF(u.requested_model, ''), NULLIF(u.model, ''), '')
+					      )))=p.mapped_key
+					ORDER BY NULLIF(u.upstream_response_model, '')
+					LIMIT $3
+				) bounded
 			) response_models ON TRUE
 		), combined_keys AS (
 			SELECT account_id, requested_key, mapped_key FROM passive_groups
@@ -1387,13 +1436,26 @@ func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days, lim
 				SELECT 1 FROM active_keys a
 				WHERE a.account_id=p.account_id AND a.requested_key=p.requested_key AND a.mapped_key=p.mapped_key
 			  )
+		), passive_only_legacy_unselected AS (
+			SELECT p.*
+			FROM passive_groups p
+			WHERE p.needs_model_match
+			  AND NOT EXISTS (
+				SELECT 1 FROM active_keys a
+				WHERE a.account_id=p.account_id AND a.requested_key=p.requested_key AND a.mapped_key=p.mapped_key
+			  )
+			  AND NOT EXISTS (
+				SELECT 1 FROM selected_keys selected
+				WHERE selected.account_id=p.account_id AND selected.requested_key=p.requested_key AND selected.mapped_key=p.mapped_key
+			  )
 		), totals AS (
 			SELECT (SELECT COUNT(*)::bigint FROM combined_keys) AS total_models,
 			       (SELECT COUNT(DISTINCT account_id)::bigint FROM combined_keys) AS total_accounts,
 			       (SELECT COALESCE(SUM(requests), 0)::bigint FROM passive_groups) AS passive_requests,
 			       (SELECT COUNT(*)::bigint FROM passive_only_reliable WHERE has_mismatch) AS passive_only_mismatch_models,
 			       (SELECT COUNT(*)::bigint FROM passive_only_reliable WHERE NOT has_mismatch AND has_matching_response) AS passive_only_self_report_models,
-			       (SELECT COUNT(*)::bigint FROM passive_only_reliable WHERE NOT has_mismatch AND NOT has_matching_response) AS passive_only_unverified_models
+			       ((SELECT COUNT(*)::bigint FROM passive_only_reliable WHERE NOT has_mismatch AND NOT has_matching_response) +
+			        (SELECT COUNT(*)::bigint FROM passive_only_legacy_unselected)) AS passive_only_unverified_models
 		)
 		SELECT detailed.account_id, detailed.account_name, detailed.platform, detailed.requested_model,
 		       detailed.mapped_model, detailed.response_models, detailed.requests, detailed.mismatches,
@@ -1404,7 +1466,7 @@ func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days, lim
 		FROM totals
 		LEFT JOIN detailed ON TRUE
 		ORDER BY detailed.last_seen DESC NULLS LAST, detailed.account_id,
-		         detailed.requested_model, detailed.mapped_model`, days, limit)
+		         detailed.requested_model, detailed.mapped_model`, days, limit, modelCapabilityAuditPassiveModelLimit)
 	if err != nil {
 		return nil, modelCapabilityPassiveTotals{}, err
 	}
@@ -1438,7 +1500,9 @@ func (s *ModelCapabilityAuditService) passiveRows(ctx context.Context, days, lim
 			Requests: requests.Int64, Mismatches: mismatches.Int64, LastSeen: lastSeen.Time,
 			NeedsModelMatch: needsModelMatch.Bool,
 		}
-		result = append(result, item)
+		if len(result) < limit {
+			result = append(result, item)
+		}
 	}
 	return result, totals, rows.Err()
 }
@@ -1611,8 +1675,11 @@ func splitResponseModels(value string) []string {
 	if strings.TrimSpace(value) == "" {
 		return nil
 	}
-	parts := strings.Split(value, ",")
-	return uniqueNonEmpty(parts)
+	parts := uniqueNonEmpty(strings.Split(value, ","))
+	if len(parts) > modelCapabilityAuditPassiveModelLimit {
+		return parts[:modelCapabilityAuditPassiveModelLimit]
+	}
+	return parts
 }
 
 func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit int) (*ModelCapabilityAuditSummary, error) {
@@ -1796,7 +1863,8 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 		return
 	}
 	verified, unsupported, failed := 0, 0, 0
-	activeMismatch := false
+	identityMismatch := false
+	activeSelfReportMatches := false
 	for _, evidence := range row.Protocols {
 		switch evidence.Status {
 		case "verified":
@@ -1805,33 +1873,47 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 			unsupported++
 		case "model_mismatch":
 			verified++
-			activeMismatch = true
+			identityMismatch = true
 		default:
 			failed++
 		}
 		// A successful capability response can still carry an identity
 		// mismatch. Preserve that distinction when aggregating the row.
 		if evidence.Status == "model_mismatch" || evidence.IdentityStatus == "mismatch" || evidence.IdentityStatus == "mismatch_suspected" {
-			activeMismatch = true
+			identityMismatch = true
+		}
+		if evidence.IdentityStatus == "consistent" || evidence.IdentityStatus == "self_report_consistent" {
+			activeSelfReportMatches = true
 		}
 		if evidence.ResponseModel != "" {
 			row.ObservedModel = evidence.ResponseModel
-			row.PassiveResponseModels = append(row.PassiveResponseModels, evidence.ResponseModel)
-			if row.MappedModel == "" || !upstreamModelsMatchForAudit(row.MappedModel, evidence.ResponseModel) {
-				activeMismatch = true
+			if capabilityProbeMetadataIsRedacted(evidence.ResponseModel) {
+				continue
+			}
+			if row.MappedModel != "" && upstreamModelsMatchForAudit(row.MappedModel, evidence.ResponseModel) {
+				activeSelfReportMatches = true
+			} else {
+				identityMismatch = true
 			}
 		} else if evidence.UpstreamModel != "" {
 			row.ObservedModel = evidence.UpstreamModel
-			row.PassiveResponseModels = append(row.PassiveResponseModels, evidence.UpstreamModel)
-			if row.MappedModel == "" || !upstreamModelsMatchForAudit(row.MappedModel, evidence.UpstreamModel) {
-				activeMismatch = true
+			if capabilityProbeMetadataIsRedacted(evidence.UpstreamModel) {
+				continue
+			}
+			if row.MappedModel != "" && upstreamModelsMatchForAudit(row.MappedModel, evidence.UpstreamModel) {
+				activeSelfReportMatches = true
+			} else {
+				identityMismatch = true
 			}
 		}
 	}
 	row.PassiveResponseModels = uniqueNonEmpty(row.PassiveResponseModels)
 	for _, model := range row.PassiveResponseModels {
+		if capabilityProbeMetadataIsRedacted(model) {
+			continue
+		}
 		if row.MappedModel != "" && !upstreamModelsMatchForAudit(row.MappedModel, model) {
-			activeMismatch = true
+			identityMismatch = true
 			break
 		}
 	}
@@ -1852,8 +1934,8 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 	} else {
 		row.ActiveStatus = "not_checked"
 	}
-	noMismatch := row.PassiveMismatches == 0 && !activeMismatch
-	selfReportMatches := false
+	noMismatch := row.PassiveMismatches == 0 && !identityMismatch
+	selfReportMatches := activeSelfReportMatches
 	for _, model := range row.PassiveResponseModels {
 		if row.MappedModel != "" && upstreamModelsMatchForAudit(row.MappedModel, model) {
 			selfReportMatches = true
@@ -1863,7 +1945,7 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 	if noMismatch && selfReportMatches {
 		row.IdentityStatus = "self_report_consistent"
 		row.Confidence = "medium"
-	} else if row.PassiveMismatches > 0 || activeMismatch {
+	} else if row.PassiveMismatches > 0 || identityMismatch {
 		row.IdentityStatus = "mismatch_suspected"
 		row.Confidence = "high"
 	} else if row.PassiveRequests > 0 || verified > 0 {
