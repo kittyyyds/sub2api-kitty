@@ -84,6 +84,80 @@ type Account struct {
 	headerOverrideCacheRawSig         uint64
 }
 
+// GetProxyPool returns the proxy IDs configured for this account. Newer
+// accounts store the pool in extra.proxy_pool; legacy accounts may use
+// extra_proxy_ids or the single proxy_id column.
+func (a *Account) GetProxyPool() []int64 {
+	if a == nil {
+		return nil
+	}
+	var raw any
+	if a.Extra != nil {
+		raw = a.Extra["proxy_pool"]
+		if raw == nil {
+			raw = a.Extra["extra_proxy_ids"]
+		}
+	}
+	ids := normalizeProxyPoolIDs(raw)
+	if len(ids) == 0 && a.ProxyID != nil && *a.ProxyID > 0 {
+		ids = []int64{*a.ProxyID}
+	}
+	return ids
+}
+
+func normalizeProxyPoolIDs(raw any) []int64 {
+	var values []any
+	switch v := raw.(type) {
+	case []any:
+		values = v
+	case []int64:
+		values = make([]any, len(v))
+		for i := range v {
+			values[i] = v[i]
+		}
+	case []int:
+		values = make([]any, len(v))
+		for i := range v {
+			values[i] = v[i]
+		}
+	case []float64:
+		values = make([]any, len(v))
+		for i := range v {
+			values[i] = v[i]
+		}
+	}
+	seen := make(map[int64]struct{}, len(values))
+	ids := make([]int64, 0, len(values))
+	for _, value := range values {
+		var id int64
+		switch n := value.(type) {
+		case int64:
+			id = n
+		case int:
+			id = int64(n)
+		case float64:
+			id = int64(n)
+		case json.Number:
+			parsed, err := n.Int64()
+			if err == nil {
+				id = parsed
+			}
+		case string:
+			parsed, err := strconv.ParseInt(strings.TrimSpace(n), 10, 64)
+			if err == nil {
+				id = parsed
+			}
+		}
+		if id > 0 {
+			if _, ok := seen[id]; !ok {
+				seen[id] = struct{}{}
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
+}
+
 // ApplyAccountGroupPriority replaces the effective priority on an account that
 // belongs to groupID when the group-priority feature is enabled. Accounts that
 // do not have a matching relation retain their global accounts.priority.

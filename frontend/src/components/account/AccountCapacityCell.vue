@@ -7,6 +7,11 @@
       </svg>
     </CapacityBadge>
 
+    <div v-for="proxyId in proxyPool" :key="proxyId" class="flex items-center gap-1 pl-2 text-[10px] text-gray-500 dark:text-gray-400">
+      <span class="truncate">P{{ proxyId }}</span>
+      <CapacityBadge :color-class="proxyConcurrencyClass(proxyId)" :current="proxyConcurrency(proxyId)" :max="account.concurrency" />
+    </div>
+
     <!-- 5h窗口费用限制 -->
     <CapacityBadge v-if="showWindowCost" :color-class="windowCostClass" :tooltip="windowCostTooltip" :current="'$' + formatCost(currentWindowCost)" :max="'$' + formatCost(account.window_cost_limit)">
       <svg class="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -58,6 +63,21 @@ const concurrencyClass = computed(() => {
   if (current > 0) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
   return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
 })
+
+const proxyPool = computed(() => {
+  const configured = props.account.proxy_pool?.filter((id) => Number.isFinite(id) && id > 0) ?? []
+  if (configured.length > 0) return configured
+  return props.account.proxy_id ? [props.account.proxy_id] : []
+})
+
+const proxyConcurrency = (proxyId: number) => props.account.proxy_concurrencies?.[String(proxyId)] ?? 0
+const proxyConcurrencyClass = (proxyId: number) => {
+  const current = proxyConcurrency(proxyId)
+  const max = props.account.concurrency
+  if (current >= max) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+  if (current > 0) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+  return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+}
 
 // ====== 窗口费用 ======
 const isAnthropicOAuthOrSetupToken = computed(() =>

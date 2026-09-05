@@ -1540,7 +1540,7 @@
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
         </div>
-        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
+        <ProxyPoolSelector v-model="form.proxy_pool" :proxies="proxies" />
       </div>
 
       <UpstreamRequestIdHeaderField
@@ -2927,7 +2927,7 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
-import ProxySelector from '@/components/common/ProxySelector.vue'
+import ProxyPoolSelector from '@/components/account/ProxyPoolSelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
@@ -3636,6 +3636,7 @@ const form = reactive({
   name: '',
   notes: '',
   proxy_id: null as number | null,
+  proxy_pool: [] as number[],
   concurrency: 1,
   load_factor: null as number | null,
   priority: 1,
@@ -3743,7 +3744,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedChannelWarningAction.value = null
   form.name = newAccount.name
   form.notes = newAccount.notes || ''
-  form.proxy_id = newAccount.proxy_id
+  form.proxy_pool = newAccount.proxy_pool?.length
+    ? [...newAccount.proxy_pool]
+    : (newAccount.proxy_id ? [newAccount.proxy_id] : [])
+  form.proxy_id = form.proxy_pool[0] ?? null
   form.concurrency = newAccount.concurrency
   form.load_factor = newAccount.load_factor ?? null
   form.priority = newAccount.priority
@@ -4705,6 +4709,8 @@ const handleSubmit = async () => {
 	}
 
   const updatePayload: Record<string, unknown> = { ...form }
+  updatePayload.proxy_pool = [...form.proxy_pool]
+  updatePayload.proxy_id = form.proxy_pool[0] ?? 0
   try {
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
     if (updatePayload.proxy_id === null) {

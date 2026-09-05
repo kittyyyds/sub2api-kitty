@@ -840,6 +840,20 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		account.Proxy = nil // 清除关联对象，防止 GORM Save 时根据 Proxy.ID 覆盖 ProxyID
 	}
+	if input.ProxyPool != nil && !account.IsCredentialShadow() {
+		pool := normalizeProxyPoolIDs(*input.ProxyPool)
+		if account.Extra == nil {
+			account.Extra = make(map[string]any)
+		}
+		account.Extra["proxy_pool"] = pool
+		if len(pool) == 0 {
+			account.ProxyID = nil
+		} else {
+			first := pool[0]
+			account.ProxyID = &first
+		}
+		account.Proxy = nil
+	}
 	if !reflect.DeepEqual(previousProbeIdentity, upstreamBillingProbeIdentity(account)) && account.Extra != nil {
 		delete(account.Extra, UpstreamBillingProbeExtraKey)
 		if !isUpstreamBillingProbeAccount(account) {

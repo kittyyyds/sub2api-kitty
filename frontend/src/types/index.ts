@@ -1210,6 +1210,8 @@ export interface Account {
     }
   } & Record<string, unknown>)
   proxy_id: number | null
+  proxy_pool?: number[]
+  proxy_concurrencies?: Record<string, number>
   proxy_fallback_origin_id?: number | null
   proxy_fallback_origin_name?: string | null
   concurrency: number

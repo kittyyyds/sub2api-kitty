@@ -139,6 +139,7 @@ type UpdateAccountRequest struct {
 	Credentials             map[string]any `json:"credentials"`
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
+	ProxyPool               *[]int64       `json:"proxy_pool"`
 	Concurrency             *int           `json:"concurrency"`
 	Priority                *int           `json:"priority"`
 	RateMultiplier          *float64       `json:"rate_multiplier"`
@@ -191,6 +192,7 @@ type CheckMixedChannelRequest struct {
 type AccountWithConcurrency struct {
 	*dto.Account
 	CurrentConcurrency int                          `json:"current_concurrency"`
+	ProxyConcurrencies map[int64]int                `json:"proxy_concurrencies,omitempty"`
 	SchedulerScore     *AccountSchedulerScore       `json:"scheduler_score,omitempty"`
 	SchedulerScores    []AccountSchedulerGroupScore `json:"scheduler_scores,omitempty"`
 	// 以下字段仅对 Anthropic OAuth/SetupToken 账号有效，且仅在启用相应功能时返回
@@ -205,11 +207,32 @@ type AccountWithConcurrency struct {
 type AccountListItemWithConcurrency struct {
 	*dto.AccountListItem
 	CurrentConcurrency int                          `json:"current_concurrency"`
+	ProxyConcurrencies map[int64]int                `json:"proxy_concurrencies,omitempty"`
 	SchedulerScore     *AccountSchedulerScore       `json:"scheduler_score,omitempty"`
 	SchedulerScores    []AccountSchedulerGroupScore `json:"scheduler_scores,omitempty"`
 	CurrentWindowCost  *float64                     `json:"current_window_cost,omitempty"`
 	ActiveSessions     *int                         `json:"active_sessions,omitempty"`
 	CurrentRPM         *int                         `json:"current_rpm,omitempty"`
+}
+
+// proxyConcurrencySnapshot keeps the response compatible with the current
+// single-proxy scheduler: requests are still routed through proxy_id, so the
+// first pool member owns the account-level active count and other configured
+// members start at zero until pool-aware routing is enabled.
+func proxyConcurrencySnapshot(account *service.Account, current int) map[int64]int {
+	if account == nil {
+		return nil
+	}
+	pool := account.GetProxyPool()
+	if len(pool) == 0 {
+		return nil
+	}
+	result := make(map[int64]int, len(pool))
+	for _, proxyID := range pool {
+		result[proxyID] = 0
+	}
+	result[pool[0]] = current
+	return result
 }
 
 type AccountSchedulerScore struct {
@@ -261,6 +284,7 @@ func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, ac
 			item.CurrentConcurrency = counts[account.ID]
 		}
 	}
+	item.ProxyConcurrencies = proxyConcurrencySnapshot(account, item.CurrentConcurrency)
 
 	if account.IsAnthropicOAuthOrSetupToken() {
 		if h.accountUsageService != nil && account.GetWindowCostLimit() > 0 {
@@ -681,6 +705,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		item := AccountWithConcurrency{
 			Account:            accountResponse,
 			CurrentConcurrency: concurrencyCounts[acc.ID],
+			ProxyConcurrencies: proxyConcurrencySnapshot(acc, concurrencyCounts[acc.ID]),
 			SchedulerScore:     schedulerScores[acc.ID],
 			SchedulerScores:    schedulerGroupScores[acc.ID],
 		}
@@ -723,6 +748,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 				CurrentWindowCost:  item.CurrentWindowCost,
 				ActiveSessions:     item.ActiveSessions,
 				CurrentRPM:         item.CurrentRPM,
+				ProxyConcurrencies: item.ProxyConcurrencies,
 			}
 		}
 		etag := buildAccountsListETag(compact, total, page, pageSize, platform, accountType, status, search, true)
@@ -1044,6 +1070,7 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		Credentials:           req.Credentials,
 		Extra:                 req.Extra,
 		ProxyID:               req.ProxyID,
+		ProxyPool:             req.ProxyPool,
 		Concurrency:           req.Concurrency, // 指针类型，nil 表示未提供
 		Priority:              req.Priority,    // 指针类型，nil 表示未提供
 		RateMultiplier:        req.RateMultiplier,
