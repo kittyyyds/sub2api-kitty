@@ -19,6 +19,7 @@ const routerPush = vi.hoisted(() => vi.fn())
 const routerResolve = vi.hoisted(() => vi.fn(() => ({ href: '/payment/stripe?mock=1' })))
 const createOrder = vi.hoisted(() => vi.fn())
 const refreshUser = vi.hoisted(() => vi.fn())
+const authUser = vi.hoisted(() => ({ username: 'demo-user', balance: 0 }))
 const fetchActiveSubscriptions = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
@@ -52,10 +53,7 @@ vi.mock('vue-i18n', async () => {
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
-    user: {
-      username: 'demo-user',
-      balance: 0,
-    },
+    user: authUser,
     refreshUser,
   }),
 }))
@@ -336,6 +334,98 @@ describe('PaymentView recharge rate preview', () => {
     })
     expect(en.payment.rechargeRatePreview).toBe('Current rate: 1 {currency} = {usd} USD')
     expect(zh.payment.rechargeRatePreview).toBe('当前倍率：1 {currency} = {usd} USD')
+  })
+})
+
+describe('PaymentView checkout credit breakdown', () => {
+  beforeEach(() => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    window.localStorage.clear()
+    createOrder.mockReset()
+    authUser.balance = 5
+    refreshUser.mockReset().mockResolvedValue(authUser)
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 0.5,
+      recharge_fee_rate: 5,
+      recharge_bonus_rules: [{ id: 1, recharge_amount: 30, bonus_amount: 1, validity_days: 7 }],
+      recharge_bonus_summary: { available_amount: 2, active_grants: 1 },
+    }))
+  })
+
+  async function mountRecharge() {
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true } },
+    })
+    await flushPromises()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 30)
+    await flushPromises()
+    return wrapper
+  }
+
+  it('shows base credit, new bonus and projected balance without duplicating old bonuses or fees', async () => {
+    const wrapper = await mountRecharge()
+    expect(wrapper.get('[data-testid="base-credit"]').text()).toBe('$15.00')
+    expect(wrapper.get('[data-testid="new-bonus"]').text()).toBe('+$1.00')
+    expect(wrapper.get('[data-testid="total-credit"]').text()).toBe('$16.00')
+    expect(wrapper.get('[data-testid="current-balance"]').text()).toBe('$5.00')
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('$21.00')
+    expect(wrapper.get('.checkout-summary__total').text()).toContain(formatPaymentAmount(31.5, 'CNY'))
+    expect(wrapper.getComponent(AmountInput).props('bonusRules')).toHaveLength(1)
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('recalculates custom amounts and removes bonuses that no longer match the exact tier', async () => {
+    const wrapper = await mountRecharge()
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 31)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="new-bonus"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="total-credit"]').text()).toBe('$15.50')
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('$20.50')
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', null)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('-')
+    expect(wrapper.get('.checkout-submit').attributes('disabled')).toBeDefined()
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('refreshes account balance after checkout has expired old grants', async () => {
+    refreshUser.mockImplementation(async () => { authUser.balance = 3; return authUser })
+    const wrapper = await mountRecharge()
+    expect(refreshUser).toHaveBeenCalledOnce()
+    expect(getCheckoutInfo.mock.invocationCallOrder[0]).toBeLessThan(refreshUser.mock.invocationCallOrder[0])
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('$19.00')
+    wrapper.unmount()
+  })
+
+  it('hides stale balance estimates when balance refresh fails without blocking checkout', async () => {
+    refreshUser.mockRejectedValue(new Error('unavailable'))
+    const wrapper = await mountRecharge()
+    expect(wrapper.get('[data-testid="current-balance"]').text()).toBe('-')
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('-')
+    expect(wrapper.text()).toContain('payment.balanceUnavailable')
+    expect(wrapper.get('.checkout-submit').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('keeps campaign tiers compact while accepting custom amounts outside the presets', async () => {
+    const wrapper = await mountRecharge()
+    expect(wrapper.getComponent(AmountInput).props('amounts')).toEqual([10, 30])
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 20)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="base-credit"]').text()).toBe('$10.00')
+    expect(wrapper.get('.checkout-submit').attributes('disabled')).toBeUndefined()
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('preserves legacy presets when there are no active campaigns', async () => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture())
+    const wrapper = await mountRecharge()
+    expect(wrapper.getComponent(AmountInput).props('amounts')).toEqual([10, 20])
+    wrapper.unmount()
   })
 })
 

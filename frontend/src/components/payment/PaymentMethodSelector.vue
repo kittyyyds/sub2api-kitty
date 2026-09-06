@@ -6,6 +6,7 @@
     <div
       data-testid="payment-method-grid"
       class="payment-methods__grid grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+      :class="{ 'payment-methods__grid--detailed': detailed }"
     >
       <button
         v-for="method in sortedMethods"
@@ -13,6 +14,7 @@
         type="button"
         :title="methodLabel(method)"
         :disabled="!method.available"
+        :aria-pressed="selected === method.type"
         :class="[
           'payment-methods__option relative flex min-w-0 flex-col items-center justify-center',
           !method.available
@@ -31,6 +33,7 @@
             <span data-testid="payment-method-label" class="payment-methods__label">
               {{ methodLabel(method) }}
             </span>
+            <span v-if="detailed" class="payment-methods__description">{{ methodDescription(method) }}</span>
             <span
               v-if="method.fee_rate > 0"
               class="payment-methods__fee"
@@ -69,6 +72,7 @@ export interface PaymentMethodOption {
 const props = defineProps<{
   methods: PaymentMethodOption[]
   selected: string
+  detailed?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -109,6 +113,13 @@ function methodLabel(method: PaymentMethodOption): string {
   return method.display_name || t(`payment.methods.${method.type}`, method.type)
 }
 
+function methodDescription(method: PaymentMethodOption): string {
+  if (!method.available) return t('payment.methodUnavailableHint')
+  if (isBuiltInAlipayMethod(method.type)) return t('payment.alipayCheckoutHint')
+  if (isBuiltInWxpayMethod(method.type)) return t('payment.wechatCheckoutHint')
+  return t('payment.otherCheckoutHint')
+}
+
 function methodSelectedClass(type: string): string {
   if (isBuiltInAlipayMethod(type)) return 'border-[#02A9F1] bg-blue-50 text-gray-900 shadow-sm dark:bg-blue-950 dark:text-gray-100'
   if (isBuiltInWxpayMethod(type)) return 'border-[#09BB07] bg-green-50 text-gray-900 shadow-sm dark:bg-green-950 dark:text-gray-100'
@@ -132,6 +143,51 @@ function methodSelectedClass(type: string): string {
   gap: 9px;
 }
 
+.payment-methods__grid--detailed {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.payment-methods__grid--detailed .payment-methods__option {
+  min-height: 88px;
+  height: auto;
+  padding: 16px 30px 16px 14px;
+}
+
+.payment-methods__grid--detailed .payment-methods__icon {
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
+}
+
+.payment-methods__grid--detailed .payment-methods__label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.payment-methods__grid--detailed .payment-methods__check {
+  top: 50%;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+}
+
+.payment-methods__description {
+  margin-top: 6px;
+  color: var(--checkout-muted, #66706c);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .payment-methods__grid--detailed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .payment-methods__option {
   position: relative;
   height: 68px;
@@ -151,7 +207,9 @@ function methodSelectedClass(type: string): string {
 }
 
 .payment-methods__option--selected {
-  box-shadow: inset 0 0 0 1px currentColor, 0 6px 16px rgba(45, 57, 52, 0.08);
+  border-color: var(--checkout-mint, #23847d);
+  background: var(--checkout-mint-soft, #e8f5f1);
+  box-shadow: inset 0 0 0 1px var(--checkout-mint, #23847d);
 }
 
 .payment-methods__option:focus-visible {
@@ -231,7 +289,7 @@ function methodSelectedClass(type: string): string {
   place-items: center;
   border-radius: 50%;
   color: #ffffff;
-  background: currentColor;
+  background: var(--checkout-mint, #23847d);
 }
 
 .payment-methods__check :deep(svg) {

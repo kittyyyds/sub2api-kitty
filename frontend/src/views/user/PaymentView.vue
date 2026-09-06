@@ -1,13 +1,32 @@
 <template>
   <AppLayout>
     <div class="checkout-page">
+      <div
+        v-if="!loading && tabs.length > 1 && paymentPhase === 'select' && !selectedPlan"
+        class="checkout-tabs"
+        role="tablist"
+        :aria-label="t('payment.title')"
+      >
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === tab.key"
+          :class="{ active: activeTab === tab.key }"
+          @click="activeTab = tab.key"
+        >
+          <Icon :name="tab.key === 'recharge' ? 'creditCard' : 'gift'" size="sm" />
+          <span>{{ tab.label }}</span>
+        </button>
+      </div>
+      <div class="checkout-body">
       <header class="checkout-heading">
         <div class="checkout-heading__mark" aria-hidden="true">
           <Icon name="creditCard" size="lg" :stroke-width="1.8" />
         </div>
         <div class="min-w-0 flex-1">
-          <p class="checkout-heading__eyebrow">{{ t('payment.secureCheckout') }}</p>
-          <h1>{{ t('payment.title') }}</h1>
+          <h1>{{ t('payment.cashierTitle') }}</h1>
           <p class="checkout-heading__copy">{{ t('payment.checkoutSubtitle') }}</p>
         </div>
         <div class="checkout-protection">
@@ -21,26 +40,6 @@
       </div>
 
       <template v-else>
-        <div
-          v-if="tabs.length > 1 && paymentPhase === 'select' && !selectedPlan"
-          class="checkout-tabs"
-          role="tablist"
-          :aria-label="t('payment.title')"
-        >
-          <button
-            v-for="tab in tabs"
-            :key="tab.key"
-            type="button"
-            role="tab"
-            :aria-selected="activeTab === tab.key"
-            :class="{ active: activeTab === tab.key }"
-            @click="activeTab = tab.key"
-          >
-            <Icon :name="tab.key === 'recharge' ? 'creditCard' : 'gift'" size="sm" />
-            <span>{{ tab.label }}</span>
-          </button>
-        </div>
-
         <section v-if="paymentPhase === 'paying'" class="checkout-payment-stage">
           <PaymentStatusPanel
             :order-id="paymentState.orderId"
@@ -76,6 +75,7 @@
                       <h2 id="checkout-amount-title">{{ t('payment.selectAmount') }}</h2>
                       <p>{{ t('payment.selectAmountHint') }}</p>
                     </div>
+                    <span v-if="globalMaxAmount > 0" class="checkout-limit">{{ t('payment.singlePaymentLimit', { amount: formatSelectedPaymentAmount(globalMaxAmount) }) }}</span>
                   </div>
                   <AmountInput
                     v-model="amount"
@@ -83,16 +83,15 @@
                     :min="globalMinAmount"
                     :max="globalMaxAmount"
                     :currency="selectedCurrency"
+                    :bonus-rules="checkout.recharge_bonus_rules"
+                    :recharge-multiplier="balanceRechargeMultiplier"
                   />
                   <p v-if="amountError" class="checkout-message checkout-message--warning" role="alert">
                     {{ amountError }}
                   </p>
-                  <div v-if="activeBonusRule || balanceRechargeMultiplier !== 1" class="checkout-offer">
+                  <div v-if="balanceRechargeMultiplier !== 1" class="checkout-offer">
                     <Icon name="sparkles" size="sm" />
                     <div>
-                      <p v-if="activeBonusRule">
-                        {{ t('payment.rechargeBonus') }} +{{ activeBonusRule.bonus_amount.toFixed(2) }} / {{ activeBonusRule.validity_days }} {{ t('payment.days') }}
-                      </p>
                       <p v-if="balanceRechargeMultiplier !== 1">
                         {{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}
                       </p>
@@ -109,6 +108,7 @@
                     </div>
                   </div>
                   <PaymentMethodSelector
+                    detailed
                     :methods="methodOptions"
                     :selected="selectedMethod"
                     @select="selectedMethod = $event"
@@ -116,21 +116,8 @@
                 </section>
               </div>
 
-              <aside class="checkout-summary" aria-labelledby="checkout-summary-title">
-                <div class="checkout-summary__account">
-                  <span class="checkout-summary__avatar" aria-hidden="true">
-                    <Icon name="user" size="sm" />
-                  </span>
-                  <div class="min-w-0 flex-1">
-                    <p>{{ t('payment.rechargeAccount') }}</p>
-                    <strong>{{ user?.username || '-' }}</strong>
-                  </div>
-                  <div class="checkout-summary__balance">
-                    <span>{{ t('payment.currentBalance') }}</span>
-                    <strong>${{ user?.balance?.toFixed(2) || '0.00' }}</strong>
-                  </div>
-                </div>
-
+              <aside class="checkout-sidebar">
+                <section class="checkout-summary" aria-labelledby="checkout-summary-title">
                 <div class="checkout-summary__total">
                   <p id="checkout-summary-title">{{ t('payment.actualPay') }}</p>
                   <strong>{{ formatSelectedPaymentAmount(totalAmount) }}</strong>
@@ -145,22 +132,19 @@
                     <dt>{{ t('payment.fee') }} ({{ feeRate }}%)</dt>
                     <dd>{{ formatSelectedPaymentAmount(feeAmount) }}</dd>
                   </div>
-                  <div v-if="hasRechargeBoost" class="checkout-breakdown__accent">
-                    <dt>{{ t('payment.creditedBalance') }}</dt>
-                    <dd>${{ creditedAmount.toFixed(2) }}</dd>
+                  <div>
+                    <dt>{{ t('payment.baseCredit') }}</dt>
+                    <dd data-testid="base-credit">${{ baseCreditAmount.toFixed(2) }}</dd>
                   </div>
-                  <div v-if="checkout.recharge_bonus_summary.available_amount > 0">
-                    <dt>{{ t('payment.bonusBalance') }}</dt>
-                    <dd>{{ checkout.recharge_bonus_summary.available_amount.toFixed(2) }}</dd>
+                  <div v-if="activeBonusRule" class="checkout-breakdown__accent">
+                    <dt>{{ t('payment.rechargeBonus') }} / {{ activeBonusRule.validity_days }} {{ t('payment.days') }}</dt>
+                    <dd data-testid="new-bonus">+${{ activeBonusRule.bonus_amount.toFixed(2) }}</dd>
+                  </div>
+                  <div class="checkout-breakdown__accent">
+                    <dt>{{ t('payment.creditedBalance') }}</dt>
+                    <dd data-testid="total-credit">${{ creditedAmount.toFixed(2) }}</dd>
                   </div>
                 </dl>
-
-                <p v-if="activeBonusRule" class="checkout-summary__notice">
-                  {{ t('payment.bonusPriorityNotice') }}
-                </p>
-                <p v-if="checkout.recharge_bonus_summary.next_expires_at" class="checkout-summary__notice">
-                  {{ t('payment.nextBonusExpiry', { time: formatBonusExpiry(checkout.recharge_bonus_summary.next_expires_at) }) }}
-                </p>
 
                 <button
                   type="button"
@@ -182,17 +166,35 @@
                   <Icon name="lock" size="xs" :stroke-width="2" />
                   <span>{{ t('payment.paymentSecurityHint') }}</span>
                 </div>
-                <div class="checkout-support">
-                  <div class="checkout-support__heading">
-                    <Icon name="infoCircle" size="sm" :stroke-width="2" />
-                    <strong>{{ t('payment.supportTitle') }}</strong>
+                </section>
+
+                <section class="checkout-account" aria-labelledby="checkout-account-title">
+                  <div class="checkout-account__heading">
+                    <span class="checkout-summary__avatar" aria-hidden="true"><Icon name="user" size="sm" /></span>
+                    <div class="min-w-0">
+                      <h2 id="checkout-account-title">{{ t('payment.rechargeAccount') }}</h2>
+                      <p>{{ user?.username || '-' }}</p>
+                    </div>
                   </div>
-                  <p>{{ t('payment.supportDescription') }}</p>
-                  <button type="button" class="checkout-support__qq" :aria-label="t('payment.copySupportQQ')" @click="copySupportQQ">
-                    <span><small>QQ</small><strong>1722345668</strong></span>
-                    <span class="checkout-support__copy"><Icon :name="supportQQCopied ? 'check' : 'copy'" size="xs" :stroke-width="2" />{{ supportQQCopied ? t('payment.copied') : t('payment.copyQQ') }}</span>
-                  </button>
-                </div>
+                  <dl class="checkout-balances">
+                    <div>
+                      <dt>{{ t('payment.currentBalance') }}</dt>
+                      <dd data-testid="current-balance">{{ balancePreviewReady ? '$' + (user?.balance ?? 0).toFixed(2) : '-' }}</dd>
+                    </div>
+                    <div>
+                      <dt>{{ t('payment.projectedBalance') }}</dt>
+                      <dd data-testid="projected-balance">{{ balancePreviewReady && canSubmit ? '$' + projectedBalance.toFixed(2) : '-' }}</dd>
+                    </div>
+                  </dl>
+                  <p v-if="checkout.recharge_bonus_summary.available_amount > 0" class="checkout-account__note">
+                    {{ t('payment.includedBonusBalance', { amount: checkout.recharge_bonus_summary.available_amount.toFixed(2) }) }}
+                  </p>
+                  <p v-if="checkout.recharge_bonus_summary.next_expires_at" class="checkout-account__note">
+                    {{ t('payment.nextBonusExpiry', { time: formatBonusExpiry(checkout.recharge_bonus_summary.next_expires_at) }) }}
+                  </p>
+                  <p class="checkout-account__note checkout-account__note--muted">{{ t(balancePreviewReady ? 'payment.balanceEstimateNotice' : 'payment.balanceUnavailable') }}</p>
+                </section>
+                <CheckoutSupport />
               </aside>
             </div>
           </template>
@@ -262,13 +264,15 @@
                   </div>
                   <PaymentMethodSelector
                     :methods="subMethodOptions"
+                    detailed
                     :selected="selectedMethod"
                     @select="selectedMethod = $event"
                   />
                 </section>
               </div>
 
-              <aside class="checkout-summary" aria-labelledby="subscription-summary-title">
+              <aside class="checkout-sidebar">
+                <section class="checkout-summary" aria-labelledby="subscription-summary-title">
                 <div class="checkout-summary__account">
                   <span class="checkout-summary__avatar" aria-hidden="true">
                     <Icon name="gift" size="sm" />
@@ -316,17 +320,8 @@
                   <Icon name="lock" size="xs" :stroke-width="2" />
                   <span>{{ t('payment.paymentSecurityHint') }}</span>
                 </div>
-                <div class="checkout-support">
-                  <div class="checkout-support__heading">
-                    <Icon name="infoCircle" size="sm" :stroke-width="2" />
-                    <strong>{{ t('payment.supportTitle') }}</strong>
-                  </div>
-                  <p>{{ t('payment.supportDescription') }}</p>
-                  <button type="button" class="checkout-support__qq" :aria-label="t('payment.copySupportQQ')" @click="copySupportQQ">
-                    <span><small>QQ</small><strong>1722345668</strong></span>
-                    <span class="checkout-support__copy"><Icon :name="supportQQCopied ? 'check' : 'copy'" size="xs" :stroke-width="2" />{{ supportQQCopied ? t('payment.copied') : t('payment.copyQQ') }}</span>
-                  </button>
-                </div>
+                </section>
+                <CheckoutSupport />
               </aside>
             </div>
 
@@ -392,6 +387,7 @@
           </section>
         </template>
       </template>
+      </div>
     </div>
 
     <Teleport to="body">
@@ -476,6 +472,7 @@ import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFi
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
+import CheckoutSupport from '@/components/payment/CheckoutSupport.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
 import {
@@ -507,39 +504,10 @@ const authStore = useAuthStore()
 const paymentStore = usePaymentStore()
 const subscriptionStore = useSubscriptionStore()
 const appStore = useAppStore()
-const supportQQCopied = ref(false)
-const supportQQ = '1722345668'
+const balancePreviewReady = ref(false)
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
-
-async function copySupportQQ() {
-  let copied = false
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(supportQQ)
-      copied = true
-    } else {
-      const textarea = document.createElement('textarea')
-      textarea.value = supportQQ
-      textarea.setAttribute('readonly', 'true')
-      textarea.style.cssText = 'position:fixed;left:-9999px;top:0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      copied = document.execCommand('copy')
-      document.body.removeChild(textarea)
-    }
-  } catch {
-    copied = false
-  }
-  if (copied) {
-    supportQQCopied.value = true
-    appStore.showSuccess(t('payment.copied'))
-    window.setTimeout(() => { supportQQCopied.value = false }, 2000)
-  } else {
-    appStore.showError(t('common.copyFailed'))
-  }
-}
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -762,14 +730,19 @@ const balanceRechargeMultiplier = computed(() => {
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
 })
 const activeBonusRule = computed(() => checkout.value.recharge_bonus_rules.find(rule => Math.abs(rule.recharge_amount - validAmount.value) < 0.00000001) || null)
-const rechargeAmounts = computed(() => Array.from(new Set([10, 20, ...checkout.value.recharge_bonus_rules.map(rule => rule.recharge_amount)])).sort((a, b) => a - b))
+const rechargeAmounts = computed(() => {
+  const campaignAmounts = checkout.value.recharge_bonus_rules.map(rule => rule.recharge_amount)
+  return Array.from(new Set(campaignAmounts.length ? [10, ...campaignAmounts] : [10, 20])).sort((a, b) => a - b)
+})
 // 订阅 CNY 换算汇率（1 USD = X CNY）。0 = 未配置，订阅保持 price 直付（与后端 opt-in 条件严格镜像）。
 const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
   return Number.isFinite(rate) && rate > 0 ? rate : 0
 })
-const creditedAmount = computed(() => Math.round((validAmount.value * balanceRechargeMultiplier.value + (activeBonusRule.value?.bonus_amount || 0)) * 100) / 100)
-const hasRechargeBoost = computed(() => Math.abs(creditedAmount.value - validAmount.value) > 0.00000001)
+const baseCreditAmount = computed(() => Math.round(validAmount.value * balanceRechargeMultiplier.value * 100) / 100)
+const creditedAmount = computed(() => Math.round((baseCreditAmount.value + (activeBonusRule.value?.bonus_amount || 0)) * 100) / 100)
+// Existing bonus grants are already included in users.balance.
+const projectedBalance = computed(() => (user.value?.balance ?? 0) + creditedAmount.value)
 
 function formatBonusExpiry(value: string): string {
   const date = new Date(value)
@@ -1381,6 +1354,13 @@ onMounted(async () => {
   try {
     const res = await paymentAPI.getCheckoutInfo()
     checkout.value = res.data
+    // Checkout expires old grants; refresh balance afterwards to avoid counting expired credit.
+    try {
+      await authStore.refreshUser()
+      balancePreviewReady.value = true
+    } catch {
+      balancePreviewReady.value = false
+    }
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER
       const sorted = [...enabledMethods.value].sort((a, b) => {
@@ -1389,6 +1369,9 @@ onMounted(async () => {
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
       })
       selectedMethod.value = sorted[0]
+      amount.value = rechargeAmounts.value.find(value => sorted.some(method =>
+        visibleMethods.value[method].available && amountFitsMethod(value, method)
+      )) ?? null
     }
     if (typeof window !== 'undefined') {
       if (hasWechatResumeQuery(route.query)) {
@@ -1446,27 +1429,36 @@ onMounted(async () => {
   --checkout-muted: #66706c;
   --checkout-line: rgba(38, 52, 47, 0.13);
   --checkout-line-strong: rgba(38, 52, 47, 0.22);
-  --checkout-surface: rgba(255, 255, 252, 0.92);
-  --checkout-surface-soft: rgba(242, 245, 240, 0.9);
+  --checkout-surface: #ffffff;
+  --checkout-surface-soft: #f4f6f5;
   --checkout-coral: #e96f62;
   --checkout-coral-soft: #fff0ec;
   --checkout-mint: #23847d;
   --checkout-mint-soft: #e8f5f1;
   --checkout-blue: #3977bd;
+  --checkout-settlement: #f6faf9;
   --checkout-shadow: 0 18px 50px rgba(67, 72, 66, 0.08);
-  width: min(100%, 1180px);
+  width: min(100%, 1240px);
   min-width: 0;
   margin: 0 auto;
   color: var(--checkout-ink);
+  font-weight: 400;
 }
 
-:global(.dark) .checkout-page {
+.checkout-body {
+  padding: 28px;
+  border-top: 3px solid var(--checkout-coral);
+  background: var(--checkout-surface);
+}
+
+.dark .checkout-page {
   --checkout-ink: #f5f8f5;
   --checkout-muted: #b7c2bd;
   --checkout-line: rgba(231, 239, 235, 0.14);
   --checkout-line-strong: rgba(231, 239, 235, 0.25);
-  --checkout-surface: rgba(31, 42, 48, 0.94);
-  --checkout-surface-soft: rgba(38, 51, 56, 0.92);
+  --checkout-surface: #202a2d;
+  --checkout-surface-soft: #283337;
+  --checkout-settlement: #243331;
   --checkout-coral: #ff8d7e;
   --checkout-coral-soft: rgba(149, 66, 58, 0.24);
   --checkout-mint: #65c8bd;
@@ -1479,7 +1471,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 4px 0 26px;
+  padding: 0 0 24px;
   border-bottom: 1px solid var(--checkout-line);
 }
 
@@ -1489,11 +1481,11 @@ onMounted(async () => {
   height: 48px;
   flex: 0 0 48px;
   place-items: center;
-  border: 1px solid rgba(233, 111, 98, 0.28);
+  border: 1px solid var(--checkout-coral);
   border-radius: 8px;
-  color: var(--checkout-coral);
-  background: var(--checkout-coral-soft);
-  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  background: var(--checkout-coral);
+  box-shadow: 0 4px 10px rgba(233, 111, 98, 0.22);
 }
 
 .checkout-heading__eyebrow {
@@ -1509,8 +1501,8 @@ onMounted(async () => {
 .checkout-heading h1 {
   margin: 0;
   color: var(--checkout-ink);
-  font-size: 28px;
-  font-weight: 760;
+  font-size: 25px;
+  font-weight: 700;
   line-height: 1.18;
   letter-spacing: 0;
 }
@@ -1560,10 +1552,10 @@ onMounted(async () => {
 
 .checkout-tabs {
   display: grid;
-  width: min(100%, 430px);
+  width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
-  margin: 22px 0;
+  margin: 0 0 20px;
   padding: 4px;
   border: 1px solid var(--checkout-line);
   border-radius: 8px;
@@ -1592,7 +1584,7 @@ onMounted(async () => {
 
 .checkout-tabs button.active {
   border-color: var(--checkout-line);
-  color: var(--checkout-ink);
+  color: var(--checkout-mint);
   background: var(--checkout-surface);
   box-shadow: 0 4px 14px rgba(52, 59, 55, 0.08);
 }
@@ -1607,19 +1599,18 @@ onMounted(async () => {
 .checkout-shell {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 350px);
-  gap: 22px;
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 330px);
+  gap: 28px;
   align-items: start;
-  margin-top: 22px;
+  margin-top: 26px;
 }
 
 .checkout-flow {
   display: grid;
   min-width: 0;
-  gap: 16px;
+  gap: 22px;
 }
 
-.checkout-section,
 .checkout-empty,
 .checkout-subscriptions,
 .checkout-help {
@@ -1631,7 +1622,8 @@ onMounted(async () => {
 
 .checkout-section {
   min-width: 0;
-  padding: 24px;
+  padding: 0 0 22px;
+  border-bottom: 1px solid var(--checkout-line);
 }
 
 .checkout-section__heading {
@@ -1641,11 +1633,27 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 
+.checkout-section__heading > div {
+  min-width: 0;
+}
+
+.checkout-limit {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--checkout-mint);
+  background: var(--checkout-mint-soft);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .checkout-section__heading h2 {
   margin: 0;
   color: var(--checkout-ink);
-  font-size: 16px;
-  font-weight: 720;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1.35;
   letter-spacing: 0;
 }
@@ -1659,20 +1667,20 @@ onMounted(async () => {
 
 .checkout-step {
   display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   place-items: center;
   border-radius: 50%;
-  color: #9c4139;
-  background: var(--checkout-coral-soft);
-  font-size: 12px;
+  color: #ffffff;
+  background: var(--checkout-coral);
+  font-size: 14px;
   font-weight: 800;
 }
 
 .checkout-step--mint {
-  color: var(--checkout-mint);
-  background: var(--checkout-mint-soft);
+  color: #ffffff;
+  background: var(--checkout-mint);
 }
 
 .checkout-message,
@@ -1694,7 +1702,7 @@ onMounted(async () => {
   background: rgba(255, 244, 222, 0.9);
 }
 
-:global(.dark) .checkout-message--warning {
+.dark .checkout-message--warning {
   color: #ffd294;
   background: rgba(133, 82, 28, 0.22);
 }
@@ -1715,26 +1723,94 @@ onMounted(async () => {
 }
 
 .checkout-summary {
-  position: sticky;
-  top: 92px;
   min-width: 0;
-  overflow: hidden;
   padding: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--checkout-line);
   border-radius: 8px;
-  color: #f4f7f4;
-  background: #1d2826;
-  box-shadow: 0 22px 55px rgba(33, 42, 39, 0.2);
+  background: var(--checkout-surface);
+  box-shadow: 0 5px 16px rgba(38, 52, 47, 0.07);
+  color: var(--checkout-ink);
 }
 
-.checkout-summary::before {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--checkout-coral) 0 38%, #f1c56b 38% 57%, #67bcb2 57% 100%);
-  content: '';
+.checkout-sidebar {
+  display: grid;
+  min-width: 0;
+  gap: 20px;
+  padding: 0 0 20px;
+  background: var(--checkout-settlement);
+}
+
+.checkout-account {
+  min-width: 0;
+  padding: 0 20px;
+}
+
+.checkout-account__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkout-account__heading h2 {
+  margin: 0;
+  color: var(--checkout-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.checkout-account__heading p {
+  margin: 3px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.checkout-balances {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 18px 0 14px;
+  border-top: 1px solid var(--checkout-line);
+  border-bottom: 1px solid var(--checkout-line);
+}
+
+.checkout-balances > div {
+  padding: 12px 0;
+  min-width: 0;
+}
+
+.checkout-balances > div:last-child {
+  padding-left: 14px;
+  border-left: 1px solid var(--checkout-line);
+}
+
+.checkout-balances dt {
+  color: var(--checkout-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.checkout-balances dd {
+  margin: 6px 0 0;
+  font-size: 21px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-balances > div:last-child dd {
+  color: var(--checkout-mint);
+}
+
+.checkout-account__note {
+  margin: 8px 0 0;
+  color: var(--checkout-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.checkout-account__note--muted {
+  font-size: 10px;
 }
 
 .checkout-summary__account {
@@ -1743,24 +1819,24 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding-bottom: 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--checkout-line);
 }
 
 .checkout-summary__avatar {
   display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   place-items: center;
   border-radius: 8px;
-  color: #ffd0c9;
-  background: rgba(233, 111, 98, 0.18);
+  color: var(--checkout-mint);
+  background: var(--checkout-mint-soft);
 }
 
 .checkout-summary__account p,
 .checkout-summary__balance span {
   margin: 0;
-  color: rgba(244, 247, 244, 0.62);
+  color: var(--checkout-muted);
   font-size: 10px;
   line-height: 1.4;
 }
@@ -1787,13 +1863,13 @@ onMounted(async () => {
 }
 
 .checkout-summary__total {
-  padding: 24px 0 20px;
-  text-align: center;
+  padding: 0 0 22px;
+  text-align: left;
 }
 
 .checkout-summary__total p {
-  margin: 0 0 5px;
-  color: rgba(244, 247, 244, 0.68);
+  margin: 0 0 10px;
+  color: var(--checkout-muted);
   font-size: 12px;
 }
 
@@ -1801,9 +1877,9 @@ onMounted(async () => {
   display: block;
   max-width: 100%;
   overflow-wrap: anywhere;
-  color: #ffffff;
-  font-size: 31px;
-  font-weight: 760;
+  color: var(--checkout-coral);
+  font-size: 40px;
+  font-weight: 700;
   line-height: 1.18;
   letter-spacing: 0;
 }
@@ -1813,8 +1889,7 @@ onMounted(async () => {
   gap: 10px;
   margin: 0;
   padding: 16px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px dashed var(--checkout-line-strong);
 }
 
 .checkout-breakdown div {
@@ -1826,34 +1901,43 @@ onMounted(async () => {
 }
 
 .checkout-breakdown dt {
-  color: rgba(244, 247, 244, 0.62);
+  color: var(--checkout-muted);
   font-size: 12px;
 }
 
 .checkout-breakdown dd {
   margin: 0;
   overflow-wrap: anywhere;
-  color: #f8faf8;
+  color: var(--checkout-ink);
   font-size: 12px;
   font-weight: 650;
   text-align: right;
 }
 
+.checkout-breakdown > div:last-child {
+  padding-top: 10px;
+  border-top: 1px solid var(--checkout-line);
+}
+
+.checkout-breakdown > div:last-child dd {
+  font-size: 15px;
+}
+
 .checkout-breakdown__accent dd {
-  color: #8ed8ce;
+  color: var(--checkout-mint);
 }
 
 .checkout-summary__notice {
   margin: 12px 0 0;
   padding: 9px 10px;
-  color: rgba(244, 247, 244, 0.73);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--checkout-muted);
+  background: var(--checkout-surface-soft);
 }
 
 .checkout-submit {
   width: 100%;
-  min-height: 46px;
-  margin-top: 18px;
+  min-height: 48px;
+  margin-top: 12px;
   border-radius: 7px;
   font-size: 14px;
   font-weight: 700;
@@ -1865,6 +1949,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .checkout-submit__spinner {
@@ -1883,113 +1968,10 @@ onMounted(async () => {
   justify-content: center;
   gap: 6px;
   margin-top: 12px;
-  color: rgba(244, 247, 244, 0.5);
+  color: var(--checkout-muted);
   font-size: 10px;
   line-height: 1.45;
   text-align: center;
-}
-
-.checkout-support {
-  margin-top: 18px;
-  padding: 14px;
-  border: 1px solid rgba(242, 197, 107, 0.55);
-  border-radius: 8px;
-  color: #6f4a17;
-  background: #fff8e8;
-}
-
-.checkout-support__heading {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #874d0b;
-  font-size: 13px;
-}
-
-.checkout-support__heading svg {
-  color: #d58b19;
-}
-
-.checkout-support p {
-  margin: 8px 0 12px;
-  color: #9a6a2a;
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.checkout-support__qq {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 11px;
-  border: 1px solid rgba(230, 169, 59, 0.55);
-  border-radius: 7px;
-  color: #7f4c0d;
-  background: rgba(255, 255, 255, 0.74);
-  text-align: left;
-  transition: border-color 160ms ease, background-color 160ms ease;
-}
-
-.checkout-support__qq:hover {
-  border-color: #d89625;
-  background: #ffffff;
-}
-
-.checkout-support__qq > span:first-child {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.checkout-support__qq small {
-  color: #b87918;
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.checkout-support__qq strong {
-  color: #6b410b;
-  font-size: 14px;
-  letter-spacing: 0;
-}
-
-.checkout-support__copy {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-  color: #b06d0d;
-  font-size: 10px;
-  font-weight: 650;
-}
-
-:global(.dark) .checkout-support {
-  border-color: rgba(242, 197, 107, 0.42);
-  color: #ffdda0;
-  background: rgba(116, 76, 21, 0.25);
-}
-
-:global(.dark) .checkout-support__heading,
-:global(.dark) .checkout-support__qq strong {
-  color: #ffe0a5;
-}
-
-:global(.dark) .checkout-support p {
-  color: #e5bb78;
-}
-
-:global(.dark) .checkout-support__qq {
-  border-color: rgba(242, 197, 107, 0.38);
-  color: #ffdda0;
-  background: rgba(31, 42, 48, 0.52);
-}
-
-:global(.dark) .checkout-support__qq:hover {
-  background: rgba(31, 42, 48, 0.8);
 }
 
 .checkout-plan {
@@ -2288,18 +2270,37 @@ onMounted(async () => {
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1180px) {
   .checkout-shell {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .checkout-summary {
-    position: relative;
-    top: auto;
+  .checkout-sidebar {
+    padding-left: 0;
+    border-left: 0;
   }
 }
 
 @media (max-width: 640px) {
+  .checkout-body {
+    padding: 20px 12px;
+  }
+
+  .checkout-section__heading {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .checkout-section__heading > div {
+    flex: 1;
+  }
+
+  .checkout-limit {
+    grid-column: 2;
+    justify-self: start;
+    margin: 0;
+  }
+
   .checkout-heading {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -2324,7 +2325,7 @@ onMounted(async () => {
 
   .checkout-tabs {
     width: 100%;
-    margin: 16px 0;
+    margin: 0 0 16px;
   }
 
   .checkout-tabs button {
@@ -2338,8 +2339,6 @@ onMounted(async () => {
     margin-top: 16px;
   }
 
-  .checkout-section,
-  .checkout-summary,
   .checkout-subscriptions {
     padding: 17px;
   }
@@ -2353,7 +2352,7 @@ onMounted(async () => {
   }
 
   .checkout-summary__total strong {
-    font-size: 27px;
+    font-size: 36px;
   }
 
   .checkout-plan__metrics {
