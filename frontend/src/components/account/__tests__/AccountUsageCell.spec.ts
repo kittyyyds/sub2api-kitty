@@ -364,8 +364,8 @@ describe('AccountUsageCell', () => {
       global: {
         stubs: {
           UsageProgressBar: {
-            props: ['label', 'utilization', 'resetsAt', 'windowStats', 'color'],
-            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}</div>'
+            props: ['label', 'utilization', 'resetsAt', 'windowStats', 'color', 'showCapacityEstimate'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}|estimate={{ showCapacityEstimate }}</div>'
           },
           AccountQuotaInfo: true
         }
@@ -376,7 +376,7 @@ describe('AccountUsageCell', () => {
 
     expect(getUsage).toHaveBeenCalledWith(2000)
     expect(wrapper.text()).toContain('5h|15|300')
-    expect(wrapper.text()).toContain('7d|77|300')
+    expect(wrapper.text()).toContain('7d|77|300|estimate=true')
   })
 
   it('OpenAI OAuth 有 codex 快照时仍然使用 /usage API 数据渲染', async () => {

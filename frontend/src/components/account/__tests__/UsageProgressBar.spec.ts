@@ -7,7 +7,8 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key
+      t: (key: string, params?: Record<string, string>) =>
+        params ? `${key}:${JSON.stringify(params)}` : key
     })
   }
 })
@@ -164,6 +165,50 @@ describe('UsageProgressBar', () => {
     expect(mountAt(75).get('.h-1\\.5 + span').classes()).toContain('text-amber-600')
     expect(mountAt(89).get('.h-1\\.5 + span').classes()).toContain('text-amber-600')
     expect(mountAt(90).get('.h-1\\.5 + span').classes()).toContain('text-red-600')
+  })
+
+  it('根据 7D 账号计费和使用率实时估算总额度', async () => {
+    const wrapper = mount(UsageProgressBar, {
+      props: {
+        label: '7d',
+        utilization: 1,
+        resetsAt: '2026-03-23T23:00:00Z',
+        showCapacityEstimate: true,
+        color: 'emerald',
+        windowStats: {
+          requests: 48,
+          tokens: 3_920_000,
+          cost: 3.7,
+          standard_cost: 3.7,
+          user_cost: 0.74
+        }
+      }
+    })
+
+    const estimate = wrapper.get('[data-test="capacity-estimate"]')
+    expect(estimate.text()).toContain('370')
+    expect(estimate.attributes('title')).toContain('366.30')
+
+    await wrapper.setProps({ utilization: 2 })
+    expect(wrapper.get('[data-test="capacity-estimate"]').text()).toContain('185')
+    expect(wrapper.get('[data-test="capacity-estimate"]').attributes('title')).toContain('181.30')
+  })
+
+  it('0% 或没有有效账号计费时不显示额度预估', async () => {
+    const wrapper = mount(UsageProgressBar, {
+      props: {
+        label: '7d',
+        utilization: 0,
+        showCapacityEstimate: true,
+        color: 'emerald',
+        windowStats: { requests: 0, tokens: 0, cost: 3.7 }
+      }
+    })
+
+    expect(wrapper.find('[data-test="capacity-estimate"]').exists()).toBe(false)
+
+    await wrapper.setProps({ utilization: 1, windowStats: { requests: 1, tokens: 1, cost: 0 } })
+    expect(wrapper.find('[data-test="capacity-estimate"]').exists()).toBe(false)
   })
 
   it('labelWidth 默认 fixed：标签保持定宽居中，百分比列不变', () => {
