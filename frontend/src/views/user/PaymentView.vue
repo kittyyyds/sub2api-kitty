@@ -182,6 +182,17 @@
                   <Icon name="lock" size="xs" :stroke-width="2" />
                   <span>{{ t('payment.paymentSecurityHint') }}</span>
                 </div>
+                <div class="checkout-support">
+                  <div class="checkout-support__heading">
+                    <Icon name="infoCircle" size="sm" :stroke-width="2" />
+                    <strong>{{ t('payment.supportTitle') }}</strong>
+                  </div>
+                  <p>{{ t('payment.supportDescription') }}</p>
+                  <button type="button" class="checkout-support__qq" :aria-label="t('payment.copySupportQQ')" @click="copySupportQQ">
+                    <span><small>QQ</small><strong>1722345668</strong></span>
+                    <span class="checkout-support__copy"><Icon :name="supportQQCopied ? 'check' : 'copy'" size="xs" :stroke-width="2" />{{ supportQQCopied ? t('payment.copied') : t('payment.copyQQ') }}</span>
+                  </button>
+                </div>
               </aside>
             </div>
           </template>
@@ -304,6 +315,17 @@
                 <div class="checkout-summary__security">
                   <Icon name="lock" size="xs" :stroke-width="2" />
                   <span>{{ t('payment.paymentSecurityHint') }}</span>
+                </div>
+                <div class="checkout-support">
+                  <div class="checkout-support__heading">
+                    <Icon name="infoCircle" size="sm" :stroke-width="2" />
+                    <strong>{{ t('payment.supportTitle') }}</strong>
+                  </div>
+                  <p>{{ t('payment.supportDescription') }}</p>
+                  <button type="button" class="checkout-support__qq" :aria-label="t('payment.copySupportQQ')" @click="copySupportQQ">
+                    <span><small>QQ</small><strong>1722345668</strong></span>
+                    <span class="checkout-support__copy"><Icon :name="supportQQCopied ? 'check' : 'copy'" size="xs" :stroke-width="2" />{{ supportQQCopied ? t('payment.copied') : t('payment.copyQQ') }}</span>
+                  </button>
                 </div>
               </aside>
             </div>
@@ -485,9 +507,39 @@ const authStore = useAuthStore()
 const paymentStore = usePaymentStore()
 const subscriptionStore = useSubscriptionStore()
 const appStore = useAppStore()
+const supportQQCopied = ref(false)
+const supportQQ = '1722345668'
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
+
+async function copySupportQQ() {
+  let copied = false
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(supportQQ)
+      copied = true
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = supportQQ
+      textarea.setAttribute('readonly', 'true')
+      textarea.style.cssText = 'position:fixed;left:-9999px;top:0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      copied = document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+  } catch {
+    copied = false
+  }
+  if (copied) {
+    supportQQCopied.value = true
+    appStore.showSuccess(t('payment.copied'))
+    window.setTimeout(() => { supportQQCopied.value = false }, 2000)
+  } else {
+    appStore.showError(t('common.copyFailed'))
+  }
+}
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -1835,6 +1887,109 @@ onMounted(async () => {
   font-size: 10px;
   line-height: 1.45;
   text-align: center;
+}
+
+.checkout-support {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(242, 197, 107, 0.55);
+  border-radius: 8px;
+  color: #6f4a17;
+  background: #fff8e8;
+}
+
+.checkout-support__heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #874d0b;
+  font-size: 13px;
+}
+
+.checkout-support__heading svg {
+  color: #d58b19;
+}
+
+.checkout-support p {
+  margin: 8px 0 12px;
+  color: #9a6a2a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.checkout-support__qq {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid rgba(230, 169, 59, 0.55);
+  border-radius: 7px;
+  color: #7f4c0d;
+  background: rgba(255, 255, 255, 0.74);
+  text-align: left;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.checkout-support__qq:hover {
+  border-color: #d89625;
+  background: #ffffff;
+}
+
+.checkout-support__qq > span:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.checkout-support__qq small {
+  color: #b87918;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.checkout-support__qq strong {
+  color: #6b410b;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.checkout-support__copy {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: #b06d0d;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+:global(.dark) .checkout-support {
+  border-color: rgba(242, 197, 107, 0.42);
+  color: #ffdda0;
+  background: rgba(116, 76, 21, 0.25);
+}
+
+:global(.dark) .checkout-support__heading,
+:global(.dark) .checkout-support__qq strong {
+  color: #ffe0a5;
+}
+
+:global(.dark) .checkout-support p {
+  color: #e5bb78;
+}
+
+:global(.dark) .checkout-support__qq {
+  border-color: rgba(242, 197, 107, 0.38);
+  color: #ffdda0;
+  background: rgba(31, 42, 48, 0.52);
+}
+
+:global(.dark) .checkout-support__qq:hover {
+  background: rgba(31, 42, 48, 0.8);
 }
 
 .checkout-plan {
