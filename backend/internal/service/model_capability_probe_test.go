@@ -60,6 +60,13 @@ func (u *modelCapabilityProbeUpstream) DoWithTLS(req *http.Request, _ string, _ 
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
+	if strings.HasSuffix(req.URL.Path, "/models") {
+		return &http.Response{
+			StatusCode: status,
+			Body:       io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"` + model + `"}]}`)),
+			Header:     make(http.Header),
+		}, nil
+	}
 	body := `{"model":"` + model + `","choices":[{"message":{"content":"pong"}}]}`
 	if strings.HasSuffix(req.URL.Path, "/responses") {
 		body = `{"model":"` + model + `","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}]}`

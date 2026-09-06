@@ -66,6 +66,15 @@ export interface CapabilityAuditEvidence {
   attempt_count?: number
   success_count?: number
   failure_count?: number
+  self_report_matches?: number
+  self_report_mismatches?: number
+  self_report_missing?: number
+  self_report_conflicts?: number
+  catalog_status?: 'checked' | 'unsupported' | 'timeout' | 'error' | 'unchecked' | string
+  catalog_declared?: boolean | null
+  catalog_http_status?: number
+  catalog_checked_at?: string | null
+  catalog_error?: string
   tool_name?: string
   response_summary?: string
   checked_at: string
@@ -93,6 +102,8 @@ export interface CapabilityAuditRow {
   last_seen?: string | null
   last_checked?: string | null
   evidence_count?: number
+  mismatch_signals?: number
+  needs_retest?: boolean
   protocols: Record<string, CapabilityAuditEvidence>
 }
 
@@ -120,6 +131,19 @@ export interface CapabilityAuditSummary {
   mismatch_suspected: number
   unverified: number
   active_errors?: number
+  capability_supported?: number
+  capability_unverified?: number
+  capability_expired?: number
+  capability_unsupported?: number
+  strong_mismatch_suspected?: number
+  retest_required?: number
+  self_report_matches?: number
+  self_report_mismatches?: number
+  self_report_missing?: number
+  self_report_conflicts?: number
+  catalog_checked?: number
+  catalog_declared?: number
+  latest_evidence_at?: string | null
   passive_requests: number
   total_accounts?: number
   stats: CapabilityAuditStats
@@ -168,6 +192,8 @@ export interface CapabilityAuditEstimate {
   target_count: number
   protocol_count: number
   request_count: number
+  catalog_request_count?: number
+  total_request_count?: number
   estimated_max_seconds: number
   max_items: number
   preview_token: string

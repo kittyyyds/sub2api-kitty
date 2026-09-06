@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  auditCatalogLabel,
+  auditEvidenceLevel,
+  auditIdentityDecision,
   normalizeCapabilityIdentityStatus,
   passiveCapabilityStatus,
   passiveConfidence,
@@ -28,5 +31,18 @@ describe('model capability identity presentation', () => {
     expect(passiveCapabilityStatus(0)).toBe('unverified')
     expect(passiveIdentityStatus(0, 0)).toBe('unverified')
     expect(passiveConfidence(0, 0)).toBe('low')
+  })
+
+  it('keeps a single mismatch in retest state and upgrades repeated evidence', () => {
+    expect(auditIdentityDecision('mismatch', 'medium', true, true)).toContain('需要复测')
+    expect(auditEvidenceLevel('mismatch', 'medium')).toBe('中等异常证据')
+    expect(auditIdentityDecision('mismatch_suspected', 'high', true, true)).toContain('高度疑似')
+    expect(auditEvidenceLevel('mismatch_suspected', 'high')).toBe('强异常证据')
+  })
+
+  it('presents model-directory evidence as weak evidence only', () => {
+    expect(auditCatalogLabel('checked', true)).toContain('已声明')
+    expect(auditCatalogLabel('checked', false)).toContain('未声明')
+    expect(auditIdentityDecision('unverified', 'low', true, false)).toContain('仅模型目录声明')
   })
 })

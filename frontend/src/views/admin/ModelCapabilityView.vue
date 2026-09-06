@@ -1,13 +1,10 @@
 <template>
   <AppLayout>
     <div class="w-full min-w-0 space-y-5 pb-8">
-      <header class="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 pb-4 dark:border-dark-700">
+      <header class="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-5 py-4 dark:border-dark-700 dark:bg-dark-800">
         <div>
-          <div class="flex items-center gap-2">
-            <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"><Icon name="shield" size="sm" /></span>
-            <h1 class="text-xl font-bold text-gray-900 dark:text-white">Kitty检测</h1>
-          </div>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">汇总真实流量证据，并对账号映射后的模型执行受控主动探测。能力支持与身份可信度分开判断。</p>
+          <h1 class="text-xl font-bold text-gray-900 dark:text-white">Kitty检测</h1>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">汇总模型映射、真实流量和主动探测证据。能力可用不等于模型身份已证实；第三方中转的目录和自报字段仍可被伪造。</p>
         </div>
         <div class="flex items-center gap-2">
           <button type="button" class="btn btn-secondary" :disabled="loading" title="刷新审计结果" @click="refreshAll"><Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />刷新记录</button>
@@ -17,23 +14,28 @@
 
       <div v-if="errorMessage" class="border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/20 dark:text-red-200">{{ errorMessage }}</div>
 
-      <section class="grid gap-4 lg:grid-cols-2">
-        <div class="border-l-4 border-sky-500 bg-sky-50 px-4 py-3 dark:bg-sky-950/20"><div class="flex items-center gap-2 text-sm font-semibold text-sky-900 dark:text-sky-200"><Icon name="database" size="sm" />被动真实流量证据</div><p class="mt-1 text-xs leading-5 text-sky-800/80 dark:text-sky-200/70">来自已完成请求的请求模型、映射模型和上游响应模型，不产生额外上游请求。</p></div>
-        <div class="border-l-4 border-violet-500 bg-violet-50 px-4 py-3 dark:bg-violet-950/20"><div class="flex items-center gap-2 text-sm font-semibold text-violet-900 dark:text-violet-200"><Icon name="beaker" size="sm" />主动受控探测</div><p class="mt-1 text-xs leading-5 text-violet-800/80 dark:text-violet-200/70">对启用的 OpenAI 兼容账号发送短请求，记录协议、工具调用、状态码和延迟。</p></div>
+      <section class="grid gap-3 lg:grid-cols-2">
+        <div class="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 dark:border-blue-900/60 dark:bg-blue-950/20"><div class="flex items-center gap-2 text-sm font-semibold text-blue-800 dark:text-blue-200"><Icon name="eye" size="sm" />被动真实流量</div><p class="mt-1 text-sm leading-5 text-blue-700 dark:text-blue-300">正常转发请求时自动记录成功响应和确定性错误，不会为了显示状态额外调用上游。</p></div>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-900/60 dark:bg-amber-950/20"><div class="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200"><Icon name="beaker" size="sm" />主动一键探测</div><p class="mt-1 text-sm leading-5 text-amber-700 dark:text-amber-300">点击后会检查模型目录，并向已配置模型发送少量 Chat Completions、Responses 和 Tools 请求；结果与真实流量分开记录。</p></div>
       </section>
 
-      <section class="flex flex-wrap items-end gap-3 border-b border-gray-200 pb-4 dark:border-dark-700">
-        <label class="block min-w-32"><span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">观察窗口</span><select v-model.number="days" class="input w-full" :disabled="running" @change="refreshAll"><option :value="7">最近 7 天</option><option :value="30">最近 30 天</option><option :value="90">最近 90 天</option></select></label>
-        <label class="flex h-9 items-center gap-2 px-1 text-sm text-gray-700 dark:text-gray-200"><input v-model="activeOnly" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" :disabled="running" />仅探测启用账号</label>
-        <label class="block w-28"><span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">探测上限</span><input v-model.number="maxItems" type="number" min="1" max="240" class="input w-full" :disabled="running" /></label>
-        <span v-if="lastRun" class="pb-2 text-xs text-gray-500 dark:text-gray-400">上次运行 #{{ lastRun.id }}：{{ runStatusLabel(lastRun.status) }}，{{ lastRun.completed_items ?? lastRun.completed_count }}/{{ lastRun.total_items ?? lastRun.total_count }} 项协议证据</span>
-      </section>
-
-      <section class="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <div v-for="card in summaryCards" :key="card.label" class="border border-gray-200 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-800">
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ card.label }}</p>
-          <p class="mt-1 text-2xl font-semibold" :class="card.color">{{ card.value }}</p>
-          <p v-if="card.hint" class="mt-1 text-[11px] text-gray-400 dark:text-gray-500">{{ card.hint }}</p>
+      <section class="rounded-lg bg-gray-50 px-5 py-4 text-sm text-gray-600 dark:bg-dark-800 dark:text-gray-300">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span class="font-semibold" :class="riskHeadlineClass">{{ riskHeadline }}</span>
+          <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="riskBadgeClass">{{ riskBadge }}</span>
+          <span>能力支持 {{ capabilityCounts.supported }}</span>
+          <span>未验证 {{ capabilityCounts.unverified }}</span>
+          <span>过期 {{ capabilityCounts.expired }}</span>
+          <span>不支持 {{ capabilityCounts.unsupported }}</span>
+          <span>身份异常 {{ summary?.mismatch_suspected ?? 0 }}</span>
+          <span>最近证据：{{ formatTime(summary?.latest_evidence_at) }}</span>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-gray-500 dark:text-gray-400">
+          <span>真实流量观测：{{ summary?.passive_requests ?? 0 }}</span>
+          <span>主动探测尝试：{{ summary?.stats.active_checks ?? 0 }}</span>
+          <span>身份自报：匹配 {{ summary?.self_report_matches ?? 0 }} / 不匹配 {{ summary?.self_report_mismatches ?? 0 }} / 缺失 {{ summary?.self_report_missing ?? 0 }} / 冲突 {{ summary?.self_report_conflicts ?? 0 }}</span>
+          <span>模型目录：已检查 {{ summary?.catalog_checked ?? 0 }} / 已声明 {{ summary?.catalog_declared ?? 0 }}</span>
+          <span v-if="lastRun">最近运行 #{{ lastRun.id }}：{{ runStatusLabel(lastRun.status) }} {{ lastRun.completed_items ?? lastRun.completed_count }}/{{ lastRun.total_items ?? lastRun.total_count }}</span>
         </div>
       </section>
 
@@ -43,21 +45,24 @@
             <h2 class="text-sm font-semibold text-gray-900 dark:text-white">模型审计矩阵</h2>
             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">每项协议独立展示能力、身份边界和最近一次证据；点击任意行查看同模型的完整证据。</p>
           </div>
-          <div class="text-right text-xs text-gray-500 dark:text-gray-400">
+          <div class="flex items-center gap-3 text-right text-xs text-gray-500 dark:text-gray-400">
+            <select v-model.number="days" class="input h-9 w-28" :disabled="running" aria-label="观察窗口" @change="refreshAll"><option :value="7">最近 7 天</option><option :value="30">最近 30 天</option><option :value="90">最近 90 天</option></select>
+            <div>
             <div>{{ summary?.generated_at ? formatTime(summary.generated_at) : '尚未加载' }}</div>
             <div v-if="summary" class="mt-1">
               当前 {{ summary.returned_models ?? summary.rows.length }} / 总计 {{ summary.total_models }} 个模型映射
               <span v-if="summary.rows_truncated" class="text-amber-600 dark:text-amber-300">（已按上限截断）</span>
+            </div>
             </div>
           </div>
         </div>
         <div v-if="loading" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">正在读取审计记录…</div>
         <div v-else-if="protocolRows.length === 0" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">暂无证据。先积累真实请求，或点击“一键探测”生成主动记录。</div>
         <div v-else class="overflow-x-auto">
-          <table class="w-full min-w-[1260px] text-left text-sm">
+          <table class="w-full min-w-[1420px] text-left text-sm">
             <thead class="bg-gray-50 text-xs font-semibold text-gray-500 dark:bg-dark-900/50 dark:text-gray-400">
               <tr>
-                <th class="px-4 py-3">账号 / 模型映射</th>
+                <th class="px-4 py-3">上游模型</th>
                 <th class="px-4 py-3">协议 / 能力</th>
                 <th class="px-4 py-3">能力 / 身份判定</th>
                 <th class="px-4 py-3">证据来源</th>
@@ -75,38 +80,37 @@
                 @keydown.enter="selectedRow = item.row"
               >
                 <td class="px-4 py-3">
-                  <div class="font-medium text-gray-900 dark:text-white">{{ item.row.account_name || ('账号 #' + item.row.account_id) }}</div>
-                  <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ item.row.platform }} · {{ item.row.group_name || '未分组' }}</div>
-                  <div class="mt-2 font-mono text-xs text-gray-800 dark:text-gray-200">请求：{{ item.row.requested_model }}</div>
-                  <div class="mt-0.5 font-mono text-[11px] text-gray-500 dark:text-gray-400">映射：{{ item.row.mapped_model || '直通' }}</div>
+                  <div class="break-all font-mono font-medium text-gray-900 dark:text-white">{{ item.row.mapped_model || item.row.requested_model }}</div>
+                  <div class="mt-1 break-all font-mono text-xs text-gray-400">请求别名：{{ item.row.requested_model }}</div>
+                  <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ item.row.account_name || ('账号 #' + item.row.account_id) }} · {{ item.row.group_name || item.row.platform }}</div>
                 </td>
                 <td class="px-4 py-3">
                   <div class="font-medium text-gray-900 dark:text-white">{{ item.protocol ? protocolLabel(item.protocol) : '被动真实流量' }}</div>
-                  <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ item.evidence?.capability || (item.protocol ? '基础协议响应' : '请求与响应模型记录') }}</div>
-                  <div v-if="item.protocol === 'responses_tools'" class="mt-1 text-xs" :class="item.evidence?.tool_call_found && item.evidence?.tool_arguments_valid ? 'text-emerald-600' : 'text-gray-500'">
-                    工具调用：{{ item.evidence?.tool_call_found && item.evidence?.tool_arguments_valid ? '结构有效' : '未验证' }}
-                  </div>
+                  <div class="mt-1 text-xs text-gray-400">{{ capabilityName(item) }}</div>
                 </td>
                 <td class="px-4 py-3">
-                  <span v-if="item.evidence" class="rounded px-2 py-1 text-xs font-medium" :class="statusClass(item.evidence.status)">{{ protocolStatus(item.evidence.status) }}</span>
-                  <span v-else class="text-xs text-gray-500 dark:text-gray-400">{{ item.row.passive_requests > 0 ? '已观测请求' : '尚无证据' }}</span>
-                  <div class="mt-2 text-xs" :class="capabilityClass(itemCapabilityStatus(item))">{{ capabilityLabel(itemCapabilityStatus(item)) }}</div>
-                  <div class="mt-1 max-w-56 text-xs" :class="identityTextClass(itemIdentityStatus(item))">{{ identityLabel(itemIdentityStatus(item)) }}</div>
-                  <div class="mt-0.5 text-[11px] text-gray-400">{{ confidenceLabel(itemConfidence(item)) }}</div>
+                  <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="statusClass(item.evidence?.status || 'unknown')">{{ capabilityStateLabel(item) }}</span>
+                  <div class="mt-3 max-w-64 font-medium" :class="identityTextClass(itemIdentityStatus(item))">{{ identityDecision(item) }}</div>
+                  <span class="mt-2 inline-flex rounded px-2 py-1 text-xs font-medium" :class="identityEvidenceClass(item)">{{ identityEvidenceLevel(item) }}</span>
+                  <div class="mt-2 text-xs text-gray-500">第三方或代理链路（身份不可直接验真）</div>
                 </td>
                 <td class="px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
                   <div class="font-medium text-gray-800 dark:text-gray-200">{{ evidenceSourceLabel(item.evidence?.evidence_source || item.evidence?.source) }}</div>
-                  <div v-if="item.evidence" class="mt-1">主动：尝试 {{ evidenceAttempts(item.evidence) }} / 成功 {{ evidenceSuccesses(item.evidence) }} / 失败 {{ evidenceFailures(item.evidence) }}</div>
-                  <div class="mt-1">被动：{{ item.row.passive_requests }} 次<span v-if="item.row.passive_mismatches" class="ml-1 text-amber-600">· 偏差 {{ item.row.passive_mismatches }}</span></div>
+                  <div class="mt-2 text-gray-500">真实流量：观测 {{ item.row.passive_requests }} / 成功 {{ passiveSuccesses(item.row) }} / 不匹配 {{ item.row.passive_mismatches }}</div>
+                  <div v-if="item.evidence" class="mt-1 text-gray-500">主动探测：尝试 {{ evidenceAttempts(item.evidence) }} / 成功 {{ evidenceSuccesses(item.evidence) }} / 不匹配 {{ item.evidence.self_report_mismatches ?? (item.evidence.status === 'model_mismatch' ? 1 : 0) }}</div>
                 </td>
-                <td class="whitespace-nowrap px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
                   <div>{{ formatTime(evidenceTime(item)) }}</div>
-                  <div v-if="item.evidence?.run_id" class="mt-1 font-mono text-[11px]">运行 #{{ item.evidence.run_id }}</div>
+                  <div class="mt-2" :class="catalogTextClass(item.evidence)">{{ catalogLabel(item.evidence) }}</div>
+                  <div v-if="item.evidence?.catalog_checked_at" class="mt-1">目录检查时间：{{ formatTime(item.evidence.catalog_checked_at) }}</div>
+                  <div v-if="item.evidence?.catalog_http_status" class="mt-1">HTTP {{ item.evidence.catalog_http_status }}</div>
                 </td>
                 <td class="max-w-80 px-4 py-3 text-xs text-gray-600 dark:text-gray-300">
-                  <div>HTTP {{ item.evidence?.http_status ?? '-' }} · {{ item.evidence?.latency_ms ?? '-' }} ms</div>
-                  <div class="mt-1 break-all font-mono">返回模型：{{ evidenceResponseModel(item) }}</div>
-                  <div v-if="item.evidence" class="mt-1 break-words text-gray-500 dark:text-gray-400">证据：{{ item.evidence.evidence_code || item.evidence.evidence || '-' }}</div>
+                  <div class="break-all">上游返回模型：<span class="font-mono">{{ evidenceResponseModel(item) }}</span></div>
+                  <div class="mt-1">{{ selfReportVerdict(item) }}</div>
+                  <div v-if="item.evidence" class="mt-1">自报计数：匹配 {{ item.evidence.self_report_matches ?? 0 }} / 不匹配 {{ item.evidence.self_report_mismatches ?? 0 }} / 缺失 {{ item.evidence.self_report_missing ?? 0 }} / 冲突 {{ item.evidence.self_report_conflicts ?? 0 }}</div>
+                  <div v-if="item.protocol === 'responses_tools'" class="mt-1" :class="item.evidence?.tool_call_found && item.evidence?.tool_arguments_valid ? 'text-emerald-600' : 'text-gray-500'">工具调用：{{ item.evidence?.tool_call_found && item.evidence?.tool_arguments_valid ? '名称与 JSON 参数均有效' : '未得到有效结构' }}</div>
+                  <div v-if="item.evidence" class="mt-2 text-gray-400">HTTP {{ item.evidence.http_status || '-' }} · {{ item.evidence.latency_ms ?? '-' }} ms · {{ item.evidence.evidence_code || item.evidence.evidence || '-' }}</div>
                   <div v-if="item.evidence?.error" class="mt-1 break-words text-red-600 dark:text-red-300">{{ item.evidence.error }}</div>
                 </td>
               </tr>
@@ -178,7 +182,7 @@
       </section>
     </div>
 
-    <div v-if="pendingEstimate" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="probe-confirm-title" @click.self="pendingEstimate = null"><section class="w-full max-w-md border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800"><div class="flex items-start justify-between border-b border-gray-200 px-5 py-4 dark:border-dark-700"><div><h2 id="probe-confirm-title" class="font-semibold text-gray-900 dark:text-white">确认一键探测</h2><p class="mt-1 text-xs text-gray-500 dark:text-gray-400">主动探测会产生上游用量和费用</p></div><button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center" title="取消探测" @click="pendingEstimate = null"><Icon name="x" size="sm" /></button></div><div class="space-y-4 p-5"><div class="grid grid-cols-3 gap-3 text-center"><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ pendingEstimate.target_count }}</p><p class="mt-1 text-xs text-gray-500">账号模型</p></div><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ pendingEstimate.request_count }}</p><p class="mt-1 text-xs text-gray-500">上游请求</p></div><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ estimateDuration(pendingEstimate.estimated_max_seconds) }}</p><p class="mt-1 text-xs text-gray-500">最长预计</p></div></div><p class="text-xs leading-5 text-gray-600 dark:text-gray-300">每个账号模型按 {{ pendingEstimate.protocol_count }} 项协议发送最小非流式请求。实际扣费由上游模型价格、输出量和账号计费规则决定。</p><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" @click="pendingEstimate = null">取消</button><button type="button" class="btn btn-primary" @click="confirmBatchProbe"><Icon name="play" size="sm" />确认探测</button></div></div></section></div>
+    <div v-if="pendingEstimate" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="probe-confirm-title" @click.self="pendingEstimate = null"><section class="w-full max-w-md border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800"><div class="flex items-start justify-between border-b border-gray-200 px-5 py-4 dark:border-dark-700"><div><h2 id="probe-confirm-title" class="font-semibold text-gray-900 dark:text-white">确认一键探测</h2><p class="mt-1 text-xs text-gray-500 dark:text-gray-400">主动探测会产生上游用量和费用</p></div><button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center" title="取消探测" @click="pendingEstimate = null"><Icon name="x" size="sm" /></button></div><div class="space-y-4 p-5"><div class="grid grid-cols-3 gap-3 text-center"><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ pendingEstimate.target_count }}</p><p class="mt-1 text-xs text-gray-500">账号模型</p></div><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ pendingEstimate.request_count }}</p><p class="mt-1 text-xs text-gray-500">计费探测</p></div><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ estimateDuration(pendingEstimate.estimated_max_seconds) }}</p><p class="mt-1 text-xs text-gray-500">最长预计</p></div></div><p class="text-xs leading-5 text-gray-600 dark:text-gray-300">每个账号模型按 {{ pendingEstimate.protocol_count }} 项协议发送最小非流式请求，另检查 {{ pendingEstimate.catalog_request_count ?? 0 }} 次模型目录。实际扣费由上游模型价格、输出量和账号计费规则决定。</p><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" @click="pendingEstimate = null">取消</button><button type="button" class="btn btn-primary" @click="confirmBatchProbe"><Icon name="play" size="sm" />确认探测</button></div></div></section></div>
 
     <div v-if="pendingBehaviorEstimate" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="behavior-confirm-title" @click.self="pendingBehaviorEstimate = null"><section class="w-full max-w-md border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800"><div class="flex items-start justify-between border-b border-gray-200 px-5 py-4 dark:border-dark-700"><div><h2 id="behavior-confirm-title" class="font-semibold text-gray-900 dark:text-white">确认成对行为审计</h2><p class="mt-1 text-xs text-gray-500 dark:text-gray-400">目标端与官方锚点都会产生上游费用</p></div><button type="button" class="inline-flex h-9 w-9 shrink-0 items-center justify-center" title="取消审计" @click="pendingBehaviorEstimate = null"><Icon name="x" size="sm" /></button></div><div class="space-y-4 p-5"><div class="grid grid-cols-3 gap-3 text-center"><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ pendingBehaviorEstimate.pair_count }}</p><p class="mt-1 text-xs text-gray-500">成对用例</p></div><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ pendingBehaviorEstimate.request_count }}</p><p class="mt-1 text-xs text-gray-500">上游请求</p></div><div class="border border-gray-200 px-2 py-3 dark:border-dark-700"><p class="text-xl font-semibold text-gray-900 dark:text-white">{{ estimateDuration(pendingBehaviorEstimate.estimated_max_seconds) }}</p><p class="mt-1 text-xs text-gray-500">最长预计</p></div></div><p class="text-xs leading-5 text-gray-600 dark:text-gray-300">将比较 {{ pendingBehaviorEstimate.target_count }} 个第三方账号与 {{ pendingBehaviorEstimate.anchor_count }} 个可用官方锚点。结果是可复现的行为证据，不是模型身份认证。</p><p v-if="pendingBehaviorEstimate.targets_truncated" class="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200">共有 {{ pendingBehaviorEstimate.available_target_count }} 个账号符合条件，本次按安全上限只审计前 {{ pendingBehaviorEstimate.target_count }} 个。</p><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" @click="pendingBehaviorEstimate = null">取消</button><button type="button" class="btn btn-primary" @click="confirmBehaviorAudit"><Icon name="play" size="sm" />确认审计</button></div></div></section></div>
 
@@ -202,6 +206,7 @@
             <div v-for="(evidence, protocol) in selectedRow.protocols" :key="protocol" class="border border-gray-200 p-3 dark:border-dark-700">
               <div class="flex flex-wrap items-center justify-between gap-2"><span class="font-medium text-gray-900 dark:text-white">{{ protocolLabel(protocol) }}</span><span class="rounded px-2 py-1 text-xs" :class="statusClass(evidence.status)">{{ protocolStatus(evidence.status) }}</span></div>
               <div class="mt-2 grid gap-2 text-xs text-gray-600 sm:grid-cols-3 dark:text-gray-300"><span>HTTP {{ evidence.http_status || '-' }}</span><span>{{ evidence.latency_ms ?? '-' }} ms</span><span class="break-all">返回 {{ evidence.response_model || evidence.upstream_model || '-' }}</span></div>
+              <p class="mt-2 text-xs" :class="catalogTextClass(evidence)">{{ catalogLabel(evidence) }}<span v-if="evidence.catalog_checked_at"> · {{ formatTime(evidence.catalog_checked_at) }}</span></p>
               <p class="mt-2 break-words text-xs text-gray-500 dark:text-gray-400">证据：{{ evidence.evidence_code || evidence.evidence || '-' }}<span v-if="evidence.error"> · {{ evidence.error }}</span></p>
             </div>
             <p v-if="Object.keys(selectedRow.protocols).length === 0" class="text-sm text-gray-500">尚无主动探测证据</p>
@@ -239,6 +244,9 @@ import Icon from '@/components/icons/Icon.vue'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { adminAPI } from '@/api/admin'
 import {
+  auditCatalogLabel,
+  auditEvidenceLevel,
+  auditIdentityDecision,
   normalizeCapabilityIdentityStatus,
   passiveCapabilityStatus,
   passiveConfidence,
@@ -273,8 +281,6 @@ const lastRun = ref<CapabilityAuditRun | null>(null)
 const selectedRow = ref<CapabilityAuditRow | null>(null)
 const runDetail = ref<CapabilityAuditRunDetail | null>(null)
 const days = ref(30)
-const maxItems = ref(60)
-const activeOnly = ref(true)
 const loading = ref(false)
 const running = ref(false)
 const previewing = ref(false)
@@ -310,10 +316,6 @@ const protocolRows = computed<CapabilityProtocolRow[]>(() => {
   }
 
   for (const row of rows.value) {
-    if (row.passive_requests > 0) {
-      result.push({ key: `${row.key}:passive`, row, protocol: null, evidence: null })
-    }
-
     const evidenceEntries = Object.entries(row.protocols ?? {}).sort(([left], [right]) => {
       const leftOrder = protocolOrder[left] ?? 99
       const rightOrder = protocolOrder[right] ?? 99
@@ -323,43 +325,62 @@ const protocolRows = computed<CapabilityProtocolRow[]>(() => {
       result.push({ key: `${row.key}:protocol:${protocol}`, row, protocol, evidence })
     }
 
-    if (row.passive_requests === 0 && evidenceEntries.length === 0) {
-      result.push({ key: `${row.key}:unobserved`, row, protocol: null, evidence: null })
+    if (evidenceEntries.length === 0) {
+      result.push({ key: `${row.key}:passive`, row, protocol: null, evidence: null })
     }
   }
   return result
 })
 const latestBehaviorRun = computed(() => behaviorRuns.value[0] ?? null)
-const summaryCards = computed(() => [
-  { label: '高度疑似模型替换', value: summary.value?.mismatch_suspected ?? 0, color: 'text-red-600', hint: '请求 / 映射 / 上游返回不一致' },
-  { label: '异常需复核', value: summary.value?.active_errors ?? 0, color: 'text-amber-600', hint: '超时、失败或结论不足' },
-  { label: '能力支持', value: summary.value?.capability_verified ?? 0, color: 'text-emerald-600', hint: '主动协议探测通过' },
-  { label: '主动探测', value: summary.value?.stats.active_checks ?? 0, color: 'text-sky-600', hint: '已完成的协议检查次数' },
-  { label: '最近检查', value: latestCheckTime.value, color: 'text-gray-700 dark:text-gray-200', hint: `观察窗口：${days.value} 天` },
-])
-const latestCheckTime = computed(() => formatTime(lastRun.value?.finished_at || lastRun.value?.created_at))
+const capabilityCounts = computed(() => ({
+  supported: summary.value?.capability_supported ?? summary.value?.capability_verified ?? 0,
+  unverified: summary.value?.capability_unverified ?? summary.value?.unverified ?? 0,
+  expired: summary.value?.capability_expired ?? 0,
+  unsupported: summary.value?.capability_unsupported ?? 0,
+}))
+const riskHeadline = computed(() => (summary.value?.strong_mismatch_suspected ?? 0) > 0
+  ? '高度疑似模型替换'
+  : (summary.value?.mismatch_suspected ?? 0) > 0 ? '发现待复测异常' : '暂未发现强替换证据')
+const riskBadge = computed(() => (summary.value?.strong_mismatch_suspected ?? 0) > 0
+  ? '强异常证据'
+  : (summary.value?.mismatch_suspected ?? 0) > 0 ? '需要复测' : '证据正常')
+const riskHeadlineClass = computed(() => (summary.value?.strong_mismatch_suspected ?? 0) > 0
+  ? 'text-red-600 dark:text-red-300'
+  : (summary.value?.mismatch_suspected ?? 0) > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300')
+const riskBadgeClass = computed(() => (summary.value?.strong_mismatch_suspected ?? 0) > 0
+  ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+  : (summary.value?.mismatch_suspected ?? 0) > 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300')
 function formatTime(value?: string | null): string { if (!value) return '-'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString() }
 function protocolLabel(value: string): string { return value === 'chat_completions' ? 'Chat Completions' : value === 'responses_tools' ? 'Responses + Tools' : value === 'responses' ? 'Responses' : value }
 function protocolStatus(value: string): string { return value === 'verified' ? '通过' : value === 'model_mismatch' ? '偏差' : value === 'unsupported' ? '不支持' : value === 'needs_retest' ? '结论不足' : value === 'timeout' ? '超时' : value === 'error' ? '异常' : '待复测' }
-function statusClass(value: string): string { return value === 'verified' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : value === 'model_mismatch' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : value === 'unsupported' || value === 'needs_retest' ? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' }
+function statusClass(value: string): string { return value === 'verified' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : value === 'model_mismatch' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : value === 'unsupported' || value === 'needs_retest' || value === 'unknown' ? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' }
 function statusTextClass(value: string): string { return value === 'verified' ? 'text-emerald-600' : value === 'model_mismatch' ? 'text-amber-600' : value === 'unsupported' || value === 'needs_retest' ? 'text-gray-500' : 'text-red-600' }
 function capabilityLabel(value: string): string { return value === 'verified' ? '能力支持' : value === 'observed' ? '真实请求已完成' : value === 'unsupported' ? '能力不支持' : '能力未验证' }
 function capabilityClass(value: string): string { return value === 'verified' || value === 'observed' ? 'text-emerald-600' : value === 'unsupported' ? 'text-gray-500' : 'text-amber-600' }
 function identityLabel(value: string): string { const normalized = normalizeCapabilityIdentityStatus(value); return normalized === 'consistent' || normalized === 'self_report_consistent' ? '目录与自报一致，身份未验真' : normalized === 'mismatch_suspected' ? '疑似模型替换' : normalized === 'evidence_only' ? '仅有能力证据' : '未验证' }
 function identityTextClass(value: string): string { const normalized = normalizeCapabilityIdentityStatus(value); return normalized === 'consistent' || normalized === 'self_report_consistent' ? 'text-blue-600' : normalized === 'mismatch_suspected' ? 'text-amber-600' : 'text-gray-600' }
-function confidenceLabel(value: string): string { return value === 'high' ? '较强异常信号' : value === 'medium' ? '弱一致性证据' : '证据不足' }
+function confidenceLabel(value: string): string { return value === 'high' ? '较强异常信号' : value === 'medium' ? '中等证据' : '证据不足' }
+function capabilityName(item: CapabilityProtocolRow): string { return item.protocol === 'responses_tools' ? 'Tools' : item.protocol ? '基础文本' : '请求与响应模型记录' }
+function evidenceExpired(evidence?: CapabilityAuditEvidence | null): boolean { if (!evidence?.checked_at) return false; const checked = new Date(evidence.checked_at).getTime(); return Number.isFinite(checked) && Date.now() - checked > 7 * 24 * 60 * 60 * 1000 }
+function capabilityStateLabel(item: CapabilityProtocolRow): string { if (evidenceExpired(item.evidence)) return '已过期'; return item.evidence ? capabilityLabel(item.evidence.capability_status || itemCapabilityStatus(item)) : '未验证' }
+function identityDecision(item: CapabilityProtocolRow): string { return auditIdentityDecision(itemIdentityStatus(item), itemConfidence(item), item.evidence?.catalog_declared, evidenceResponseModel(item) !== '-') }
+function identityEvidenceLevel(item: CapabilityProtocolRow): string { return auditEvidenceLevel(itemIdentityStatus(item), itemConfidence(item)) }
+function identityEvidenceClass(item: CapabilityProtocolRow): string { const level = identityEvidenceLevel(item); return level === '强异常证据' ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300' : level === '中等异常证据' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' : level === '弱一致性证据' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' }
+function passiveSuccesses(row: CapabilityAuditRow): number { return Math.max(0, row.passive_requests - row.passive_mismatches) }
+function catalogLabel(evidence?: CapabilityAuditEvidence | null): string { return auditCatalogLabel(evidence?.catalog_status, evidence?.catalog_declared) }
+function catalogTextClass(evidence?: CapabilityAuditEvidence | null): string { return evidence?.catalog_status === 'checked' && evidence.catalog_declared ? 'text-blue-600 dark:text-blue-300' : evidence?.catalog_status === 'checked' && evidence.catalog_declared === false ? 'text-amber-600 dark:text-amber-300' : 'text-gray-500' }
+function selfReportVerdict(item: CapabilityProtocolRow): string { if (!item.evidence) return item.row.passive_response_models?.length ? '来自被动流量的模型自报' : '响应未提供可用的模型标识'; if ((item.evidence.self_report_conflicts ?? 0) > 0) return '重复探测的模型自报发生冲突'; if ((item.evidence.self_report_mismatches ?? 0) > 0 || item.evidence.status === 'model_mismatch') return '自报模型与映射不匹配'; if (evidenceResponseModel(item) !== '-') return '自报模型与映射匹配'; return '响应未提供可用的模型标识' }
 function estimateDuration(seconds: number): string { if (!seconds) return '< 1 分钟'; const minutes = Math.max(1, Math.ceil(seconds / 60)); return minutes >= 60 ? `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分` : `${minutes} 分钟` }
 function runStatusLabel(value: string): string { return value === 'completed' ? '已完成' : value === 'partial' ? '部分完成' : value === 'running' ? '运行中' : value === 'failed' ? '失败' : value }
 function runStatusClass(value: string): string { return value === 'completed' ? 'bg-emerald-100 text-emerald-700' : value === 'partial' ? 'bg-amber-100 text-amber-700' : value === 'running' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700' }
 function evidenceSourceLabel(value?: string): string { return value === 'active_probe' ? '主动受控探测' : value === 'paired_behavior' ? '成对行为审计' : value === 'passive_traffic' || value === 'usage_log' ? '被动真实流量' : value ? value : '被动真实流量' }
 function evidenceAttempts(evidence: CapabilityAuditEvidence): number { return evidence.attempt_count === undefined ? 1 : Math.max(0, evidence.attempt_count) }
 function evidenceSuccesses(evidence: CapabilityAuditEvidence): number { return evidence.success_count === undefined ? (evidence.status === 'verified' || evidence.status === 'model_mismatch' ? 1 : 0) : Math.max(0, evidence.success_count) }
-function evidenceFailures(evidence: CapabilityAuditEvidence): number { return evidence.failure_count === undefined ? Math.max(0, evidenceAttempts(evidence) - evidenceSuccesses(evidence)) : Math.max(0, evidence.failure_count) }
 function evidenceResponseModel(item: CapabilityProtocolRow): string { return item.evidence ? (item.evidence.response_model || item.evidence.upstream_model || '-') : (item.row.passive_response_models?.join(', ') || '-') }
 function evidenceTime(item: CapabilityProtocolRow): string | null | undefined { return item.evidence?.checked_at || item.row.passive_last_seen }
 function itemCapabilityStatus(item: CapabilityProtocolRow): string { return item.evidence?.capability_status || (item.evidence ? item.row.capability_status : passiveCapabilityStatus(item.row.passive_requests)) }
-function itemIdentityStatus(item: CapabilityProtocolRow): string { return item.evidence ? normalizeCapabilityIdentityStatus(item.evidence.identity_status) : passiveIdentityStatus(item.row.passive_requests, item.row.passive_mismatches, item.row.passive_response_models) }
-function itemConfidence(item: CapabilityProtocolRow): string { return item.evidence?.confidence || (item.evidence ? item.row.confidence : passiveConfidence(item.row.passive_requests, item.row.passive_mismatches, item.row.passive_response_models)) }
+function itemIdentityStatus(item: CapabilityProtocolRow): string { if (item.evidence && ((item.evidence.self_report_mismatches ?? 0) > 0 || (item.evidence.self_report_conflicts ?? 0) > 0)) return 'mismatch_suspected'; return item.evidence ? normalizeCapabilityIdentityStatus(item.evidence.identity_status) : passiveIdentityStatus(item.row.passive_requests, item.row.passive_mismatches, item.row.passive_response_models) }
+function itemConfidence(item: CapabilityProtocolRow): string { if (item.evidence && ((item.evidence.self_report_conflicts ?? 0) > 0 || (item.evidence.self_report_mismatches ?? 0) >= 2)) return 'high'; if (item.evidence && (item.evidence.self_report_mismatches ?? 0) > 0) return 'medium'; return item.evidence?.confidence || (item.evidence ? item.row.confidence : passiveConfidence(item.row.passive_requests, item.row.passive_mismatches, item.row.passive_response_models)) }
 function behaviorStatusLabel(value: string): string { return value === 'matched' ? '一致' : value === 'diverged' ? '偏离' : value === 'inconclusive' ? '待复核' : value === 'error' ? '异常' : value }
 function behaviorStatusClass(value: string): string { return value === 'matched' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : value === 'diverged' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : value === 'inconclusive' ? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' }
 function behaviorObservationLabel(value: string): string { return value === 'correct' ? '正确' : value === 'incorrect' ? '错误答案' : value === 'inconclusive' ? '结论不足' : value === 'invalid' ? '工具结构无效' : value === 'timeout' ? '超时' : value === 'error' ? '异常' : value || '未执行' }
@@ -437,7 +458,7 @@ function startPolling(runID: number) {
   const version = pollVersion
   pollTimer = setTimeout(() => void pollRun(runID, version), 800)
 }
-function currentProbeRequest(): CapabilityAuditProbeRequest { return { active_only: activeOnly.value, max_items: Math.max(1, Math.min(240, Number(maxItems.value) || 60)) } }
+function currentProbeRequest(): CapabilityAuditProbeRequest { return { active_only: true, max_items: 60 } }
 async function prepareBatchProbe() {
   previewing.value = true
   errorMessage.value = ''

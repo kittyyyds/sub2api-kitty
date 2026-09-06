@@ -109,6 +109,9 @@ func (u *barrierModelCapabilityAuditUpstream) Do(req *http.Request, proxyURL str
 }
 
 func (u *barrierModelCapabilityAuditUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	if strings.HasSuffix(req.URL.Path, "/models") {
+		return modelCapabilityAuditCatalogResponse(), nil
+	}
 	call := u.calls.Add(1)
 	if call <= u.barrier {
 		u.started <- struct{}{}
@@ -126,6 +129,9 @@ func (u *firstWaveModelCapabilityAuditUpstream) Do(req *http.Request, proxyURL s
 }
 
 func (u *firstWaveModelCapabilityAuditUpstream) DoWithTLS(req *http.Request, _ string, _ int64, _ int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+	if strings.HasSuffix(req.URL.Path, "/models") {
+		return modelCapabilityAuditCatalogResponse(), nil
+	}
 	call := int(u.calls.Add(1))
 	u.started <- call
 	if call == 1 {
@@ -148,7 +154,10 @@ func (u *panickingModelCapabilityAuditUpstream) Do(req *http.Request, proxyURL s
 	return u.DoWithTLS(req, proxyURL, accountID, accountConcurrency, nil)
 }
 
-func (u *panickingModelCapabilityAuditUpstream) DoWithTLS(*http.Request, string, int64, int, *tlsfingerprint.Profile) (*http.Response, error) {
+func (u *panickingModelCapabilityAuditUpstream) DoWithTLS(req *http.Request, _ string, _ int64, _ int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+	if strings.HasSuffix(req.URL.Path, "/models") {
+		return modelCapabilityAuditCatalogResponse(), nil
+	}
 	panic("synthetic upstream panic")
 }
 
@@ -157,6 +166,9 @@ func (u *blockingModelCapabilityAuditUpstream) Do(req *http.Request, proxyURL st
 }
 
 func (u *blockingModelCapabilityAuditUpstream) DoWithTLS(req *http.Request, _ string, _ int64, _ int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+	if strings.HasSuffix(req.URL.Path, "/models") {
+		return modelCapabilityAuditCatalogResponse(), nil
+	}
 	u.once.Do(func() { close(u.started) })
 	select {
 	case <-u.release:
@@ -169,6 +181,14 @@ func (u *blockingModelCapabilityAuditUpstream) DoWithTLS(req *http.Request, _ st
 		}, nil
 	case <-req.Context().Done():
 		return nil, req.Context().Err()
+	}
+}
+
+func modelCapabilityAuditCatalogResponse() *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(`{"object":"list","data":[{"id":"gpt-4o-mini"}]}`)),
 	}
 }
 
@@ -320,8 +340,31 @@ func TestStartModelCapabilityAuditReturnsBeforeProbeAndDetachesFromRequest(t *te
 }
 
 func TestModelCapabilityAuditRunTimeoutCoversWorkerWaves(t *testing.T) {
-	if got, want := modelCapabilityAuditRunTimeout(60), 19*time.Minute+15*time.Second; got != want {
+	if got, want := modelCapabilityAuditRunTimeout(60), 24*time.Minute+15*time.Second; got != want {
 		t.Fatalf("timeout = %s, want %s", got, want)
+	}
+}
+
+func TestProbeAuditCatalogsChecksEachAccountOnce(t *testing.T) {
+	account := &Account{
+		ID: 17, Name: "catalog-once", Status: StatusActive, Platform: PlatformOpenAI,
+		Type: AccountTypeAPIKey, Concurrency: 2,
+		Credentials: map[string]any{"api_key": "secret", "base_url": "http://upstream.test/v1"},
+	}
+	upstream := &countingModelCapabilityAuditUpstream{upstream: &modelCapabilityProbeUpstream{model: "gpt-5"}}
+	audit := &ModelCapabilityAuditService{accountTestService: newModelCapabilityProbeService(upstream, account)}
+
+	results := audit.probeAuditCatalogs(context.Background(), []modelCapabilityAuditTarget{
+		{Account: account, ModelID: "gpt-5"},
+		{Account: account, ModelID: "gpt-5-mini"},
+	})
+
+	result := results[account.ID]
+	if result.Status != "checked" || result.HTTPStatus != http.StatusOK || len(result.Models) != 1 || result.Models[0] != "gpt-5" {
+		t.Fatalf("unexpected catalog result: %+v", result)
+	}
+	if got := upstream.calls.Load(); got != 1 {
+		t.Fatalf("model directory requests = %d, want 1", got)
 	}
 }
 
@@ -350,6 +393,9 @@ func TestEstimateModelCapabilityAuditSkipsUnsupportedAccounts(t *testing.T) {
 	}
 	if estimate.TargetCount != 1 || estimate.ProtocolCount != 2 || estimate.RequestCount != 2 {
 		t.Fatalf("estimate = %+v, want 1 target / 2 protocols / 2 requests", estimate)
+	}
+	if estimate.CatalogRequestCount != 1 || estimate.TotalRequestCount != 3 {
+		t.Fatalf("estimate = %+v, want 1 directory / 3 total upstream requests", estimate)
 	}
 	if estimate.PreviewToken == "" || !estimate.ExpiresAt.After(time.Now()) {
 		t.Fatalf("estimate did not return a live preview token: %+v", estimate)
@@ -769,8 +815,8 @@ func TestDeriveAuditVerdictRequiresMappedModelResponseForConsistency(t *testing.
 		wantConfidence string
 	}{
 		{name: "matching mapped model", responseModel: "upstream-model", wantIdentity: "self_report_consistent", wantConfidence: "medium"},
-		{name: "requested alias only", responseModel: "public-alias", wantIdentity: "mismatch_suspected", wantConfidence: "high"},
-		{name: "different model", responseModel: "other-model", wantIdentity: "mismatch_suspected", wantConfidence: "high"},
+		{name: "requested alias only", responseModel: "public-alias", wantIdentity: "mismatch_suspected", wantConfidence: "medium"},
+		{name: "different model", responseModel: "other-model", wantIdentity: "mismatch_suspected", wantConfidence: "medium"},
 	}
 
 	for _, tt := range tests {
@@ -795,6 +841,31 @@ func TestDeriveAuditVerdictRequiresMappedModelResponseForConsistency(t *testing.
 				t.Fatalf("confidence = %q, want %q", row.Confidence, tt.wantConfidence)
 			}
 		})
+	}
+}
+
+func TestDeriveAuditVerdictRequiresRepeatedMismatchForHighConfidence(t *testing.T) {
+	row := ModelCapabilityAuditRow{
+		RequestedModel: "public-alias",
+		MappedModel:    "upstream-model",
+		Protocols: map[string]ModelCapabilityAuditEvidence{
+			ModelCapabilityProtocolResponses: {
+				Status:             "model_mismatch",
+				ResponseModel:      "other-model",
+				SelfReportMismatch: 1,
+			},
+			ModelCapabilityProtocolResponsesTools: {
+				Status:             "model_mismatch",
+				ResponseModel:      "other-model",
+				SelfReportMismatch: 1,
+			},
+		},
+	}
+
+	deriveAuditVerdict(&row)
+
+	if row.IdentityStatus != "mismatch_suspected" || row.Confidence != "high" || row.NeedsRetest || row.MismatchSignals != 2 {
+		t.Fatalf("unexpected repeated mismatch verdict: %+v", row)
 	}
 }
 
@@ -1049,10 +1120,13 @@ func TestModelCapabilitySummaryReportsTrueTotalsBeforeRowLimit(t *testing.T) {
 			"id", "run_id", "account_id", "account_name", "platform", "group_id", "requested_model", "mapped_model",
 			"response_model", "protocol", "status", "capability", "capability_status", "identity_status",
 			"confidence", "evidence_source", "http_status", "latency_ms", "tool_call_found", "tool_arguments_valid",
-			"error_message", "evidence", "evidence_code", "attempt_count", "success_count", "failure_count", "checked_at",
+			"error_message", "evidence", "evidence_code", "attempt_count", "success_count", "failure_count",
+			"self_report_matches", "self_report_mismatches", "self_report_missing",
+			"catalog_status", "catalog_declared", "catalog_http_status", "catalog_checked_at", "catalog_error", "checked_at",
 		}).AddRow(5, 4, 1, "one", PlatformOpenAI, 10, "model-a", "model-a", "model-a",
 			ModelCapabilityProtocolResponses, "verified", "responses_text", "verified", "self_report_consistent",
-			"medium", "active_probe", 200, 12, false, false, nil, "valid_json_response", "valid_json_response", 5, 4, 1, now))
+			"medium", "active_probe", 200, 12, false, false, nil, "valid_json_response", "valid_json_response", 5, 4, 1,
+			4, 0, 1, "checked", true, 200, now, nil, now))
 	mock.ExpectQuery("FROM account_groups").
 		WillReturnRows(sqlmock.NewRows([]string{"account_id", "group_id", "name"}).AddRow(1, 10, "group-a"))
 
@@ -1068,6 +1142,10 @@ func TestModelCapabilitySummaryReportsTrueTotalsBeforeRowLimit(t *testing.T) {
 	}
 	if summary.SelfReportConsistent != 3 || summary.Stats.SelfReported != 3 || summary.MismatchSuspected != 0 || summary.Unverified != 0 {
 		t.Fatalf("unexpected identity totals: %+v", summary)
+	}
+	if summary.CapabilitySupported != 1 || summary.CapabilityUnverified != 2 || summary.CatalogChecked != 1 || summary.CatalogDeclared != 1 ||
+		summary.SelfReportMatches != 4 || summary.SelfReportMissing != 1 {
+		t.Fatalf("unexpected reference summary counters: %+v", summary)
 	}
 	if len(summary.RecentEvidence) != 1 || summary.RecentEvidence[0].Platform != PlatformOpenAI ||
 		summary.RecentEvidence[0].GroupID == nil || *summary.RecentEvidence[0].GroupID != 10 || summary.RecentEvidence[0].GroupName != "group-a" {

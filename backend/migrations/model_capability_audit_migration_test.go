@@ -32,3 +32,14 @@ func TestModelCapabilityAuditResilienceUsesAdditiveMigration(t *testing.T) {
 	require.Contains(t, sql, "idx_model_capability_probe_runs_running_request")
 	require.Contains(t, sql, "WHERE status = 'running' AND request_key IS NOT NULL")
 }
+
+func TestModelCapabilityCatalogEvidenceUsesAdditiveMigration(t *testing.T) {
+	content, err := FS.ReadFile("236_model_capability_catalog_evidence.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS catalog_status")
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS catalog_declared BOOLEAN")
+	require.Contains(t, sql, "ADD COLUMN IF NOT EXISTS catalog_checked_at TIMESTAMPTZ")
+	require.NotContains(t, sql, "DROP TABLE")
+}

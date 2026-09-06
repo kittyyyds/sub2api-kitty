@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ import (
 const (
 	modelCapabilityAuditPersistenceTimeout  = 10 * time.Second
 	modelCapabilityAuditTargetTimeout       = 75 * time.Second
+	modelCapabilityAuditCatalogTimeout      = 20 * time.Second
 	modelCapabilityAuditWorkerCount         = 4
 	modelCapabilityAuditStaleAfter          = 2 * time.Minute
 	modelBehaviorAuditStaleAfter            = 90 * time.Second
@@ -32,6 +34,7 @@ const (
 	modelCapabilityAuditPreviewKindManual   = "manual"
 	modelCapabilityAuditPreviewKindBehavior = "paired_behavior"
 	modelCapabilityAuditPassiveModelLimit   = 16
+	modelCapabilityAuditEvidenceFreshFor    = 7 * 24 * time.Hour
 )
 
 // ModelCapabilityAuditOptions controls one bounded, administrator-triggered
@@ -50,6 +53,8 @@ type ModelCapabilityAuditEstimate struct {
 	TargetCount         int       `json:"target_count"`
 	ProtocolCount       int       `json:"protocol_count"`
 	RequestCount        int       `json:"request_count"`
+	CatalogRequestCount int       `json:"catalog_request_count"`
+	TotalRequestCount   int       `json:"total_request_count"`
 	EstimatedMaxSeconds int64     `json:"estimated_max_seconds"`
 	MaxItems            int       `json:"max_items"`
 	PreviewToken        string    `json:"preview_token"`
@@ -80,35 +85,44 @@ type ModelCapabilityAuditRun struct {
 }
 
 type ModelCapabilityAuditEvidence struct {
-	ID                 int64     `json:"id,omitempty"`
-	RunID              int64     `json:"run_id,omitempty"`
-	AccountID          int64     `json:"account_id,omitempty"`
-	AccountName        string    `json:"account_name,omitempty"`
-	Platform           string    `json:"platform,omitempty"`
-	GroupID            *int64    `json:"group_id,omitempty"`
-	GroupName          string    `json:"group_name,omitempty"`
-	RequestedModel     string    `json:"requested_model,omitempty"`
-	MappedModel        string    `json:"mapped_model,omitempty"`
-	ResponseModel      string    `json:"response_model,omitempty"`
-	Protocol           string    `json:"protocol"`
-	Status             string    `json:"status"`
-	Capability         string    `json:"capability"`
-	HTTPStatus         int       `json:"http_status"`
-	LatencyMS          int64     `json:"latency_ms"`
-	UpstreamModel      string    `json:"upstream_model,omitempty"`
-	ToolCallFound      bool      `json:"tool_call_found"`
-	ToolArgumentsValid bool      `json:"tool_arguments_valid"`
-	Error              string    `json:"error,omitempty"`
-	Evidence           string    `json:"evidence"`
-	EvidenceCode       string    `json:"evidence_code,omitempty"`
-	CapabilityStatus   string    `json:"capability_status,omitempty"`
-	IdentityStatus     string    `json:"identity_status,omitempty"`
-	Confidence         string    `json:"confidence,omitempty"`
-	EvidenceSource     string    `json:"evidence_source,omitempty"`
-	AttemptCount       int       `json:"attempt_count"`
-	SuccessCount       int       `json:"success_count"`
-	FailureCount       int       `json:"failure_count"`
-	CheckedAt          time.Time `json:"checked_at"`
+	ID                 int64      `json:"id,omitempty"`
+	RunID              int64      `json:"run_id,omitempty"`
+	AccountID          int64      `json:"account_id,omitempty"`
+	AccountName        string     `json:"account_name,omitempty"`
+	Platform           string     `json:"platform,omitempty"`
+	GroupID            *int64     `json:"group_id,omitempty"`
+	GroupName          string     `json:"group_name,omitempty"`
+	RequestedModel     string     `json:"requested_model,omitempty"`
+	MappedModel        string     `json:"mapped_model,omitempty"`
+	ResponseModel      string     `json:"response_model,omitempty"`
+	Protocol           string     `json:"protocol"`
+	Status             string     `json:"status"`
+	Capability         string     `json:"capability"`
+	HTTPStatus         int        `json:"http_status"`
+	LatencyMS          int64      `json:"latency_ms"`
+	UpstreamModel      string     `json:"upstream_model,omitempty"`
+	ToolCallFound      bool       `json:"tool_call_found"`
+	ToolArgumentsValid bool       `json:"tool_arguments_valid"`
+	Error              string     `json:"error,omitempty"`
+	Evidence           string     `json:"evidence"`
+	EvidenceCode       string     `json:"evidence_code,omitempty"`
+	CapabilityStatus   string     `json:"capability_status,omitempty"`
+	IdentityStatus     string     `json:"identity_status,omitempty"`
+	Confidence         string     `json:"confidence,omitempty"`
+	EvidenceSource     string     `json:"evidence_source,omitempty"`
+	AttemptCount       int        `json:"attempt_count"`
+	SuccessCount       int        `json:"success_count"`
+	FailureCount       int        `json:"failure_count"`
+	SelfReportMatches  int        `json:"self_report_matches"`
+	SelfReportMismatch int        `json:"self_report_mismatches"`
+	SelfReportMissing  int        `json:"self_report_missing"`
+	SelfReportConflict int        `json:"self_report_conflicts"`
+	CatalogStatus      string     `json:"catalog_status,omitempty"`
+	CatalogDeclared    *bool      `json:"catalog_declared,omitempty"`
+	CatalogHTTPStatus  int        `json:"catalog_http_status,omitempty"`
+	CatalogCheckedAt   *time.Time `json:"catalog_checked_at,omitempty"`
+	CatalogError       string     `json:"catalog_error,omitempty"`
+	CheckedAt          time.Time  `json:"checked_at"`
 }
 
 type ModelCapabilityAuditRow struct {
@@ -133,27 +147,42 @@ type ModelCapabilityAuditRow struct {
 	LastSeen               *time.Time                              `json:"last_seen,omitempty"`
 	LastChecked            *time.Time                              `json:"last_checked,omitempty"`
 	EvidenceCount          int                                     `json:"evidence_count,omitempty"`
+	MismatchSignals        int                                     `json:"mismatch_signals,omitempty"`
+	NeedsRetest            bool                                    `json:"needs_retest,omitempty"`
 	Protocols              map[string]ModelCapabilityAuditEvidence `json:"protocols"`
 	passiveNeedsModelMatch bool
 }
 
 type ModelCapabilityAuditSummary struct {
-	Days                 int                            `json:"days"`
-	GeneratedAt          time.Time                      `json:"generated_at"`
-	TotalModels          int                            `json:"total_models"`
-	ReturnedModels       int                            `json:"returned_models"`
-	RowsTruncated        bool                           `json:"rows_truncated"`
-	CapabilityVerified   int                            `json:"capability_verified"`
-	IdentityConsistent   int                            `json:"identity_consistent"`
-	SelfReportConsistent int                            `json:"self_report_consistent"`
-	MismatchSuspected    int                            `json:"mismatch_suspected"`
-	Unverified           int                            `json:"unverified"`
-	ActiveErrors         int                            `json:"active_errors"`
-	PassiveRequests      int64                          `json:"passive_requests"`
-	TotalAccounts        int                            `json:"total_accounts,omitempty"`
-	Stats                ModelCapabilityAuditStats      `json:"stats"`
-	RecentEvidence       []ModelCapabilityAuditEvidence `json:"recent_evidence,omitempty"`
-	Rows                 []ModelCapabilityAuditRow      `json:"rows"`
+	Days                  int                            `json:"days"`
+	GeneratedAt           time.Time                      `json:"generated_at"`
+	TotalModels           int                            `json:"total_models"`
+	ReturnedModels        int                            `json:"returned_models"`
+	RowsTruncated         bool                           `json:"rows_truncated"`
+	CapabilityVerified    int                            `json:"capability_verified"`
+	IdentityConsistent    int                            `json:"identity_consistent"`
+	SelfReportConsistent  int                            `json:"self_report_consistent"`
+	MismatchSuspected     int                            `json:"mismatch_suspected"`
+	Unverified            int                            `json:"unverified"`
+	ActiveErrors          int                            `json:"active_errors"`
+	CapabilitySupported   int                            `json:"capability_supported"`
+	CapabilityUnverified  int                            `json:"capability_unverified"`
+	CapabilityExpired     int                            `json:"capability_expired"`
+	CapabilityUnsupported int                            `json:"capability_unsupported"`
+	StrongMismatch        int                            `json:"strong_mismatch_suspected"`
+	RetestRequired        int                            `json:"retest_required"`
+	SelfReportMatches     int                            `json:"self_report_matches"`
+	SelfReportMismatch    int                            `json:"self_report_mismatches"`
+	SelfReportMissing     int                            `json:"self_report_missing"`
+	SelfReportConflict    int                            `json:"self_report_conflicts"`
+	CatalogChecked        int                            `json:"catalog_checked"`
+	CatalogDeclared       int                            `json:"catalog_declared"`
+	LatestEvidenceAt      *time.Time                     `json:"latest_evidence_at,omitempty"`
+	PassiveRequests       int64                          `json:"passive_requests"`
+	TotalAccounts         int                            `json:"total_accounts,omitempty"`
+	Stats                 ModelCapabilityAuditStats      `json:"stats"`
+	RecentEvidence        []ModelCapabilityAuditEvidence `json:"recent_evidence,omitempty"`
+	Rows                  []ModelCapabilityAuditRow      `json:"rows"`
 }
 
 type ModelCapabilityAuditStats struct {
@@ -173,6 +202,14 @@ type modelCapabilityAuditTarget struct {
 	GroupID   *int64
 	ModelID   string
 	Protocols []string
+}
+
+type modelCapabilityCatalogResult struct {
+	Status     string
+	HTTPStatus int
+	Models     []string
+	CheckedAt  time.Time
+	Error      string
 }
 
 type modelCapabilityPassive struct {
@@ -576,8 +613,12 @@ func (s *ModelCapabilityAuditService) Estimate(ctx context.Context, input ModelC
 		return nil, err
 	}
 	requestCount := 0
+	accountIDs := make(map[int64]struct{})
 	for _, target := range targets {
 		requestCount += len(target.Protocols)
+		if target.Account != nil && target.Account.ID > 0 {
+			accountIDs[target.Account.ID] = struct{}{}
+		}
 	}
 	maxSeconds := int64(0)
 	if len(targets) > 0 {
@@ -587,6 +628,8 @@ func (s *ModelCapabilityAuditService) Estimate(ctx context.Context, input ModelC
 		TargetCount:         len(targets),
 		ProtocolCount:       len(protocols),
 		RequestCount:        requestCount,
+		CatalogRequestCount: len(accountIDs),
+		TotalRequestCount:   requestCount + len(accountIDs),
 		EstimatedMaxSeconds: maxSeconds,
 		MaxItems:            options.MaxItems,
 		PreviewToken:        previewToken,
@@ -619,7 +662,7 @@ func (s *ModelCapabilityAuditService) createRun(ctx context.Context, options Mod
 	return run, err
 }
 
-func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID int64, target modelCapabilityAuditTarget, result ModelCapabilityProbeResult, checkedAt time.Time, source string) error {
+func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID int64, target modelCapabilityAuditTarget, result ModelCapabilityProbeResult, catalog modelCapabilityCatalogResult, checkedAt time.Time, source string) error {
 	var groupID any
 	if target.GroupID != nil {
 		groupID = *target.GroupID
@@ -658,27 +701,47 @@ func (s *ModelCapabilityAuditService) insertResult(ctx context.Context, runID in
 	}
 	confidence := "low"
 	if identityStatus == "mismatch" {
-		confidence = "high"
+		// One self-reported mismatch is an anomaly worth retesting, not proof of
+		// substitution. Aggregation upgrades repeated evidence to high confidence.
+		confidence = "medium"
 	} else if identityStatus == "self_report_consistent" {
 		confidence = "medium"
 	}
 	attemptCount, successCount, failureCount := capabilityProbeAttemptCounts(result)
+	var catalogDeclared any
+	if catalog.Status == "checked" {
+		declared := false
+		for _, model := range catalog.Models {
+			if upstreamModelsMatchForAudit(mappedModel, model) {
+				declared = true
+				break
+			}
+		}
+		catalogDeclared = declared
+	}
+	var catalogCheckedAt any
+	if !catalog.CheckedAt.IsZero() {
+		catalogCheckedAt = catalog.CheckedAt
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO model_capability_probe_results
 		(run_id, account_id, group_id, account_name, platform, requested_model, mapped_model,
 		 response_model, upstream_model, protocol, status, capability, capability_status, identity_status,
 		 confidence, evidence_source, source, http_status, latency_ms, attempt_count,
 		 success_count, failure_count, tool_name, tool_call_found, tool_arguments_valid,
-		 error_message, evidence, evidence_code, response_summary, checked_at)
+		 error_message, evidence, evidence_code, response_summary,
+		 catalog_status, catalog_declared, catalog_http_status, catalog_checked_at, catalog_error,
+		 checked_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,NULLIF($8,''),NULLIF($8,''),$9,$10,$11,$12,$13,$14,$15,$16,
 		 NULLIF($17,0),NULLIF($18,0),$19,$20,$21,NULLIF($22,''),$23,$24,
-		 NULLIF($25,''),NULLIF($26,''),NULLIF($27,''),NULLIF($28,''),$29)`,
+		 NULLIF($25,''),NULLIF($26,''),NULLIF($27,''),NULLIF($28,''),$29,$30,NULLIF($31,0),$32,NULLIF($33,''),$34)`,
 		runID, target.Account.ID, groupID, target.Account.Name, target.Account.Platform,
 		truncateModelCapabilityAuditText(result.RequestedModel), mappedModel, observedModel, result.Protocol, result.Status,
 		result.Capability, capabilityStatus, identityStatus, confidence, evidenceSource, source,
 		result.HTTPStatus, result.LatencyMS, attemptCount, successCount, failureCount,
 		truncateModelCapabilityAuditText(result.ToolName), result.ToolCallFound, result.ToolArgumentsValid, nullableText(result.Error),
-		result.Evidence, result.Evidence, nullableText(result.Error), checkedAt)
+		result.Evidence, result.Evidence, nullableText(result.Error), catalog.Status, catalogDeclared,
+		catalog.HTTPStatus, catalogCheckedAt, nullableText(catalog.Error), checkedAt)
 	return err
 }
 
@@ -798,7 +861,10 @@ func modelCapabilityAuditRunTimeout(targetCount int) time.Duration {
 		return 2 * time.Minute
 	}
 	waves := (targetCount + modelCapabilityAuditWorkerCount - 1) / modelCapabilityAuditWorkerCount
-	timeout := time.Duration(waves)*modelCapabilityAuditTargetTimeout + 30*time.Second
+	// The estimate is deliberately conservative: in the worst case every target
+	// belongs to a different account, so each worker wave performs one directory
+	// check before the three bounded capability requests.
+	timeout := time.Duration(waves)*(modelCapabilityAuditTargetTimeout+modelCapabilityAuditCatalogTimeout) + 30*time.Second
 	if timeout < 2*time.Minute {
 		return 2 * time.Minute
 	}
@@ -953,6 +1019,7 @@ func (s *ModelCapabilityAuditService) executeRun(ctx context.Context, run *Model
 
 	runCtx, stopRun := context.WithCancel(ctx)
 	defer stopRun()
+	catalogs := s.probeAuditCatalogs(runCtx, targets)
 	type outcome struct {
 		target  modelCapabilityAuditTarget
 		results []ModelCapabilityProbeResult
@@ -1024,7 +1091,13 @@ func (s *ModelCapabilityAuditService) executeRun(ctx context.Context, run *Model
 		persistedForTarget := 0
 		for _, result := range results {
 			persistCtx, cancel := context.WithTimeout(context.Background(), modelCapabilityAuditPersistenceTimeout)
-			err := s.insertResult(persistCtx, run.ID, item.target, result, checkedAt, "active")
+			catalog := modelCapabilityCatalogResult{Status: "unchecked"}
+			if item.target.Account != nil {
+				if resolved, ok := catalogs[item.target.Account.ID]; ok {
+					catalog = resolved
+				}
+			}
+			err := s.insertResult(persistCtx, run.ID, item.target, result, catalog, checkedAt, "active")
 			cancel()
 			if err != nil {
 				errorsCount++
@@ -1144,6 +1217,133 @@ func (s *ModelCapabilityAuditService) probeAuditTarget(ctx context.Context, targ
 		return nil, errors.New("active probe returned no response")
 	}
 	return response.Results, nil
+}
+
+// probeAuditCatalog records weak directory evidence separately from capability
+// evidence. A declared model can still be relayed or spoofed, so this result is
+// never used to mark model identity as verified.
+func (s *ModelCapabilityAuditService) probeAuditCatalog(ctx context.Context, account *Account) (result modelCapabilityCatalogResult) {
+	result.Status = "error"
+	result.CheckedAt = time.Now()
+	accountID := int64(0)
+	if account != nil {
+		accountID = account.ID
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			slog.Error("model_capability_audit.catalog_panic", "account_id", accountID)
+			result.Status = "error"
+			result.Error = "model directory check failed"
+		}
+	}()
+	if account == nil || s.accountTestService == nil {
+		result.Error = "model directory check unavailable"
+		return result
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, modelCapabilityAuditCatalogTimeout)
+	defer cancel()
+	if s.concurrencyService != nil && s.concurrencyService.cache != nil {
+		release, err := s.acquireAuditAccountSlot(probeCtx, account.ID, account.Concurrency)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(probeCtx.Err(), context.DeadlineExceeded) {
+				result.Status = "timeout"
+				result.Error = "model directory check timed out"
+			} else {
+				result.Error = "model directory concurrency check failed"
+			}
+			return result
+		}
+		if release != nil {
+			defer release()
+		}
+	}
+
+	models, err := s.accountTestService.FetchUpstreamSupportedModels(probeCtx, account)
+	if err != nil {
+		result.HTTPStatus = upstreamModelSyncStatusCode(err)
+		switch {
+		case errors.Is(err, context.DeadlineExceeded), errors.Is(probeCtx.Err(), context.DeadlineExceeded):
+			result.Status = "timeout"
+			result.Error = "model directory check timed out"
+		case result.HTTPStatus == 404, result.HTTPStatus == 405:
+			result.Status = "unsupported"
+			result.Error = "upstream does not expose a model directory"
+		default:
+			result.Error = "model directory check failed"
+		}
+		return result
+	}
+	result.Status = "checked"
+	result.HTTPStatus = http.StatusOK
+	result.Models = uniqueNonEmpty(models)
+	return result
+}
+
+// probeAuditCatalogs performs at most one /v1/models request per account for a
+// batch. Every target on that account reuses the same timestamp and verdict.
+func (s *ModelCapabilityAuditService) probeAuditCatalogs(ctx context.Context, targets []modelCapabilityAuditTarget) map[int64]modelCapabilityCatalogResult {
+	accountsByID := make(map[int64]*Account)
+	for _, target := range targets {
+		if target.Account != nil && target.Account.ID > 0 {
+			accountsByID[target.Account.ID] = target.Account
+		}
+	}
+	results := make(map[int64]modelCapabilityCatalogResult, len(accountsByID))
+	if len(accountsByID) == 0 {
+		return results
+	}
+
+	accounts := make([]*Account, 0, len(accountsByID))
+	for _, account := range accountsByID {
+		accounts = append(accounts, account)
+	}
+	sort.Slice(accounts, func(i, j int) bool { return accounts[i].ID < accounts[j].ID })
+	type catalogOutcome struct {
+		accountID int64
+		result    modelCapabilityCatalogResult
+	}
+	jobs := make(chan *Account)
+	outcomes := make(chan catalogOutcome, len(accounts))
+	workerCount := modelCapabilityAuditWorkerCount
+	if len(accounts) < workerCount {
+		workerCount = len(accounts)
+	}
+	var workers sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for account := range jobs {
+				outcomes <- catalogOutcome{accountID: account.ID, result: s.probeAuditCatalog(ctx, account)}
+			}
+		}()
+	}
+	go func() {
+		defer close(jobs)
+		for _, account := range accounts {
+			select {
+			case jobs <- account:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	go func() {
+		workers.Wait()
+		close(outcomes)
+	}()
+	for outcome := range outcomes {
+		results[outcome.accountID] = outcome.result
+	}
+	for accountID := range accountsByID {
+		if _, ok := results[accountID]; !ok {
+			results[accountID] = modelCapabilityCatalogResult{
+				Status: "error", CheckedAt: time.Now(), Error: "model directory check canceled",
+			}
+		}
+	}
+	return results
 }
 
 func (s *ModelCapabilityAuditService) acquireAuditAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (func(), error) {
@@ -1276,7 +1476,8 @@ func (s *ModelCapabilityAuditService) GetRun(ctx context.Context, id int64) (*Mo
 		       identity_status, confidence, evidence_source, http_status, latency_ms,
 		       attempt_count, success_count, failure_count,
 		       tool_call_found, tool_arguments_valid, error_message, evidence,
-		       evidence_code, checked_at
+		       evidence_code, catalog_status, catalog_declared, catalog_http_status,
+		       catalog_checked_at, catalog_error, checked_at
 		FROM model_capability_probe_results WHERE run_id=$1 ORDER BY checked_at ASC, id ASC`, id)
 	if err != nil {
 		return nil, nil, err
@@ -1286,15 +1487,19 @@ func (s *ModelCapabilityAuditService) GetRun(ctx context.Context, id int64) (*Mo
 	for rows.Next() {
 		var item ModelCapabilityAuditEvidence
 		var upstream, mapped, responseModel, capability, errorMessage, capabilityStatus, identityStatus, confidence, evidenceSource, evidenceCode sql.NullString
+		var catalogStatus, catalogError sql.NullString
 		var evidenceText sql.NullString
 		var groupID sql.NullInt64
-		var httpStatus, latency sql.NullInt64
+		var httpStatus, latency, catalogHTTPStatus sql.NullInt64
+		var catalogDeclared sql.NullBool
+		var catalogCheckedAt sql.NullTime
 		if err := rows.Scan(&item.ID, &item.RunID, &item.AccountID, &item.AccountName, &item.Platform, &groupID, &item.RequestedModel,
 			&mapped, &responseModel, &upstream, &item.Protocol, &item.Status, &capability, &capabilityStatus,
 			&identityStatus, &confidence, &evidenceSource, &httpStatus, &latency,
 			&item.AttemptCount, &item.SuccessCount, &item.FailureCount,
 			&item.ToolCallFound, &item.ToolArgumentsValid, &errorMessage, &evidenceText,
-			&evidenceCode, &item.CheckedAt); err != nil {
+			&evidenceCode, &catalogStatus, &catalogDeclared, &catalogHTTPStatus,
+			&catalogCheckedAt, &catalogError, &item.CheckedAt); err != nil {
 			return nil, nil, err
 		}
 		if upstream.Valid {
@@ -1340,6 +1545,35 @@ func (s *ModelCapabilityAuditService) GetRun(ctx context.Context, id int64) (*Mo
 		}
 		if evidenceText.Valid {
 			item.Evidence = evidenceText.String
+		}
+		if item.AttemptCount > 0 {
+			switch item.IdentityStatus {
+			case "consistent", "self_report_consistent":
+				item.SelfReportMatches = 1
+			case "mismatch", "mismatch_suspected":
+				item.SelfReportMismatch = 1
+			default:
+				if item.ResponseModel == "" && item.UpstreamModel == "" {
+					item.SelfReportMissing = 1
+				}
+			}
+		}
+		if catalogStatus.Valid {
+			item.CatalogStatus = catalogStatus.String
+		}
+		if catalogDeclared.Valid {
+			declared := catalogDeclared.Bool
+			item.CatalogDeclared = &declared
+		}
+		if catalogHTTPStatus.Valid {
+			item.CatalogHTTPStatus = int(catalogHTTPStatus.Int64)
+		}
+		if catalogCheckedAt.Valid {
+			checked := catalogCheckedAt.Time
+			item.CatalogCheckedAt = &checked
+		}
+		if catalogError.Valid {
+			item.CatalogError = catalogError.String
 		}
 		evidence = append(evidence, item)
 	}
@@ -1554,6 +1788,9 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 			       SUM(attempt_count) OVER audit_window AS cumulative_attempt_count,
 			       SUM(success_count) OVER audit_window AS cumulative_success_count,
 			       SUM(failure_count) OVER audit_window AS cumulative_failure_count,
+			       SUM(CASE WHEN identity_status IN ('consistent','self_report_consistent') THEN 1 ELSE 0 END) OVER audit_window AS cumulative_self_report_matches,
+			       SUM(CASE WHEN identity_status IN ('mismatch','mismatch_suspected') THEN 1 ELSE 0 END) OVER audit_window AS cumulative_self_report_mismatches,
+			       SUM(CASE WHEN attempt_count > 0 AND COALESCE(NULLIF(response_model, ''), NULLIF(upstream_model, '')) IS NULL THEN 1 ELSE 0 END) OVER audit_window AS cumulative_self_report_missing,
 			       ROW_NUMBER() OVER (audit_window ORDER BY checked_at DESC, results.id DESC) AS row_rank
 			FROM model_capability_probe_results AS results
 			JOIN model_capability_probe_runs AS runs ON runs.id=results.run_id AND runs."trigger"='manual'
@@ -1568,7 +1805,10 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 		       COALESCE(NULLIF(response_model, ''), upstream_model), protocol, status, capability, capability_status, identity_status,
 		       confidence, evidence_source, http_status, latency_ms, tool_call_found,
 		       tool_arguments_valid, error_message, evidence, evidence_code,
-		       cumulative_attempt_count, cumulative_success_count, cumulative_failure_count, checked_at
+		       cumulative_attempt_count, cumulative_success_count, cumulative_failure_count,
+		       cumulative_self_report_matches, cumulative_self_report_mismatches, cumulative_self_report_missing,
+		       catalog_status, catalog_declared, catalog_http_status, catalog_checked_at, catalog_error,
+		       checked_at
 		FROM ranked WHERE row_rank=1
 		ORDER BY account_id, requested_model, COALESCE(NULLIF(mapped_model, ''), requested_model), protocol`, days)
 	if err != nil {
@@ -1583,15 +1823,22 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 		var evidence sql.NullString
 		var capability sql.NullString
 		var mappedModel, upstreamModel, capabilityStatus, identityStatus, confidence, evidenceSource, evidenceCode sql.NullString
+		var catalogStatus, catalogError sql.NullString
 		var groupID sql.NullInt64
 		var httpStatus, latency, attemptCount, successCount, failureCount sql.NullInt64
+		var selfReportMatches, selfReportMismatches, selfReportMissing, catalogHTTPStatus sql.NullInt64
 		var toolFound, toolValid bool
+		var catalogDeclared sql.NullBool
+		var catalogCheckedAt sql.NullTime
 		var errorMessage sql.NullString
 		var checkedAt time.Time
 		if err := rows.Scan(&evidenceID, &runID, &accountID, &accountName, &platform, &groupID, &requestedModel, &mappedModel,
 			&upstreamModel, &protocol, &status, &capability, &capabilityStatus, &identityStatus,
 			&confidence, &evidenceSource, &httpStatus, &latency, &toolFound, &toolValid,
-			&errorMessage, &evidence, &evidenceCode, &attemptCount, &successCount, &failureCount, &checkedAt); err != nil {
+			&errorMessage, &evidence, &evidenceCode, &attemptCount, &successCount, &failureCount,
+			&selfReportMatches, &selfReportMismatches, &selfReportMissing,
+			&catalogStatus, &catalogDeclared, &catalogHTTPStatus, &catalogCheckedAt, &catalogError,
+			&checkedAt); err != nil {
 			return nil, err
 		}
 		key := auditRowKey(accountID, requestedModel, mappedModel.String)
@@ -1657,6 +1904,36 @@ func (s *ModelCapabilityAuditService) activeRows(ctx context.Context, days int) 
 		item.AttemptCount = int(attemptCount.Int64)
 		item.SuccessCount = int(successCount.Int64)
 		item.FailureCount = int(failureCount.Int64)
+		item.SelfReportMatches = int(selfReportMatches.Int64)
+		item.SelfReportMismatch = int(selfReportMismatches.Int64)
+		item.SelfReportMissing = int(selfReportMissing.Int64)
+		if item.SelfReportMatches > 0 && item.SelfReportMismatch > 0 {
+			item.SelfReportConflict = 1
+		}
+		if catalogStatus.Valid {
+			item.CatalogStatus = catalogStatus.String
+		}
+		if catalogDeclared.Valid {
+			declared := catalogDeclared.Bool
+			item.CatalogDeclared = &declared
+		}
+		if catalogHTTPStatus.Valid {
+			item.CatalogHTTPStatus = int(catalogHTTPStatus.Int64)
+		}
+		if catalogCheckedAt.Valid {
+			checked := catalogCheckedAt.Time
+			item.CatalogCheckedAt = &checked
+		}
+		if catalogError.Valid {
+			item.CatalogError = catalogError.String
+		}
+		if item.IdentityStatus == "mismatch" || item.IdentityStatus == "mismatch_suspected" {
+			if item.SelfReportMismatch >= 2 || item.SelfReportConflict > 0 {
+				item.Confidence = "high"
+			} else {
+				item.Confidence = "medium"
+			}
+		}
 		result[idx].Protocols[protocol] = item
 		if result[idx].ActiveLastSeen == nil || checkedAt.After(*result[idx].ActiveLastSeen) {
 			t := checkedAt
@@ -1804,6 +2081,12 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 		Models: passiveTotals.TotalModels, Accounts: passiveTotals.TotalAccounts,
 		PassiveRequests: passiveTotals.PassiveRequests, ActiveChecks: activeChecks,
 	}
+	for _, item := range passive {
+		if summary.LatestEvidenceAt == nil || item.LastSeen.After(*summary.LatestEvidenceAt) {
+			seen := item.LastSeen
+			summary.LatestEvidenceAt = &seen
+		}
+	}
 	for _, row := range rows {
 		// Passive-only rows with complete mismatch metadata are counted by the
 		// aggregate SQL, including those omitted by the detail limit. Active
@@ -1825,6 +2108,11 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 		case "mismatch_suspected":
 			summary.MismatchSuspected++
 			summary.Stats.Suspect++
+			if row.Confidence == "high" {
+				summary.StrongMismatch++
+			} else {
+				summary.RetestRequired++
+			}
 		default:
 			summary.Unverified++
 			summary.Stats.Unverified++
@@ -1833,13 +2121,59 @@ func (s *ModelCapabilityAuditService) Summary(ctx context.Context, days, limit i
 			summary.ActiveErrors++
 			summary.Stats.ActiveErrors++
 		}
+
+		var latestCatalog *ModelCapabilityAuditEvidence
+		if len(row.Protocols) == 0 {
+			summary.CapabilityUnverified++
+		}
+		for _, evidence := range row.Protocols {
+			summary.SelfReportMatches += evidence.SelfReportMatches
+			summary.SelfReportMismatch += evidence.SelfReportMismatch
+			summary.SelfReportMissing += evidence.SelfReportMissing
+			summary.SelfReportConflict += evidence.SelfReportConflict
+			if summary.LatestEvidenceAt == nil || evidence.CheckedAt.After(*summary.LatestEvidenceAt) {
+				checked := evidence.CheckedAt
+				summary.LatestEvidenceAt = &checked
+			}
+			if evidence.CatalogCheckedAt != nil && (latestCatalog == nil || latestCatalog.CatalogCheckedAt == nil || evidence.CatalogCheckedAt.After(*latestCatalog.CatalogCheckedAt)) {
+				copy := evidence
+				latestCatalog = &copy
+			}
+			if summary.GeneratedAt.Sub(evidence.CheckedAt) > modelCapabilityAuditEvidenceFreshFor {
+				summary.CapabilityExpired++
+				continue
+			}
+			switch evidence.Status {
+			case "verified", "model_mismatch":
+				summary.CapabilitySupported++
+			case "unsupported":
+				summary.CapabilityUnsupported++
+			default:
+				summary.CapabilityUnverified++
+			}
+		}
+		if latestCatalog != nil && latestCatalog.CatalogStatus == "checked" {
+			summary.CatalogChecked++
+			if latestCatalog.CatalogDeclared != nil && *latestCatalog.CatalogDeclared {
+				summary.CatalogDeclared++
+			}
+		}
+		if row.PassiveLastSeen != nil && (summary.LatestEvidenceAt == nil || row.PassiveLastSeen.After(*summary.LatestEvidenceAt)) {
+			seen := *row.PassiveLastSeen
+			summary.LatestEvidenceAt = &seen
+		}
 	}
 	summary.MismatchSuspected += passiveTotals.PassiveOnlyMismatchModels
 	summary.Stats.Suspect += passiveTotals.PassiveOnlyMismatchModels
+	summary.RetestRequired += passiveTotals.PassiveOnlyMismatchModels
 	summary.SelfReportConsistent += passiveTotals.PassiveOnlySelfReportedModels
 	summary.Stats.SelfReported += passiveTotals.PassiveOnlySelfReportedModels
 	summary.Unverified += passiveTotals.PassiveOnlyUnverifiedModels
 	summary.Stats.Unverified += passiveTotals.PassiveOnlyUnverifiedModels
+	summary.CapabilityUnverified += passiveTotals.PassiveOnlyMismatchModels + passiveTotals.PassiveOnlySelfReportedModels + passiveTotals.PassiveOnlyUnverifiedModels
+	// Preserve the older field for API clients while making its protocol-level
+	// meaning match the reference audit summary.
+	summary.CapabilityVerified = summary.CapabilitySupported
 	if len(rows) > limit {
 		summary.Rows = rows[:limit]
 	} else {
@@ -1869,9 +2203,16 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 		return
 	}
 	verified, unsupported, failed := 0, 0, 0
-	identityMismatch := false
+	mismatchSignals := int(row.PassiveMismatches)
+	conflictSignals := 0
 	activeSelfReportMatches := false
 	for _, evidence := range row.Protocols {
+		evidenceMismatches := evidence.SelfReportMismatch
+		if evidenceMismatches == 0 && (evidence.Status == "model_mismatch" || evidence.IdentityStatus == "mismatch" || evidence.IdentityStatus == "mismatch_suspected") {
+			evidenceMismatches = 1
+		}
+		mismatchSignals += evidenceMismatches
+		conflictSignals += evidence.SelfReportConflict
 		switch evidence.Status {
 		case "verified":
 			verified++
@@ -1879,14 +2220,8 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 			unsupported++
 		case "model_mismatch":
 			verified++
-			identityMismatch = true
 		default:
 			failed++
-		}
-		// A successful capability response can still carry an identity
-		// mismatch. Preserve that distinction when aggregating the row.
-		if evidence.Status == "model_mismatch" || evidence.IdentityStatus == "mismatch" || evidence.IdentityStatus == "mismatch_suspected" {
-			identityMismatch = true
 		}
 		if evidence.IdentityStatus == "consistent" || evidence.IdentityStatus == "self_report_consistent" {
 			activeSelfReportMatches = true
@@ -1898,8 +2233,8 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 			}
 			if row.MappedModel != "" && upstreamModelsMatchForAudit(row.MappedModel, evidence.ResponseModel) {
 				activeSelfReportMatches = true
-			} else {
-				identityMismatch = true
+			} else if evidenceMismatches == 0 {
+				mismatchSignals++
 			}
 		} else if evidence.UpstreamModel != "" {
 			row.ObservedModel = evidence.UpstreamModel
@@ -1908,8 +2243,8 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 			}
 			if row.MappedModel != "" && upstreamModelsMatchForAudit(row.MappedModel, evidence.UpstreamModel) {
 				activeSelfReportMatches = true
-			} else {
-				identityMismatch = true
+			} else if evidenceMismatches == 0 {
+				mismatchSignals++
 			}
 		}
 	}
@@ -1919,10 +2254,13 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 			continue
 		}
 		if row.MappedModel != "" && !upstreamModelsMatchForAudit(row.MappedModel, model) {
-			identityMismatch = true
+			if row.PassiveMismatches == 0 {
+				mismatchSignals++
+			}
 			break
 		}
 	}
+	row.MismatchSignals = mismatchSignals
 	switch {
 	case verified > 0:
 		row.CapabilityStatus = "verified"
@@ -1940,7 +2278,7 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 	} else {
 		row.ActiveStatus = "not_checked"
 	}
-	noMismatch := row.PassiveMismatches == 0 && !identityMismatch
+	noMismatch := mismatchSignals == 0 && conflictSignals == 0
 	selfReportMatches := activeSelfReportMatches
 	for _, model := range row.PassiveResponseModels {
 		if row.MappedModel != "" && upstreamModelsMatchForAudit(row.MappedModel, model) {
@@ -1951,9 +2289,14 @@ func deriveAuditVerdict(row *ModelCapabilityAuditRow) {
 	if noMismatch && selfReportMatches {
 		row.IdentityStatus = "self_report_consistent"
 		row.Confidence = "medium"
-	} else if row.PassiveMismatches > 0 || identityMismatch {
+	} else if !noMismatch {
 		row.IdentityStatus = "mismatch_suspected"
-		row.Confidence = "high"
+		row.NeedsRetest = mismatchSignals < 2 && conflictSignals == 0
+		if row.NeedsRetest {
+			row.Confidence = "medium"
+		} else {
+			row.Confidence = "high"
+		}
 	} else if row.PassiveRequests > 0 || verified > 0 {
 		row.IdentityStatus = "evidence_only"
 		row.Confidence = "medium"
