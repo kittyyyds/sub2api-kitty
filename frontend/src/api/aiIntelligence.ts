@@ -53,9 +53,11 @@ export interface AIIntelligencePayload {
   stale: boolean
 }
 
-export async function getAIIntelligence(options?: { signal?: AbortSignal }): Promise<AIIntelligencePayload> {
+export async function getAIIntelligence(options?: { signal?: AbortSignal; forceRefresh?: boolean }): Promise<AIIntelligencePayload> {
   const { data } = await apiClient.get<AIIntelligencePayload>('/public/ai-intelligence', {
     signal: options?.signal,
+    params: options?.forceRefresh ? { refresh: Date.now() } : undefined,
+    headers: options?.forceRefresh ? { 'Cache-Control': 'no-cache' } : undefined,
   })
   return data
 }

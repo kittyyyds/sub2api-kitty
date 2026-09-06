@@ -166,7 +166,8 @@ func newAIIntelligenceHandler(client *http.Client, endpoints aiIntelligenceEndpo
 
 // Get serves a compact, same-origin snapshot used by the AI Intelligence page.
 func (h *AIIntelligenceHandler) Get(c *gin.Context) {
-	payload, err := h.getSnapshot()
+	forceRefresh := c.Query("refresh") != ""
+	payload, err := h.getSnapshot(forceRefresh)
 	if err != nil {
 		response.ErrorFrom(c, infraerrors.ServiceUnavailable(
 			"AI_INTELLIGENCE_UPSTREAM_UNAVAILABLE",
@@ -175,20 +176,29 @@ func (h *AIIntelligenceHandler) Get(c *gin.Context) {
 		return
 	}
 
-	c.Header("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
+	if forceRefresh {
+		c.Header("Cache-Control", "no-store")
+	} else {
+		c.Header("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
+	}
 	response.Success(c, payload)
 }
 
-func (h *AIIntelligenceHandler) getSnapshot() (*AIIntelligencePayload, error) {
+func (h *AIIntelligenceHandler) getSnapshot(force ...bool) (*AIIntelligencePayload, error) {
+	forceRefresh := len(force) > 0 && force[0]
 	now := h.now().UTC()
-	if cached := h.readFresh(now); cached != nil {
-		return cached, nil
+	if !forceRefresh {
+		if cached := h.readFresh(now); cached != nil {
+			return cached, nil
+		}
 	}
 
 	value, err, _ := h.refresh.Do("snapshot", func() (any, error) {
 		now = h.now().UTC()
-		if cached := h.readFresh(now); cached != nil {
-			return cached, nil
+		if !forceRefresh {
+			if cached := h.readFresh(now); cached != nil {
+				return cached, nil
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), aiIntelligenceFetchTimeout)

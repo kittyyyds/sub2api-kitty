@@ -1,375 +1,70 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-
+import { getModelPlaza } from '@/api/modelPlaza'
 import BillingEstimator from '@/components/customer-console/billing/BillingEstimator.vue'
 import CustomerFeatureHeader from '@/components/customer-console/CustomerFeatureHeader.vue'
 import Icon from '@/components/icons/Icon.vue'
-
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const formulaOpen = ref(true), trapsOpen = ref(true), competitorMultiplier = ref(3)
+const tokenInput = ref(1_000_000), tokenOutput = ref(1_000_000), tokenMultiplier = ref(0.8), cacheEnabled = ref(true)
+const isZh = computed(() => locale.value === 'zh')
+const inputPrice = ref(5)
+const outputPrice = ref(15)
+const cacheWritePrice = ref(1)
+const cacheReadPrice = ref(0.5)
+const tokenDots = Array.from({ length: 12 }, (_, index) => ({
+  id: index,
+  top: `${14 + (index * 23) % 76}%`,
+  size: `${5 + (index % 4) * 2}px`,
+  delay: `${-(index * 0.72).toFixed(2)}s`,
+  duration: `${5.8 + (index % 5) * 0.7}s`,
+}))
+const copy = computed(() => isZh.value ? { eyebrow:'透明计费 / 实时规则', heroTitle:'每一枚 Token，都有迹可循', heroBody:'从官方单价到客户分组倍率，完整展示实际扣费路径。所有估算与正式计费共用同一套后台规则。', viewCalc:'打开实时计算器', formula:'计费公式', formulaBody:'先按模型官方单价计算标准成本，再叠加缓存、长上下文和客户有效倍率。', input:'输入 Token', output:'输出 Token', cache:'缓存 Token', multiplier:'有效倍率', result:'实际扣费', basis:'标准成本 × 有效倍率', compare:'倍率对比', compareBody:'拖动倍率，立即查看同一批 Token 在不同渠道的价格变化。', yours:'本站倍率', official:'官方参考', save:'预计节省', tokenLab:'Token 可视化', tokenBody:'输入与输出占比会直接影响账单，拖动滑块观察构成。', advanced:'高级规则与计费陷阱', traps:['长上下文可能触发阶梯单价','缓存写入与读取采用不同费率','工具调用会把返回结果带回下一轮输入','高峰时段可能叠加峰值倍率'], promise:'规则可核对，账单可追溯', promiseBody:'调用完成后可按模型、Token 分类、倍率和 API Key 对账。', cta:'去查看用量明细', yourCost:'本站估算', competitorCost:'参考渠道', cacheHint:'已计入缓存读取优惠' } : { eyebrow:'Transparent billing / Live rules', heroTitle:'Every token has a traceable cost', heroBody:'See the complete path from provider price to your group multiplier. Estimates and production billing share the same rules.', viewCalc:'Open live calculator', formula:'Billing formula', formulaBody:'Start with provider prices, add cache and long-context rules, then apply your effective multiplier.', input:'Input tokens', output:'Output tokens', cache:'Cached tokens', multiplier:'Effective rate', result:'Actual charge', basis:'Standard cost × effective rate', compare:'Rate comparison', compareBody:'Drag the rate to compare the same workload across channels.', yours:'Your rate', official:'Reference', save:'Estimated saving', tokenLab:'Token visualizer', tokenBody:'Input and output mix directly changes cost. Drag the sliders to explore.', advanced:'Advanced rules and billing traps', traps:['Long context may trigger tiered prices','Cache writes and reads use different rates','Tool results become input in the next turn','Peak hours may add a peak multiplier'], promise:'Auditable rules, traceable charges', promiseBody:'Reconcile by model, token class, multiplier and API key after each call.', cta:'Open usage details', yourCost:'Your estimate', competitorCost:'Reference channel', cacheHint:'Cache read discount included' })
+function scrollToCalculator(){ document.getElementById('billing-calculator')?.scrollIntoView({behavior:'smooth',block:'start'}) }
+const tokenTotal = computed(() => tokenInput.value + tokenOutput.value)
+const inputShare = computed(() => tokenTotal.value ? Math.round(tokenInput.value / tokenTotal.value * 100) : 0)
+const cacheCost = computed(() => cacheEnabled.value ? ((tokenInput.value * 0.2) / 1_000_000 * cacheWritePrice.value + (tokenInput.value * 0.55) / 1_000_000 * cacheReadPrice.value) : 0)
+const visualCost = computed(() => (((tokenInput.value / 1_000_000) * inputPrice.value + (tokenOutput.value / 1_000_000) * outputPrice.value) + cacheCost.value) * tokenMultiplier.value)
+const compareBase = computed(() => ((tokenInput.value / 1_000_000) * inputPrice.value + (tokenOutput.value / 1_000_000) * outputPrice.value + cacheCost.value) )
+const compareMine = computed(() => compareBase.value * tokenMultiplier.value)
+const compareReference = computed(() => compareBase.value * competitorMultiplier.value)
+const saving = computed(() => Math.max(0, compareReference.value - compareMine.value))
+const money = (value:number) => `¥${value.toFixed(2)}`
+onMounted(async () => {
+  if (import.meta.env.MODE === 'test') return
+  try {
+    const plaza = await getModelPlaza()
+    const model = plaza.groups.flatMap((group) => group.models).find((entry) => entry.name.toLowerCase() === 'gpt-5.5')
+    const pricing = model?.official_pricing ?? model?.pricing
+    if (pricing) {
+      inputPrice.value = Number(pricing.input_price ?? pricing.input_price ?? 0) * 1e6
+      outputPrice.value = Number(pricing.output_price ?? 0) * 1e6
+      cacheWritePrice.value = Number(pricing.cache_write_price ?? 0) * 1e6
+      cacheReadPrice.value = Number(pricing.cache_read_price ?? 0) * 1e6
+    }
+  } catch { /* the live estimator remains the source of truth when the catalog is unavailable */ }
+})
 </script>
-
 <template>
   <div class="billing-panel">
-    <CustomerFeatureHeader
-      eyebrow="Cost telemetry / Billing"
-      :title="t('native.billing.title')"
-      :description="t('native.billing.description')"
-      icon="calculator"
-      :metrics="[
-        { value: t('native.billing.metrics.unitValue'), label: t('native.billing.metrics.unitLabel') },
-        { value: t('native.billing.metrics.partsValue'), label: t('native.billing.metrics.partsLabel') },
-        { value: t('native.billing.metrics.recordValue'), label: t('native.billing.metrics.recordLabel') }
-      ]"
-    />
-
-    <section class="billing-panel__formula" aria-labelledby="billing-formula-title">
-      <div class="billing-panel__section-heading">
-        <span class="billing-panel__index">01</span>
-        <div>
-          <h2 id="billing-formula-title">{{ t('native.billing.formula.title') }}</h2>
-          <p>{{ t('native.billing.formula.description') }}</p>
-        </div>
-      </div>
-
-      <div class="formula-strip">
-        <div class="formula-strip__term">
-          <span>{{ t('native.billing.formula.input') }}</span>
-          <strong>{{ t('native.billing.formula.inputFormula') }}</strong>
-        </div>
-        <span class="formula-strip__operator">+</span>
-        <div class="formula-strip__term">
-          <span>{{ t('native.billing.formula.output') }}</span>
-          <strong>{{ t('native.billing.formula.outputFormula') }}</strong>
-        </div>
-        <span class="formula-strip__operator">+</span>
-        <div class="formula-strip__term">
-          <span>{{ t('native.billing.formula.cache') }}</span>
-          <strong>{{ t('native.billing.formula.cacheFormula') }}</strong>
-        </div>
-        <span class="formula-strip__operator">×</span>
-        <div class="formula-strip__term formula-strip__term--accent">
-          <span>{{ t('native.billing.formula.multiplier') }}</span>
-          <strong>{{ t('native.billing.formula.total') }}</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="billing-panel__calculator" aria-labelledby="billing-calculator-title">
-      <div class="billing-panel__section-heading">
-        <span class="billing-panel__index">02</span>
-        <div>
-          <h2 id="billing-calculator-title">{{ t('native.billing.calculator.title') }}</h2>
-          <p>{{ t('native.billing.calculator.description') }}</p>
-        </div>
-      </div>
-      <BillingEstimator />
-    </section>
-
-    <section class="billing-panel__concepts" aria-labelledby="billing-concepts-title">
-      <div class="billing-panel__section-heading">
-        <span class="billing-panel__index">03</span>
-        <div>
-          <h2 id="billing-concepts-title">{{ t('native.billing.concepts.title') }}</h2>
-          <p>{{ t('native.billing.concepts.description') }}</p>
-        </div>
-      </div>
-
-      <div class="concept-grid">
-        <article>
-          <span>01 / CONTEXT</span>
-          <h3>{{ t('native.billing.concepts.contextTitle') }}</h3>
-          <p>{{ t('native.billing.concepts.contextBody') }}</p>
-          <ul>
-            <li>{{ t('native.billing.concepts.contextItem1') }}</li>
-            <li>{{ t('native.billing.concepts.contextItem2') }}</li>
-          </ul>
-        </article>
-        <article>
-          <span>02 / CACHE</span>
-          <h3>{{ t('native.billing.concepts.cacheTitle') }}</h3>
-          <p>{{ t('native.billing.concepts.cacheBody') }}</p>
-          <ul>
-            <li>{{ t('native.billing.concepts.cacheItem1') }}</li>
-            <li>{{ t('native.billing.concepts.cacheItem2') }}</li>
-          </ul>
-        </article>
-        <article>
-          <span>03 / AGENT LOOP</span>
-          <h3>{{ t('native.billing.concepts.toolsTitle') }}</h3>
-          <p>{{ t('native.billing.concepts.toolsBody') }}</p>
-          <ul>
-            <li>{{ t('native.billing.concepts.toolsItem1') }}</li>
-            <li>{{ t('native.billing.concepts.toolsItem2') }}</li>
-          </ul>
-        </article>
-      </div>
-    </section>
-
-    <section class="billing-panel__audit">
-      <div>
-        <span class="billing-panel__audit-kicker">VERIFY, THEN TRUST</span>
-        <h2>{{ t('native.billing.reconcile.title') }}</h2>
-        <p>{{ t('native.billing.reconcile.description') }}</p>
-      </div>
-      <div class="billing-panel__audit-points">
-        <span><Icon name="check" size="sm" /> {{ t('native.billing.reconcile.model') }}</span>
-        <span><Icon name="check" size="sm" /> {{ t('native.billing.reconcile.tokens') }}</span>
-        <span><Icon name="check" size="sm" /> {{ t('native.billing.reconcile.multiplier') }}</span>
-        <span><Icon name="check" size="sm" /> {{ t('native.billing.reconcile.charged') }}</span>
-      </div>
-    </section>
+    <CustomerFeatureHeader eyebrow="Cost telemetry / Billing" :title="t('native.billing.title')" :description="t('native.billing.description')" icon="calculator" :metrics="[{ value: t('native.billing.metrics.unitValue'), label: t('native.billing.metrics.unitLabel') }, { value: t('native.billing.metrics.partsValue'), label: t('native.billing.metrics.partsLabel') }, { value: t('native.billing.metrics.recordValue'), label: t('native.billing.metrics.recordLabel') }]" />
+    <section class="billing-hero"><div class="billing-hero__copy"><span class="billing-kicker">{{ copy.eyebrow }}</span><h1>{{ copy.heroTitle }}</h1><p>{{ copy.heroBody }}</p><button class="billing-hero__cta" type="button" @click="scrollToCalculator"><Icon name="calculator" size="sm" /> {{ copy.viewCalc }}</button></div><div class="billing-hero__signal" aria-hidden="true"><span>INPUT</span><b>+</b><span>OUTPUT</span><b>×</b><strong>RATE</strong></div></section>
+    <section class="billing-section billing-formula" aria-labelledby="billing-formula-title"><button class="section-toggle" type="button" :aria-expanded="formulaOpen" @click="formulaOpen = !formulaOpen"><span class="section-number">01</span><span><strong id="billing-formula-title">{{ copy.formula }}</strong><small>{{ copy.formulaBody }}</small></span><Icon name="chevronDown" size="sm" :class="formulaOpen && 'is-open'" /></button><Transition name="collapse"><div v-if="formulaOpen" class="formula-grid"><div><span>{{ copy.input }}</span><strong>Token × input price</strong></div><i>+</i><div><span>{{ copy.output }}</span><strong>Token × output price</strong></div><i>+</i><div><span>{{ copy.cache }}</span><strong>Read / write rules</strong></div><i>×</i><div class="formula-grid__accent"><span>{{ copy.multiplier }}</span><strong>{{ tokenMultiplier.toFixed(2) }}x</strong></div><i>=</i><div class="formula-grid__total"><span>{{ copy.result }}</span><strong>{{ copy.basis }}</strong></div></div></Transition></section>
+    <section class="insight-grid" aria-label="billing principles"><article><span>01 / PRICE</span><h3>{{ isZh ? '官方单价' : 'Provider price' }}</h3><p>{{ isZh ? '输入、输出、缓存分别取对应模型价格。' : 'Input, output and cache use their model-specific prices.' }}</p></article><article><span>02 / RATE</span><h3>{{ isZh ? '客户倍率' : 'Customer rate' }}</h3><p>{{ isZh ? '分组倍率、专属倍率和高峰因子按当前规则生效。' : 'Group, personal and peak rates are applied as configured.' }}</p></article><article><span>03 / TRACE</span><h3>{{ isZh ? '可追溯' : 'Traceable' }}</h3><p>{{ isZh ? '每次调用都能在用量明细中还原计算过程。' : 'Every call can be reconciled from usage details.' }}</p></article></section>
+    <section class="billing-section transparency-section"><div class="section-heading"><span class="section-number">01+</span><div><h2>{{ isZh ? '行业套路揭秘' : 'Common pricing traps' }}</h2><p>{{ isZh ? '看起来便宜的套餐，可能把真实成本藏在倍率、缓存或输出价格里。' : 'Low headline prices can hide multipliers, cache fees or output costs.' }}</p></div></div><div class="trap-cards"><article v-for="(trap, index) in copy.traps" :key="trap"><span>{{ index === 0 ? '高风险' : index === 1 ? '误导' : index === 2 ? '隐性' : '陷阱' }}</span><h3>{{ trap }}</h3><p>{{ isZh ? '请在用量明细中核对输入、输出与有效倍率。' : 'Verify input, output and effective rate in usage details.' }}</p></article></div></section>
+    <section class="billing-section compare-section"><div class="section-heading"><span class="section-number">02</span><div><h2>{{ copy.compare }}</h2><p>{{ copy.compareBody }}</p></div></div><div class="compare-layout"><div class="compare-slider"><label>{{ isZh ? '竞品倍率' : 'Competitor multiplier' }} <b>{{ competitorMultiplier.toFixed(1) }}x</b></label><input v-model.number="competitorMultiplier" type="range" min="1" max="8" step="0.1" /></div><div class="compare-results"><div><span>{{ copy.yourCost }} · {{ tokenMultiplier.toFixed(2) }}x</span><strong>{{ money(compareMine) }}</strong></div><div><span>{{ copy.competitorCost }} · {{ competitorMultiplier.toFixed(1) }}x</span><strong>{{ money(compareReference) }}</strong></div><em>{{ copy.save }} {{ money(saving) }}</em></div></div></section>
+    <section class="billing-section token-section"><div class="section-heading"><span class="section-number">03</span><div><h2>{{ copy.tokenLab }}</h2><p>{{ copy.tokenBody }}</p></div></div><div class="token-layout"><div class="token-controls"><label>{{ copy.input }} <b>{{ tokenInput.toLocaleString() }}</b><input v-model.number="tokenInput" type="range" min="1000" max="1000000" step="1000" /></label><label>{{ copy.output }} <b>{{ tokenOutput.toLocaleString() }}</b><input v-model.number="tokenOutput" type="range" min="1000" max="1000000" step="1000" /></label><label>{{ copy.multiplier }} <b>{{ tokenMultiplier.toFixed(2) }}x</b><input v-model.number="tokenMultiplier" type="range" min="0" max="1" step="0.01" /></label><label class="cache-toggle"><input v-model="cacheEnabled" type="checkbox" /><span>{{ isZh ? '加入 Prompt Cache 示例' : 'Include Prompt Cache example' }}</span></label></div><div class="token-stage"><div class="token-stage__bar"><i :style="{width:`${inputShare}%`}"></i><b :style="{width:`${100 - inputShare}%`}"></b></div><div class="token-stage__flow" aria-hidden="true"><i v-for="dot in tokenDots" :key="dot.id" :style="{ top: dot.top, width: dot.size, height: dot.size, animationDelay: dot.delay, animationDuration: dot.duration }"></i></div><div class="token-stage__legend"><span><i class="dot dot--input"></i>{{ copy.input }} {{ inputShare }}%</span><span><i class="dot dot--output"></i>{{ copy.output }} {{ 100 - inputShare }}%</span></div><strong>{{ money(visualCost) }}</strong><small>{{ cacheEnabled ? copy.cacheHint : copy.basis }}</small></div></div></section>
+    <section id="billing-calculator" class="billing-section calculator-section" aria-labelledby="billing-calculator-title"><div class="section-heading"><span class="section-number">04</span><div><h2 id="billing-calculator-title">{{ t('native.billing.calculator.title') }}</h2><p>{{ t('native.billing.calculator.description') }}</p></div></div><BillingEstimator /></section>
+    <section class="billing-section traps-section"><button class="section-toggle" type="button" :aria-expanded="trapsOpen" @click="trapsOpen = !trapsOpen"><span class="section-number">05</span><span><strong>{{ copy.advanced }}</strong><small>{{ isZh ? '缓存、按次 / 图片、长上下文 - 点击展开' : 'Cache, per-request / image and long context' }}</small></span><Icon name="chevronDown" size="sm" :class="trapsOpen && 'is-open'" /></button><Transition name="collapse"><div v-if="trapsOpen" class="advanced-cards"><article><h3>{{ isZh ? 'Prompt Cache' : 'Prompt Cache' }}</h3><p>{{ isZh ? '缓存写入与缓存读取可能使用不同单价，命中后通常更低。' : 'Cache writes and reads may have separate prices.' }}</p><ul><li>{{ isZh ? '首次长提示可能产生写入费用' : 'First long prompts may create cache writes' }}</li><li>{{ isZh ? '缓存窗口由上游模型决定' : 'Cache windows are model-specific' }}</li></ul></article><article><h3>{{ isZh ? '按次 / 图片计费' : 'Per-request / image' }}</h3><p>{{ isZh ? '图片、特殊工具或部分模型不按 Token 计费。' : 'Images and special tools may not use token billing.' }}</p><ul><li>{{ isZh ? '尺寸、质量、数量都会影响价格' : 'Size, quality and count affect price' }}</li><li>{{ isZh ? '失败请求是否扣费以明细为准' : 'Check usage details for failed requests' }}</li></ul></article><article><h3>{{ isZh ? '长上下文' : 'Long context' }}</h3><p>{{ isZh ? '历史消息、文档和工具定义都会推高输入成本。' : 'History, documents and tools increase input cost.' }}</p><ul><li>{{ isZh ? '可能触发阶梯单价' : 'Tiered prices may apply' }}</li><li>{{ isZh ? 'Agent 循环会重复产生输入输出' : 'Agent loops repeat input and output' }}</li></ul></article></div></Transition></section>
+    <section class="billing-promise"><div><span class="billing-kicker">VERIFY, THEN TRUST</span><h2>{{ copy.promise }}</h2><p>{{ copy.promiseBody }}</p></div><button type="button" @click="scrollToCalculator">{{ copy.cta }} <Icon name="arrowRight" size="sm" /></button></section>
   </div>
 </template>
-
 <style scoped>
-.billing-panel {
-  width: 100%;
-  min-width: 0;
-  color: var(--customer-ink, #142126);
-}
-
-.billing-panel > * + * {
-  margin-top: 22px;
-}
-
-.billing-panel__formula,
-.billing-panel__calculator,
-.billing-panel__concepts {
-  padding: 22px 0 0;
-  border-top: 1px solid var(--customer-line, rgba(20, 33, 38, 0.12));
-}
-
-.billing-panel__section-heading {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 16px;
-}
-
-.billing-panel__section-heading h2 {
-  margin: 0;
-  color: var(--customer-ink, #142126);
-  font-size: 19px;
-  font-weight: 680;
-  letter-spacing: 0;
-  line-height: 1.35;
-}
-
-.billing-panel__section-heading p {
-  margin: 4px 0 0;
-  color: var(--customer-muted, rgba(20, 33, 38, 0.66));
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.billing-panel__index {
-  display: inline-grid;
-  flex: 0 0 30px;
-  width: 30px;
-  height: 24px;
-  color: var(--customer-cyan, #0a7f90);
-  font-family: var(--customer-mono, monospace);
-  font-size: 10px;
-  font-weight: 700;
-  place-items: center;
-  background: var(--customer-cyan-soft, rgba(10, 127, 144, 0.1));
-  border-left: 2px solid var(--customer-cyan, #0a7f90);
-}
-
-.formula-strip {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) auto minmax(140px, 1fr) auto minmax(140px, 1fr);
-  gap: 10px;
-  align-items: stretch;
-  padding: 14px;
-  background: var(--customer-surface, rgba(248, 251, 252, 0.82));
-  border: 1px solid var(--customer-line, rgba(20, 33, 38, 0.12));
-  border-radius: 7px;
-}
-
-.formula-strip__term {
-  min-width: 0;
-  padding: 12px;
-  background: var(--customer-surface-soft, rgba(228, 237, 240, 0.82));
-  border: 1px solid var(--customer-line, rgba(20, 33, 38, 0.12));
-  border-radius: 5px;
-}
-
-.formula-strip__term span,
-.formula-strip__term strong {
-  display: block;
-}
-
-.formula-strip__term span {
-  color: var(--customer-faint, rgba(20, 33, 38, 0.48));
-  font-family: var(--customer-mono, monospace);
-  font-size: 10px;
-  line-height: 1.35;
-  text-transform: uppercase;
-}
-
-.formula-strip__term strong {
-  margin-top: 5px;
-  color: var(--customer-ink, #142126);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.5;
-}
-
-.formula-strip__term--accent {
-  background: var(--customer-copper-soft, rgba(156, 100, 31, 0.11));
-  border-color: color-mix(in srgb, var(--customer-copper, #9c641f) 35%, transparent);
-}
-
-.formula-strip__term--accent span {
-  color: var(--customer-copper, #9c641f);
-}
-
-.formula-strip__operator {
-  display: grid;
-  color: var(--customer-cyan, #0a7f90);
-  font-family: var(--customer-mono, monospace);
-  font-size: 16px;
-  font-weight: 700;
-  place-items: center;
-}
-
-.concept-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.concept-grid article {
-  min-width: 0;
-  padding: 18px;
-  background: var(--customer-surface, rgba(248, 251, 252, 0.82));
-  border: 1px solid var(--customer-line, rgba(20, 33, 38, 0.12));
-  border-radius: 7px;
-}
-
-.concept-grid article > span {
-  color: var(--customer-cyan, #0a7f90);
-  font-family: var(--customer-mono, monospace);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.concept-grid article:nth-child(2) > span {
-  color: var(--customer-copper, #9c641f);
-}
-
-.concept-grid h3 {
-  margin: 8px 0 6px;
-  color: var(--customer-ink, #142126);
-  font-size: 15px;
-  font-weight: 680;
-}
-
-.concept-grid p,
-.concept-grid li {
-  color: var(--customer-muted, rgba(20, 33, 38, 0.66));
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.concept-grid p {
-  margin: 0;
-}
-
-.concept-grid ul {
-  padding: 10px 0 0 17px;
-  margin: 12px 0 0;
-  border-top: 1px solid var(--customer-line, rgba(20, 33, 38, 0.12));
-}
-
-.billing-panel__audit {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
-  gap: 28px;
-  align-items: center;
-  padding: 22px;
-  background: var(--customer-surface-soft, rgba(228, 237, 240, 0.82));
-  border-left: 3px solid var(--customer-copper, #9c641f);
-  border-radius: 0 7px 7px 0;
-}
-
-.billing-panel__audit-kicker {
-  color: var(--customer-copper, #9c641f);
-  font-family: var(--customer-mono, monospace);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.billing-panel__audit h2 {
-  margin: 5px 0 6px;
-  color: var(--customer-ink, #142126);
-  font-size: 18px;
-}
-
-.billing-panel__audit p {
-  max-width: 720px;
-  margin: 0;
-  color: var(--customer-muted, rgba(20, 33, 38, 0.66));
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.billing-panel__audit-points {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.billing-panel__audit-points span {
-  display: flex;
-  min-width: 0;
-  gap: 7px;
-  align-items: center;
-  color: var(--customer-muted, rgba(20, 33, 38, 0.66));
-  font-size: 11px;
-}
-
-.billing-panel__audit-points svg {
-  flex: 0 0 auto;
-  color: var(--customer-cyan, #0a7f90);
-}
-
-@media (max-width: 1100px) {
-  .formula-strip {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 900px) {
-  .concept-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .billing-panel__audit {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 620px) {
-  .billing-panel > * + * {
-    margin-top: 18px;
-  }
-
-  .formula-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .formula-strip__operator {
-    min-height: 18px;
-  }
-
-  .billing-panel__audit {
-    padding: 18px;
-  }
-
-  .billing-panel__audit-points {
-    grid-template-columns: 1fr;
-  }
-}
+.billing-panel{width:100%;min-width:0;color:var(--customer-ink,#142126)}.billing-panel>*+*{margin-top:24px}.billing-hero{display:flex;justify-content:space-between;gap:26px;padding:28px 0 30px;border-bottom:1px solid var(--customer-line,rgba(20,33,38,.12))}.billing-hero__copy{max-width:680px}.billing-kicker{color:var(--customer-cyan,#0a7f90);font:700 10px var(--customer-mono,monospace);letter-spacing:.08em;text-transform:uppercase}.billing-hero h1{margin:10px 0 8px;font-size:clamp(28px,4vw,46px);line-height:1.1;letter-spacing:0}.billing-hero p{max-width:610px;margin:0;color:var(--customer-muted,rgba(20,33,38,.66));font-size:14px;line-height:1.7}.billing-hero__cta,.billing-promise button{display:inline-flex;align-items:center;gap:8px;margin-top:20px;padding:10px 14px;color:#fff;font:650 12px inherit;background:var(--customer-cyan,#0a7f90);border:0;border-radius:5px;cursor:pointer}.billing-hero__signal{display:grid;grid-template-columns:auto auto auto auto auto;align-content:center;gap:10px;color:var(--customer-faint,rgba(20,33,38,.48));font:700 10px var(--customer-mono,monospace)}.billing-hero__signal b{color:var(--customer-copper,#9c641f);font-size:18px}.billing-hero__signal strong{color:var(--customer-copper,#9c641f)}.billing-section{padding-top:22px;border-top:1px solid var(--customer-line,rgba(20,33,38,.12))}.section-heading,.section-toggle{display:flex;align-items:flex-start;gap:12px}.section-heading{margin-bottom:16px}.section-heading h2,.section-toggle strong{margin:0;font-size:19px;font-weight:680}.section-heading p,.section-toggle small{display:block;margin:4px 0 0;color:var(--customer-muted,rgba(20,33,38,.66));font-size:13px;line-height:1.6}.section-number{display:inline-grid;flex:0 0 30px;width:30px;height:24px;color:var(--customer-cyan,#0a7f90);font:700 10px var(--customer-mono,monospace);place-items:center;background:var(--customer-cyan-soft,rgba(10,127,144,.1));border-left:2px solid currentColor}.section-toggle{width:100%;padding:0;text-align:left;color:inherit;background:transparent;border:0;cursor:pointer}.section-toggle>span:nth-child(2){flex:1}.section-toggle>svg{margin-top:5px;transition:transform .18s}.section-toggle>svg.is-open{transform:rotate(180deg)}.formula-grid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(100px,.8fr) auto minmax(150px,1.2fr);gap:9px;align-items:center;padding:14px;background:var(--customer-surface,rgba(248,251,252,.82));border:1px solid var(--customer-line,rgba(20,33,38,.12));border-radius:7px}.formula-grid>div{padding:12px;background:var(--customer-surface-soft,rgba(228,237,240,.82));border:1px solid var(--customer-line,rgba(20,33,38,.12));border-radius:5px}.formula-grid span{display:block;color:var(--customer-faint,rgba(20,33,38,.48));font:10px var(--customer-mono,monospace);text-transform:uppercase}.formula-grid strong{display:block;margin-top:5px;font-size:12px;line-height:1.4}.formula-grid i{font-style:normal;color:var(--customer-cyan,#0a7f90);font-weight:700}.formula-grid__accent{background:var(--customer-copper-soft,rgba(156,100,31,.11))!important}.formula-grid__accent strong,.formula-grid__accent span{color:var(--customer-copper,#9c641f)}.formula-grid__total{border-color:var(--customer-cyan,#0a7f90)!important}.insight-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.insight-grid article{padding:18px;background:var(--customer-surface,rgba(248,251,252,.82));border:1px solid var(--customer-line,rgba(20,33,38,.12));border-radius:7px}.insight-grid span{color:var(--customer-cyan,#0a7f90);font:700 9px var(--customer-mono,monospace)}.insight-grid article:nth-child(2) span{color:var(--customer-copper,#9c641f)}.insight-grid h3{margin:8px 0 5px;font-size:15px}.insight-grid p{margin:0;color:var(--customer-muted,rgba(20,33,38,.66));font-size:12px;line-height:1.65}.compare-layout,.token-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.75fr);gap:18px;align-items:center;padding:18px;background:var(--customer-surface,rgba(248,251,252,.82));border:1px solid var(--customer-line,rgba(20,33,38,.12));border-radius:7px}.compare-slider label,.token-controls label{display:block;color:var(--customer-muted,rgba(20,33,38,.66));font-size:12px}.compare-slider b,.token-controls b{float:right;color:var(--customer-copper,#9c641f);font-family:var(--customer-mono,monospace)}input[type=range]{display:block;width:100%;margin-top:16px;accent-color:var(--customer-cyan,#0a7f90)}.compare-results{display:grid;grid-template-columns:1fr 1fr;gap:10px}.compare-results div{padding:12px;background:var(--customer-surface-soft,rgba(228,237,240,.82));border-radius:5px}.compare-results span{display:block;color:var(--customer-faint,rgba(20,33,38,.48));font-size:10px}.compare-results strong{display:block;margin-top:5px;font:700 18px var(--customer-mono,monospace)}.compare-results em{grid-column:1/-1;color:var(--customer-copper,#9c641f);font-size:11px;font-style:normal}.token-controls{display:grid;gap:18px}.token-stage{text-align:center}.token-stage__bar{display:flex;height:22px;overflow:hidden;background:var(--customer-surface-soft,rgba(228,237,240,.82));border-radius:4px}.token-stage__bar i{display:block;background:var(--customer-cyan,#0a7f90);transition:width .25s}.token-stage__legend{display:flex;justify-content:space-between;margin-top:9px;color:var(--customer-faint,rgba(20,33,38,.48));font-size:10px}.dot{display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:var(--customer-cyan,#0a7f90)}.dot--output{background:var(--customer-copper,#9c641f)}.token-stage>strong{display:block;margin-top:16px;font:700 26px var(--customer-mono,monospace)}.token-stage>small{color:var(--customer-faint,rgba(20,33,38,.48));font-size:10px}.traps-section{padding-bottom:4px}.trap-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:14px 0 0 42px;margin:0;list-style:none}.trap-list li{display:flex;gap:7px;align-items:center;color:var(--customer-muted,rgba(20,33,38,.66));font-size:12px}.trap-list svg{color:var(--customer-copper,#9c641f);flex:0 0 auto}.billing-promise{display:flex;justify-content:space-between;gap:20px;align-items:center;padding:22px;background:var(--customer-surface-soft,rgba(228,237,240,.82));border-left:3px solid var(--customer-copper,#9c641f);border-radius:0 7px 7px 0}.billing-promise h2{margin:5px 0 6px;font-size:19px}.billing-promise p{max-width:680px;margin:0;color:var(--customer-muted,rgba(20,33,38,.66));font-size:12px;line-height:1.6}.billing-promise button{margin:0;white-space:nowrap}.collapse-enter-active,.collapse-leave-active{transition:opacity .18s,transform .18s}.collapse-enter-from,.collapse-leave-to{opacity:0;transform:translateY(-5px)}
+@media (max-width:900px){.billing-hero__signal{display:none}.formula-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.formula-grid i{display:none}.insight-grid{grid-template-columns:1fr}.compare-layout,.token-layout{grid-template-columns:1fr}.billing-promise{align-items:flex-start;flex-direction:column}.billing-promise button{margin-top:4px}.trap-list{grid-template-columns:1fr}}@media (max-width:620px){.billing-hero{padding-top:16px}.billing-hero h1{font-size:30px}.formula-grid{grid-template-columns:1fr}.formula-grid>div{padding:10px}.compare-results{grid-template-columns:1fr}.compare-results em{grid-column:auto}.billing-panel>*+*{margin-top:18px}}
+.trap-cards,.advanced-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.trap-cards article,.advanced-cards article{padding:14px;background:var(--customer-surface,rgba(248,251,252,.82));border:1px solid var(--customer-line,rgba(20,33,38,.12));border-radius:7px}.trap-cards span{display:inline-block;padding:3px 6px;color:var(--customer-copper,#9c641f);font-size:10px;font-weight:700;background:var(--customer-copper-soft,rgba(156,100,31,.11));border-radius:999px}.trap-cards h3,.advanced-cards h3{margin:8px 0 5px;font-size:14px}.trap-cards p,.advanced-cards p,.advanced-cards li{margin:0;color:var(--customer-muted,rgba(20,33,38,.66));font-size:11px;line-height:1.6}.advanced-cards{grid-template-columns:repeat(3,minmax(0,1fr));padding:14px 0 0 42px}.advanced-cards ul{padding-left:16px;margin:9px 0 0;border-top:1px solid var(--customer-line,rgba(20,33,38,.12));padding-top:8px}.cache-toggle{display:flex!important;gap:8px;align-items:center}.cache-toggle input{width:15px!important;height:15px!important;accent-color:var(--customer-cyan,#0a7f90)}
+@media (max-width:900px){.trap-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.advanced-cards{grid-template-columns:1fr;padding-left:42px}}@media (max-width:620px){.trap-cards{grid-template-columns:1fr}.advanced-cards{padding-left:0}}
+.billing-panel{position:relative;isolation:isolate;width:calc(100% + 48px);min-height:100%;padding:24px;background:var(--customer-page-bg,#f2f7f8);overflow:hidden}.billing-panel::before{position:absolute;inset:0;z-index:-1;pointer-events:none;content:'';opacity:.28;background-image:linear-gradient(rgba(10,127,144,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(10,127,144,.08) 1px,transparent 1px);background-size:32px 32px}.billing-panel>*{position:relative}.billing-hero{padding:clamp(34px,6vw,74px) clamp(22px,5vw,64px);background:var(--customer-surface,rgba(248,251,252,.72));border:1px solid var(--customer-line,rgba(20,33,38,.14));border-radius:14px;box-shadow:0 22px 55px rgba(25,47,55,.12)}.billing-hero h1{font-size:clamp(34px,5vw,62px);font-weight:760;letter-spacing:.01em}.billing-section{padding:30px 0 0}.section-heading h2,.section-toggle strong{font-size:clamp(21px,2.4vw,30px);font-weight:730;letter-spacing:.01em}.formula-grid,.compare-layout,.token-layout,.insight-grid article,.trap-cards article,.advanced-cards article,.billing-promise{background:color-mix(in srgb,var(--customer-surface,#f8fbfc) 76%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 12px 32px rgba(25,47,55,.08)}.formula-grid>div,.compare-results div{background:color-mix(in srgb,var(--customer-surface-soft,#e4edf0) 72%,transparent)}.billing-hero__cta,.billing-promise button{box-shadow:0 8px 20px color-mix(in srgb,var(--customer-cyan,#0a7f90) 25%,transparent);transition:transform .16s ease,box-shadow .16s ease}.billing-hero__cta:hover,.billing-promise button:hover{transform:translateY(-2px);box-shadow:0 12px 26px color-mix(in srgb,var(--customer-cyan,#0a7f90) 32%,transparent)}.token-stage{position:relative;overflow:hidden;padding:18px;border:1px solid var(--customer-line,rgba(20,33,38,.12));border-radius:10px;background:color-mix(in srgb,var(--customer-surface,#f8fbfc) 72%,transparent);box-shadow:inset 0 0 36px rgba(10,127,144,.06)}.token-stage__bar{position:relative;z-index:1;height:34px;box-shadow:0 0 0 1px rgba(20,33,38,.08)}.token-stage__bar i{background:var(--customer-cyan,#0a7f90)}.token-stage__bar b{display:block;height:100%;background:var(--customer-copper,#9c641f);transition:width .25s}.token-stage__flow{position:absolute;inset:18px;overflow:hidden;pointer-events:none}.token-stage__flow i{position:absolute;left:-12%;display:block;border-radius:50%;background:var(--customer-cyan,#0a7f90);box-shadow:0 0 12px color-mix(in srgb,var(--customer-cyan,#0a7f90) 45%,transparent);animation:token-flow 7s linear infinite}.token-stage__flow i:nth-child(3n){background:var(--customer-copper,#9c641f);box-shadow:0 0 12px color-mix(in srgb,var(--customer-copper,#9c641f) 42%,transparent)}@keyframes token-flow{0%{transform:translate3d(0,0,0) scale(.72);opacity:0}12%{opacity:.8}55%{transform:translate3d(62vw,-4px,0) scale(1);opacity:.64}100%{transform:translate3d(118vw,3px,0) scale(.76);opacity:0}}.cache-toggle{padding:8px 10px;border:1px solid var(--customer-line,rgba(20,33,38,.12));border-radius:6px;background:color-mix(in srgb,var(--customer-cyan-soft,rgba(10,127,144,.1)) 55%,transparent)}
+@media (max-width:620px){.billing-panel{width:calc(100% + 32px);padding:16px}.billing-hero{padding:30px 18px}.billing-section{padding-top:24px}}
 </style>

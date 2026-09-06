@@ -50,7 +50,7 @@ const updatedLabel = computed(() => {
         :disabled="loading"
         :title="t('native.radar.sync.refresh')"
         :aria-label="t('native.radar.sync.refresh')"
-        @click="refresh"
+        @click="refresh({ force: true })"
       >
         <Icon name="refresh" size="sm" :class="{ 'is-spinning': loading }" />
       </button>
@@ -67,7 +67,7 @@ const updatedLabel = computed(() => {
       <span aria-hidden="true"><Icon name="exclamationTriangle" size="lg" /></span>
       <h1>{{ t('native.radar.error.title') }}</h1>
       <p>{{ error || t('native.radar.error.description') }}</p>
-      <button type="button" :disabled="loading" @click="refresh">
+      <button type="button" :disabled="loading" @click="refresh({ force: true })">
         <Icon name="refresh" size="sm" />
         {{ t('native.radar.error.retry') }}
       </button>

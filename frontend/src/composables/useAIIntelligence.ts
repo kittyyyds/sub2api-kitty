@@ -55,14 +55,14 @@ export function useAIIntelligence() {
 
   const stale = computed(() => payload.value?.stale ?? false)
 
-  async function refresh(): Promise<void> {
+  async function refresh(options?: { force?: boolean }): Promise<void> {
     requestController?.abort()
     const controller = new AbortController()
     requestController = controller
     loading.value = true
     error.value = ''
     try {
-      const next = await aiIntelligenceAPI.get({ signal: controller.signal })
+      const next = await aiIntelligenceAPI.get({ signal: controller.signal, forceRefresh: options?.force })
       if (controller.signal.aborted) return
       payload.value = next
       if (!next.stale) storeSnapshot(next)

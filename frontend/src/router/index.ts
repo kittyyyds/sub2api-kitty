@@ -427,6 +427,12 @@ const routes: RouteRecordRaw[] = [
     path: '/billing-rules',
     redirect: '/custom/billing-rules'
   },
+  ...(import.meta.env.DEV ? [{
+    path: '/billing-rules-preview',
+    name: 'BillingRulesPreview',
+    component: () => import('@/views/user/native/BillingRulesPanel.vue'),
+    meta: { requiresAuth: false, requiresAdmin: false, title: 'Billing Rules Preview' }
+  }] : []),
   {
     path: '/docs',
     redirect: '/custom/docs'
@@ -823,6 +829,7 @@ const BACKEND_MODE_CALLBACK_PATHS = [
 const BACKEND_MODE_PENDING_AUTH_PATHS = ['/register', '/email-verify']
 
 function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: boolean): boolean {
+  if (import.meta.env.DEV && path === '/billing-rules-preview') return true
   if (BACKEND_MODE_ALLOWED_PATHS.some((allowedPath) => path === allowedPath || path.startsWith(allowedPath))) {
     return true
   }
