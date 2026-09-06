@@ -120,13 +120,6 @@ const currentGroup = computed<ModelPlazaGroup | null>(() => {
       <header class="pricing-intro">
         <h1 id="model-pricing-title">{{ t('modelPlaza.title') }}</h1>
         <p>{{ t('modelPlaza.description') }}</p>
-        <div class="pricing-facts">
-          <span class="exchange-rate">$1 = ¥7</span>
-          <span class="billing-rule">
-            <Icon name="infoCircle" size="xs" />
-            {{ t('modelPlaza.billingRule') }}
-          </span>
-        </div>
       </header>
 
       <div
@@ -234,24 +227,22 @@ const currentGroup = computed<ModelPlazaGroup | null>(() => {
 
 .pricing-console {
   overflow: hidden;
-  border: 1px solid var(--plaza-line);
-  border-radius: 8px;
+  border-top: 1px solid var(--plaza-line);
+  border-bottom: 1px solid var(--plaza-line);
   background: var(--plaza-surface);
 }
 
 .pricing-intro {
-  display: grid;
-  justify-items: center;
-  padding: 30px 24px 22px;
+  padding: 20px 22px 16px;
   border-bottom: 1px solid var(--plaza-line-soft);
-  text-align: center;
+  background: var(--plaza-surface);
 }
 
 .pricing-intro h1 {
   margin: 0;
-  color: var(--plaza-accent);
-  font-size: 22px;
-  font-weight: 800;
+  color: var(--plaza-text-strong);
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .pricing-intro p {
@@ -260,39 +251,6 @@ const currentGroup = computed<ModelPlazaGroup | null>(() => {
   color: var(--plaza-muted);
   font-size: 12px;
   line-height: 1.6;
-}
-
-.pricing-facts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.pricing-facts span {
-  display: inline-flex;
-  min-height: 28px;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid var(--plaza-line);
-  border-radius: 5px;
-  padding: 0 10px;
-  background: var(--plaza-surface-muted);
-  color: var(--plaza-muted);
-  font-size: 10px;
-}
-
-.pricing-facts .exchange-rate {
-  color: var(--plaza-text-strong);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 700;
-}
-
-.pricing-facts .billing-rule {
-  border-color: color-mix(in srgb, var(--plaza-accent) 28%, var(--plaza-line));
-  color: var(--plaza-accent);
-  background: var(--plaza-accent-soft);
 }
 
 .plaza-description,
@@ -399,19 +357,11 @@ const currentGroup = computed<ModelPlazaGroup | null>(() => {
 
 @media (max-width: 640px) {
   .pricing-intro {
-    padding: 24px 14px 18px;
+    padding: 18px 14px 14px;
   }
 
   .pricing-intro h1 {
-    font-size: 20px;
-  }
-
-  .pricing-facts {
-    width: 100%;
-  }
-
-  .pricing-facts span {
-    max-width: 100%;
+    font-size: 17px;
   }
 }
 
