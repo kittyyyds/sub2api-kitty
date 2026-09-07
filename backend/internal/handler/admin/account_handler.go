@@ -3041,11 +3041,12 @@ func (h *AccountHandler) SyncUpstreamModels(c *gin.Context) {
 // POST /api/v1/admin/accounts/models/sync-upstream-preview
 func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 	var req struct {
-		Platform     string            `json:"platform" binding:"required"`
-		Type         string            `json:"type" binding:"required"`
-		BaseURL      string            `json:"base_url"`
-		APIKey       string            `json:"api_key" binding:"required"`
-		ModelMapping map[string]string `json:"model_mapping"`
+		CursorAuthMode string            `json:"cursor_auth_mode"`
+		Platform       string            `json:"platform" binding:"required"`
+		Type           string            `json:"type" binding:"required"`
+		BaseURL        string            `json:"base_url"`
+		APIKey         string            `json:"api_key" binding:"required"`
+		ModelMapping   map[string]string `json:"model_mapping"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
@@ -3066,6 +3067,13 @@ func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 		},
 	}
 
+	if req.CursorAuthMode != "" {
+		tempAccount.Credentials["cursor_auth_mode"] = req.CursorAuthMode
+	}
+	if err := service.ValidateCursorAccount(tempAccount); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	if h.accountTestService == nil {
 		response.InternalError(c, "Account test service is not configured")
 		return

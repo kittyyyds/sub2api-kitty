@@ -28,7 +28,8 @@
 
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
-        <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
+        <CursorAccountFields v-if="isCursorAccount" v-model="editApiKey" editing :account-id="account.id" />
+        <div v-if="!isCursorAccount && (!isCNApiKeyAccount || editApiProtocol !== 'adaptive')">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
             v-model="editBaseUrl"
@@ -62,7 +63,7 @@
             @select="onCnPresetSelect"
           />
         </div>
-        <div v-else>
+        <div v-else-if="!isCursorAccount">
           <label class="input-label">{{ t('admin.accounts.cnProviders.apiProtocol.endpoints') }}</label>
           <div class="mt-2 space-y-3">
             <div v-for="item in editAdaptiveProtocolOptions" :key="item.value">
@@ -147,7 +148,7 @@
           </div>
           <p class="input-hint mt-2">{{ t('admin.accounts.cnProviders.zhipuTeam.hint') }}</p>
         </div>
-        <div>
+        <div v-if="!isCursorAccount">
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
           <input
             v-model="editApiKey"
@@ -1540,7 +1541,8 @@
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
         </div>
-        <ProxyPoolSelector v-model="form.proxy_pool" :proxies="proxies" />
+        <ProxyPoolSelector v-if="!isCursorAccount" v-model="form.proxy_pool" :proxies="proxies" />
+        <p v-else class="input-hint">{{ t('admin.accounts.cursor.proxyHelp') }}</p>
       </div>
 
       <UpstreamRequestIdHeaderField
@@ -1861,7 +1863,7 @@
       </div>
 
       <div
-        v-if="account?.type === 'apikey'"
+        v-if="account?.type === 'apikey' && !isCursorAccount"
         class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div>
@@ -2922,6 +2924,7 @@
 </template>
 
 <script setup lang="ts">
+import CursorAccountFields from './CursorAccountFields.vue'
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -3062,6 +3065,7 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const isCursorAccount = computed(() => props.account?.platform === 'anthropic' && props.account?.credentials?.cursor_auth_mode === 'user_api_key')
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）account_mode / api_protocol 编辑 ──
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
@@ -4755,7 +4759,7 @@ const handleSubmit = async () => {
       updatePayload.load_factor = 0
     }
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
-    if (props.account.type === 'apikey') {
+    if (props.account.type === 'apikey' && !isCursorAccount.value) {
       updatePayload.upstream_billing_probe_enabled = upstreamBillingAutoProbeEnabled.value
       updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
       if (upstreamBillingRateSyncEnabled.value) {
@@ -4773,6 +4777,13 @@ const handleSubmit = async () => {
       const newCredentials: Record<string, unknown> = {
         ...currentCredentials,
         base_url: newBaseUrl
+      }
+      if (isCursorAccount.value) {
+        delete newCredentials.base_url
+        if (editApiKey.value.trim() && !/^crsr_[A-Za-z0-9_-]{8,512}$/.test(editApiKey.value.trim())) {
+          appStore.showError(t('admin.accounts.cursor.invalidKey'))
+          return
+        }
       }
 
       // 国产供应商：模式与协议写入凭据（决定额度/余额探测与转发端点/格式）。

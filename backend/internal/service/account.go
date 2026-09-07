@@ -1161,6 +1161,13 @@ func (a *Account) ResolveCompactMappedModel(requestedModel string) (mappedModel 
 }
 
 func (a *Account) GetBaseURL() string {
+	if a.IsCursor() {
+		base, _, err := cursorBridgeConfig()
+		if err != nil {
+			return "http://cursor-bridge-unconfigured.invalid"
+		}
+		return base
+	}
 	if a.Type != AccountTypeAPIKey {
 		return ""
 	}

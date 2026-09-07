@@ -33,10 +33,34 @@ func (a *Account) GetAnthropicAPIKeyAuthScheme() string {
 	}
 }
 
-func setAnthropicAPIKeyAuthHeader(header http.Header, account *Account, token string) {
+func setAnthropicAPIKeyAuthHeader(header http.Header, account *Account, token string) error {
+	// Never accept a customer-supplied account selection credential.
+	for name := range header {
+		if strings.EqualFold(name, CursorKeyHeader) {
+			delete(header, name)
+		}
+	}
+	if err := ValidateCursorAccount(account); err != nil {
+		return err
+	}
+	if account.IsCursor() {
+		_, bridgeKey, err := cursorBridgeConfig()
+		if err != nil {
+			return err
+		}
+		for name := range header {
+			if strings.EqualFold(name, "authorization") || strings.EqualFold(name, "x-api-key") || strings.EqualFold(name, "x-opencodex-api-key") {
+				delete(header, name)
+			}
+		}
+		header.Set("x-api-key", bridgeKey)
+		header.Set(CursorKeyHeader, strings.TrimSpace(account.GetCredential("api_key")))
+		return nil
+	}
 	if account.GetAnthropicAPIKeyAuthScheme() == AnthropicAPIKeyAuthSchemeAuthorizationBearer {
 		header.Set("Authorization", "Bearer "+token)
-		return
+		return nil
 	}
 	header.Set("x-api-key", token)
+	return nil
 }

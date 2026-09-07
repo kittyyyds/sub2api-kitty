@@ -78,6 +78,7 @@ interface Props {
   platform: AccountPlatform
   type: AccountType
   authMode?: string
+  cursorAccount?: boolean
   planType?: string
   privacyMode?: string
   subscriptionExpiresAt?: string
@@ -101,6 +102,7 @@ const normalizedAuthMode = computed(() =>
 )
 
 const typeLabel = computed(() => {
+  if (props.platform === 'anthropic' && props.type === 'apikey' && props.cursorAccount) return 'Cursor'
   if (props.platform === 'openai' && props.type === 'oauth') {
     if (normalizedAuthMode.value === 'agentidentity') return 'Agent Identity'
     if (normalizedAuthMode.value === 'personalaccesstoken') return 'PAT'

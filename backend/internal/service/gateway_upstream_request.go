@@ -126,7 +126,9 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if tokenType == "oauth" {
 		setHeaderRaw(req.Header, "authorization", "Bearer "+token)
 	} else {
-		setAnthropicAPIKeyAuthHeader(req.Header, account, token)
+		if err := setAnthropicAPIKeyAuthHeader(req.Header, account, token); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// 白名单透传 headers

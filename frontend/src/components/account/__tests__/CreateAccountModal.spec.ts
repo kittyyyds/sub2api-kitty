@@ -149,6 +149,10 @@ function mountModal(groups: any[] = []) {
         GroupSelector: GroupSelectorStub,
         ModelWhitelistSelector: ModelWhitelistSelectorStub,
         QuotaLimitCard: true,
+        CursorAccountFields: defineComponent({
+          props: ['modelValue'], emits: ['update:modelValue'],
+          template: '<input data-testid="cursor-key" type="password" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+        }),
       },
     },
   })
@@ -213,6 +217,36 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it('creates Cursor through the managed bridge and syncs models without an external URL', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'Cursor')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Cursor account')
+    await wrapper.get('[data-testid="cursor-key"]').setValue('crsr_test_account_aaaaaaaa')
+    expect(wrapper.find('[data-testid="upstream-billing-auto-probe"]').exists()).toBe(false)
+    const sync = wrapper.findComponent(ModelWhitelistSelectorStub).props('syncCredentials')
+    expect(sync).toMatchObject({ platform: 'anthropic', type: 'apikey', cursor_auth_mode: 'user_api_key' })
+    expect(sync.base_url).toBeUndefined()
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).toHaveBeenCalledOnce()
+    const request = createAccountMock.mock.calls[0][0]
+    expect(request).toMatchObject({ platform: 'anthropic', type: 'apikey', concurrency: 1, credentials: { cursor_auth_mode: 'user_api_key', api_key: 'crsr_test_account_aaaaaaaa' } })
+    expect(request.credentials.base_url).toBeUndefined()
+    expect(request.extra.anthropic_passthrough).toBe(true)
+    expect(probeUpstreamBillingMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('clears the Cursor secret when switching to an ordinary Claude account', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'Cursor')
+    await wrapper.get('[data-testid="cursor-key"]').setValue('crsr_test_account_aaaaaaaa')
+    await selectButtonByText(wrapper, 'admin.accounts.claudeConsole')
+    expect(wrapper.get<HTMLInputElement>('input[type="password"]').element.value).toBe('')
+    expect(wrapper.find('[data-testid="cursor-key"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
 
   it('sets month and year expiry presets without submitting the account form', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })

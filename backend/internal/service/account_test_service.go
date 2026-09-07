@@ -463,7 +463,9 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	} else {
 		req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
-		setAnthropicAPIKeyAuthHeader(req.Header, account, authToken)
+		if err := setAnthropicAPIKeyAuthHeader(req.Header, account, authToken); err != nil {
+			return s.sendErrorAndEnd(c, err.Error())
+		}
 	}
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头

@@ -81,7 +81,9 @@ func (s *AccountTestService) testCNProviderAdaptiveAnthropicConnection(c *gin.Co
 		req.Header.Set(key, value)
 	}
 	req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
-	setAnthropicAPIKeyAuthHeader(req.Header, account, authToken)
+	if err := setAnthropicAPIKeyAuthHeader(req.Header, account, authToken); err != nil {
+		return s.sendErrorAndEnd(c, err.Error())
+	}
 	account.ApplyHeaderOverrides(req.Header)
 
 	resp, err := s.doCNProviderAdaptiveRequest(req, account)
@@ -260,7 +262,9 @@ func (s *AccountTestService) testCNProviderAnthropicConnection(c *gin.Context, a
 	for key, value := range claude.DefaultHeaders {
 		req.Header.Set(key, value)
 	}
-	setAnthropicAPIKeyAuthHeader(req.Header, account, authToken)
+	if err := setAnthropicAPIKeyAuthHeader(req.Header, account, authToken); err != nil {
+		return s.sendErrorAndEnd(c, err.Error())
+	}
 	account.ApplyHeaderOverrides(req.Header)
 
 	resp, err := s.doCNProviderAdaptiveRequest(req, account)

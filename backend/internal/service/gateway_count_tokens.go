@@ -417,7 +417,9 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
-	setAnthropicAPIKeyAuthHeader(req.Header, account, token)
+	if err := setAnthropicAPIKeyAuthHeader(req.Header, account, token); err != nil {
+		return nil, err
+	}
 
 	if req.Header.Get("content-type") == "" {
 		req.Header.Set("content-type", "application/json")
@@ -522,7 +524,9 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if tokenType == "oauth" {
 		setHeaderRaw(req.Header, "authorization", "Bearer "+token)
 	} else {
-		setAnthropicAPIKeyAuthHeader(req.Header, account, token)
+		if err := setAnthropicAPIKeyAuthHeader(req.Header, account, token); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// 白名单透传 headers（恢复真实 wire casing）

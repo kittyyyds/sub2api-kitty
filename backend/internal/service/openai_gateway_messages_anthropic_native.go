@@ -182,7 +182,9 @@ func (s *OpenAIGatewayService) buildNativeAnthropicUpstreamRequest(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
-	setAnthropicAPIKeyAuthHeader(req.Header, account, apiKey)
+	if err := setAnthropicAPIKeyAuthHeader(req.Header, account, apiKey); err != nil {
+		return nil, nil, err
+	}
 
 	if getHeaderRaw(req.Header, "content-type") == "" {
 		setHeaderRaw(req.Header, "content-type", "application/json")
