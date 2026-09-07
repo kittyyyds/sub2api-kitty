@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -109,4 +111,48 @@ func TestCursorPartialEditAndInvalidConfigurationFailClosed(t *testing.T) {
 	h := http.Header{}
 	require.Error(t, setAnthropicAPIKeyAuthHeader(h, a, a.GetCredential("api_key")))
 	require.Empty(t, h)
+}
+
+func TestCursorManagedBridgeWorksWithPublicOnlyURLPolicy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		require.Equal(t, "bridge-test-secret", req.Header.Get("x-api-key"))
+		require.Equal(t, "crsr_test_account_aaaaaaaa", req.Header.Get(CursorKeyHeader))
+		if req.URL.Path == "/redirect" {
+			w.Header().Set("Location", "https://must-not-contact.invalid")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "event: message_start\ndata: {}\n\n")
+		w.(http.Flusher).Flush()
+		_, _ = io.WriteString(w, "event: message_stop\ndata: {}\n\n")
+	}))
+	defer server.Close()
+	t.Setenv("CURSOR_BRIDGE_URL", server.URL)
+	t.Setenv("CURSOR_BRIDGE_API_KEY", "bridge-test-secret")
+	a := cursorTestAccount("crsr_test_account_aaaaaaaa")
+	deny := func(string) (string, error) { return "", errors.New("public HTTPS only") }
+	base, err := validateAccountUpstreamBaseURL(a, a.GetBaseURL(), deny)
+	require.NoError(t, err)
+	require.Equal(t, server.URL, base)
+	_, err = validateAccountUpstreamBaseURL(a, "https://another.invalid", deny)
+	require.Error(t, err)
+	_, err = validateAccountUpstreamBaseURL(&Account{}, server.URL, deny)
+	require.ErrorContains(t, err, "public HTTPS only")
+	for _, path := range []string{"/v1/messages", "/redirect"} {
+		req, _ := http.NewRequest(http.MethodPost, base+path, nil)
+		require.NoError(t, setAnthropicAPIKeyAuthHeader(req.Header, a, a.GetCredential("api_key")))
+		res, err := DoCursorBridgeRequest(req)
+		require.NoError(t, err)
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if path == "/redirect" {
+			require.Equal(t, http.StatusFound, res.StatusCode)
+		} else {
+			require.Contains(t, string(body), "message_stop")
+		}
+		req.URL.Host = "must-not-contact.invalid"
+		_, err = DoCursorBridgeRequest(req)
+		require.Error(t, err)
+	}
 }

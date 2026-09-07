@@ -197,6 +197,9 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 //   - 调用方必须关闭 resp.Body，否则会导致 inFlight 计数泄漏
 //   - inFlight > 0 的客户端不会被淘汰，确保活跃请求不被中断
 func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	if req != nil && req.Header.Get(service.CursorKeyHeader) != "" {
+		return service.DoCursorBridgeRequest(req)
+	}
 	applyGrokCLIProxyHeaders(req)
 	if err := s.validateRequestHost(req); err != nil {
 		return nil, err
@@ -248,7 +251,7 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 	}
 	// Plain HTTP has no TLS handshake to fingerprint. Reuse the normal transport
 	// so a configured HTTP or SOCKS proxy is not bypassed.
-	if req != nil && req.URL != nil && strings.EqualFold(req.URL.Scheme, "http") {
+	if req != nil && (req.Header.Get(service.CursorKeyHeader) != "" || (req.URL != nil && strings.EqualFold(req.URL.Scheme, "http"))) {
 		return s.Do(req, proxyURL, accountID, accountConcurrency)
 	}
 	applyGrokCLIProxyHeaders(req)

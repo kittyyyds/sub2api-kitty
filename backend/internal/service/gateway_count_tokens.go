@@ -374,7 +374,7 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 	targetURL := claudeAPICountTokensURL
 	baseURL := account.GetBaseURL()
 	if baseURL != "" {
-		validatedURL, err := s.validateUpstreamBaseURL(baseURL)
+		validatedURL, err := validateAccountUpstreamBaseURL(account, baseURL, s.validateUpstreamBaseURL)
 		if err != nil {
 			return nil, err
 		}
@@ -442,7 +442,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if account.Type == AccountTypeAPIKey {
 		baseURL := account.GetBaseURL()
 		if baseURL != "" {
-			validatedURL, err := s.validateUpstreamBaseURL(baseURL)
+			validatedURL, err := validateAccountUpstreamBaseURL(account, baseURL, s.validateUpstreamBaseURL)
 			if err != nil {
 				return nil, nil, err
 			}

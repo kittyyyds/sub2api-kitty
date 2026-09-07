@@ -417,7 +417,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		if baseURL == "" {
 			baseURL = "https://api.anthropic.com"
 		}
-		normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
+		normalizedBaseURL, err := validateAccountUpstreamBaseURL(account, baseURL, s.validateUpstreamBaseURL)
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}

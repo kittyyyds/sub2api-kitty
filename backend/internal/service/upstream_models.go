@@ -923,7 +923,7 @@ func (s *AccountTestService) buildAnthropicUpstreamModelsRequest(ctx context.Con
 		)
 	}
 
-	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
+	normalizedBaseURL, err := validateAccountUpstreamBaseURL(account, baseURL, s.validateUpstreamBaseURL)
 	if err != nil {
 		return nil, newUpstreamModelSyncConfigError("Invalid Anthropic base URL", err)
 	}

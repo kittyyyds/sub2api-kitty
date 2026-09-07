@@ -30,7 +30,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if account.Type == AccountTypeAPIKey {
 		baseURL := account.GetBaseURL()
 		if baseURL != "" {
-			validatedURL, err := s.validateUpstreamBaseURL(baseURL)
+			validatedURL, err := validateAccountUpstreamBaseURL(account, baseURL, s.validateUpstreamBaseURL)
 			if err != nil {
 				return nil, nil, err
 			}

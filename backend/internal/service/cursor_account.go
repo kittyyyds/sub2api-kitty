@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -64,6 +65,50 @@ var cursorBridgeHTTPClient = &http.Client{
 	Timeout:       20 * time.Second,
 	Transport:     &http.Transport{Proxy: nil, MaxIdleConns: 16, IdleConnTimeout: 60 * time.Second},
 	CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+}
+
+// Operator-managed service connections are independent of administrator-entered
+// public upstream URLs. This exemption is limited to the configured destination.
+func validateAccountUpstreamBaseURL(account *Account, raw string, validate func(string) (string, error)) (string, error) {
+	if !account.IsCursor() {
+		return validate(raw)
+	}
+	if err := ValidateCursorAccount(account); err != nil {
+		return "", err
+	}
+	base, _, err := cursorBridgeConfig()
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimRight(raw, "/") != base {
+		return "", infraerrors.BadRequest("CURSOR_DESTINATION_MISMATCH", "Cursor 请求目标与站点网关配置不一致")
+	}
+	return base, nil
+}
+
+var cursorBridgeStreamClient = &http.Client{
+	Transport: &http.Transport{
+		Proxy:        nil,
+		DialContext:  (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		MaxIdleConns: 64, MaxIdleConnsPerHost: 32, IdleConnTimeout: 60 * time.Second,
+		TLSHandshakeTimeout: 15 * time.Second, ResponseHeaderTimeout: 120 * time.Second,
+	},
+	CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+}
+
+// Used only for requests bearing the server-injected private credential header.
+// Authenticate the bridge destination again at the transport boundary, never
+// follow redirects, and never use a per-account or environment HTTP proxy.
+func DoCursorBridgeRequest(req *http.Request) (*http.Response, error) {
+	base, key, err := cursorBridgeConfig()
+	if err != nil {
+		return nil, err
+	}
+	if req == nil || req.URL == nil || req.URL.Scheme+"://"+req.URL.Host != base || req.URL.User != nil || req.Header.Get("x-api-key") != key || !cursorUserKeyPattern.MatchString(req.Header.Get(CursorKeyHeader)) {
+		return nil, infraerrors.BadRequest("CURSOR_DESTINATION_MISMATCH", "Cursor 请求目标或认证配置不一致")
+	}
+	req.Header.Set("Accept-Encoding", "identity")
+	return cursorBridgeStreamClient.Do(req)
 }
 
 type CursorBridgeStatus struct {

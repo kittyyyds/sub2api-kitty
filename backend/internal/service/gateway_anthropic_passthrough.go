@@ -303,7 +303,7 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	targetURL := claudeAPIURL
 	baseURL := account.GetBaseURL()
 	if baseURL != "" {
-		validatedURL, err := s.validateUpstreamBaseURL(baseURL)
+		validatedURL, err := validateAccountUpstreamBaseURL(account, baseURL, s.validateUpstreamBaseURL)
 		if err != nil {
 			return nil, nil, err
 		}
