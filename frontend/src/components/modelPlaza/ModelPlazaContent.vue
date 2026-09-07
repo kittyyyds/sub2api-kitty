@@ -5,31 +5,45 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
+import ModelIcon from '@/components/common/ModelIcon.vue'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { useClipboard } from '@/composables/useClipboard'
 import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
 import { useAuthStore } from '@/stores/auth'
+import type { GroupPlatform } from '@/types'
+import { platformLabel } from '@/utils/platformColors'
+import { formatScaled } from '@/utils/pricing'
 
-import PlazaFilterBar from './PlazaFilterBar.vue'
-import PlazaGroupSection from './PlazaGroupSection.vue'
+import {
+  buildCatalogSections,
+  groupTextRate,
+  visibleCatalogGroups,
+  type CatalogKind,
+  type CatalogMetric,
+} from './modelCatalog'
 
 const props = defineProps<{
   response: ModelPlazaResponse | null
   loading: boolean
   error?: boolean
-  /** AppLayout already supplies the route title when this page is embedded. */
   embedded?: boolean
+}>()
+
+const emit = defineEmits<{
+  retry: []
 }>()
 
 const { t } = useI18n()
 const authStore = useAuthStore()
 const { isDarkMode } = useDocumentDarkMode()
+const { copyToClipboard } = useClipboard()
 
-const selectedPlatform = shallowRef('')
 const selectedGroupId = shallowRef<number | null>(null)
-const searchQuery = shallowRef('')
-
 const isAuthenticated = computed(() => authStore.isAuthenticated)
-const searchActive = computed(() => searchQuery.value.trim() !== '')
+const groups = computed(() => visibleCatalogGroups(props.response?.groups ?? []))
+const sections = computed(() => buildCatalogSections(props.response?.groups ?? [], selectedGroupId.value))
+const modelCount = computed(() => sections.value.reduce((total, section) => total + section.cards.length, 0))
 
 const descriptionHtml = computed(() => {
   const markdown = props.response?.description?.trim()
@@ -37,342 +51,793 @@ const descriptionHtml = computed(() => {
   return DOMPurify.sanitize(marked.parse(markdown) as string)
 })
 
-function effectiveRate(group: ModelPlazaGroup): number {
-  return group.user_rate_multiplier ?? group.rate_multiplier
-}
-
-const platforms = computed(() => {
-  const values = [...new Set(
-    (props.response?.groups ?? []).map((group) => group.platform).filter(Boolean)
-  )]
-  const priority = ['openai', 'anthropic', 'grok']
-  return values.sort((a, b) => {
-    const aIndex = priority.indexOf(a)
-    const bIndex = priority.indexOf(b)
-    if (aIndex !== -1 || bIndex !== -1) {
-      return (aIndex === -1 ? priority.length : aIndex) - (bIndex === -1 ? priority.length : bIndex)
-    }
-    return a.localeCompare(b)
-  })
-})
-
-const groupOptions = computed(() =>
-  (props.response?.groups ?? [])
-    .map((group) => ({
-      id: group.id,
-      name: group.name,
-      platform: group.platform,
-      rate: effectiveRate(group),
-      usesPersonalRate: group.user_rate_multiplier != null
-        && Math.abs(group.user_rate_multiplier - group.rate_multiplier) > Number.EPSILON
-    }))
-    .sort((a, b) => a.rate - b.rate || a.name.localeCompare(b.name))
-)
-
-const visibleGroupOptions = computed(() =>
-  groupOptions.value.filter((group) => group.platform === selectedPlatform.value)
-)
-
-watch(groupOptions, (groups) => {
-  if (groups.length === 0) {
-    selectedPlatform.value = ''
+watch(groups, (nextGroups) => {
+  if (
+    selectedGroupId.value != null
+    && !nextGroups.some((group) => group.id === selectedGroupId.value)
+  ) {
     selectedGroupId.value = null
-    return
   }
-
-  if (!platforms.value.includes(selectedPlatform.value)) {
-    selectedPlatform.value = platforms.value[0] ?? groups[0].platform
-  }
-
-  const availableGroups = groups.filter((group) => group.platform === selectedPlatform.value)
-  if (!availableGroups.some((group) => group.id === selectedGroupId.value)) {
-    selectedGroupId.value = availableGroups[0]?.id ?? null
-  }
-}, { immediate: true })
-
-function selectPlatform(platform: string): void {
-  selectedPlatform.value = platform
-  selectedGroupId.value = groupOptions.value.find((group) => group.platform === platform)?.id ?? null
-}
-
-function selectGroup(groupId: number): void {
-  const group = groupOptions.value.find((item) => item.id === groupId)
-  if (!group) return
-  selectedPlatform.value = group.platform
-  selectedGroupId.value = group.id
-}
-
-const currentGroup = computed<ModelPlazaGroup | null>(() => {
-  const group = (props.response?.groups ?? []).find((item) => item.id === selectedGroupId.value)
-  if (!group) return null
-
-  const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return group
-
-  const models = group.models.filter((model) => model.name.toLowerCase().includes(query))
-  return models.length > 0 ? { ...group, models } : null
 })
+
+function selectGroup(groupId: number | null): void {
+  selectedGroupId.value = groupId
+}
+
+function groupRate(group: ModelPlazaGroup): string {
+  return rateLabel(groupTextRate(group))
+}
+
+function groupUsesPersonalRate(group: ModelPlazaGroup): boolean {
+  return group.user_rate_multiplier != null
+    && Math.abs(group.user_rate_multiplier - group.rate_multiplier) > Number.EPSILON
+}
+
+function rateLabel(value: number): string {
+  return `×${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: value >= 1 ? 2 : 4
+  }).format(value)}`
+}
+
+function sectionTitle(platform: string, kind: CatalogKind): string {
+  return t('modelPlaza.catalog.sectionTitle', {
+    platform: platformLabel(platform),
+    kind: kindLabel(kind)
+  })
+}
+
+function kindLabel(kind: CatalogKind): string {
+  return t(`modelPlaza.catalog.kinds.${kind}`)
+}
+
+function metricTitle(metric: CatalogMetric, kind: CatalogKind): string {
+  if (metric.label === 'unit') {
+    const unit = kind === 'image'
+      ? t('modelPlaza.catalog.units.image')
+      : kind === 'video'
+        ? t('modelPlaza.catalog.units.second')
+        : t('modelPlaza.catalog.units.request')
+    return metric.tier ? `${metric.tier} / ${unit}` : unit
+  }
+  return `${t(`modelPlaza.catalog.metrics.${metric.label}`)} / 1M`
+}
+
+function displayPrice(value: number | null, kind: CatalogKind): string {
+  return formatScaled(value, kind === 'token' ? 1_000_000 : 1, 2)
+}
+
+function savingLabel(value: number): string {
+  return `-${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)}%`
+}
+
+function copyModelId(modelId: string): void {
+  void copyToClipboard(modelId, t('modelPlaza.catalog.copySuccess'))
+}
 </script>
 
 <template>
-  <main class="model-plaza-content" :class="{ 'is-dark': isDarkMode }">
-    <section class="pricing-console" aria-labelledby="model-pricing-title">
-      <header class="pricing-intro">
-        <h1 id="model-pricing-title">{{ t('modelPlaza.title') }}</h1>
-        <p>{{ t('modelPlaza.description') }}</p>
-      </header>
+  <main class="model-catalog" :class="{ 'is-dark': isDarkMode }">
+    <section
+      v-if="groups.length > 0"
+      class="pricing-group-panel"
+      :aria-label="t('modelPlaza.catalog.groupSelector')"
+    >
+      <button
+        type="button"
+        class="pricing-group-chip"
+        :class="{ active: selectedGroupId === null }"
+        :aria-pressed="selectedGroupId === null"
+        @click="selectGroup(null)"
+      >
+        <Icon name="sparkles" size="sm" />
+        <span>{{ t('modelPlaza.catalog.bestPrice') }}</span>
+      </button>
 
-      <div
-        v-if="descriptionHtml"
-        class="plaza-description"
-        v-html="descriptionHtml"
-      ></div>
-
-      <p v-if="!isAuthenticated" class="anonymous-hint">
-        <Icon name="infoCircle" size="xs" />
-        {{ t('modelPlaza.anonymousHint') }}
-      </p>
-
-      <div v-if="loading" class="loading-state" :aria-label="t('modelPlaza.loading')">
-        <div class="loading-spinner"></div>
-      </div>
-      <div v-else-if="error" class="error-state">
-        {{ t('modelPlaza.loadFailed') }}
-      </div>
-      <template v-else>
-        <PlazaFilterBar
-          :platforms="platforms"
-          :groups="visibleGroupOptions"
-          :platform="selectedPlatform"
-          :group-id="selectedGroupId"
-          :search="searchQuery"
-          @update:platform="selectPlatform"
-          @update:group-id="selectGroup"
-          @update:search="searchQuery = $event"
-        />
-
-        <Transition name="group-price" mode="out-in">
-          <PlazaGroupSection
-            v-if="currentGroup"
-            :key="currentGroup.id"
-            :group="currentGroup"
-          />
-          <div v-else :key="'empty'" class="empty-state">
-            {{ searchActive ? t('modelPlaza.noSearchResult') : t('modelPlaza.empty') }}
-          </div>
-        </Transition>
-      </template>
+      <button
+        v-for="group in groups"
+        :key="group.id"
+        type="button"
+        class="pricing-group-chip"
+        :class="{ active: selectedGroupId === group.id }"
+        :aria-pressed="selectedGroupId === group.id"
+        :title="group.name"
+        @click="selectGroup(group.id)"
+      >
+        <PlatformIcon :platform="group.platform as GroupPlatform" size="sm" />
+        <span class="pricing-group-name">{{ group.name }}</span>
+        <small :title="groupUsesPersonalRate(group) ? t('modelPlaza.catalog.personalRate') : undefined">
+          {{ groupRate(group) }}
+        </small>
+      </button>
     </section>
+
+    <div
+      v-if="descriptionHtml"
+      class="catalog-notice"
+      v-html="descriptionHtml"
+    ></div>
+
+    <p v-if="!isAuthenticated" class="catalog-hint">
+      <Icon name="infoCircle" size="xs" />
+      {{ t('modelPlaza.anonymousHint') }}
+    </p>
+
+    <div v-if="loading" class="state-panel" :aria-label="t('modelPlaza.loading')">
+      <div class="state-spinner"></div>
+      <p>{{ t('modelPlaza.loading') }}</p>
+    </div>
+
+    <div v-else-if="error" class="state-panel error">
+      <Icon name="exclamationTriangle" size="lg" />
+      <p>{{ t('modelPlaza.loadFailed') }}</p>
+      <button type="button" class="retry-button" @click="emit('retry')">
+        <Icon name="refresh" size="sm" />
+        {{ t('common.refresh') }}
+      </button>
+    </div>
+
+    <div v-else-if="modelCount === 0" class="state-panel">
+      <Icon name="inbox" size="xl" />
+      <p>{{ t('modelPlaza.empty') }}</p>
+    </div>
+
+    <div v-else class="platform-section-list">
+      <section
+        v-for="section in sections"
+        :key="section.key"
+        class="platform-model-section"
+      >
+        <header class="platform-section-header">
+          <div>
+            <h2>{{ sectionTitle(section.platform, section.kind) }}</h2>
+            <p>{{ t('modelPlaza.catalog.modelCount', { count: section.cards.length }) }}</p>
+          </div>
+        </header>
+
+        <div class="platform-grid">
+          <article
+            v-for="card in section.cards"
+            :key="card.key"
+            class="platform-card"
+          >
+            <header class="platform-card-header">
+              <div class="platform-title-group">
+                <div class="platform-model-icon" aria-hidden="true">
+                  <ModelIcon :model="card.modelId" size="34px" />
+                </div>
+                <div class="model-title-copy">
+                  <h3 :title="card.modelName">{{ card.modelName }}</h3>
+                  <div class="platform-meta-row">
+                    <span class="platform-provider-pill">
+                      <PlatformIcon :platform="card.platform as GroupPlatform" size="sm" />
+                      {{ platformLabel(card.platform) }}
+                    </span>
+                    <span class="platform-kind-pill">{{ kindLabel(card.kind) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="platform-header-actions">
+                <span class="best-group-pill">
+                  {{ t(
+                    selectedGroupId === null
+                      ? 'modelPlaza.catalog.bestGroup'
+                      : 'modelPlaza.catalog.currentGroup',
+                    { group: card.groupName }
+                  ) }}
+                </span>
+                <button
+                  type="button"
+                  class="copy-id-button"
+                  :title="t('modelPlaza.catalog.copyModelId')"
+                  @click="copyModelId(card.modelId)"
+                >
+                  <Icon name="copy" size="sm" />
+                  <span>{{ t('modelPlaza.catalog.copyId') }}</span>
+                </button>
+              </div>
+            </header>
+
+            <div class="platform-model-id-row">
+              <span>{{ t('modelPlaza.catalog.modelId') }}</span>
+              <code :title="card.modelId">{{ card.modelId }}</code>
+            </div>
+
+            <div
+              class="platform-price-grid"
+              :class="`price-grid-${Math.min(card.metrics.length, 4)}`"
+            >
+              <div
+                v-for="metric in card.metrics"
+                :key="metric.key"
+                class="price-metric"
+              >
+                <p class="price-metric-title">{{ metricTitle(metric, card.kind) }}</p>
+                <div class="price-metric-body">
+                  <div class="price-line">
+                    <span>{{ t('modelPlaza.catalog.currentPrice') }}</span>
+                    <strong>{{ displayPrice(metric.current, card.kind) }}</strong>
+                  </div>
+                  <div v-if="metric.official != null" class="price-line official">
+                    <span>{{ t('modelPlaza.catalog.officialPrice') }}</span>
+                    <span>{{ displayPrice(metric.official, card.kind) }}</span>
+                  </div>
+                </div>
+                <div v-if="metric.saving != null" class="price-saving-row">
+                  <span>{{ t('modelPlaza.catalog.saving') }}</span>
+                  <strong>{{ savingLabel(metric.saving) }}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="platform-footer-row">
+              <span>{{ t('modelPlaza.catalog.effectiveMultiplier') }}</span>
+              <strong>{{ rateLabel(card.multiplier) }}</strong>
+            </div>
+
+            <div
+              v-if="card.hasLongContextPricing || card.hasTimePricing"
+              class="platform-note-list"
+            >
+              <span v-if="card.hasLongContextPricing" class="platform-note-chip">
+                {{ t('modelPlaza.catalog.longContextNote') }}
+              </span>
+              <span v-if="card.hasTimePricing" class="platform-note-chip">
+                {{ t('modelPlaza.catalog.timePricingNote') }}
+              </span>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 
 <style scoped>
-.model-plaza-content {
-  --plaza-surface: #ffffff;
-  --plaza-surface-muted: #f7f9fb;
-  --plaza-surface-soft: #f1f5f7;
-  --plaza-line: #dce4ea;
-  --plaza-line-soft: #e9eef2;
-  --plaza-line-strong: #cbd6de;
-  --plaza-text: #526171;
-  --plaza-text-strong: #172330;
-  --plaza-muted: #748191;
-  --plaza-muted-soft: #8793a1;
-  --plaza-accent: #0f766e;
-  --plaza-accent-soft: #ecfdf8;
-  --plaza-accent-ring: rgb(15 118 110 / 12%);
-  --plaza-active-mix: #0f172a;
-  --plaza-hover: #f8fbfa;
-  --plaza-reference: #8b98a7;
-  --plaza-reference-strike: #a6b0bb;
-  --plaza-price: #c2710c;
-  --plaza-success: #047857;
-  --plaza-success-bg: #dcfce7;
-  --plaza-subscription: #6d28d9;
-  --plaza-peak-border: #f5d99a;
-  --plaza-peak-bg: #fff9e9;
-  --plaza-peak-text: #9a5b0a;
+.model-catalog {
+  --catalog-surface: #ffffff;
+  --catalog-surface-muted: #f7f9fb;
+  --catalog-surface-soft: #eef3f5;
+  --catalog-line: #dfe6eb;
+  --catalog-line-strong: #cdd8df;
+  --catalog-text: #526171;
+  --catalog-text-strong: #172330;
+  --catalog-muted: #748191;
+  --catalog-accent: #0f766e;
+  --catalog-accent-strong: #0b625c;
+  --catalog-accent-soft: #eaf8f5;
+  --catalog-active-text: #ffffff;
+  --catalog-saving: #c25716;
+  --catalog-saving-bg: #fff4ea;
+  --catalog-saving-line: #f1c9aa;
+  --catalog-danger: #dc2626;
   width: 100%;
-  max-width: 1120px;
+  max-width: 1280px;
   margin-inline: auto;
-  color: var(--plaza-text);
+  color: var(--catalog-text);
 }
 
-.model-plaza-content.is-dark {
-  --plaza-surface: #0f1928;
-  --plaza-surface-muted: #111d2c;
-  --plaza-surface-soft: #162334;
-  --plaza-line: #29384a;
-  --plaza-line-soft: #223043;
-  --plaza-line-strong: #35465a;
-  --plaza-text: #c3cbd5;
-  --plaza-text-strong: #f1f5f9;
-  --plaza-muted: #95a2b3;
-  --plaza-muted-soft: #8290a2;
-  --plaza-accent: #4de2ce;
-  --plaza-accent-soft: rgb(45 212 191 / 10%);
-  --plaza-accent-ring: rgb(45 212 191 / 15%);
-  --plaza-active-mix: #07111f;
-  --plaza-hover: rgb(45 212 191 / 4%);
-  --plaza-reference: #8492a4;
-  --plaza-reference-strike: #64748b;
-  --plaza-price: #fbbf24;
-  --plaza-success: #5ee7ba;
-  --plaza-success-bg: rgb(16 185 129 / 14%);
-  --plaza-subscription: #c4b5fd;
-  --plaza-peak-border: rgb(180 83 9 / 45%);
-  --plaza-peak-bg: rgb(120 53 15 / 16%);
-  --plaza-peak-text: #fcd34d;
+.model-catalog.is-dark {
+  --catalog-surface: #111b29;
+  --catalog-surface-muted: #0d1724;
+  --catalog-surface-soft: #182636;
+  --catalog-line: #29394a;
+  --catalog-line-strong: #3a4b5e;
+  --catalog-text: #c6d0db;
+  --catalog-text-strong: #f5f7fa;
+  --catalog-muted: #96a3b3;
+  --catalog-accent: #4dd8c5;
+  --catalog-accent-strong: #61e7d4;
+  --catalog-accent-soft: rgb(45 212 191 / 11%);
+  --catalog-active-text: #071514;
+  --catalog-saving: #fdba74;
+  --catalog-saving-bg: rgb(194 65 12 / 16%);
+  --catalog-saving-line: rgb(251 146 60 / 28%);
+  --catalog-danger: #fca5a5;
 }
 
-.pricing-console {
-  overflow: hidden;
-  border-top: 1px solid var(--plaza-line);
-  border-bottom: 1px solid var(--plaza-line);
-  background: var(--plaza-surface);
+.pricing-group-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--catalog-surface);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
 }
 
-.pricing-intro {
-  padding: 20px 22px 16px;
-  border-bottom: 1px solid var(--plaza-line-soft);
-  background: var(--plaza-surface);
+.pricing-group-chip {
+  display: inline-flex;
+  height: 36px;
+  max-width: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--catalog-text);
+  background: var(--catalog-surface-muted);
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
 
-.pricing-intro h1 {
-  margin: 0;
-  color: var(--plaza-text-strong);
-  font-size: 18px;
-  font-weight: 700;
+.pricing-group-chip:hover {
+  border-color: color-mix(in srgb, var(--catalog-accent) 62%, var(--catalog-line));
+  color: var(--catalog-accent-strong);
+  background: var(--catalog-accent-soft);
 }
 
-.pricing-intro p {
-  max-width: 680px;
-  margin: 7px 0 0;
-  color: var(--plaza-muted);
-  font-size: 12px;
-  line-height: 1.6;
+.pricing-group-chip.active {
+  border-color: var(--catalog-accent);
+  color: var(--catalog-active-text);
+  background: var(--catalog-accent);
 }
 
-.plaza-description,
-.anonymous-hint {
-  padding: 11px 18px;
-  border-bottom: 1px solid var(--plaza-line-soft);
-  background: var(--plaza-surface-muted);
+.pricing-group-chip small {
+  flex: 0 0 auto;
+  color: inherit;
+  opacity: .8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
+}
+
+.pricing-group-name {
+  max-width: 176px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-notice,
+.catalog-hint {
+  margin: 12px 0 0;
+  border: 1px solid var(--catalog-line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--catalog-muted);
+  background: var(--catalog-surface-muted);
+  font-size: 12px;
   line-height: 1.65;
 }
 
-.anonymous-hint {
+.catalog-hint {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.catalog-notice :deep(p) {
   margin: 0;
-  color: var(--plaza-muted);
 }
 
-.plaza-description {
-  overflow-wrap: anywhere;
-}
-
-.plaza-description :deep(h1),
-.plaza-description :deep(h2),
-.plaza-description :deep(h3) {
-  margin: 10px 0 5px;
-  color: var(--plaza-text-strong);
-  font-weight: 700;
-}
-
-.plaza-description :deep(h1:first-child),
-.plaza-description :deep(h2:first-child),
-.plaza-description :deep(h3:first-child) {
-  margin-top: 0;
-}
-
-.plaza-description :deep(p) {
-  margin: 0 0 5px;
-}
-
-.plaza-description :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
-.plaza-description :deep(a) {
-  color: var(--plaza-accent);
+.catalog-notice :deep(a) {
+  color: var(--catalog-accent);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.plaza-description :deep(ul),
-.plaza-description :deep(ol) {
-  margin: 0 0 5px;
-  padding-left: 18px;
+.state-panel {
+  display: flex;
+  min-height: 288px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  border: 1px dashed var(--catalog-line-strong);
+  border-radius: 8px;
+  padding: 32px;
+  color: var(--catalog-muted);
+  background: var(--catalog-surface);
+  text-align: center;
+  font-size: 13px;
 }
 
-.plaza-description :deep(code) {
-  border-radius: 3px;
-  padding: 1px 4px;
-  background: var(--plaza-surface-soft);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+.state-panel p {
+  margin: 0;
 }
 
-.loading-state,
-.error-state,
-.empty-state {
-  display: grid;
-  min-height: 240px;
-  place-items: center;
-  padding: 30px;
-  color: var(--plaza-muted);
-  font-size: 12px;
+.state-panel.error {
+  color: var(--catalog-danger);
 }
 
-.loading-spinner {
-  width: 30px;
-  height: 30px;
-  animation: spin 750ms linear infinite;
-  border: 2px solid color-mix(in srgb, var(--plaza-accent) 22%, transparent);
-  border-top-color: var(--plaza-accent);
+.state-spinner {
+  width: 32px;
+  height: 32px;
+  animation: spin 1s linear infinite;
+  border: 3px solid color-mix(in srgb, var(--catalog-accent) 24%, transparent);
+  border-top-color: var(--catalog-accent);
   border-radius: 50%;
 }
 
-.error-state {
-  color: #dc2626;
-  background: rgb(239 68 68 / 6%);
+.retry-button,
+.copy-id-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 6px;
+  color: var(--catalog-text);
+  background: var(--catalog-surface);
+  font-weight: 600;
 }
 
-.group-price-enter-active,
-.group-price-leave-active {
-  transition: opacity 150ms ease, transform 150ms ease;
+.retry-button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
 }
 
-.group-price-enter-from,
-.group-price-leave-to {
-  opacity: 0;
-  transform: translateY(4px);
+.platform-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 18px;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.platform-model-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-@media (max-width: 640px) {
-  .pricing-intro {
-    padding: 18px 14px 14px;
+.platform-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.platform-section-header h2 {
+  margin: 0;
+  color: var(--catalog-text-strong);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.platform-section-header p {
+  margin: 3px 0 0;
+  color: var(--catalog-muted);
+  font-size: 12px;
+}
+
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.platform-card {
+  min-width: 0;
+  border: 1px solid var(--catalog-line);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--catalog-surface);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+}
+
+.platform-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.platform-title-group {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.platform-model-icon {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--catalog-line);
+  border-radius: 8px;
+  background: var(--catalog-surface);
+}
+
+.model-title-copy {
+  min-width: 0;
+}
+
+.platform-card h3 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--catalog-text-strong);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.platform-provider-pill,
+.platform-kind-pill,
+.best-group-pill,
+.platform-note-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.platform-provider-pill,
+.best-group-pill,
+.platform-note-chip {
+  color: var(--catalog-text);
+  background: var(--catalog-surface-soft);
+}
+
+.platform-kind-pill {
+  color: #0369a1;
+  background: #eff8ff;
+}
+
+.is-dark .platform-kind-pill {
+  color: #7dd3fc;
+  background: rgb(14 165 233 / 14%);
+}
+
+.platform-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.best-group-pill {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-id-button {
+  height: 32px;
+  padding: 0 9px;
+  color: var(--catalog-muted);
+  font-size: 12px;
+}
+
+.copy-id-button:hover,
+.retry-button:hover {
+  border-color: color-mix(in srgb, var(--catalog-accent) 62%, var(--catalog-line));
+  color: var(--catalog-accent-strong);
+  background: var(--catalog-accent-soft);
+}
+
+.platform-model-id-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--catalog-surface-muted);
+  font-size: 11px;
+}
+
+.platform-model-id-row span {
+  flex: 0 0 auto;
+  color: var(--catalog-muted);
+  font-weight: 600;
+}
+
+.platform-model-id-row code {
+  overflow: hidden;
+  color: var(--catalog-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-price-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--catalog-line);
+  border-radius: 6px;
+  background: var(--catalog-surface-muted);
+}
+
+.price-metric {
+  min-width: 0;
+  padding: 9px;
+  background: var(--catalog-surface-muted);
+}
+
+.price-metric + .price-metric {
+  border-top: 1px solid var(--catalog-line);
+}
+
+.price-metric-title {
+  margin: 0;
+  color: var(--catalog-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.price-metric-body {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.price-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.price-line > span:first-child {
+  color: var(--catalog-muted);
+  font-size: 10px;
+}
+
+.price-line strong {
+  color: var(--catalog-text-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.price-line.official > span:last-child {
+  color: var(--catalog-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.price-saving-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+  border: 1px solid var(--catalog-saving-line);
+  border-radius: 5px;
+  padding: 3px 6px;
+  color: var(--catalog-saving);
+  background: var(--catalog-saving-bg);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.platform-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  border-top: 1px solid var(--catalog-line);
+  padding-top: 10px;
+  color: var(--catalog-muted);
+  font-size: 12px;
+}
+
+.platform-footer-row strong {
+  color: var(--catalog-text-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+}
+
+.platform-note-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.platform-note-chip {
+  color: var(--catalog-muted);
+  font-size: 10px;
+}
+
+@media (min-width: 640px) {
+  .platform-price-grid.price-grid-2,
+  .platform-price-grid.price-grid-3,
+  .platform-price-grid.price-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .pricing-intro h1 {
-    font-size: 17px;
+  .price-metric + .price-metric {
+    border-top: 0;
+    border-left: 1px solid var(--catalog-line);
+  }
+
+  .price-grid-3 .price-metric:nth-child(3) {
+    border-top: 1px solid var(--catalog-line);
+    border-left: 0;
+  }
+
+  .price-grid-4 .price-metric:nth-child(3) {
+    border-top: 1px solid var(--catalog-line);
+    border-left: 0;
+  }
+
+  .price-grid-4 .price-metric:nth-child(4) {
+    border-top: 1px solid var(--catalog-line);
+  }
+}
+
+@media (min-width: 980px) {
+  .platform-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1440px) {
+  .platform-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .pricing-group-panel {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .platform-card-header {
+    display: block;
+  }
+
+  .platform-header-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+
+  .best-group-pill {
+    max-width: calc(100% - 92px);
+  }
+
+  .copy-id-button span {
+    display: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loading-spinner {
-    animation-duration: 1500ms;
+  .state-spinner {
+    animation-duration: 2s;
   }
 
-  .group-price-enter-active,
-  .group-price-leave-active {
+  .pricing-group-chip {
     transition: none;
   }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

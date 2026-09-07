@@ -646,6 +646,42 @@ export default {
     loadFailed: 'Failed to load model pricing',
     noSearchResult: 'No matching models',
     anonymousHint: 'Sign in to see your exclusive groups and personal rates',
+    catalog: {
+      groupSelector: 'Select a pricing group',
+      bestPrice: 'Best Price',
+      personalRate: 'Your personal rate',
+      sectionTitle: '{platform} {kind}',
+      modelCount: '{count} models',
+      kinds: {
+        token: 'Token Models',
+        image: 'Image Generation',
+        video: 'Video Generation',
+        per_request: 'Per Request'
+      },
+      units: {
+        image: 'image',
+        second: 'second',
+        request: 'request'
+      },
+      metrics: {
+        input: 'Input',
+        cache_write: 'Cache Write',
+        cache_read: 'Cache Read',
+        output: 'Output'
+      },
+      bestGroup: 'Best group: {group}',
+      currentGroup: 'Current group: {group}',
+      copyModelId: 'Copy model ID',
+      copyId: 'Copy ID',
+      copySuccess: 'Model ID copied',
+      modelId: 'Model ID',
+      currentPrice: 'Our price',
+      officialPrice: 'Official price',
+      saving: 'Save',
+      effectiveMultiplier: 'Effective multiplier',
+      longContextNote: 'Includes long-context tiers',
+      timePricingNote: 'Includes time-based pricing'
+    },
     platforms: {
       openai: 'Codex / OpenAI Models',
       anthropic: 'Claude Models',

@@ -1,17 +1,25 @@
 import { nextTick, shallowRef } from 'vue'
-import { mount, shallowMount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
+import type { ModelPlazaGroup, ModelPlazaResponse, PlazaModel } from '@/api/modelPlaza'
 import ModelPlazaContent from '../ModelPlazaContent.vue'
-import PlazaFilterBar from '../PlazaFilterBar.vue'
-import PlazaGroupSection from '../PlazaGroupSection.vue'
+
+const { copyToClipboard } = vi.hoisted(() => ({
+  copyToClipboard: vi.fn().mockResolvedValue(true)
+}))
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
-  return { ...actual, useI18n: () => ({ t: (key: string) => key }) }
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string, params?: Record<string, unknown>) => (
+        params?.group ? `${key}:${params.group}` : key
+      )
+    })
+  }
 })
-
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ isAuthenticated: true })
 }))
@@ -20,19 +28,43 @@ vi.mock('@/composables/useDocumentDarkMode', () => ({
   useDocumentDarkMode: () => ({ isDarkMode: shallowRef(false) })
 }))
 
-function group(
-  id: number,
-  platform: string,
-  name: string,
-  rateMultiplier: number
-): ModelPlazaGroup {
+vi.mock('@/composables/useClipboard', () => ({
+  useClipboard: () => ({ copyToClipboard })
+}))
+
+function tokenModel(name: string): PlazaModel {
+  return {
+    name,
+    platform: 'openai',
+    pricing: {
+      billing_mode: 'token',
+      input_price: 1e-6,
+      output_price: 2e-6,
+      cache_write_price: null,
+      cache_write_1h_price: null,
+      cache_read_price: 2e-7,
+      image_input_price: null,
+      image_output_price: null,
+      per_request_price: null,
+      intervals: []
+    },
+    official_pricing: {
+      input_price: 1e-6,
+      output_price: 2e-6,
+      cache_write_price: null,
+      cache_read_price: 2e-7
+    }
+  }
+}
+
+function group(id: number, name: string, rate: number, models: PlazaModel[]): ModelPlazaGroup {
   return {
     id,
     name,
     description: '',
-    platform,
+    platform: 'openai',
     subscription_type: 'standard',
-    rate_multiplier: rateMultiplier,
+    rate_multiplier: rate,
     image_rate_independent: false,
     image_rate_multiplier: 1,
     video_rate_independent: false,
@@ -42,100 +74,89 @@ function group(
     peak_end: '',
     peak_rate_multiplier: 1,
     is_exclusive: false,
-    models: []
+    long_context_pricing_enabled: true,
+    models
   }
 }
 
 function mountContent(response: ModelPlazaResponse) {
-  return shallowMount(ModelPlazaContent, {
-    props: {
-      response,
-      loading: false
-    },
+  return mount(ModelPlazaContent, {
+    props: { response, loading: false },
     global: {
       stubs: {
-        Transition: { template: '<div><slot /></div>' }
+        Icon: true,
+        ModelIcon: true,
+        PlatformIcon: true
       }
     }
   })
 }
 
-describe('ModelPlazaContent single-group navigation', () => {
-  it('selects the first platform and renders only its first group', () => {
+describe('ModelPlazaContent model catalog', () => {
+  beforeEach(() => copyToClipboard.mockClear())
+
+  it('starts in best-price mode and renders one card for a shared model', () => {
     const wrapper = mountContent({
       description: '',
       groups: [
-        group(11, 'openai', 'OpenAI Plus', 0.8),
-        group(12, 'openai', 'OpenAI Max', 1),
-        group(21, 'anthropic', 'Claude Plus', 0.7)
+        group(1, 'Stable', 0.8, [tokenModel('gpt-5.6-sol')]),
+        group(2, 'Value', 0.2, [tokenModel('gpt-5.6-sol')])
       ]
     })
 
-    const filter = wrapper.getComponent(PlazaFilterBar)
-    const renderedGroups = wrapper.findAllComponents(PlazaGroupSection)
-
-    expect(filter.props('platform')).toBe('openai')
-    expect(filter.props('groupId')).toBe(11)
-    expect(filter.props('groups')).toHaveLength(2)
-    expect(renderedGroups).toHaveLength(1)
-    expect(renderedGroups[0].props('group').id).toBe(11)
+    expect(wrapper.get('.pricing-group-chip').classes()).toContain('active')
+    expect(wrapper.findAll('.platform-card')).toHaveLength(1)
+    expect(wrapper.get('.best-group-pill').text()).toContain('Value')
+    expect(wrapper.text()).toContain('$0.20')
+    expect(wrapper.text()).toContain('-80%')
   })
 
-  it('switches to the first group of a newly selected platform', async () => {
+  it('switches to a concrete group and only displays that group models', async () => {
     const wrapper = mountContent({
       description: '',
       groups: [
-        group(11, 'openai', 'OpenAI Plus', 0.8),
-        group(21, 'anthropic', 'Claude Plus', 0.7),
-        group(22, 'anthropic', 'Claude Max', 1)
+        group(1, 'Stable', 0.8, [tokenModel('gpt-stable')]),
+        group(2, 'Value', 0.2, [tokenModel('gpt-value')])
       ]
     })
 
-    wrapper.getComponent(PlazaFilterBar).vm.$emit('update:platform', 'anthropic')
+    await wrapper.findAll('.pricing-group-chip')[1].trigger('click')
     await nextTick()
 
-    const filter = wrapper.getComponent(PlazaFilterBar)
-    const section = wrapper.getComponent(PlazaGroupSection)
-    expect(filter.props('platform')).toBe('anthropic')
-    expect(filter.props('groupId')).toBe(21)
-    expect(filter.props('groups')).toHaveLength(2)
-    expect(section.props('group').id).toBe(21)
+    expect(wrapper.text()).toContain('gpt-stable')
+    expect(wrapper.text()).not.toContain('gpt-value')
+    expect(wrapper.get('.best-group-pill').text()).toContain('Stable')
   })
 
-  it('has no all-groups selection mode', () => {
-    const wrapper = mountContent({
-      description: '',
-      groups: [
-        group(11, 'openai', 'OpenAI Plus', 0.8),
-        group(21, 'anthropic', 'Claude Plus', 0.7)
-      ]
-    })
+  it('shows a personal multiplier on the group chip', () => {
+    const personalized = group(1, 'Personal', 0.8, [tokenModel('gpt-5.6')])
+    personalized.user_rate_multiplier = 0.13
+    const wrapper = mountContent({ description: '', groups: [personalized] })
 
-    expect(wrapper.getComponent(PlazaFilterBar).props('groupId')).toEqual(expect.any(Number))
-    expect(wrapper.findAllComponents(PlazaGroupSection)).toHaveLength(1)
+    expect(wrapper.findAll('.pricing-group-chip')[1].get('small').text()).toBe('×0.13')
+    expect(wrapper.findAll('.pricing-group-chip')[1].get('small').attributes('title'))
+      .toBe('modelPlaza.catalog.personalRate')
   })
 
-  it('marks a user override as personal instead of presenting it as the group default', () => {
-    const personalizedGroup = group(11, 'openai', 'OpenAI Plus', 0.13)
-    personalizedGroup.user_rate_multiplier = 0.01
-    const wrapper = mountContent({ description: '', groups: [personalizedGroup] })
-    const groups = wrapper.getComponent(PlazaFilterBar).props('groups')
+  it('copies the normalized model ID', async () => {
+    const model = tokenModel('publishers/openai/models/gpt-5.6-sol')
+    const wrapper = mountContent({ description: '', groups: [group(1, 'Stable', 0.8, [model])] })
 
-    expect(groups).toEqual([expect.objectContaining({
-      id: 11,
-      rate: 0.01,
-      usesPersonalRate: true
-    })])
+    await wrapper.get('.copy-id-button').trigger('click')
 
-    const filter = mount(PlazaFilterBar, {
-      props: {
-        platforms: ['openai'],
-        groups,
-        platform: 'openai',
-        groupId: 11,
-        search: ''
-      }
+    expect(copyToClipboard).toHaveBeenCalledWith(
+      'gpt-5.6-sol',
+      'modelPlaza.catalog.copySuccess'
+    )
+  })
+
+  it('emits retry from the error state', async () => {
+    const wrapper = mount(ModelPlazaContent, {
+      props: { response: null, loading: false, error: true },
+      global: { stubs: { Icon: true } }
     })
-    expect(filter.get('.group-tabs small').text()).toBe('modelPlaza.filters.personalRate')
+
+    await wrapper.get('.retry-button').trigger('click')
+    expect(wrapper.emitted('retry')).toHaveLength(1)
   })
 })

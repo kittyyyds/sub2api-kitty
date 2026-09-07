@@ -651,6 +651,42 @@ export default {
     loadFailed: '加载模型价格失败',
     noSearchResult: '没有匹配的模型',
     anonymousHint: '登录后可查看你的专属分组与专属倍率',
+    catalog: {
+      groupSelector: '选择价格分组',
+      bestPrice: '最优价格',
+      personalRate: '当前账号专属倍率',
+      sectionTitle: '{platform} {kind}',
+      modelCount: '共 {count} 个模型',
+      kinds: {
+        token: 'Token 模型',
+        image: '图片生成',
+        video: '视频生成',
+        per_request: '按次计费'
+      },
+      units: {
+        image: '张',
+        second: '秒',
+        request: '次'
+      },
+      metrics: {
+        input: '输入',
+        cache_write: 'Cache Write',
+        cache_read: 'Cache Read',
+        output: '输出'
+      },
+      bestGroup: '最优分组：{group}',
+      currentGroup: '当前分组：{group}',
+      copyModelId: '复制模型 ID',
+      copyId: '复制 ID',
+      copySuccess: '模型 ID 已复制',
+      modelId: '模型 ID',
+      currentPrice: '本站价格',
+      officialPrice: '官方价格',
+      saving: '节省',
+      effectiveMultiplier: '有效倍率',
+      longContextNote: '包含长上下文阶梯价',
+      timePricingNote: '包含分时价格'
+    },
     platforms: {
       openai: 'Codex / OpenAI 模型',
       anthropic: 'Claude 模型',
