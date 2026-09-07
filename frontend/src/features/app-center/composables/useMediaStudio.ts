@@ -34,8 +34,8 @@ export type ImageStudioMode = 'text' | 'image' | 'text-video' | 'image-video'
 export interface MediaModelOption<TModel extends string = KittyImageModel> {
   value: TModel
   model: TModel
-  labelKey: string
-  descriptionKey: string
+  labelSuffix: string
+  descriptionSuffix: string
 }
 
 export interface ImageRatioOption {
@@ -159,22 +159,22 @@ export const VIDEO_DURATION_OPTIONS = [5, 8, 10, 12, 15] as const
 const GPT_IMAGE_OPTIONS: readonly MediaModelOption[] = [{
   value: KITTY_IMAGE_MODEL,
   model: KITTY_IMAGE_MODEL,
-  labelKey: 'gptImage2',
-  descriptionKey: 'gptImage2',
+  labelSuffix: 'gptImage2',
+  descriptionSuffix: 'gptImage2',
 }]
 
 const GROK_IMAGE_OPTIONS: readonly MediaModelOption[] = [
   {
     value: GROK_IMAGE_QUALITY_MODEL,
     model: GROK_IMAGE_QUALITY_MODEL,
-    labelKey: 'grokQuality',
-    descriptionKey: 'grokQuality',
+    labelSuffix: 'grokQuality',
+    descriptionSuffix: 'grokQuality',
   },
   {
     value: GROK_IMAGE_MODEL,
     model: GROK_IMAGE_MODEL,
-    labelKey: 'grokStandard',
-    descriptionKey: 'grokStandard',
+    labelSuffix: 'grokStandard',
+    descriptionSuffix: 'grokStandard',
   },
 ]
 
@@ -182,14 +182,14 @@ const GROK_VIDEO_OPTIONS: readonly MediaModelOption<GrokVideoModel>[] = [
   {
     value: GROK_VIDEO_MODEL,
     model: GROK_VIDEO_MODEL,
-    labelKey: 'grokVideo',
-    descriptionKey: 'grokVideo',
+    labelSuffix: 'grokVideo',
+    descriptionSuffix: 'grokVideo',
   },
   {
     value: GROK_VIDEO_15_MODEL,
     model: GROK_VIDEO_15_MODEL,
-    labelKey: 'grokVideo15',
-    descriptionKey: 'grokVideo15',
+    labelSuffix: 'grokVideo15',
+    descriptionSuffix: 'grokVideo15',
   },
 ]
 

@@ -13,6 +13,7 @@ import {
   type BillingMode,
 } from '@/constants/channel'
 import { platformAccentColor, platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
+import { resolveIntervalPrices } from '@/utils/pricing'
 
 import PlazaPricePair from './PlazaPricePair.vue'
 
@@ -152,11 +153,17 @@ function sortByContext(intervals: UserPricingInterval[]): UserPricingInterval[] 
 }
 
 function tokenIntervals(model: PlazaModel): UserPricingInterval[] {
-  return sortByContext(model.pricing?.intervals ?? [])
+  if (!model.pricing) return []
+  return sortByContext(model.pricing.intervals ?? []).map((interval) =>
+    resolveIntervalPrices(interval, model.pricing!)
+  )
 }
 
 function officialIntervals(model: PlazaModel): UserPricingInterval[] {
-  return sortByContext(model.official_pricing?.intervals ?? [])
+  if (!model.official_pricing) return []
+  return sortByContext(model.official_pricing.intervals ?? []).map((interval) =>
+    resolveIntervalPrices(interval, model.official_pricing!)
+  )
 }
 
 function requestIntervals(model: PlazaModel): UserPricingInterval[] {

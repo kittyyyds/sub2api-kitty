@@ -255,7 +255,7 @@ function appendPrompt(fragment: string): void {
             <span class="section-index">01</span>
             <h2 id="composer-title">{{ t('native.studio.composer') }}</h2>
           </div>
-          <span class="model-readout">{{ modelLabel(selectedModel.labelKey) }}</span>
+          <span class="model-readout">{{ modelLabel(selectedModel.labelSuffix) }}</span>
         </div>
 
         <fieldset class="composer-fields" :disabled="isGenerating">
@@ -347,7 +347,7 @@ function appendPrompt(fragment: string): void {
         <div class="parameter-band">
           <div class="parameter-intro">
             <span>{{ t('native.studio.outputSettings') }}</span>
-            <p>{{ modelDescription(selectedModel.descriptionKey) }}</p>
+            <p>{{ modelDescription(selectedModel.descriptionSuffix) }}</p>
           </div>
           <div class="parameter-grid">
             <label class="control-field control-field-wide">
@@ -380,12 +380,12 @@ function appendPrompt(fragment: string): void {
               <span>{{ t('native.studio.model') }}</span>
               <select v-if="isVideoMode" v-model="form.videoModel" :aria-label="t('native.studio.model')">
                 <option v-for="model in availableVideoModels" :key="model.value" :value="model.value">
-                  {{ modelLabel(model.labelKey) }} · {{ model.model }}
+                  {{ modelLabel(model.labelSuffix) }} · {{ model.model }}
                 </option>
               </select>
               <select v-else v-model="form.imageModel" :aria-label="t('native.studio.model')">
                 <option v-for="model in availableImageModels" :key="model.value" :value="model.value">
-                  {{ modelLabel(model.labelKey) }} · {{ model.model }}
+                  {{ modelLabel(model.labelSuffix) }} · {{ model.model }}
                 </option>
               </select>
             </label>

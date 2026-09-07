@@ -55,6 +55,7 @@ func TestGrokMediaGenerationEligibility(t *testing.T) {
 		{name: "x premium plus is explicit paid evidence", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"subscription_tier": "x_premium_plus"}}, want: true, wantReason: "paid_subscription_tier"},
 		{name: "JWT paid tier wins over stale free credential and billing", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJ0aWVyIjoxfQ.", "subscription_tier": "free"}, Extra: map[string]any{"grok_billing_snapshot": forbiddenBilling}}, want: true, wantReason: "paid_subscription_tier"},
 		{name: "JWT free tier wins over stale paid credential", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Credentials: map[string]any{"access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJ0aWVyIjowfQ.", "subscription_tier": "SuperGrok"}}, want: false, wantReason: "billing_free_tier"},
+		{name: "inconclusive successful billing remains eligible", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: map[string]any{grokBillingExtraKey: &xai.BillingSummary{StatusCode: http.StatusOK, Partial: true}}}, want: true, wantReason: "billing_inconclusive"},
 		{name: "weekly paid usage is eligible without inferring from period type", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: map[string]any{grokBillingExtraKey: weeklyAllowance}}, want: true, wantReason: "eligible"},
 		{name: "billing forbidden is rejected", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: map[string]any{grokBillingExtraKey: forbiddenBilling}}, want: false, wantReason: "billing_forbidden"},
 		{name: "weekly billing forbidden is rejected after partial success", account: &Account{Platform: PlatformGrok, Type: AccountTypeOAuth, Extra: map[string]any{grokBillingExtraKey: weeklyForbidden}}, want: false, wantReason: "billing_forbidden"},
@@ -113,7 +114,7 @@ func TestGrokPaidSubscriptionTierEvidenceFallsBackForUnknownJWT(t *testing.T) {
 	require.Equal(t, "paid_subscription_tier", reason)
 }
 
-func TestGrokMediaCapabilityKeepsOnlyUnobservedOAuthAsProbeCandidate(t *testing.T) {
+func TestGrokMediaCapabilityKeepsUnobservedAndInconclusiveOAuthAsCandidates(t *testing.T) {
 	unobserved := &Account{Platform: PlatformGrok, Type: AccountTypeOAuth}
 	eligible, reason := unobserved.GrokMediaGenerationEligibility()
 	require.False(t, eligible)
@@ -128,7 +129,10 @@ func TestGrokMediaCapabilityKeepsOnlyUnobservedOAuthAsProbeCandidate(t *testing.
 			Partial:    true,
 		}},
 	}
-	require.False(t, inconclusive.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityGrokMediaGeneration))
+	eligible, reason = inconclusive.GrokMediaGenerationEligibility()
+	require.True(t, eligible)
+	require.Equal(t, "billing_inconclusive", reason)
+	require.True(t, inconclusive.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityGrokMediaGeneration))
 }
 
 func TestGrokMediaCapabilityFiltersOnlyGeneration(t *testing.T) {

@@ -130,7 +130,7 @@ func TestBillingPreviewFallsBackToGroupModelsListWithoutChannels(t *testing.T) {
 	group := billingPreviewGroup()
 	group.Platform = PlatformComposite
 	group.ModelPricing = nil
-	group.ModelsListConfig = GroupModelsListConfig{
+	group.ModelAllowlist = GroupModelAllowlist{
 		Enabled: true,
 		Models:  []string{"claude-sonnet-4", " claude-sonnet-4 ", "gpt-5.4"},
 	}

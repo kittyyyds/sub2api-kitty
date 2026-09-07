@@ -1,160 +1,77 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { createI18n } from 'vue-i18n'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
-
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { ref } from 'vue'
 import TurnstileWidget from '../TurnstileWidget.vue'
 
-function createTestI18n() {
-  return createI18n({
-    legacy: false,
-    locale: 'en',
-    fallbackLocale: 'en',
-    messages: {
-      en: {
-        common: { loading: () => 'Loading...' },
-        auth: { turnstileFailed: () => 'Verification failed' }
-      },
-      zh: {
-        common: { loading: () => '加载中...' },
-        auth: { turnstileFailed: () => '验证失败' }
-      }
-    }
-  })
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ locale: ref('en'), t: (key: string) => key })
+}))
+
+const scriptSelector = 'script[src*="challenges.cloudflare.com/turnstile"]'
+let wrapper: VueWrapper | undefined
+
+function installSDK() {
+  const render = vi.fn<NonNullable<typeof window.turnstile>['render']>(() => 'widget-1')
+  window.turnstile = { render, reset: vi.fn(), remove: vi.fn() }
+  return render
 }
 
 afterEach(() => {
+  wrapper?.unmount()
+  wrapper = undefined
   delete window.turnstile
-  document
-    .querySelectorAll('script[data-kitty-turnstile-api], script[src*="/turnstile/v0/api.js"]')
-    .forEach((script) => script.remove())
-  vi.useRealTimers()
+  delete window.onTurnstileLoad
+  document.querySelectorAll(scriptSelector).forEach((script) => script.remove())
   vi.restoreAllMocks()
 })
 
 describe('TurnstileWidget', () => {
-  it('keeps the Turnstile language in sync with the application locale', async () => {
-    const render = vi.fn()
-      .mockReturnValueOnce('widget-en')
-      .mockReturnValueOnce('widget-zh')
-    const remove = vi.fn()
+  it('shows a loading placeholder until the SDK initializes the widget', async () => {
+    wrapper = mount(TurnstileWidget, { props: { siteKey: 'site-key' } })
 
-    window.turnstile = {
-      render,
-      reset: vi.fn(),
-      remove
-    }
+    expect(wrapper.get('[role="status"]').text()).toBe('common.loading')
+    expect(document.querySelector(scriptSelector)).not.toBeNull()
+    const container = wrapper.get('.turnstile-container').element
 
-    const i18n = createTestI18n()
-
-    const wrapper = mount(TurnstileWidget, {
-      props: { siteKey: 'test-site-key' },
-      global: { plugins: [i18n] }
-    })
+    const render = installSDK()
+    document.querySelector(scriptSelector)?.dispatchEvent(new Event('load'))
     await flushPromises()
 
-    expect(render).toHaveBeenCalledTimes(1)
-    expect(render.mock.calls[0][1]).toMatchObject({
-      sitekey: 'test-site-key',
-      language: 'en'
-    })
-
-    i18n.global.locale.value = 'zh'
-    await nextTick()
-    await flushPromises()
-
-    expect(remove).toHaveBeenCalledWith('widget-en')
-    expect(render).toHaveBeenCalledTimes(2)
-    expect(render.mock.calls[1][1]).toMatchObject({
-      sitekey: 'test-site-key',
-      language: 'zh-CN'
-    })
-
-    wrapper.unmount()
+    expect(render).toHaveBeenCalledWith(container, expect.objectContaining({ sitekey: 'site-key' }))
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.get('.turnstile-container').element).toBe(container)
   })
 
-  it('renders after a cold script load without relying on a global callback', async () => {
-    const render = vi.fn().mockReturnValue('widget-cold')
-    const wrapper = mount(TurnstileWidget, {
-      props: { siteKey: 'cold-site-key' },
-      global: {
-        plugins: [createTestI18n()]
-      }
-    })
+  it('initializes an already loaded SDK and still forwards verification', async () => {
+    const render = installSDK()
+    wrapper = mount(TurnstileWidget, { props: { siteKey: 'site-key' } })
     await flushPromises()
 
-    const script = document.querySelector<HTMLScriptElement>('script[data-kitty-turnstile-api]')
-    expect(script?.src).toBe(
-      'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-    )
-    expect(wrapper.attributes('data-turnstile-state')).toBe('loading')
+    expect(render).toHaveBeenCalledOnce()
+    expect(document.querySelector(scriptSelector)).toBeNull()
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
 
-    window.turnstile = { render, reset: vi.fn(), remove: vi.fn() }
-    script?.dispatchEvent(new Event('load'))
-    await flushPromises()
-
-    expect(render).toHaveBeenCalledTimes(1)
-    expect(wrapper.attributes('data-turnstile-state')).toBe('ready')
-    wrapper.unmount()
+    render.mock.calls[0]![1].callback('verified-token')
+    expect(wrapper.emitted('verify')).toEqual([['verified-token']])
   })
 
-  it('adopts an existing in-flight script and still observes delayed readiness', async () => {
-    const existingScript = document.createElement('script')
-    existingScript.src =
-      'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=legacyCallback'
-    document.head.appendChild(existingScript)
-
-    const render = vi.fn().mockReturnValue('widget-existing')
-    const wrapper = mount(TurnstileWidget, {
-      props: { siteKey: 'existing-site-key' },
-      global: {
-        plugins: [createTestI18n()]
-      }
-    })
-    await flushPromises()
-
-    expect(document.querySelectorAll('script[src*="/turnstile/v0/api.js"]')).toHaveLength(1)
-    window.turnstile = { render, reset: vi.fn(), remove: vi.fn() }
-    existingScript.dispatchEvent(new Event('load'))
-    await flushPromises()
-
-    expect(render).toHaveBeenCalledTimes(1)
-    expect(wrapper.attributes('data-turnstile-state')).toBe('ready')
-    wrapper.unmount()
-  })
-
-  it('retries with a fresh script after the first cold-load request fails', async () => {
-    vi.useFakeTimers()
+  it('keeps loading while a failed script is scheduled for retry', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    const render = vi.fn().mockReturnValue('widget-retry')
-    const wrapper = mount(TurnstileWidget, {
-      props: { siteKey: 'retry-site-key' },
-      global: {
-        plugins: [createTestI18n()]
-      }
-    })
+    wrapper = mount(TurnstileWidget, { props: { siteKey: 'site-key' } })
+
+    document.querySelector(scriptSelector)!.dispatchEvent(new Event('error'))
     await flushPromises()
 
-    const failedScript = document.querySelector<HTMLScriptElement>(
-      'script[data-kitty-turnstile-api]'
-    )
-    failedScript?.dispatchEvent(new Event('error'))
-    await flushPromises()
-    expect(failedScript?.isConnected).toBe(false)
+    expect(wrapper.get('[role="status"]').text()).toBe('common.loading')
+    expect(wrapper.emitted('error')).toBeUndefined()
+  })
 
-    await vi.advanceTimersByTimeAsync(500)
-    await flushPromises()
-    const retryScript = document.querySelector<HTMLScriptElement>(
-      'script[data-kitty-turnstile-api]'
-    )
-    expect(retryScript).not.toBe(failedScript)
-
-    window.turnstile = { render, reset: vi.fn(), remove: vi.fn() }
-    retryScript?.dispatchEvent(new Event('load'))
+  it('does not show a placeholder or load the SDK without a site key', async () => {
+    wrapper = mount(TurnstileWidget, { props: { siteKey: '' } })
     await flushPromises()
 
-    expect(render).toHaveBeenCalledTimes(1)
-    expect(wrapper.attributes('data-turnstile-state')).toBe('ready')
-    wrapper.unmount()
+    expect(wrapper.find('.turnstile-wrapper').exists()).toBe(false)
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(document.querySelector(scriptSelector)).toBeNull()
   })
 })

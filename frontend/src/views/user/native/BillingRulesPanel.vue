@@ -5,10 +5,9 @@ import { getModelPlaza } from '@/api/modelPlaza'
 import BillingEstimator from '@/components/customer-console/billing/BillingEstimator.vue'
 import CustomerFeatureHeader from '@/components/customer-console/CustomerFeatureHeader.vue'
 import Icon from '@/components/icons/Icon.vue'
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const formulaOpen = ref(true), trapsOpen = ref(true), competitorMultiplier = ref(3)
 const tokenInput = ref(1_000_000), tokenOutput = ref(1_000_000), tokenMultiplier = ref(0.8), cacheEnabled = ref(true)
-const isZh = computed(() => locale.value === 'zh')
 const inputPrice = ref(5)
 const outputPrice = ref(15)
 const cacheWritePrice = ref(1)
@@ -20,7 +19,62 @@ const tokenDots = Array.from({ length: 12 }, (_, index) => ({
   delay: `${-(index * 0.72).toFixed(2)}s`,
   duration: `${5.8 + (index % 5) * 0.7}s`,
 }))
-const copy = computed(() => isZh.value ? { eyebrow:'透明计费 / 实时规则', heroTitle:'每一枚 Token，都有迹可循', heroBody:'从官方单价到客户分组倍率，完整展示实际扣费路径。所有估算与正式计费共用同一套后台规则。', viewCalc:'打开实时计算器', formula:'计费公式', formulaBody:'先按模型官方单价计算标准成本，再叠加缓存、长上下文和客户有效倍率。', input:'输入 Token', output:'输出 Token', cache:'缓存 Token', multiplier:'有效倍率', result:'实际扣费', basis:'标准成本 × 有效倍率', compare:'倍率对比', compareBody:'拖动倍率，立即查看同一批 Token 在不同渠道的价格变化。', yours:'本站倍率', official:'官方参考', save:'预计节省', tokenLab:'Token 可视化', tokenBody:'输入与输出占比会直接影响账单，拖动滑块观察构成。', advanced:'高级规则与计费陷阱', traps:['长上下文可能触发阶梯单价','缓存写入与读取采用不同费率','工具调用会把返回结果带回下一轮输入','高峰时段可能叠加峰值倍率'], promise:'规则可核对，账单可追溯', promiseBody:'调用完成后可按模型、Token 分类、倍率和 API Key 对账。', cta:'去查看用量明细', yourCost:'本站估算', competitorCost:'参考渠道', cacheHint:'已计入缓存读取优惠' } : { eyebrow:'Transparent billing / Live rules', heroTitle:'Every token has a traceable cost', heroBody:'See the complete path from provider price to your group multiplier. Estimates and production billing share the same rules.', viewCalc:'Open live calculator', formula:'Billing formula', formulaBody:'Start with provider prices, add cache and long-context rules, then apply your effective multiplier.', input:'Input tokens', output:'Output tokens', cache:'Cached tokens', multiplier:'Effective rate', result:'Actual charge', basis:'Standard cost × effective rate', compare:'Rate comparison', compareBody:'Drag the rate to compare the same workload across channels.', yours:'Your rate', official:'Reference', save:'Estimated saving', tokenLab:'Token visualizer', tokenBody:'Input and output mix directly changes cost. Drag the sliders to explore.', advanced:'Advanced rules and billing traps', traps:['Long context may trigger tiered prices','Cache writes and reads use different rates','Tool results become input in the next turn','Peak hours may add a peak multiplier'], promise:'Auditable rules, traceable charges', promiseBody:'Reconcile by model, token class, multiplier and API key after each call.', cta:'Open usage details', yourCost:'Your estimate', competitorCost:'Reference channel', cacheHint:'Cache read discount included' })
+const copy = computed(() => ({
+  eyebrow: t('native.billing.showcase.eyebrow'),
+  heroTitle: t('native.billing.showcase.heroTitle'),
+  heroBody: t('native.billing.showcase.heroBody'),
+  viewCalc: t('native.billing.showcase.viewCalculator'),
+  formula: t('native.billing.showcase.formula'),
+  formulaBody: t('native.billing.showcase.formulaBody'),
+  input: t('native.billing.showcase.input'),
+  output: t('native.billing.showcase.output'),
+  cache: t('native.billing.showcase.cache'),
+  multiplier: t('native.billing.showcase.multiplier'),
+  result: t('native.billing.showcase.result'),
+  basis: t('native.billing.showcase.basis'),
+  insights: [
+    { title: t('native.billing.showcase.insights.priceTitle'), body: t('native.billing.showcase.insights.priceBody') },
+    { title: t('native.billing.showcase.insights.rateTitle'), body: t('native.billing.showcase.insights.rateBody') },
+    { title: t('native.billing.showcase.insights.traceTitle'), body: t('native.billing.showcase.insights.traceBody') },
+  ],
+  transparencyTitle: t('native.billing.showcase.transparencyTitle'),
+  transparencyBody: t('native.billing.showcase.transparencyBody'),
+  riskLabels: ['high', 'misleading', 'hidden', 'trap'].map((key) => t(`native.billing.showcase.riskLabels.${key}`)),
+  traps: ['longContext', 'cacheRates', 'toolResults', 'peakRate'].map((key) => t(`native.billing.showcase.traps.${key}`)),
+  trapCardBody: t('native.billing.showcase.trapCardBody'),
+  compare: t('native.billing.showcase.compare'),
+  compareBody: t('native.billing.showcase.compareBody'),
+  competitorMultiplier: t('native.billing.showcase.competitorMultiplier'),
+  yourCost: t('native.billing.showcase.yourCost'),
+  competitorCost: t('native.billing.showcase.competitorCost'),
+  save: t('native.billing.showcase.saving'),
+  tokenLab: t('native.billing.showcase.tokenTitle'),
+  tokenBody: t('native.billing.showcase.tokenBody'),
+  cacheExample: t('native.billing.showcase.cacheExample'),
+  cacheHint: t('native.billing.showcase.cacheHint'),
+  advanced: t('native.billing.showcase.advanced.title'),
+  advancedSummary: t('native.billing.showcase.advanced.summary'),
+  advancedCards: [
+    {
+      title: t('native.billing.showcase.advanced.cacheTitle'),
+      body: t('native.billing.showcase.advanced.cacheBody'),
+      items: [t('native.billing.showcase.advanced.cacheItem1'), t('native.billing.showcase.advanced.cacheItem2')],
+    },
+    {
+      title: t('native.billing.showcase.advanced.requestTitle'),
+      body: t('native.billing.showcase.advanced.requestBody'),
+      items: [t('native.billing.showcase.advanced.requestItem1'), t('native.billing.showcase.advanced.requestItem2')],
+    },
+    {
+      title: t('native.billing.showcase.advanced.contextTitle'),
+      body: t('native.billing.showcase.advanced.contextBody'),
+      items: [t('native.billing.showcase.advanced.contextItem1'), t('native.billing.showcase.advanced.contextItem2')],
+    },
+  ],
+  promise: t('native.billing.showcase.promise'),
+  promiseBody: t('native.billing.showcase.promiseBody'),
+  cta: t('native.billing.showcase.usageDetails'),
+}))
 function scrollToCalculator(){ document.getElementById('billing-calculator')?.scrollIntoView({behavior:'smooth',block:'start'}) }
 const tokenTotal = computed(() => tokenInput.value + tokenOutput.value)
 const inputShare = computed(() => tokenTotal.value ? Math.round(tokenInput.value / tokenTotal.value * 100) : 0)
@@ -51,12 +105,12 @@ onMounted(async () => {
     <CustomerFeatureHeader eyebrow="Cost telemetry / Billing" :title="t('native.billing.title')" :description="t('native.billing.description')" icon="calculator" :metrics="[{ value: t('native.billing.metrics.unitValue'), label: t('native.billing.metrics.unitLabel') }, { value: t('native.billing.metrics.partsValue'), label: t('native.billing.metrics.partsLabel') }, { value: t('native.billing.metrics.recordValue'), label: t('native.billing.metrics.recordLabel') }]" />
     <section class="billing-hero"><div class="billing-hero__copy"><span class="billing-kicker">{{ copy.eyebrow }}</span><h1>{{ copy.heroTitle }}</h1><p>{{ copy.heroBody }}</p><button class="billing-hero__cta" type="button" @click="scrollToCalculator"><Icon name="calculator" size="sm" /> {{ copy.viewCalc }}</button></div><div class="billing-hero__signal" aria-hidden="true"><span>INPUT</span><b>+</b><span>OUTPUT</span><b>×</b><strong>RATE</strong></div></section>
     <section class="billing-section billing-formula" aria-labelledby="billing-formula-title"><button class="section-toggle" type="button" :aria-expanded="formulaOpen" @click="formulaOpen = !formulaOpen"><span class="section-number">01</span><span><strong id="billing-formula-title">{{ copy.formula }}</strong><small>{{ copy.formulaBody }}</small></span><Icon name="chevronDown" size="sm" :class="formulaOpen && 'is-open'" /></button><Transition name="collapse"><div v-if="formulaOpen" class="formula-grid"><div><span>{{ copy.input }}</span><strong>Token × input price</strong></div><i>+</i><div><span>{{ copy.output }}</span><strong>Token × output price</strong></div><i>+</i><div><span>{{ copy.cache }}</span><strong>Read / write rules</strong></div><i>×</i><div class="formula-grid__accent"><span>{{ copy.multiplier }}</span><strong>{{ tokenMultiplier.toFixed(2) }}x</strong></div><i>=</i><div class="formula-grid__total"><span>{{ copy.result }}</span><strong>{{ copy.basis }}</strong></div></div></Transition></section>
-    <section class="insight-grid" aria-label="billing principles"><article><span>01 / PRICE</span><h3>{{ isZh ? '官方单价' : 'Provider price' }}</h3><p>{{ isZh ? '输入、输出、缓存分别取对应模型价格。' : 'Input, output and cache use their model-specific prices.' }}</p></article><article><span>02 / RATE</span><h3>{{ isZh ? '客户倍率' : 'Customer rate' }}</h3><p>{{ isZh ? '分组倍率、专属倍率和高峰因子按当前规则生效。' : 'Group, personal and peak rates are applied as configured.' }}</p></article><article><span>03 / TRACE</span><h3>{{ isZh ? '可追溯' : 'Traceable' }}</h3><p>{{ isZh ? '每次调用都能在用量明细中还原计算过程。' : 'Every call can be reconciled from usage details.' }}</p></article></section>
-    <section class="billing-section transparency-section"><div class="section-heading"><span class="section-number">01+</span><div><h2>{{ isZh ? '行业套路揭秘' : 'Common pricing traps' }}</h2><p>{{ isZh ? '看起来便宜的套餐，可能把真实成本藏在倍率、缓存或输出价格里。' : 'Low headline prices can hide multipliers, cache fees or output costs.' }}</p></div></div><div class="trap-cards"><article v-for="(trap, index) in copy.traps" :key="trap"><span>{{ index === 0 ? '高风险' : index === 1 ? '误导' : index === 2 ? '隐性' : '陷阱' }}</span><h3>{{ trap }}</h3><p>{{ isZh ? '请在用量明细中核对输入、输出与有效倍率。' : 'Verify input, output and effective rate in usage details.' }}</p></article></div></section>
-    <section class="billing-section compare-section"><div class="section-heading"><span class="section-number">02</span><div><h2>{{ copy.compare }}</h2><p>{{ copy.compareBody }}</p></div></div><div class="compare-layout"><div class="compare-slider"><label>{{ isZh ? '竞品倍率' : 'Competitor multiplier' }} <b>{{ competitorMultiplier.toFixed(1) }}x</b></label><input v-model.number="competitorMultiplier" type="range" min="1" max="8" step="0.1" /></div><div class="compare-results"><div><span>{{ copy.yourCost }} · {{ tokenMultiplier.toFixed(2) }}x</span><strong>{{ money(compareMine) }}</strong></div><div><span>{{ copy.competitorCost }} · {{ competitorMultiplier.toFixed(1) }}x</span><strong>{{ money(compareReference) }}</strong></div><em>{{ copy.save }} {{ money(saving) }}</em></div></div></section>
-    <section class="billing-section token-section"><div class="section-heading"><span class="section-number">03</span><div><h2>{{ copy.tokenLab }}</h2><p>{{ copy.tokenBody }}</p></div></div><div class="token-layout"><div class="token-controls"><label>{{ copy.input }} <b>{{ tokenInput.toLocaleString() }}</b><input v-model.number="tokenInput" type="range" min="1000" max="1000000" step="1000" /></label><label>{{ copy.output }} <b>{{ tokenOutput.toLocaleString() }}</b><input v-model.number="tokenOutput" type="range" min="1000" max="1000000" step="1000" /></label><label>{{ copy.multiplier }} <b>{{ tokenMultiplier.toFixed(2) }}x</b><input v-model.number="tokenMultiplier" type="range" min="0" max="1" step="0.01" /></label><label class="cache-toggle"><input v-model="cacheEnabled" type="checkbox" /><span>{{ isZh ? '加入 Prompt Cache 示例' : 'Include Prompt Cache example' }}</span></label></div><div class="token-stage"><div class="token-stage__bar"><i :style="{width:`${inputShare}%`}"></i><b :style="{width:`${100 - inputShare}%`}"></b></div><div class="token-stage__flow" aria-hidden="true"><i v-for="dot in tokenDots" :key="dot.id" :style="{ top: dot.top, width: dot.size, height: dot.size, animationDelay: dot.delay, animationDuration: dot.duration }"></i></div><div class="token-stage__legend"><span><i class="dot dot--input"></i>{{ copy.input }} {{ inputShare }}%</span><span><i class="dot dot--output"></i>{{ copy.output }} {{ 100 - inputShare }}%</span></div><strong>{{ money(visualCost) }}</strong><small>{{ cacheEnabled ? copy.cacheHint : copy.basis }}</small></div></div></section>
+    <section class="insight-grid" aria-label="billing principles"><article v-for="(insight, index) in copy.insights" :key="insight.title"><span>0{{ index + 1 }} / {{ ['PRICE', 'RATE', 'TRACE'][index] }}</span><h3>{{ insight.title }}</h3><p>{{ insight.body }}</p></article></section>
+    <section class="billing-section transparency-section"><div class="section-heading"><span class="section-number">01+</span><div><h2>{{ copy.transparencyTitle }}</h2><p>{{ copy.transparencyBody }}</p></div></div><div class="trap-cards"><article v-for="(trap, index) in copy.traps" :key="trap"><span>{{ copy.riskLabels[index] }}</span><h3>{{ trap }}</h3><p>{{ copy.trapCardBody }}</p></article></div></section>
+    <section class="billing-section compare-section"><div class="section-heading"><span class="section-number">02</span><div><h2>{{ copy.compare }}</h2><p>{{ copy.compareBody }}</p></div></div><div class="compare-layout"><div class="compare-slider"><label>{{ copy.competitorMultiplier }} <b>{{ competitorMultiplier.toFixed(1) }}x</b></label><input v-model.number="competitorMultiplier" type="range" min="1" max="8" step="0.1" /></div><div class="compare-results"><div><span>{{ copy.yourCost }} · {{ tokenMultiplier.toFixed(2) }}x</span><strong>{{ money(compareMine) }}</strong></div><div><span>{{ copy.competitorCost }} · {{ competitorMultiplier.toFixed(1) }}x</span><strong>{{ money(compareReference) }}</strong></div><em>{{ copy.save }} {{ money(saving) }}</em></div></div></section>
+    <section class="billing-section token-section"><div class="section-heading"><span class="section-number">03</span><div><h2>{{ copy.tokenLab }}</h2><p>{{ copy.tokenBody }}</p></div></div><div class="token-layout"><div class="token-controls"><label>{{ copy.input }} <b>{{ tokenInput.toLocaleString() }}</b><input v-model.number="tokenInput" type="range" min="1000" max="1000000" step="1000" /></label><label>{{ copy.output }} <b>{{ tokenOutput.toLocaleString() }}</b><input v-model.number="tokenOutput" type="range" min="1000" max="1000000" step="1000" /></label><label>{{ copy.multiplier }} <b>{{ tokenMultiplier.toFixed(2) }}x</b><input v-model.number="tokenMultiplier" type="range" min="0" max="1" step="0.01" /></label><label class="cache-toggle"><input v-model="cacheEnabled" type="checkbox" /><span>{{ copy.cacheExample }}</span></label></div><div class="token-stage"><div class="token-stage__bar"><i :style="{width:`${inputShare}%`}"></i><b :style="{width:`${100 - inputShare}%`}"></b></div><div class="token-stage__flow" aria-hidden="true"><i v-for="dot in tokenDots" :key="dot.id" :style="{ top: dot.top, width: dot.size, height: dot.size, animationDelay: dot.delay, animationDuration: dot.duration }"></i></div><div class="token-stage__legend"><span><i class="dot dot--input"></i>{{ copy.input }} {{ inputShare }}%</span><span><i class="dot dot--output"></i>{{ copy.output }} {{ 100 - inputShare }}%</span></div><strong>{{ money(visualCost) }}</strong><small>{{ cacheEnabled ? copy.cacheHint : copy.basis }}</small></div></div></section>
     <section id="billing-calculator" class="billing-section calculator-section" aria-labelledby="billing-calculator-title"><div class="section-heading"><span class="section-number">04</span><div><h2 id="billing-calculator-title">{{ t('native.billing.calculator.title') }}</h2><p>{{ t('native.billing.calculator.description') }}</p></div></div><BillingEstimator /></section>
-    <section class="billing-section traps-section"><button class="section-toggle" type="button" :aria-expanded="trapsOpen" @click="trapsOpen = !trapsOpen"><span class="section-number">05</span><span><strong>{{ copy.advanced }}</strong><small>{{ isZh ? '缓存、按次 / 图片、长上下文 - 点击展开' : 'Cache, per-request / image and long context' }}</small></span><Icon name="chevronDown" size="sm" :class="trapsOpen && 'is-open'" /></button><Transition name="collapse"><div v-if="trapsOpen" class="advanced-cards"><article><h3>{{ isZh ? 'Prompt Cache' : 'Prompt Cache' }}</h3><p>{{ isZh ? '缓存写入与缓存读取可能使用不同单价，命中后通常更低。' : 'Cache writes and reads may have separate prices.' }}</p><ul><li>{{ isZh ? '首次长提示可能产生写入费用' : 'First long prompts may create cache writes' }}</li><li>{{ isZh ? '缓存窗口由上游模型决定' : 'Cache windows are model-specific' }}</li></ul></article><article><h3>{{ isZh ? '按次 / 图片计费' : 'Per-request / image' }}</h3><p>{{ isZh ? '图片、特殊工具或部分模型不按 Token 计费。' : 'Images and special tools may not use token billing.' }}</p><ul><li>{{ isZh ? '尺寸、质量、数量都会影响价格' : 'Size, quality and count affect price' }}</li><li>{{ isZh ? '失败请求是否扣费以明细为准' : 'Check usage details for failed requests' }}</li></ul></article><article><h3>{{ isZh ? '长上下文' : 'Long context' }}</h3><p>{{ isZh ? '历史消息、文档和工具定义都会推高输入成本。' : 'History, documents and tools increase input cost.' }}</p><ul><li>{{ isZh ? '可能触发阶梯单价' : 'Tiered prices may apply' }}</li><li>{{ isZh ? 'Agent 循环会重复产生输入输出' : 'Agent loops repeat input and output' }}</li></ul></article></div></Transition></section>
+    <section class="billing-section traps-section"><button class="section-toggle" type="button" :aria-expanded="trapsOpen" @click="trapsOpen = !trapsOpen"><span class="section-number">05</span><span><strong>{{ copy.advanced }}</strong><small>{{ copy.advancedSummary }}</small></span><Icon name="chevronDown" size="sm" :class="trapsOpen && 'is-open'" /></button><Transition name="collapse"><div v-if="trapsOpen" class="advanced-cards"><article v-for="card in copy.advancedCards" :key="card.title"><h3>{{ card.title }}</h3><p>{{ card.body }}</p><ul><li v-for="item in card.items" :key="item">{{ item }}</li></ul></article></div></Transition></section>
     <section class="billing-promise"><div><span class="billing-kicker">VERIFY, THEN TRUST</span><h2>{{ copy.promise }}</h2><p>{{ copy.promiseBody }}</p></div><button type="button" @click="scrollToCalculator">{{ copy.cta }} <Icon name="arrowRight" size="sm" /></button></section>
   </div>
 </template>

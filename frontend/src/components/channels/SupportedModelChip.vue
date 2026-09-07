@@ -80,7 +80,6 @@
                   {{ t(prefixKey('actualPrice')) }} ×{{ effectiveRate(priceGroup) }}
                 </span>
               </div>
-
               <template v-if="model.pricing.billing_mode === BILLING_MODE_TOKEN">
                 <PricingRow :label="t(prefixKey('inputPrice'))" :value="model.pricing.input_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
                 <PricingRow :label="t(prefixKey('outputPrice'))" :value="model.pricing.output_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
@@ -103,7 +102,7 @@
                       <template v-if="iv.tier_label">{{ iv.tier_label }}</template>
                       <template v-else>{{ formatRange(iv.min_tokens, iv.max_tokens) }}</template>
                     </span>
-                    <span>{{ formatInterval(iv, model.pricing.billing_mode, effectiveRate(priceGroup)) }}</span>
+                    <span>{{ formatInterval(iv, model.pricing, effectiveRate(priceGroup)) }}</span>
                   </div>
                 </div>
               </div>
@@ -119,17 +118,18 @@
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PricingRow from './PricingRow.vue'
-import { formatScaled } from '@/utils/pricing'
+import { formatScaled, resolveIntervalPrices } from '@/utils/pricing'
 import {
   BILLING_MODE_TOKEN,
   BILLING_MODE_PER_REQUEST,
   BILLING_MODE_IMAGE,
-  BILLING_MODE_VIDEO,
-  type BillingMode
+  BILLING_MODE_VIDEO
 } from '@/constants/channel'
 // 复用 api/channels.ts 的用户侧最小形态 DTO。
 // admin 侧 ChannelModelPricing 字段更多，但结构上是用户 DTO 的超集，admin 视图传入可直接通过结构化子类型检查。
-import type { UserAvailableGroup, UserPricingInterval, UserSupportedModel } from '@/api/channels'
+import type { UserAvailableGroup, UserPricingInterval, UserSupportedModel, UserSupportedModelPricing } from '@/api/channels'
+// 复用 api/channels.ts 的用户侧最小形态 DTO。
+// admin 侧 ChannelModelPricing 字段更多，但结构上是用户 DTO 的超集，admin 视图传入可直接通过结构化子类型检查。
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type { GroupPlatform } from '@/types'
 import { platformBadgeClass, platformBorderClass, platformBadgeLightClass } from '@/utils/platformColors'
@@ -242,17 +242,18 @@ function formatRange(min: number, max: number | null): string {
   return `(${min}, ${maxLabel}]`
 }
 
-function formatInterval(iv: UserPricingInterval, mode: BillingMode, rate = 1): string {
-  if (mode === BILLING_MODE_PER_REQUEST || mode === BILLING_MODE_IMAGE || mode === BILLING_MODE_VIDEO) {
-    const unitKey = mode === BILLING_MODE_VIDEO
+function formatInterval(iv: UserPricingInterval, pricing: UserSupportedModelPricing, rate = 1): string {
+  if (pricing.billing_mode === BILLING_MODE_PER_REQUEST || pricing.billing_mode === BILLING_MODE_IMAGE || pricing.billing_mode === BILLING_MODE_VIDEO) {
+    const unitKey = pricing.billing_mode === BILLING_MODE_VIDEO
       ? 'unitPerSecond'
-      : mode === BILLING_MODE_IMAGE
+      : pricing.billing_mode === BILLING_MODE_IMAGE
         ? 'unitPerImage'
         : 'unitPerRequest'
     return `${formatScaled(iv.per_request_price, rate)} ${t(prefixKey(unitKey))}`
   }
-  const input = formatScaled(iv.input_price, perMillionScale * rate)
-  const output = formatScaled(iv.output_price, perMillionScale * rate)
+  const resolved = resolveIntervalPrices(iv, pricing)
+  const input = formatScaled(resolved.input_price, perMillionScale * rate)
+  const output = formatScaled(resolved.output_price, perMillionScale * rate)
   return `${input} / ${output}`
 }
 

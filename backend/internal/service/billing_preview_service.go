@@ -292,8 +292,8 @@ func billingPreviewCatalogModels(group Group, plazaByID map[int64]PlazaGroup) []
 		return plaza.Models
 	}
 
-	models := make([]PlazaModel, 0, len(group.ModelsListConfig.Models))
-	for _, configuredModel := range group.ModelsListConfig.Models {
+	models := make([]PlazaModel, 0, len(group.ModelAllowlist.Models))
+	for _, configuredModel := range group.ModelAllowlist.Models {
 		name := strings.TrimSpace(configuredModel)
 		if name == "" {
 			continue

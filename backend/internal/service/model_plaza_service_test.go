@@ -87,7 +87,7 @@ func TestListPlazaGroups_UsesConfiguredGroupModelsWithoutChannels(t *testing.T) 
 	})
 	groups := []Group{{
 		ID: 10, Name: "configured", Platform: PlatformAnthropic, RateMultiplier: 0.7,
-		ModelsListConfig: GroupModelsListConfig{
+		ModelAllowlist: GroupModelAllowlist{
 			Enabled: false,
 			Models:  []string{" claude-sonnet ", "Claude-Sonnet", "", "claude-opus"},
 		},
@@ -118,7 +118,7 @@ func TestListPlazaGroups_CatalogFallbackOmitsImageOnlyOfficialPricing(t *testing
 	})
 	groups := []Group{{
 		ID: 11, Name: "configured", Platform: PlatformOpenAI,
-		ModelsListConfig: GroupModelsListConfig{Models: []string{"image-only"}},
+		ModelAllowlist: GroupModelAllowlist{Models: []string{"image-only"}},
 	}}
 
 	out, err := newPlazaService(nil, groups, pricingSvc).ListGroups(context.Background())
@@ -132,7 +132,7 @@ func TestListPlazaGroups_CatalogFallbackOmitsImageOnlyOfficialPricing(t *testing
 func TestListPlazaGroups_IncludesModelsConfiguredOnlyInMediaPriceMaps(t *testing.T) {
 	groups := []Group{{
 		ID: 10, Name: "grok-media", Platform: PlatformGrok, RateMultiplier: 0.15,
-		ModelsListConfig: GroupModelsListConfig{Models: []string{"grok-imagine-image-2.0"}},
+		ModelAllowlist: GroupModelAllowlist{Models: []string{"grok-imagine-image-2.0"}},
 		ImageModelPrices: map[string]map[string]float64{
 			"grok-imagine-image-2.0": {
 				ImageBillingSize1K: 0.01,
@@ -176,7 +176,7 @@ func TestListPlazaGroups_IncludesModelsConfiguredOnlyInMediaPriceMaps(t *testing
 func TestListPlazaGroups_ConfiguredCompositeModelsUseDetectedPlatforms(t *testing.T) {
 	groups := []Group{{
 		ID: 10, Name: "composite", Platform: PlatformComposite, RateMultiplier: 1,
-		ModelsListConfig: GroupModelsListConfig{
+		ModelAllowlist: GroupModelAllowlist{
 			Models: []string{"claude-sonnet-4", "openai/gpt-5", "OPENAI/GPT-5", "ambiguous-model"},
 		},
 	}}
@@ -199,7 +199,7 @@ func TestListPlazaGroups_GroupPricingOverridesChannelPricing(t *testing.T) {
 	channelInput := 2e-6
 	groups := []Group{{
 		ID: 10, Name: "priority", Platform: PlatformAnthropic, RateMultiplier: 1,
-		ModelsListConfig: GroupModelsListConfig{Models: []string{"claude-sonnet"}},
+		ModelAllowlist: GroupModelAllowlist{Models: []string{"claude-sonnet"}},
 		ModelPricing: []ChannelModelPricing{{
 			Platform: PlatformAnthropic, Models: []string{"claude-*"}, BillingMode: BillingModeToken,
 			InputPrice: &groupInput,
@@ -646,7 +646,7 @@ func TestListPlazaGroups_CanonicalizesGrokVideo15AliasesForDisplay(t *testing.T)
 	}
 	groups := []Group{{
 		ID: 10, Name: "grok-video-catalog", Platform: PlatformGrok, RateMultiplier: 1,
-		ModelsListConfig: GroupModelsListConfig{
+		ModelAllowlist: GroupModelAllowlist{
 			Enabled: true,
 			Models: []string{
 				"grok-imagine-video-1.5-preview",
