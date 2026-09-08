@@ -43,7 +43,7 @@ COPY frontend/ ./
 COPY docs/legal/ /app/docs/legal/
 # Keep release builds bounded on small production hosts. The deployment builder
 # also enforces a cgroup memory/CPU limit; these settings reduce compiler peaks.
-RUN NODE_OPTIONS=--max-old-space-size=1024 pnpm run build
+RUN NODE_OPTIONS=--max-old-space-size=1536 pnpm run build
 
 # -----------------------------------------------------------------------------
 # Stage 2: Backend Builder
