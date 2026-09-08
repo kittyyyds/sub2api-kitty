@@ -41,7 +41,9 @@ RUN --mount=type=cache,id=sub2api-pnpm-store,target=/root/.local/share/pnpm/stor
 # Copy only that subtree to keep the build dependency minimal.
 COPY frontend/ ./
 COPY docs/legal/ /app/docs/legal/
-RUN pnpm run build
+# Keep release builds bounded on small production hosts. The deployment builder
+# also enforces a cgroup memory/CPU limit; these settings reduce compiler peaks.
+RUN NODE_OPTIONS=--max-old-space-size=1024 pnpm run build
 
 # -----------------------------------------------------------------------------
 # Stage 2: Backend Builder
@@ -64,6 +66,7 @@ ARG TARGETARCH
 
 ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
+ENV GOMAXPROCS=1 GOMEMLIMIT=512MiB GOGC=50 GOFLAGS=-p=1
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
