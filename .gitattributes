@@ -20,3 +20,7 @@ backend/migrations/*.sql text eol=lf
 
 # Dockerfile
 Dockerfile text eol=lf
+
+# Embedded moderation assets have byte-level SHA-256 manifests.
+backend/resources/content-moderation/**/*.txt text eol=lf
+backend/resources/content-moderation/**/*.json text eol=lf
