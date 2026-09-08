@@ -14,6 +14,7 @@ ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 ARG NPM_CONFIG_REGISTRY=
+ARG KITTY_FRONTEND_STAGE=frontend-builder
 
 # -----------------------------------------------------------------------------
 # Stage 1: Frontend Builder
@@ -41,9 +42,14 @@ RUN --mount=type=cache,id=sub2api-pnpm-store,target=/root/.local/share/pnpm/stor
 # Copy only that subtree to keep the build dependency minimal.
 COPY frontend/ ./
 COPY docs/legal/ /app/docs/legal/
-# Keep release builds bounded on small production hosts. The deployment builder
-# also enforces a cgroup memory/CPU limit; these settings reduce compiler peaks.
-RUN NODE_OPTIONS=--max-old-space-size=1536 pnpm run build
+# Small release hosts can use the separately verified frontend-prebuilt stage.
+# The default remains a complete frontend build from source.
+RUN pnpm run build
+
+FROM scratch AS frontend-prebuilt
+COPY --from=kitty_frontend / /app/backend/internal/web/dist/
+
+FROM ${KITTY_FRONTEND_STAGE} AS frontend-output
 
 # -----------------------------------------------------------------------------
 # Stage 2: Backend Builder
@@ -84,7 +90,7 @@ RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
 COPY backend/ ./
 
 # Copy frontend dist from previous stage (must be after backend copy to avoid being overwritten)
-COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
+COPY --from=frontend-output /app/backend/internal/web/dist ./internal/web/dist
 
 # Build the binary (BuildType=release for CI builds, embed frontend)
 # Version precedence: build arg VERSION > exact git tag > cmd/server/VERSION
