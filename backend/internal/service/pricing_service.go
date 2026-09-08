@@ -91,14 +91,14 @@ var (
 		SupportsPromptCaching:               true,
 	}
 	openAIGPT56LunaFallbackPricing = &LiteLLMModelPricing{
-		InputCostPerToken:                   2e-07,
-		InputCostPerTokenPriority:           4e-07,
-		OutputCostPerToken:                  1.2e-06,
-		OutputCostPerTokenPriority:          2.4e-06,
-		CacheCreationInputTokenCost:         2.5e-07,
-		CacheCreationInputTokenCostPriority: 5e-07,
-		CacheReadInputTokenCost:             2e-08,
-		CacheReadInputTokenCostPriority:     4e-08,
+		InputCostPerToken:                   4e-07,
+		InputCostPerTokenPriority:           8e-07,
+		OutputCostPerToken:                  2.4e-06,
+		OutputCostPerTokenPriority:          4.8e-06,
+		CacheCreationInputTokenCost:         5e-07,
+		CacheCreationInputTokenCostPriority: 1e-06,
+		CacheReadInputTokenCost:             4e-08,
+		CacheReadInputTokenCostPriority:     8e-08,
 		SupportsServiceTier:                 true,
 		LiteLLMProvider:                     "openai",
 		Mode:                                "chat",
@@ -569,6 +569,7 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 	if err := json.Unmarshal(body, &rawData); err != nil {
 		return nil, fmt.Errorf("parse raw JSON: %w", err)
 	}
+	applyKittySelectedLunaPricing(rawData)
 	rawData = s.applyPricingOverrides(rawData)
 
 	result := make(map[string]*LiteLLMModelPricing)

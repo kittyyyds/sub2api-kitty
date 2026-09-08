@@ -271,17 +271,6 @@
 
           <button
             type="button"
-            @click="accountCategory = 'cursor'"
-            :aria-pressed="isCursorAccount"
-            :class="['flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all', isCursorAccount ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 hover:border-primary-300 dark:border-dark-600']"
-            data-testid="account-type-cursor"
-          >
-            <div :class="['flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', isCursorAccount ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-500 dark:bg-dark-600']"><Icon name="key" size="sm" /></div>
-            <div><span class="block text-sm font-medium text-gray-900 dark:text-white">Cursor</span><span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.cursor.typeDescription') }}</span></div>
-          </button>
-
-          <button
-            type="button"
             @click="accountCategory = 'bedrock'"
             :class="[
               'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
@@ -1291,8 +1280,7 @@
 
       <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
       <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
-        <CursorAccountFields v-if="isCursorAccount" v-model="apiKeyValue" />
-        <div v-if="!isCursorAccount && (!isCNPlatform || apiProtocol !== 'adaptive')">
+        <div v-if="!isCNPlatform || apiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
             v-model="apiKeyBaseUrl"
@@ -1316,7 +1304,7 @@
             @select="onCnPresetSelect"
           />
         </div>
-        <div v-else-if="!isCursorAccount">
+        <div v-else>
           <label class="input-label">{{ t('admin.accounts.cnProviders.apiProtocol.endpoints') }}</label>
           <div class="mt-2 space-y-3">
             <div v-for="item in cnAdaptiveProtocolOptions" :key="item.value">
@@ -1335,7 +1323,7 @@
             {{ t('admin.accounts.cnProviders.apiProtocol.responsesFallbackDesc') }}
           </p>
         </div>
-        <div v-if="!isCursorAccount">
+        <div>
           <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
           <input
             v-model="apiKeyValue"
@@ -1349,7 +1337,6 @@
 
         <!-- 上游倍率自动探测：全部 API-key 平台可用（所在区块已限定 apikey 类型） -->
         <div
-          v-if="!isCursorAccount"
           class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
         >
           <div>
@@ -2932,8 +2919,7 @@
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
         </div>
-        <ProxySelector v-if="!isCursorAccount" v-model="form.proxy_id" :proxies="proxies" />
-        <p v-else class="input-hint">{{ t('admin.accounts.cursor.proxyHelp') }}</p>
+        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
       <UpstreamRequestIdHeaderField
@@ -3260,17 +3246,6 @@
           </div>
           <div class="w-44">
             <Select v-model="openAICompactMode" :options="openAICompactModeOptions" />
-          </div>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div class="min-w-0">
-            <label class="input-label mb-0">{{ t('admin.accounts.openai.gpt5VariantLock') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.openai.gpt5VariantLockDesc') }}
-            </p>
-          </div>
-          <div class="w-44 flex-shrink-0">
-            <Select v-model="openAIGPT5VariantLock" :options="openAIGPT5VariantLockOptions" />
           </div>
         </div>
         <div>
@@ -3827,7 +3802,6 @@
 </template>
 
 <script setup lang="ts">
-import CursorAccountFields from './CursorAccountFields.vue'
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -3861,7 +3835,6 @@ import type {
   CreateAccountRequest,
   CodexSessionImportMessage,
   OpenAICompactMode,
-  OpenAIGPT5VariantLock,
   OpenAIResponsesMode,
   OpenAIEndpointCapability
 } from '@/types'
@@ -4078,8 +4051,7 @@ interface TempUnschedRuleForm {
 // State
 const step = ref(1)
 const submitting = ref(false)
-const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account' | 'cursor'>('oauth-based') // UI selection for account category
-const isCursorAccount = computed(() => form.platform === 'anthropic' && accountCategory.value === 'cursor')
+const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account'>('oauth-based') // UI selection for account category
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
@@ -4219,8 +4191,7 @@ const syncPreviewCredentials = computed(() => {
   return {
     platform: form.platform,
     type: form.type,
-    base_url: isCursorAccount.value ? undefined : baseUrl || undefined,
-    ...(isCursorAccount.value ? { cursor_auth_mode: 'user_api_key' } : {}),
+    base_url: baseUrl || undefined,
     api_key: apiKeyValue.value,
     ...(modelMapping ? { model_mapping: modelMapping } : {})
   }
@@ -4312,7 +4283,6 @@ const openaiFlattenNamespacesEnabled = ref(false)
 const openAILongContextBillingEnabled = ref(false)
 const openAILongContextBillingTouched = ref(false)
 const openAICompactMode = ref<OpenAICompactMode>('auto')
-const openAIGPT5VariantLock = ref<OpenAIGPT5VariantLock>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
@@ -4390,12 +4360,6 @@ const openAICompactModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.compactModeAuto') },
   { value: 'force_on', label: t('admin.accounts.openai.compactModeForceOn') },
   { value: 'force_off', label: t('admin.accounts.openai.compactModeForceOff') }
-])
-const openAIGPT5VariantLockOptions = computed(() => [
-  { value: 'auto', label: t('admin.accounts.openai.gpt5VariantLockAuto') },
-  { value: 'sol', label: t('admin.accounts.openai.gpt5VariantLockSol') },
-  { value: 'terra', label: t('admin.accounts.openai.gpt5VariantLockTerra') },
-  { value: 'luna', label: t('admin.accounts.openai.gpt5VariantLockLuna') }
 ])
 const openAIResponsesModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.responsesModeAuto') },
@@ -4692,19 +4656,9 @@ watch(
 )
 
 // Sync form.type based on accountCategory, addMethod, and platform-specific type
-watch(accountCategory, (next, previous) => {
-  if (next !== previous && (next === 'cursor' || previous === 'cursor')) apiKeyValue.value = ''
-})
 watch(
   [accountCategory, addMethod, antigravityAccountType, () => form.platform],
   ([category, method, agType]) => {
-    if (form.platform === 'anthropic' && category === 'cursor') {
-      form.type = 'apikey'
-      form.concurrency = 1
-      form.proxy_id = null
-      upstreamBillingAutoProbeEnabled.value = false
-      return
-    }
     // Antigravity upstream 类型（实际创建为 apikey）
     if (form.platform === 'antigravity' && agType === 'upstream') {
       form.type = 'apikey'
@@ -4730,7 +4684,6 @@ watch(
 watch(
   () => form.platform,
   (newPlatform) => {
-    if (newPlatform !== 'anthropic' && accountCategory.value === 'cursor') accountCategory.value = 'apikey'
     // Reset base URL based on platform
     if (newPlatform === 'kimi' || newPlatform === 'zhipu' || newPlatform === 'deepseek') {
       apiKeyBaseUrl.value = defaultCNBaseUrl(newPlatform, accountMode.value, apiProtocol.value)
@@ -5250,7 +5203,6 @@ const resetForm = () => {
   openAILongContextBillingEnabled.value = false
   openAILongContextBillingTouched.value = false
   openAICompactMode.value = 'auto'
-  openAIGPT5VariantLock.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
@@ -5368,11 +5320,6 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     extra.openai_compact_mode = openAICompactMode.value
   } else {
     delete extra.openai_compact_mode
-  }
-  if (openAIGPT5VariantLock.value !== 'auto') {
-    extra.openai_gpt5_variant_lock = openAIGPT5VariantLock.value
-  } else {
-    delete extra.openai_gpt5_variant_lock
   }
 
   if (
@@ -5681,14 +5628,6 @@ const handleSubmit = async () => {
     base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
     api_key: apiKeyValue.value.trim()
   }
-  if (isCursorAccount.value) {
-    if (!/^crsr_[A-Za-z0-9_-]{8,512}$/.test(apiKeyValue.value.trim())) {
-      appStore.showError(t('admin.accounts.cursor.invalidKey'))
-      return
-    }
-    credentials.cursor_auth_mode = 'user_api_key'
-    delete credentials.base_url
-  }
   if (form.platform === 'gemini') {
     credentials.tier_id = geminiTierAIStudio.value
   }
@@ -5770,9 +5709,7 @@ const handleSubmit = async () => {
   }
 
   form.credentials = credentials
-  const extra = isCursorAccount.value
-    ? { ...buildAnthropicExtra(buildOpenAIExtra()), anthropic_passthrough: true }
-    : buildAnthropicExtra(buildOpenAIExtra())
+  const extra = buildAnthropicExtra(buildOpenAIExtra())
 
   await doCreateAccount({
     ...form,

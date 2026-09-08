@@ -1228,7 +1228,7 @@ func normalizeOpenAIModelForUpstream(account *Account, model string) string {
 		return normalizeCodexModel(model)
 	}
 	if account.UsesOpenAICodexProtocol() {
-		return account.ApplyOpenAIGPT5VariantLock(normalizeCodexModel(model))
+		return normalizeCodexModel(model)
 	}
 	return strings.TrimSpace(model)
 }

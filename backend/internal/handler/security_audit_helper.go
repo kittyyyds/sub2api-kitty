@@ -48,6 +48,9 @@ func (h *GatewayHandler) checkSecurityAudit(c *gin.Context, reqLog *zap.Logger, 
 	if h == nil {
 		return nil
 	}
+	if decision := runKittyRisk(c, h.kittyRiskService, apiKey, subject, protocol, model, body, "http"); decision != nil {
+		return decision
+	}
 	return runSecurityAudit(c, reqLog, h.securityAuditCoordinator, h.contentModerationService, apiKey, subject, protocol, model, body, "http")
 }
 
@@ -55,12 +58,18 @@ func (h *OpenAIGatewayHandler) checkSecurityAudit(c *gin.Context, reqLog *zap.Lo
 	if h == nil {
 		return nil
 	}
+	if decision := runKittyRisk(c, h.kittyRiskService, apiKey, subject, protocol, model, body, "http"); decision != nil {
+		return decision
+	}
 	return runSecurityAudit(c, reqLog, h.securityAuditCoordinator, h.contentModerationService, apiKey, subject, protocol, model, body, "http")
 }
 
 func (h *OpenAIGatewayHandler) checkSecurityAuditStage(c *gin.Context, reqLog *zap.Logger, apiKey *service.APIKey, subject middleware2.AuthSubject, protocol, model string, body []byte, stage string) *securityaudit.Decision {
 	if h == nil {
 		return nil
+	}
+	if decision := runKittyRisk(c, h.kittyRiskService, apiKey, subject, protocol, model, body, stage); decision != nil {
+		return decision
 	}
 	return runSecurityAudit(c, reqLog, h.securityAuditCoordinator, h.contentModerationService, apiKey, subject, protocol, model, body, stage)
 }

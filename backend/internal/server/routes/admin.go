@@ -171,6 +171,25 @@ func registerAdminComplianceRoutes(admin *gin.RouterGroup, h *handler.Handlers) 
 }
 
 func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h.Admin.KittyRisk != nil {
+		k := h.Admin.KittyRisk
+		k.StartHealthWorkers()
+		risk := admin.Group("/kitty-risk-control")
+		risk.GET("/config", k.GetConfig)
+		risk.PUT("/config", k.UpdateConfig)
+		risk.POST("/deepseek/channels/:id/test", k.TestDeepSeekChannel)
+		risk.POST("/deepseek/channels/:id/test-api", k.TestContentModerationChannelAPI)
+		risk.GET("/status", k.GetStatus)
+		risk.GET("/logs", k.ListLogs)
+		risk.GET("/logs/:id", k.GetLog)
+		risk.GET("/logs/:id/archive/preview", k.PreviewArchive)
+		risk.GET("/logs/:id/archive/download", k.DownloadArchive)
+		risk.DELETE("/logs/:id/archive", k.DeleteArchive)
+		risk.POST("/users/:user_id/unban", k.UnbanUser)
+		risk.DELETE("/hashes", k.DeleteFlaggedHash)
+		risk.DELETE("/hashes/all", k.ClearFlaggedHashes)
+	}
+
 	risk := admin.Group("/risk-control")
 	{
 		risk.GET("/config", h.Admin.ContentModeration.GetConfig)
@@ -361,8 +380,6 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 	accounts := admin.Group("/accounts")
 	{
 		accounts.GET("", h.Admin.Account.List)
-		accounts.GET("/cursor/status", h.Admin.Account.CursorBridgeStatus)
-		accounts.POST("/cursor/verify", h.Admin.Account.VerifyCursorCredential)
 		accounts.GET("/upstream-billing-rates", h.Admin.Account.GetUpstreamBillingRates)
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)

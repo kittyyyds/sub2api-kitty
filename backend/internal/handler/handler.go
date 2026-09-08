@@ -39,6 +39,7 @@ type AdminHandlers struct {
 	ChannelMonitor         *admin.ChannelMonitorHandler
 	ChannelMonitorTemplate *admin.ChannelMonitorRequestTemplateHandler
 	ContentModeration      *admin.ContentModerationHandler
+	KittyRisk              *admin.KittyRiskHandler
 	PromptAudit            *securityaudit.PromptAdminHandler
 	Payment                *admin.PaymentHandler
 	Affiliate              *admin.AffiliateHandler
@@ -77,5 +78,6 @@ type Handlers struct {
 // BuildInfo contains build-time information
 type BuildInfo struct {
 	Version   string
+	Commit    string
 	BuildType string // "source" for manual builds, "release" for CI builds
 }

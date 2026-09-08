@@ -1,24 +1,5 @@
 export default {
     accounts: {
-      cursor: {
-        title: 'Cursor 账号', description: '使用 Cursor 账号提供 Anthropic 兼容服务，客户仍使用本站的地址和 API Key。',
-        typeDescription: 'Cursor 用户 API Key', checking: '检查网关中', ready: '网关已就绪', unavailable: '网关待连接',
-        statusFailed: '无法获取网关状态，请稍后重试。', retry: '重新检查',
-        step1: '登录你有权使用的 Cursor 账号。', openDashboard: '打开 Cursor 后台',
-        step2: '在账号后台生成用户 API Key，复制完整的 crsr_ 开头密钥。',
-        step3: '填写下方 Key 并验证认证，保存后通过账号列表测试实际模型。',
-        keyLabel: 'Cursor 用户 API Key', keyHint: '每条账号记录使用自己的 Key，无需修改服务器文件。不要填写邮箱密码、Claude Key 或本站客户 Key。',
-        keepExisting: '留空保留现有 Cursor Key', editHint: '填写新 Key 即更换此账号凭据；留空会保留原值，后台不会回显完整 Key。',
-        show: '显示', hide: '隐藏', verifying: '正在验证…', verify: '验证 Cursor 认证', verified: '账号认证通过',
-        verifyScope: '此验证只确认 Cursor 认证成功，不代表所有模型都有权限或额度；请在保存后测试实际请求。',
-        invalidKey: '请填写完整的 crsr_ 开头的 Cursor 用户 API Key。', verifyFailed: '认证暂未通过，请检查 Key 与网关连接后重试。',
-        helpTitle: '接入说明与使用范围',
-        authHelp: '当前按开源项目的用户 Key 兑换认证方式接入。打开 Cursor 后台仅用于获取 Key，不是自动授权；暂不支持邮箱密码登录或 OAuth 回调。',
-        downstreamHelp: '下游中转站选择 Anthropic / Claude Console，填写本站地址与本站生成的客户 API Key。Claude Code CLI 或支持自定义 Anthropic 接口的客户端使用相同配置。',
-        quotaHelp: '分组、并发、优先级与启停沿用本站账号管理。建议并发从 1 开始；本站统计不等于 Cursor 官方余额，实际模型以调用测试为准。',
-        proxyHelp: '当前 Cursor 上游统一使用网关服务器出口，暂不支持账号级代理。',
-        visionHelp: '开源桥接的图片输入尚未打通；添加账号不会自动补齐图片识别或官方客户端的全部功能。'
-      },
       title: '账号管理',
       description: '管理 AI 平台账号和 Cookie',
       createAccount: '添加账号',
@@ -764,12 +745,6 @@ export default {
         compactModeAuto: '自动',
         compactModeForceOn: '强制开启',
         compactModeForceOff: '强制关闭',
-        gpt5VariantLock: 'GPT-5.x Model Variant Lock',
-        gpt5VariantLockDesc: '固定 GPT-5.6 请求使用指定变体。仅影响中转层模型路由，无法控制上游内部隐藏调度。',
-        gpt5VariantLockAuto: '自动（不覆写）',
-        gpt5VariantLockSol: '固定 gpt-5.6-sol',
-        gpt5VariantLockTerra: '固定 gpt-5.6-terra',
-        gpt5VariantLockLuna: '固定 gpt-5.6-luna',
         compactModelMapping: 'Compact 专属模型映射',
         compactModelMappingDesc:
           '仅在 /responses/compact 请求中生效。当上游 compact 端点需要特殊 compact 模型时使用。',

@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/kittyrisk"
 	"io"
 	"net/http"
 	"runtime/debug"
@@ -40,6 +41,7 @@ type OpenAIGatewayHandler struct {
 	usageRecordWorkerPool      *service.UsageRecordWorkerPool
 	errorPassthroughService    *service.ErrorPassthroughService
 	contentModerationService   *service.ContentModerationService
+	kittyRiskService           *kittyrisk.ContentModerationService
 	securityAuditCoordinator   *securityaudit.Coordinator
 	grokMediaEligibilityProber grokMediaEligibilityProber
 	opsService                 *service.OpsService
@@ -4100,6 +4102,7 @@ func (h *OpenAIGatewayHandler) recordCyberPolicyIfMarked(c *gin.Context, apiKey 
 	}
 	c.Set(cyberPolicyRecordedKey, true)
 	model = clientRequestedModel(c, model)
+	h.recordKittyCyberPolicy(c, apiKey, model, cyberBlockBody, mark)
 
 	requestID := c.Writer.Header().Get("X-Request-Id")
 	var userID, apiKeyID int64

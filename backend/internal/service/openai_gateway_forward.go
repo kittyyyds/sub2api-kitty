@@ -556,12 +556,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if codexResult.NormalizedModel != "" {
 			upstreamModel = codexResult.NormalizedModel
 		}
-		if lockedModel := account.ApplyOpenAIGPT5VariantLock(upstreamModel); lockedModel != upstreamModel {
-			decoded["model"] = lockedModel
-			upstreamModel = lockedModel
-			markDecodedModified()
-			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] GPT-5.6 variant lock applied: %s -> %s (account: %s)", codexResult.NormalizedModel, lockedModel, account.Name)
-		}
 		if strings.TrimSpace(clientPromptCacheKey) != "" {
 			// The body now carries an account-scoped value. Keep the original here
 			// so the header builder derives the same namespace exactly once.
@@ -622,6 +616,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				markPatchDelete(unsupportedField)
 			}
 		}
+	}
+	// Ollama Cloud（实际 Responses 上游为 ollama.com）输出上限 clamp：对 Codex 与
+	// 非 Codex 客户端一律执行（真实 Codex 客户端同样会带超限 max_output_tokens 被
+	// ollama.com 以 400 拒绝）。在 `!isCodexCLI` 归一化块之后独立调用：非 Codex 时
+	// 位于平台字段归一化之后，不跳过原有平台 switch（patch 按追加顺序应用，set 在
+	// 先前的 delete/set 之后生效）；Codex 请求不做归一化，直接按 body 现值判定。
+	if clampedCap, ok := ollamaCloudResponsesMaxOutputTokensClamp(account, upstreamModel, body); ok {
+		markPatchSet("max_output_tokens", clampedCap)
 	}
 	if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 &&
 		!account.IsOpenAIApiKey() && gjson.GetBytes(body, "previous_response_id").Exists() {

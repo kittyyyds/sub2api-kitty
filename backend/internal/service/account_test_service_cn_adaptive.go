@@ -81,9 +81,9 @@ func (s *AccountTestService) testCNProviderAdaptiveAnthropicConnection(c *gin.Co
 		req.Header.Set(key, value)
 	}
 	req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
-	if err := setAnthropicAPIKeyAuthHeader(req.Header, account, authToken); err != nil {
-		return s.sendErrorAndEnd(c, err.Error())
-	}
+	// Ollama Cloud Anthropic 兼容端点按 adaptive 实际选用的 Anthropic
+	// base_url 强制 Bearer，其余保持 extra/default 行为。
+	setAnthropicAPIKeyAuthHeader(req.Header, account, authToken, account.GetCNProtocolBaseURL(APIProtocolAnthropic))
 	account.ApplyHeaderOverrides(req.Header)
 
 	resp, err := s.doCNProviderAdaptiveRequest(req, account)
@@ -262,9 +262,9 @@ func (s *AccountTestService) testCNProviderAnthropicConnection(c *gin.Context, a
 	for key, value := range claude.DefaultHeaders {
 		req.Header.Set(key, value)
 	}
-	if err := setAnthropicAPIKeyAuthHeader(req.Header, account, authToken); err != nil {
-		return s.sendErrorAndEnd(c, err.Error())
-	}
+	// Ollama Cloud Anthropic 兼容端点按实际 base_url 强制 Bearer，其余保持
+	// extra/default 行为。
+	setAnthropicAPIKeyAuthHeader(req.Header, account, authToken, account.GetAnthropicProtocolBaseURL())
 	account.ApplyHeaderOverrides(req.Header)
 
 	resp, err := s.doCNProviderAdaptiveRequest(req, account)

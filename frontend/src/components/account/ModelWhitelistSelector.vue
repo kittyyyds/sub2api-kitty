@@ -165,7 +165,6 @@ const props = defineProps<{
   syncCredentials?: {
     platform: string
     type: string
-    cursor_auth_mode?: string
     base_url?: string
     api_key: string
   }

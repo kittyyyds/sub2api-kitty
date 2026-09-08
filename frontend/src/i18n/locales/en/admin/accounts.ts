@@ -1,24 +1,5 @@
 export default {
     accounts: {
-      cursor: {
-        title: 'Cursor account', description: 'Provide an Anthropic-compatible endpoint through Cursor. Customers continue using this site’s URL and API key.',
-        typeDescription: 'Cursor user API key', checking: 'Checking bridge', ready: 'Bridge ready', unavailable: 'Bridge unavailable',
-        statusFailed: 'Unable to retrieve bridge status. Please retry.', retry: 'Check again',
-        step1: 'Sign in to a Cursor account you are authorized to use.', openDashboard: 'Open Cursor dashboard',
-        step2: 'Generate a user API key in the account dashboard and copy the complete crsr_ key.',
-        step3: 'Enter the key and verify authentication. After saving, test an actual model from the account list.',
-        keyLabel: 'Cursor user API key', keyHint: 'Each account keeps its own key; no server file edits are needed. Do not enter a password, Claude key, or customer key.',
-        keepExisting: 'Leave blank to keep the existing Cursor key', editHint: 'Enter a new key to replace this account’s credential. Leave blank to preserve it; complete keys are never returned to the form.',
-        show: 'Show', hide: 'Hide', verifying: 'Verifying…', verify: 'Verify Cursor authentication', verified: 'Account authenticated',
-        verifyScope: 'This verifies authentication only. It does not establish model permissions or quota. Test a real request after saving.',
-        invalidKey: 'Enter a complete Cursor user API key starting with crsr_.', verifyFailed: 'Authentication could not be verified. Check the key and bridge connection.',
-        helpTitle: 'Connection guide and supported features',
-        authHelp: 'Uses the open-source project’s user-key exchange flow. The dashboard link helps obtain a key; it does not authorize automatically. Password sign-in and OAuth callbacks are not supported.',
-        downstreamHelp: 'Downstream relays select Anthropic / Claude Console and enter this site’s URL and customer API key. Claude Code CLI and clients supporting custom Anthropic endpoints use the same settings.',
-        quotaHelp: 'Groups, concurrency, priority, and scheduling use the existing account controls. Start at concurrency 1. Local usage is not an official Cursor balance; verify models with real requests.',
-        proxyHelp: 'Cursor requests currently use the bridge server’s outbound connection. Per-account proxies are not supported.',
-        visionHelp: 'Image input is not connected in the open-source bridge. Adding an account does not enable vision or every official client feature.'
-      },
       title: 'Account Management',
       description: 'Manage AI platform accounts and credentials',
       createAccount: 'Create Account',
@@ -686,12 +667,6 @@ export default {
         compactModeAuto: 'Auto',
         compactModeForceOn: 'Force On',
         compactModeForceOff: 'Force Off',
-        gpt5VariantLock: 'GPT-5.x Model Variant Lock',
-        gpt5VariantLockDesc: 'Pin GPT-5.6 requests to one variant at the gateway. This cannot control hidden upstream routing.',
-        gpt5VariantLockAuto: 'Auto (no override)',
-        gpt5VariantLockSol: 'Pin gpt-5.6-sol',
-        gpt5VariantLockTerra: 'Pin gpt-5.6-terra',
-        gpt5VariantLockLuna: 'Pin gpt-5.6-luna',
         compactModelMapping: 'Compact-only model mapping',
         compactModelMappingDesc:
           'Only applies to /responses/compact. Use this when the upstream compact endpoint requires a special compact model.',

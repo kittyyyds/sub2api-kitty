@@ -685,14 +685,6 @@ const (
 	OpenAICompactModeForceOff = "force_off"
 )
 
-const (
-	// OpenAIGPT5VariantLockAuto preserves the upstream/default variant behavior.
-	OpenAIGPT5VariantLockAuto  = "auto"
-	OpenAIGPT5VariantLockSol   = "sol"
-	OpenAIGPT5VariantLockTerra = "terra"
-	OpenAIGPT5VariantLockLuna  = "luna"
-)
-
 func normalizeOpenAICompactMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case OpenAICompactModeForceOn:
@@ -701,19 +693,6 @@ func normalizeOpenAICompactMode(mode string) string {
 		return OpenAICompactModeForceOff
 	default:
 		return OpenAICompactModeAuto
-	}
-}
-
-func normalizeOpenAIGPT5VariantLock(lock string) string {
-	switch strings.ToLower(strings.TrimSpace(lock)) {
-	case OpenAIGPT5VariantLockSol:
-		return OpenAIGPT5VariantLockSol
-	case OpenAIGPT5VariantLockTerra:
-		return OpenAIGPT5VariantLockTerra
-	case OpenAIGPT5VariantLockLuna:
-		return OpenAIGPT5VariantLockLuna
-	default:
-		return OpenAIGPT5VariantLockAuto
 	}
 }
 
@@ -1070,35 +1049,6 @@ func (a *Account) GetOpenAICompactMode() string {
 	return normalizeOpenAICompactMode(mode)
 }
 
-// GetOpenAIGPT5VariantLock returns the account-level GPT-5.6 variant policy.
-// It only affects OpenAI Codex protocol accounts; auto leaves normal alias
-// normalization unchanged.
-func (a *Account) GetOpenAIGPT5VariantLock() string {
-	if a == nil || !a.IsOpenAI() || a.Extra == nil {
-		return OpenAIGPT5VariantLockAuto
-	}
-	lock, _ := a.Extra["openai_gpt5_variant_lock"].(string)
-	return normalizeOpenAIGPT5VariantLock(lock)
-}
-
-// ApplyOpenAIGPT5VariantLock pins GPT-5.6 family aliases to the configured
-// variant. It does not affect GPT-5.4/5.5, GPT-6, or non-Codex OpenAI API-key
-// accounts, and cannot control hidden routing performed by the upstream.
-func (a *Account) ApplyOpenAIGPT5VariantLock(model string) string {
-	if a == nil || !a.UsesOpenAICodexProtocol() {
-		return strings.TrimSpace(model)
-	}
-	lock := a.GetOpenAIGPT5VariantLock()
-	if lock == OpenAIGPT5VariantLockAuto {
-		return strings.TrimSpace(model)
-	}
-	normalized := normalizeKnownOpenAICodexModel(model)
-	if !isOpenAIGPT56Model(normalized) {
-		return strings.TrimSpace(model)
-	}
-	return "gpt-5.6-" + lock
-}
-
 // OpenAICompactSupportKnown reports whether compact capability is known for this
 // account and, when known, whether it is supported.
 func (a *Account) OpenAICompactSupportKnown() (supported bool, known bool) {
@@ -1161,13 +1111,6 @@ func (a *Account) ResolveCompactMappedModel(requestedModel string) (mappedModel 
 }
 
 func (a *Account) GetBaseURL() string {
-	if a.IsCursor() {
-		base, _, err := cursorBridgeConfig()
-		if err != nil {
-			return "http://cursor-bridge-unconfigured.invalid"
-		}
-		return base
-	}
 	if a.Type != AccountTypeAPIKey {
 		return ""
 	}

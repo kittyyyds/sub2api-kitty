@@ -220,14 +220,6 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		if normalized {
 			body = normalizedBody
 		}
-		lockedModel := account.ApplyOpenAIGPT5VariantLock(strings.TrimSpace(gjson.GetBytes(body, "model").String()))
-		if lockedModel != "" && lockedModel != strings.TrimSpace(gjson.GetBytes(body, "model").String()) {
-			lockedBody, lockErr := sjson.SetBytes(body, "model", lockedModel)
-			if lockErr != nil {
-				return nil, fmt.Errorf("set GPT-5.6 variant lock: %w", lockErr)
-			}
-			body = lockedBody
-		}
 		if account.IsOpenAIOAuthLike() {
 			aliasedBody, reverse, aliased, aliasErr := aliasOpenAIOAuthReservedToolNamesBody(body)
 			if aliasErr != nil {

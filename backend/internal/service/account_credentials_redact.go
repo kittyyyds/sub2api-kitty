@@ -40,13 +40,6 @@ func MergePreservingSensitiveCreds(existing, incoming map[string]any) map[string
 	for k, v := range incoming {
 		out[k] = v
 	}
-	// Cursor is a credential routing identity, so an unrelated partial edit must
-	// not silently turn its user key into an ordinary Anthropic API key.
-	if existing["cursor_auth_mode"] == CursorAuthMode {
-		if _, provided := incoming["cursor_auth_mode"]; !provided {
-			out["cursor_auth_mode"] = CursorAuthMode
-		}
-	}
 	for _, key := range SensitiveCredentialKeys {
 		if _, hasIncoming := incoming[key]; hasIncoming {
 			continue

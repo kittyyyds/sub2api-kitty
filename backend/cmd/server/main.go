@@ -189,6 +189,7 @@ func runMainServer() {
 	}
 
 	buildInfo := handler.BuildInfo{
+		Commit: Commit,
 		Version:   Version,
 		BuildType: BuildType,
 	}

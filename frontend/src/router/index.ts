@@ -663,6 +663,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/kitty-risk-control',
+    name: 'AdminKittyRiskControl',
+    component: () => import('@/views/admin/KittyRiskControlView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Kitty Risk', titleKey: 'admin.kittyRisk.title' }
+  },
+  {
     path: '/admin/risk-control',
     name: 'AdminRiskControl',
     component: () => import('@/views/admin/RiskControlView.vue'),

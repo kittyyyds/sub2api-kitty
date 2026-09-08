@@ -654,7 +654,6 @@ export async function syncUpstreamModels(id: number): Promise<SyncUpstreamModels
 export interface SyncUpstreamPreviewParams {
   platform: string
   type: string
-  cursor_auth_mode?: string
   base_url?: string
   api_key: string
   model_mapping?: Record<string, string>

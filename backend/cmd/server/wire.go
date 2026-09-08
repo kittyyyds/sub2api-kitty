@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"github.com/Wei-Shaw/sub2api/internal/kittyrisk"
 	"log"
 	"net/http"
 	"sync"
@@ -128,6 +129,7 @@ func provideCleanup(
 	auditLog *service.AuditLogService,
 	openAIAutoReset *service.OpenAIQuotaAutoResetService,
 	promptAudit *securityaudit.PromptService,
+	kittyRisk *kittyrisk.ContentModerationService,
 	pluginManager *service.PluginManager,
 ) func() {
 	return func() {
@@ -141,6 +143,7 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"KittyRisk", func() error { kittyRisk.CloseContentModerationRuntime(); return nil }},
 			{"PluginManager", func() error {
 				if pluginManager != nil {
 					pluginManager.Stop()

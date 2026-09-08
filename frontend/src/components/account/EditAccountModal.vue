@@ -28,8 +28,7 @@
 
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
-        <CursorAccountFields v-if="isCursorAccount" v-model="editApiKey" editing :account-id="account.id" />
-        <div v-if="!isCursorAccount && (!isCNApiKeyAccount || editApiProtocol !== 'adaptive')">
+        <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
             v-model="editBaseUrl"
@@ -63,7 +62,7 @@
             @select="onCnPresetSelect"
           />
         </div>
-        <div v-else-if="!isCursorAccount">
+        <div v-else>
           <label class="input-label">{{ t('admin.accounts.cnProviders.apiProtocol.endpoints') }}</label>
           <div class="mt-2 space-y-3">
             <div v-for="item in editAdaptiveProtocolOptions" :key="item.value">
@@ -148,7 +147,7 @@
           </div>
           <p class="input-hint mt-2">{{ t('admin.accounts.cnProviders.zhipuTeam.hint') }}</p>
         </div>
-        <div v-if="!isCursorAccount">
+        <div>
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
           <input
             v-model="editApiKey"
@@ -1541,8 +1540,7 @@
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
         </div>
-        <ProxyPoolSelector v-if="!isCursorAccount" v-model="form.proxy_pool" :proxies="proxies" />
-        <p v-else class="input-hint">{{ t('admin.accounts.cursor.proxyHelp') }}</p>
+        <ProxyPoolSelector v-model="form.proxy_pool" :proxies="proxies" />
       </div>
 
       <UpstreamRequestIdHeaderField
@@ -1863,7 +1861,7 @@
       </div>
 
       <div
-        v-if="account?.type === 'apikey' && !isCursorAccount"
+        v-if="account?.type === 'apikey'"
         class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div>
@@ -2194,17 +2192,6 @@
           </div>
           <div class="w-44">
             <Select v-model="openAICompactMode" :options="openAICompactModeOptions" />
-          </div>
-        </div>
-        <div class="flex items-center justify-between gap-4">
-          <div class="min-w-0">
-            <label class="input-label mb-0">{{ t('admin.accounts.openai.gpt5VariantLock') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.openai.gpt5VariantLockDesc') }}
-            </p>
-          </div>
-          <div class="w-44 flex-shrink-0">
-            <Select v-model="openAIGPT5VariantLock" :options="openAIGPT5VariantLockOptions" />
           </div>
         </div>
         <div class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">
@@ -2924,7 +2911,6 @@
 </template>
 
 <script setup lang="ts">
-import CursorAccountFields from './CursorAccountFields.vue'
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -2937,7 +2923,6 @@ import type {
   AdminGroup,
   CheckMixedChannelResponse,
   OpenAICompactMode,
-  OpenAIGPT5VariantLock,
   OpenAIResponsesMode,
   OpenAIEndpointCapability,
   OllamaCloudUsageState
@@ -3065,7 +3050,6 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
-const isCursorAccount = computed(() => props.account?.platform === 'anthropic' && props.account?.credentials?.cursor_auth_mode === 'user_api_key')
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）account_mode / api_protocol 编辑 ──
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
@@ -3335,7 +3319,6 @@ const openAILongContextBillingEnabled = ref(false)
 // OpenAI 订阅档位（Plus/Pro/Free）手动覆盖值,存于 credentials.plan_type;'' 表示清空/自动识别
 const editPlanType = ref<string>('')
 const openAICompactMode = ref<OpenAICompactMode>('auto')
-const openAIGPT5VariantLock = ref<OpenAIGPT5VariantLock>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 // Images 非流式响应缺 b64_json 时由网关下载 url 回填（仅 OpenAI API Key）。
 const openAIImagesUrlToB64JsonEnabled = ref(false)
@@ -3472,12 +3455,6 @@ const openAICompactModeOptions = computed(() => [
   { value: 'auto', label: t('admin.accounts.openai.compactModeAuto') },
   { value: 'force_on', label: t('admin.accounts.openai.compactModeForceOn') },
   { value: 'force_off', label: t('admin.accounts.openai.compactModeForceOff') }
-])
-const openAIGPT5VariantLockOptions = computed(() => [
-  { value: 'auto', label: t('admin.accounts.openai.gpt5VariantLockAuto') },
-  { value: 'sol', label: t('admin.accounts.openai.gpt5VariantLockSol') },
-  { value: 'terra', label: t('admin.accounts.openai.gpt5VariantLockTerra') },
-  { value: 'luna', label: t('admin.accounts.openai.gpt5VariantLockLuna') }
 ])
 // OpenAI 订阅档位手动覆盖选项(清空 + Plus/Pro/Free;别名/自定义值友好显示且保留 canonical)
 const planTypeOptions = computed(() =>
@@ -3829,7 +3806,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openAILongContextBillingEnabled.value = false
   editPlanType.value = ''
   openAICompactMode.value = 'auto'
-  openAIGPT5VariantLock.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
   openAICompactModelMappings.value = []
@@ -3853,9 +3829,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       ? readPlanType(newAccount.credentials as Record<string, unknown> | undefined)
       : ''
     openAICompactMode.value = (extra?.openai_compact_mode as OpenAICompactMode) || 'auto'
-    openAIGPT5VariantLock.value = (['auto', 'sol', 'terra', 'luna'].includes(String(extra?.openai_gpt5_variant_lock))
-      ? String(extra?.openai_gpt5_variant_lock)
-      : 'auto') as OpenAIGPT5VariantLock
     if (newAccount.type === 'apikey') {
       openAIResponsesMode.value = normalizeOpenAIResponsesMode(extra?.openai_responses_mode)
       openAIEndpointCapabilities.value = readOpenAIEndpointCapabilities(
@@ -4759,7 +4732,7 @@ const handleSubmit = async () => {
       updatePayload.load_factor = 0
     }
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
-    if (props.account.type === 'apikey' && !isCursorAccount.value) {
+    if (props.account.type === 'apikey') {
       updatePayload.upstream_billing_probe_enabled = upstreamBillingAutoProbeEnabled.value
       updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
       if (upstreamBillingRateSyncEnabled.value) {
@@ -4777,13 +4750,6 @@ const handleSubmit = async () => {
       const newCredentials: Record<string, unknown> = {
         ...currentCredentials,
         base_url: newBaseUrl
-      }
-      if (isCursorAccount.value) {
-        delete newCredentials.base_url
-        if (editApiKey.value.trim() && !/^crsr_[A-Za-z0-9_-]{8,512}$/.test(editApiKey.value.trim())) {
-          appStore.showError(t('admin.accounts.cursor.invalidKey'))
-          return
-        }
       }
 
       // 国产供应商：模式与协议写入凭据（决定额度/余额探测与转发端点/格式）。
@@ -5299,11 +5265,6 @@ const handleSubmit = async () => {
         delete newExtra.openai_compact_mode
       } else {
         newExtra.openai_compact_mode = openAICompactMode.value
-      }
-      if (openAIGPT5VariantLock.value === 'auto') {
-        delete newExtra.openai_gpt5_variant_lock
-      } else {
-        newExtra.openai_gpt5_variant_lock = openAIGPT5VariantLock.value
       }
 		if (props.account.type === 'apikey') {
         if (!openAITextGenerationCapabilityEnabled.value || openAIResponsesMode.value === 'auto') {

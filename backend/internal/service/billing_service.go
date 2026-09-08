@@ -505,14 +505,14 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerTokenPriority:     0.4e-6,
 	}
 	s.fallbackPrices["gpt-5.6-luna"] = &ModelPricing{
-		InputPricePerToken:                 0.2e-6,
-		InputPricePerTokenPriority:         0.4e-6,
-		OutputPricePerToken:                1.2e-6,
-		OutputPricePerTokenPriority:        2.4e-6,
-		CacheCreationPricePerToken:         0.25e-6,
-		CacheCreationPricePerTokenPriority: 0.5e-6,
-		CacheReadPricePerToken:             0.02e-6,
-		CacheReadPricePerTokenPriority:     0.04e-6,
+		InputPricePerToken:                 4e-07,
+		InputPricePerTokenPriority:         8e-07,
+		OutputPricePerToken:                2.4e-06,
+		OutputPricePerTokenPriority:        4.8e-06,
+		CacheCreationPricePerToken:         5e-07,
+		CacheCreationPricePerTokenPriority: 1e-06,
+		CacheReadPricePerToken:             4e-08,
+		CacheReadPricePerTokenPriority:     8e-08,
 	}
 
 	s.fallbackPrices["gpt-5.4-mini"] = &ModelPricing{

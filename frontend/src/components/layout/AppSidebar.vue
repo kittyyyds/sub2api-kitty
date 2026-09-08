@@ -888,6 +888,7 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/prompt-audit', label: t('nav.promptAudit'), icon: ShieldIcon },
       ],
     },
+    { path: '/admin/kitty-risk-control', label: t('admin.kittyRisk.title'), icon: ShieldIcon },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     {

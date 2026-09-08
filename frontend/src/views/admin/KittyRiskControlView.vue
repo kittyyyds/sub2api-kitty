@@ -1,0 +1,2590 @@
+<template>
+  <AppLayout>
+    <div class="space-y-7" data-test="risk-control-view">
+      <div v-if="loading" class="flex min-h-64 items-center justify-center">
+        <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600"></div>
+      </div>
+
+      <div
+        v-else-if="configLoadError"
+        class="flex min-h-64 flex-col items-center justify-center gap-4 text-center"
+        data-test="risk-config-load-error"
+      >
+        <Icon name="exclamationTriangle" size="lg" class="text-amber-500" />
+        <div>
+          <p class="font-medium text-gray-900 dark:text-white">{{ t('admin.kittyRisk.configUnavailable') }}</p>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.kittyRisk.configUnavailableHint') }}</p>
+        </div>
+        <button type="button" class="btn btn-secondary inline-flex items-center gap-2" @click="loadInitial">
+          <Icon name="refresh" size="sm" />
+          {{ t('admin.kittyRisk.retryLoad') }}
+        </button>
+      </div>
+
+      <template v-else>
+        <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.kittyRisk.title') }}
+            </h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.kittyRisk.description') }}
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn btn-secondary inline-flex items-center gap-2"
+              :disabled="refreshing || !configLoaded"
+              :title="t('admin.kittyRisk.refresh')"
+              @click="refreshAll"
+            >
+              <Icon name="refresh" size="sm" :class="refreshing ? 'animate-spin' : ''" />
+              {{ t('admin.kittyRisk.refresh') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary inline-flex items-center gap-2"
+              :disabled="saving || !configLoaded"
+              data-test="save-risk-control"
+              @click="saveConfig"
+            >
+              <Icon name="check" size="sm" />
+              {{ saving ? t('common.saving') : t('admin.kittyRisk.saveConfig') }}
+            </button>
+          </div>
+        </header>
+
+        <div
+          v-if="statusLoadError"
+          class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-100"
+          role="alert"
+          data-test="risk-status-error"
+        >
+          <span>{{ t('admin.kittyRisk.statusUnavailable') }}</span>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm inline-flex items-center gap-1.5"
+            :disabled="statusLoading"
+            @click="loadStatus(false)"
+          >
+            <Icon name="refresh" size="xs" :class="statusLoading ? 'animate-spin' : ''" />
+            {{ t('admin.kittyRisk.retryStatus') }}
+          </button>
+        </div>
+
+        <div
+          class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(11,minmax(0,1fr))]"
+          data-test="risk-overview"
+        >
+          <div
+            v-for="item in overviewItems"
+            :key="item.key"
+            class="rounded-lg border border-gray-100 bg-white px-4 py-3 shadow-sm dark:border-dark-700 dark:bg-dark-800"
+            :class="item.key === 'second-layer-cache' ? 'xl:col-span-3' : 'xl:col-span-2'"
+            :data-test="`risk-overview-${item.key}`"
+            :data-cache-hits="item.cacheMetrics?.hits"
+            :data-cache-misses="item.cacheMetrics?.misses"
+            :data-cache-writes="item.cacheMetrics?.writes"
+            :data-cache-errors="item.cacheMetrics?.errors"
+          >
+            <div class="flex items-center gap-3">
+              <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg" :class="item.iconClass">
+                <Icon :name="item.icon" size="sm" />
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ item.label }}</p>
+                <p class="mt-1 truncate text-lg font-semibold text-gray-900 dark:text-white">{{ item.value }}</p>
+                <p class="truncate text-xs text-gray-500 dark:text-gray-400" :title="item.meta">{{ item.meta }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="rounded-lg bg-blue-50 p-4 text-sm leading-6 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200">{{ t('admin.kittyRisk.releaseGateHelp') }}</p>
+        <section class="border-y border-gray-200 py-6 dark:border-dark-700" aria-labelledby="reviewers-heading">
+          <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="reviewers-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.kittyRisk.reviewersTitle') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.kittyRisk.reviewersSummary') }}
+              </p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-gray-600 dark:text-gray-300">{{ t('admin.kittyRisk.enabled') }}</span>
+              <Toggle v-model="configForm.enabled" data-test="risk-control-enabled" />
+              <span class="text-sm text-gray-600 dark:text-gray-300">{{ t('admin.kittyRisk.evidenceEnabled') }}</span>
+              <Toggle v-model="configForm.evidence_enabled" data-test="kitty-risk-evidence-enabled" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <article class="rounded-lg border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-800">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex min-w-0 items-start gap-3">
+                  <span
+                    class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
+                  >
+                    <Icon name="cloud" size="md" />
+                  </span>
+                  <div class="min-w-0">
+                    <h3 class="font-semibold text-gray-900 dark:text-white">
+                      {{ t('admin.kittyRisk.onlineReviewersTitle') }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {{
+                        t('admin.kittyRisk.onlineReviewersMeta', {
+                          threshold: percent(configForm.deepseek_threshold),
+                        })
+                      }}
+                    </p>
+                  </div>
+                </div>
+                <Toggle
+                  v-model="configForm.remote_reviewers_enabled"
+                  data-test="deepseek-enabled"
+                  data-reviewer-pool-toggle="true"
+                  @update:model-value="configForm.deepseek_enabled = configForm.remote_reviewers_enabled"
+                />
+              </div>
+              <div class="mt-4 flex flex-wrap gap-2 text-xs">
+                <span class="rounded-md bg-gray-100 px-2 py-1 text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+                  {{ t('admin.kittyRisk.nonThinking') }}
+                </span>
+                <span class="rounded-md bg-gray-100 px-2 py-1 text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+                  {{ t('admin.kittyRisk.textOnly') }}
+                </span>
+                <span
+                  class="rounded-md px-2 py-1"
+                  :class="reachableChannelCount > 0 ? statusClasses.healthy : statusClasses.unknown"
+                >
+                  {{
+                    t('admin.kittyRisk.remoteProviderHealthSummary', {
+                      reachable: reachableChannelCount,
+                      enabled: enabledChannelCount,
+                      providers: reachableProviderCount,
+                    })
+                  }}
+                </span>
+                <span
+                  class="rounded-md px-2 py-1"
+                  :class="restrictionConsensusReady ? statusClasses.healthy : statusClasses.warning"
+                  data-test="restriction-consensus-gate"
+                >
+                  {{
+                    t(
+                      restrictionConsensusReady
+                        ? 'admin.kittyRisk.restrictionConsensusReady'
+                        : 'admin.kittyRisk.restrictionConsensusUnavailable',
+                      {
+                        reachable: reachableProviderCount,
+                        required: restrictedConsensusRequired,
+                      }
+                    )
+                  }}
+                </span>
+              </div>
+              <div class="mt-4 border-t border-gray-100 pt-4 dark:border-dark-700">
+                <p class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                  {{ t('admin.kittyRisk.remoteUnavailablePolicy') }}
+                </p>
+                <div
+                  class="mt-2 inline-flex rounded-lg bg-gray-100 p-1 dark:bg-dark-900"
+                  role="group"
+                  :aria-label="t('admin.kittyRisk.remoteUnavailablePolicy')"
+                >
+                  <button
+                    type="button"
+                    class="min-h-9 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                    :class="
+                      configForm.remote_unavailable_policy === 'risk_tiered'
+                        ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
+                        : 'text-gray-500 dark:text-gray-400'
+                    "
+                    data-test="remote-unavailable-risk-tiered"
+                    @click="configForm.remote_unavailable_policy = 'risk_tiered'"
+                  >
+                    {{ t('admin.kittyRisk.remoteUnavailableRiskTiered') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="min-h-9 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                    :class="
+                      configForm.remote_unavailable_policy === 'fail_closed'
+                        ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
+                        : 'text-gray-500 dark:text-gray-400'
+                    "
+                    data-test="remote-unavailable-fail-closed"
+                    @click="configForm.remote_unavailable_policy = 'fail_closed'"
+                  >
+                    {{ t('admin.kittyRisk.remoteUnavailableFailClosed') }}
+                  </button>
+                </div>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {{
+                    configForm.remote_unavailable_policy === 'risk_tiered'
+                      ? t('admin.kittyRisk.remoteUnavailableRiskTieredHint')
+                      : t('admin.kittyRisk.remoteUnavailableFailClosedHint')
+                  }}
+                </p>
+              </div>
+            </article>
+
+          </div>
+        </section>
+
+        <section aria-labelledby="managed-providers-heading" data-test="managed-provider-catalog">
+          <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="managed-providers-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.kittyRisk.managedProvidersTitle') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.kittyRisk.managedProvidersSummary') }}
+              </p>
+            </div>
+            <span class="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+              {{ t('admin.kittyRisk.managedProvidersNonThinking') }}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <article
+              v-for="provider in managedProviderRows"
+              :key="provider.id"
+              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+              :data-test="`managed-provider-${provider.id}`"
+            >
+              <div class="flex min-w-0 items-start gap-3">
+                <span
+                  class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300"
+                >
+                  <Icon name="server" size="sm" />
+                </span>
+                <div class="min-w-0">
+                  <h3 class="truncate font-semibold text-gray-900 dark:text-white">{{ provider.label }}</h3>
+                  <p class="mt-1 truncate font-mono text-xs text-gray-500 dark:text-gray-400">{{ provider.id }}</p>
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-1.5">
+                <span
+                  v-for="model in provider.models"
+                  :key="model"
+                  class="rounded-md bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:bg-dark-700 dark:text-gray-300"
+                >
+                  {{ model }}
+                </span>
+              </div>
+              <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.kittyRisk.managedProviderModelsCount', { count: provider.models.length }) }}
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section aria-labelledby="stages-heading">
+          <div class="mb-4">
+            <h2 id="stages-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.kittyRisk.layerStagesTitle') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.kittyRisk.layerStagesSummary') }}
+            </p>
+          </div>
+
+          <div class="divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-700 dark:border-dark-700">
+            <div
+              v-for="layer in layerRows"
+              :key="layer.id"
+              class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
+              :data-test="`${layer.id}-stage-row`"
+            >
+              <div>
+                <p class="font-medium text-gray-900 dark:text-white">{{ layer.label }}</p>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ layer.meta }}</p>
+              </div>
+              <div
+                class="inline-flex w-fit rounded-lg bg-gray-100 p-1 dark:bg-dark-800"
+                role="group"
+                :aria-label="layer.label"
+              >
+                <button
+                  v-for="stage in stageOptions"
+                  :key="stage.value"
+                  type="button"
+                  class="min-h-9 min-w-24 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                  :class="
+                    layer.stage === stage.value
+                      ? stage.activeClass
+                      : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                  "
+                  :data-test="`${layer.id}-stage-${stage.value}`"
+                  @click="setLayerStage(layer.id, stage.value)"
+                >
+                  {{ stage.label }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div
+            class="mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-sm"
+            :class="secondLayerEnforceReady ? statusClasses.healthy : statusClasses.warning"
+            data-test="enforce-health-gate"
+          >
+            <Icon
+              :name="secondLayerEnforceReady ? 'checkCircle' : 'exclamationTriangle'"
+              size="sm"
+              class="mt-0.5 flex-shrink-0"
+            />
+            <span>{{ enforceGateText }}</span>
+          </div>
+        </section>
+
+        <section aria-labelledby="channels-heading" data-test="deepseek-channels">
+          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="channels-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.kittyRisk.remoteReviewersChannelsTitle') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.kittyRisk.remoteReviewersChannelsSummary') }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn btn-secondary inline-flex items-center gap-2"
+              data-test="add-deepseek-channel"
+              @click="addChannel"
+            >
+              <Icon name="plus" size="sm" />
+              {{ t('admin.kittyRisk.addChannel') }}
+            </button>
+          </div>
+
+          <p
+            v-if="configForm.deepseek_channels.length === 0"
+            class="border-y border-gray-200 py-8 text-center text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400"
+          >
+            {{ t('admin.kittyRisk.noRemoteReviewers') }}
+          </p>
+
+          <div v-else class="space-y-3">
+            <article
+              v-for="(channel, index) in configForm.deepseek_channels"
+              :key="channel.id"
+              class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+              :data-test="`deepseek-channel-${index}`"
+            >
+              <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-3">
+                  <span
+                    class="flex h-8 min-w-8 items-center justify-center rounded-md bg-gray-100 px-2 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+                  >
+                    {{ index + 1 }}
+                  </span>
+                  <div class="min-w-0">
+                    <p class="truncate font-medium text-gray-900 dark:text-white">
+                      {{ channel.name || t('admin.kittyRisk.unnamedChannel') }}
+                    </p>
+                    <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                      {{ reviewerProviderLabel(channel.provider) }} · {{ channel.id }}
+                    </p>
+                  </div>
+                  <span class="rounded-md px-2 py-1 text-xs font-medium" :class="channelStatusClass(channel)">
+                    {{ channelStatusLabel(channel) }}
+                  </span>
+                  <span
+                    class="rounded-md px-2 py-1 text-xs font-medium"
+                    :class="heartbeatStatusClass(channel)"
+                    :data-test="`deepseek-channel-heartbeat-status-${index}`"
+                  >
+                    {{ t('admin.kittyRisk.heartbeatLabel') }}: {{ heartbeatStatusLabel(channel) }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <Toggle v-model="channel.enabled" :data-test="`deepseek-channel-enabled-${index}`" />
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm p-2"
+                    :disabled="index === 0"
+                    :title="t('admin.kittyRisk.moveChannelUp')"
+                    :aria-label="t('admin.kittyRisk.moveChannelUp')"
+                    :data-test="`deepseek-channel-move-up-${index}`"
+                    @click="moveChannel(index, -1)"
+                  >
+                    <Icon name="arrowUp" size="sm" />
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm p-2"
+                    :disabled="index === configForm.deepseek_channels.length - 1"
+                    :title="t('admin.kittyRisk.moveChannelDown')"
+                    :aria-label="t('admin.kittyRisk.moveChannelDown')"
+                    :data-test="`deepseek-channel-move-down-${index}`"
+                    @click="moveChannel(index, 1)"
+                  >
+                    <Icon name="arrowDown" size="sm" />
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm p-2 text-red-600 dark:text-red-300"
+                    :title="t('admin.kittyRisk.removeChannel')"
+                    :aria-label="t('admin.kittyRisk.removeChannel')"
+                    @click="removeChannel(index)"
+                  >
+                    <Icon name="trash" size="sm" />
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
+                <label class="xl:col-span-2">
+                  <span class="input-label">{{ t('admin.kittyRisk.channelProvider') }}</span>
+                  <select
+                    :value="normalizeReviewerProvider(channel.provider)"
+                    class="input"
+                    :data-test="`remote-reviewer-provider-${index}`"
+                    @change="setReviewerProvider(channel, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="provider in reviewerProviderOptions" :key="provider.value" :value="provider.value">
+                      {{ provider.label }}
+                    </option>
+                  </select>
+                </label>
+                <label class="xl:col-span-3">
+                  <span class="input-label">{{ t('admin.kittyRisk.channelName') }}</span>
+                  <input
+                    v-model.trim="channel.name"
+                    class="input"
+                    type="text"
+                    :data-test="`deepseek-channel-name-${index}`"
+                  />
+                </label>
+                <label class="xl:col-span-4">
+                  <span class="input-label">{{ t('admin.kittyRisk.channelBaseURL') }}</span>
+                  <input
+                    v-model.trim="channel.base_url"
+                    class="input"
+                    type="url"
+                    :placeholder="reviewerProviderPreset(channel.provider).baseURL"
+                    :data-test="`deepseek-channel-url-${index}`"
+                  />
+                </label>
+                <label class="xl:col-span-3">
+                  <span class="input-label">{{ t('admin.kittyRisk.channelModel') }}</span>
+                  <input
+                    v-model.trim="channel.model"
+                    class="input"
+                    type="text"
+                    :placeholder="reviewerProviderPreset(channel.provider).model"
+                    :data-test="`deepseek-channel-model-${index}`"
+                  />
+                </label>
+                <label class="xl:col-span-2">
+                  <span class="input-label">{{ t('admin.kittyRisk.channelTimeout') }}</span>
+                  <input
+                    v-model.number="channel.timeout_ms"
+                    class="input"
+                    type="number"
+                    min="100"
+                    max="30000"
+                    step="100"
+                    :data-test="`deepseek-channel-timeout-${index}`"
+                  />
+                </label>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                <div>
+                  <label :for="`channel-key-${channel.id}`" class="input-label">{{
+                    t('admin.kittyRisk.channelAPIKey')
+                  }}</label>
+                  <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <input
+                      :id="`channel-key-${channel.id}`"
+                      v-model="channel.api_key"
+                      class="input font-mono"
+                      type="password"
+                      autocomplete="new-password"
+                      :placeholder="
+                        channel.api_key_configured
+                          ? channel.api_key_masked
+                          : t('admin.kittyRisk.channelAPIKeyPlaceholder')
+                      "
+                      :disabled="channel.clear_api_key"
+                      :data-test="`deepseek-channel-key-${index}`"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn-secondary inline-flex items-center justify-center gap-2"
+                      :class="channel.clear_api_key ? 'border-red-300 text-red-700 dark:text-red-300' : ''"
+                      :disabled="!channel.api_key_configured && !channel.clear_api_key"
+                      @click="toggleClearChannelKey(channel)"
+                    >
+                      <Icon :name="channel.clear_api_key ? 'x' : 'trash'" size="sm" />
+                      {{
+                        channel.clear_api_key
+                          ? t('admin.kittyRisk.keepChannelKey')
+                          : t('admin.kittyRisk.clearChannelKey')
+                      }}
+                    </button>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ channelKeyStatus(channel) }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary inline-flex min-w-32 items-center justify-center gap-2"
+                  :disabled="!canTestChannel(channel) || testingChannelID !== null"
+                  :data-test="`test-api-availability-${index}`"
+                  @click="testChannel(channel)"
+                >
+                  <Icon name="beaker" size="sm" :class="testingChannelID === channel.id ? 'animate-pulse' : ''" />
+                  {{
+                    testingChannelID === channel.id
+                      ? t('admin.kittyRisk.testingAPIAvailability')
+                      : t('admin.kittyRisk.testAPIAvailability')
+                  }}
+                </button>
+              </div>
+
+              <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                <span>{{ t('admin.kittyRisk.channelBreaker') }}: {{ breakerLabel(channel) }}</span>
+                <span>{{ t('admin.kittyRisk.channelLatency') }}: {{ latencyText(channel.last_latency_ms) }}</span>
+                <span
+                  >{{ t('admin.kittyRisk.channelHealthChecked') }}:
+                  {{ dateOrDash(channel.last_health_checked_at) }}</span
+                >
+                <span
+                  :data-test="`deepseek-channel-heartbeat-${index}`"
+                  :title="heartbeatError(channel) || undefined"
+                >
+                  {{ t('admin.kittyRisk.heartbeatChecked') }}:
+                  {{ dateOrDash(heartbeatCheckedAt(channel)) }}
+                  <template v-if="heartbeatLatency(channel) !== undefined">
+                    · {{ latencyText(heartbeatLatency(channel)) }}
+                  </template>
+                  <template v-if="heartbeatHTTPStatus(channel)"> · HTTP {{ heartbeatHTTPStatus(channel) }}</template>
+                </span>
+                <span v-if="channel.last_error" class="text-amber-700 dark:text-amber-300">{{
+                  channel.last_error
+                }}</span>
+                <span v-if="heartbeatError(channel)" class="text-amber-700 dark:text-amber-300">
+                  {{ heartbeatError(channel) }}
+                </span>
+              </div>
+
+              <div
+                v-if="channelTestResults[channel.id]"
+                class="mt-3 rounded-lg border px-3 py-2 text-sm"
+                :class="channelTestResults[channel.id]?.reachable ? statusClasses.healthy : statusClasses.warning"
+                :data-test="`deepseek-channel-test-result-${index}`"
+              >
+                {{ channelTestResultText(channelTestResults[channel.id]!) }}
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="border-y border-gray-200 py-6 dark:border-dark-700" aria-labelledby="policy-heading">
+          <div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_180px_180px]">
+            <div>
+              <h2 id="policy-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.kittyRisk.policyTitle') }}
+              </h2>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <span
+                  class="rounded-md bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:bg-dark-700 dark:text-gray-300"
+                >
+                  {{ configForm.policy_version || '-' }}
+                </span>
+                <span
+                  v-for="category in policyCategories"
+                  :key="category"
+                  class="rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300"
+                >
+                  {{ t(`admin.kittyRisk.policyCategories.${category}`) }}
+                </span>
+              </div>
+            </div>
+            <label>
+              <span class="input-label">{{ t('admin.kittyRisk.confidenceThreshold') }}</span>
+              <input
+                :value="percent(configForm.deepseek_threshold)"
+                class="input bg-gray-50 dark:bg-dark-700"
+                type="text"
+                readonly
+                data-test="deepseek-threshold"
+              />
+            </label>
+            <label>
+              <span class="input-label">{{ t('admin.kittyRisk.totalReviewBudget') }}</span>
+              <input
+                v-model.number="configForm.deepseek_total_timeout_ms"
+                class="input"
+                type="number"
+                min="100"
+                max="120000"
+                step="100"
+                data-test="deepseek-total-timeout"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section aria-labelledby="keywords-heading">
+          <div class="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="keywords-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.kittyRisk.keywordTiersTitle') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.kittyRisk.keywordTiersSummary') }}
+              </p>
+            </div>
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+              {{
+                t('admin.kittyRisk.keywordCounts', { layer1: layer1Keywords.length, layer2: layer2Keywords.length })
+              }}
+            </span>
+          </div>
+          <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <label>
+              <span class="input-label">{{ t('admin.kittyRisk.layer1Keywords') }}</span>
+              <textarea
+                v-model="configForm.layer1_keywords_text"
+                class="input min-h-44 resize-y font-mono text-sm"
+                data-test="layer1-keywords"
+              ></textarea>
+              <span class="mt-2 block text-xs text-gray-500 dark:text-gray-400">{{
+                t('admin.kittyRisk.layer1KeywordsMeta')
+              }}</span>
+            </label>
+            <label>
+              <span class="input-label">{{ t('admin.kittyRisk.layer2Keywords') }}</span>
+              <textarea
+                v-model="configForm.layer2_keywords_text"
+                class="input min-h-44 resize-y font-mono text-sm"
+                data-test="layer2-keywords"
+              ></textarea>
+              <span class="mt-2 block text-xs text-gray-500 dark:text-gray-400">{{
+                t('admin.kittyRisk.layer2KeywordsMeta')
+              }}</span>
+            </label>
+          </div>
+        </section>
+
+        <details class="border-y border-gray-200 py-4 dark:border-dark-700" data-test="advanced-risk-settings">
+          <summary
+            class="flex cursor-pointer list-none items-center justify-between gap-3 font-medium text-gray-900 dark:text-white"
+          >
+            <span>{{ t('admin.kittyRisk.advancedSettings') }}</span>
+            <Icon name="chevronDown" size="sm" />
+          </summary>
+          <div class="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div class="space-y-4">
+              <h3 class="font-medium text-gray-900 dark:text-white">{{ t('admin.kittyRisk.scopeTitle') }}</h3>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.kittyRisk.allGroups') }}</span>
+                <Toggle v-model="configForm.all_groups" />
+              </label>
+              <div
+                v-if="!configForm.all_groups"
+                class="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-3 dark:border-dark-700"
+              >
+                <label
+                  v-for="group in groups"
+                  :key="group.id"
+                  class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                >
+                  <input
+                    v-model="configForm.group_ids"
+                    type="checkbox"
+                    :value="group.id"
+                    class="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  />
+                  <span class="truncate">{{ group.name }}</span>
+                </label>
+              </div>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.userEmailWhitelist') }}</span>
+                <textarea
+                  v-model="configForm.user_email_whitelist_text"
+                  class="input min-h-24 resize-y text-sm"
+                  :placeholder="t('admin.kittyRisk.userEmailWhitelistPlaceholder')"
+                ></textarea>
+              </label>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.modelFilter') }}</span>
+                <select v-model="configForm.model_filter_type" class="input" data-test="model-filter-type">
+                  <option value="all">{{ t('admin.kittyRisk.modelFilterAll') }}</option>
+                  <option value="include">{{ t('admin.kittyRisk.modelFilterInclude') }}</option>
+                  <option value="exclude">{{ t('admin.kittyRisk.modelFilterExclude') }}</option>
+                </select>
+              </label>
+              <textarea
+                v-if="configForm.model_filter_type !== 'all'"
+                v-model="configForm.model_filter_models_text"
+                class="input min-h-20 resize-y font-mono text-sm"
+                :placeholder="t('admin.kittyRisk.modelFilterModels')"
+                data-test="model-filter-models"
+              ></textarea>
+              <div v-if="configForm.model_filter_type !== 'all'" class="space-y-2" data-test="managed-model-filter-presets">
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.kittyRisk.managedProviderFilterHint') }}
+                </p>
+                <div v-for="provider in managedProviderRows" :key="provider.id" class="space-y-1.5">
+                  <p class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ provider.label }}</p>
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      v-for="model in provider.models"
+                      :key="model"
+                      type="button"
+                      class="inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs transition-colors"
+                      :class="
+                        isModelFilterSelected(model)
+                          ? 'border-primary-300 bg-primary-50 text-primary-700 dark:border-primary-700 dark:bg-primary-900/20 dark:text-primary-300'
+                          : 'border-gray-200 text-gray-600 hover:border-primary-300 hover:text-primary-700 dark:border-dark-600 dark:text-gray-300 dark:hover:border-primary-700 dark:hover:text-primary-300'
+                      "
+                      :data-test="`managed-model-filter-${model.replace(/[^a-z0-9]+/gi, '-')}`"
+                      @click="toggleModelFilterModel(model)"
+                    >
+                      <Icon :name="isModelFilterSelected(model) ? 'check' : 'plus'" size="xs" />
+                      {{ model }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-4">
+              <h3 class="font-medium text-gray-900 dark:text-white">{{ t('admin.kittyRisk.responseTitle') }}</h3>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.blockStatus') }}</span>
+                <input v-model.number="configForm.block_status" class="input" type="number" min="400" max="599" />
+              </label>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.blockMessage') }}</span>
+                <input v-model.trim="configForm.block_message" class="input" type="text" />
+              </label>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.kittyRisk.emailOnHit') }}</span>
+                <Toggle v-model="configForm.email_on_hit" />
+              </label>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.kittyRisk.autoBan') }}</span>
+                <Toggle v-model="configForm.auto_ban_enabled" />
+              </label>
+              <label class="flex items-center justify-between gap-3">
+                <span class="min-w-0">
+                  <span class="block text-sm text-gray-700 dark:text-gray-300">{{
+                    t('admin.kittyRisk.cyberPolicyExcludeBan')
+                  }}</span>
+                  <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">{{
+                    t('admin.kittyRisk.cyberPolicyExcludeBanHint')
+                  }}</span>
+                </span>
+                <Toggle
+                  v-model="configForm.cyber_policy_exclude_from_ban_count"
+                  class="flex-shrink-0"
+                  data-test="cyber-policy-exclude-ban"
+                />
+              </label>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.banThreshold') }}</span>
+                <input v-model.number="configForm.ban_threshold" class="input" type="number" min="1" max="1000" />
+              </label>
+            </div>
+
+            <div class="space-y-4">
+              <h3 class="font-medium text-gray-900 dark:text-white">{{ t('admin.kittyRisk.retentionTitle') }}</h3>
+              <label class="flex items-center justify-between gap-3">
+                <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.kittyRisk.recordNonHits') }}</span>
+                <Toggle v-model="configForm.record_non_hits" />
+              </label>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.hitRetentionDays') }}</span>
+                <input v-model.number="configForm.hit_retention_days" class="input" type="number" min="1" max="3650" />
+              </label>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.nonHitRetentionDays') }}</span>
+                <input v-model.number="configForm.non_hit_retention_days" class="input" type="number" min="1" max="3" />
+              </label>
+              <p v-if="status?.last_cleanup_at" class="text-xs text-gray-500 dark:text-gray-400">
+                {{
+                  t('admin.kittyRisk.archiveRetentionStatus', {
+                    count: status.last_cleanup_deleted_archives ?? 0,
+                    at: formatDateTime(status.last_cleanup_at),
+                  })
+                }}
+              </p>
+              <label>
+                <span class="input-label">{{ t('admin.kittyRisk.violationWindowHours') }}</span>
+                <input
+                  v-model.number="configForm.violation_window_hours"
+                  class="input"
+                  type="number"
+                  min="1"
+                  max="8760"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-lg border border-gray-200 p-4 dark:border-dark-700" data-test="flagged-hash-controls">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t('admin.kittyRisk.flaggedHashCount', { count: status?.flagged_hash_count ?? 0 }) }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.kittyRisk.flaggedHashHint') }}</p>
+              </div>
+              <button
+                type="button"
+                class="btn btn-secondary inline-flex items-center justify-center gap-2 text-red-600 hover:text-red-700 dark:text-red-300"
+                :disabled="hashActionLoading || !status || (status.flagged_hash_count ?? 0) === 0"
+                data-test="clear-flagged-hashes"
+                @click="requestClearFlaggedHashes"
+              >
+                <Icon name="trash" size="sm" :class="hashActionLoading ? 'animate-pulse' : ''" />
+                {{ t('admin.kittyRisk.clearFlaggedHashes') }}
+              </button>
+            </div>
+            <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+              <input
+                v-model.trim="flaggedHashInput"
+                type="text"
+                class="input font-mono text-sm"
+                :placeholder="t('admin.kittyRisk.flaggedHashPlaceholder')"
+                data-test="flagged-hash-input"
+                @keyup.enter="requestDeleteFlaggedHash"
+              />
+              <button
+                type="button"
+                class="btn btn-secondary inline-flex items-center justify-center gap-2"
+                :disabled="hashActionLoading || !isFlaggedHashInputValid"
+                data-test="delete-flagged-hash"
+                @click="requestDeleteFlaggedHash"
+              >
+                <Icon name="trash" size="sm" />
+                {{ t('admin.kittyRisk.deleteFlaggedHash') }}
+              </button>
+            </div>
+          </div>
+        </details>
+
+        <section
+          class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800"
+          aria-labelledby="records-heading"
+        >
+          <div class="border-b border-gray-200 px-4 py-4 dark:border-dark-700 sm:px-5">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 id="records-heading" class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.kittyRisk.records') }}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.kittyRisk.recordsSummary') }}</p>
+              </div>
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <input
+                  v-model.trim="filters.search"
+                  class="input"
+                  type="search"
+                  :placeholder="t('admin.kittyRisk.filters.search')"
+                  @keyup.enter="reloadLogs"
+                />
+                <input
+                  v-model="filters.from"
+                  class="input"
+                  type="datetime-local"
+                  :title="t('admin.kittyRisk.filters.from')"
+                  @change="reloadLogs"
+                />
+                <input
+                  v-model="filters.to"
+                  class="input"
+                  type="datetime-local"
+                  :title="t('admin.kittyRisk.filters.to')"
+                  @change="reloadLogs"
+                />
+              </div>
+            </div>
+
+            <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5" data-test="audit-log-filters">
+              <select v-model="filters.group_id" class="input" :title="t('admin.kittyRisk.filters.allGroups')" @change="reloadLogs">
+                <option :value="0">{{ t('admin.kittyRisk.filters.allGroups') }}</option>
+                <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+              </select>
+              <input
+                v-model.trim="filters.endpoint"
+                class="input"
+                type="text"
+                :placeholder="t('admin.kittyRisk.filters.allEndpoints')"
+                @keyup.enter="reloadLogs"
+              />
+              <select v-model="filters.context_class" class="input" @change="reloadLogs">
+                <option value="">{{ t('admin.kittyRisk.filters.allContexts') }}</option>
+                <option v-for="context in contextFilterOptions" :key="context" :value="context">{{ contextLabel(context) }}</option>
+              </select>
+              <input
+                v-model.trim="filters.model_profile"
+                class="input"
+                type="text"
+                :placeholder="t('admin.kittyRisk.filters.allProfiles')"
+                @keyup.enter="reloadLogs"
+              />
+              <input
+                v-model.trim="filters.decision_source"
+                class="input"
+                type="text"
+                :placeholder="t('admin.kittyRisk.filters.allDecisionSources')"
+                @keyup.enter="reloadLogs"
+              />
+            </div>
+
+            <nav
+              class="mt-4 grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-dark-900 sm:grid-cols-3 lg:grid-cols-6"
+              role="tablist"
+              :aria-label="t('admin.kittyRisk.records')"
+            >
+              <button
+                v-for="tab in recordTabs"
+                :key="tab.value"
+                type="button"
+                role="tab"
+                class="min-h-10 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                :class="
+                  filters.result === tab.value
+                    ? 'bg-white text-gray-900 shadow-sm dark:bg-dark-700 dark:text-white'
+                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                "
+                :aria-selected="filters.result === tab.value"
+                :data-test="`record-tab-${tab.value}`"
+                @click="selectLogView(tab.value)"
+              >
+                {{ tab.label }}
+              </button>
+            </nav>
+          </div>
+
+          <div class="overflow-x-auto" data-test="audit-log-table">
+            <table class="min-w-[1120px] w-full divide-y divide-gray-200 dark:divide-dark-700">
+              <thead class="bg-gray-50 dark:bg-dark-900/40">
+                <tr>
+                  <th
+                    v-for="column in logColumns"
+                    :key="column"
+                    class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t(`admin.kittyRisk.table.${column}`) }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+                <tr v-if="logsLoading">
+                  <td
+                    :colspan="logColumns.length"
+                    class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('common.loading') }}
+                  </td>
+                </tr>
+                <tr v-else-if="logs.length === 0">
+                  <td
+                    :colspan="logColumns.length"
+                    class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t('admin.kittyRisk.emptyLogs') }}
+                  </td>
+                </tr>
+                <tr v-for="row in logs" v-else :key="row.id" class="hover:bg-gray-50 dark:hover:bg-dark-700/50">
+                  <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                    {{ formatDateTime(row.created_at) }}
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <div class="max-w-48 truncate">{{ row.user_email || '-' }}</div>
+                    <div class="text-xs text-gray-400">{{ row.group_name || '-' }}</div>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <div class="max-w-48 truncate">{{ row.model || '-' }}</div>
+                    <div class="text-xs text-gray-400">{{ row.keyword_tier || row.context_class || '-' }}</div>
+                  </td>
+                  <td class="px-4 py-3">
+                    <span
+                      class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
+                      :class="resultClass(row)"
+                      data-test="audit-decision-label"
+                    >{{
+                      resultLabel(row)
+                    }}</span>
+                    <div
+                      v-if="decisionMeta(row)"
+                      class="mt-1 max-w-48 text-xs text-gray-500 dark:text-gray-400"
+                      data-test="audit-decision-meta"
+                    >
+                      {{ decisionMeta(row) }}
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <div>{{ row.deepseek_category || row.highest_category || '-' }}</div>
+                    <div class="text-xs text-gray-400" data-test="review-confidence">{{ confidenceText(row) }}</div>
+                    <div
+                      v-if="row.deepseek_reason"
+                      class="mt-1 max-w-48 truncate text-xs text-gray-500 dark:text-gray-400"
+                    >
+                      {{ row.deepseek_reason }}
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <div>{{ firstAttemptName(row) }}</div>
+                    <div class="text-xs text-gray-400">{{ attemptSummary(row) }}</div>
+                  </td>
+                  <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    {{ latencyText(row.upstream_latency_ms) }}
+                  </td>
+                  <td class="w-72 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                    <button
+                      type="button"
+                      class="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-gray-100 dark:hover:bg-dark-700"
+                      @click="openLog(row)"
+                    >
+                      <span class="min-w-0 flex-1 truncate">{{ row.input_excerpt || row.error || '-' }}</span>
+                      <Icon name="eye" size="xs" class="flex-shrink-0 text-gray-400" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <Pagination
+            v-if="pagination.total > 0"
+            :page="pagination.page"
+            :page-size="pagination.page_size"
+            :total="pagination.total"
+            @update:page="changePage"
+            @update:page-size="changePageSize"
+          />
+        </section>
+      </template>
+
+      <BaseDialog
+        :show="selectedLog !== null"
+        :title="t('admin.kittyRisk.inputDetailTitle')"
+        width="extra-wide"
+        @close="closeLogDetail"
+      >
+        <div v-if="selectedLog" class="space-y-5" data-test="audit-log-detail">
+          <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div v-for="item in selectedLogMeta" :key="item.label" class="min-w-0">
+              <dt class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ item.label }}</dt>
+              <dd class="mt-1 break-words text-sm text-gray-900 dark:text-white">{{ item.value }}</dd>
+            </div>
+          </dl>
+
+          <div
+            v-if="selectedLog.source_log_id && selectedLog.source_log_id !== selectedLog.id"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 dark:border-sky-900/50 dark:bg-sky-900/10"
+            data-test="replay-source"
+          >
+            <div class="min-w-0 text-sm text-sky-900 dark:text-sky-100">
+              <span class="font-medium">{{ t('admin.kittyRisk.auditReplaySource') }}</span>
+              <span class="ml-2 font-mono">#{{ selectedLog.source_log_id }}</span>
+            </div>
+            <button
+              type="button"
+              class="btn btn-secondary inline-flex items-center gap-1.5"
+              :disabled="sourceLogLoading"
+              data-test="open-replay-source"
+              @click="openReplaySource"
+            >
+              <Icon name="arrowRight" size="sm" />
+              {{ sourceLogLoading ? t('common.loading') : t('admin.kittyRisk.viewOriginalEvidence') }}
+            </button>
+            <p v-if="sourceLogError" class="basis-full text-xs text-amber-700 dark:text-amber-300">
+              {{ t('admin.kittyRisk.replaySourceUnavailable') }}
+            </p>
+          </div>
+
+          <div v-if="selectedLog.review_attempts?.length" data-test="review-attempts">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.kittyRisk.reviewAttempts') }}
+            </h3>
+            <div
+              class="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-dark-700 dark:border-dark-700"
+            >
+              <div
+                v-for="(attempt, index) in selectedLog.review_attempts"
+                :key="`${attempt.channel_id}-${index}`"
+                class="grid grid-cols-1 gap-1 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_120px_100px]"
+              >
+                <span class="truncate text-gray-900 dark:text-white">{{
+                  `${attempt.provider || attempt.reviewer || '-'} · ${attempt.channel_name || attempt.channel_id || '-'}`
+                }}</span>
+                <span class="text-gray-500 dark:text-gray-400">
+                  {{ attempt.verdict || attempt.outcome || (attempt.http_status ? `HTTP ${attempt.http_status}` : '-') }}
+                </span>
+                <span class="text-gray-500 dark:text-gray-400">{{ latencyText(attempt.latency_ms) }}</span>
+                <span v-if="attempt.error" class="text-xs text-amber-700 dark:text-amber-300 sm:col-span-3">{{
+                  attempt.error
+                }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="evidenceWindows.length" class="space-y-3" data-test="evidence-windows">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{
+                originalLog
+                  ? `${t('admin.kittyRisk.inputDetailContent')} · ${t('admin.kittyRisk.auditReplaySource')}`
+                  : t('admin.kittyRisk.inputDetailContent')
+              }}
+            </h3>
+            <div
+              v-for="(window, index) in evidenceWindows"
+              :key="`${window.path}-${index}`"
+              class="rounded-lg border border-gray-200 p-3 dark:border-dark-700"
+              data-test="evidence-window"
+            >
+              <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>{{ window.context_class }}</span>
+                <span class="font-mono">{{ window.path }}</span>
+              </div>
+              <div
+                class="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-md bg-gray-50 p-3 font-mono text-xs text-gray-700 dark:bg-dark-900/50 dark:text-gray-300"
+                data-test="evidence-text"
+              >
+                <span
+                  v-for="(segment, segmentIndex) in evidenceSegments(window)"
+                  :key="`${segmentIndex}-${segment.text}`"
+                  :class="
+                    segment.matched
+                      ? 'rounded bg-amber-200 px-0.5 text-amber-950 ring-1 ring-amber-400/70 dark:bg-amber-700/70 dark:text-amber-50 dark:ring-amber-300/60'
+                      : undefined
+                  "
+                  :data-test="segment.matched ? 'evidence-match' : undefined"
+                  :title="segment.matched ? evidenceMatchTitle(segment.matches) : undefined"
+                >{{ segment.text }}</span>
+              </div>
+              <div v-if="window.matches?.length" class="mt-2 flex flex-wrap gap-1">
+                <span
+                  v-for="match in window.matches"
+                  :key="`${match.rule_id}-${match.start}`"
+                  class="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                >
+                  {{ match.keyword }} · {{ match.tier }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="rounded-lg bg-gray-50 p-4 text-sm text-gray-700 dark:bg-dark-900/40 dark:text-gray-300">
+            {{ evidenceLog?.input_excerpt || evidenceLog?.error || '-' }}
+          </div>
+
+          <section
+            v-if="selectedLog.archive_id"
+            class="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dark-700"
+            data-test="archive-controls"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.kittyRisk.archiveTitle') }}</h3>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t(`admin.kittyRisk.archiveStatus.${selectedLog.archive_status || 'none'}`) }}
+                  <span v-if="selectedLog.archive_bytes"> · {{ selectedLog.archive_bytes }} bytes</span>
+                </p>
+              </div>
+              <div v-if="selectedLog.archive_status === 'available'" class="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  class="btn btn-secondary inline-flex items-center gap-1.5"
+                  :disabled="archiveActionLoading"
+                  @click="previewSelectedArchive"
+                >
+                  <Icon name="eye" size="sm" />
+                  {{ t('admin.kittyRisk.archivePreview') }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary inline-flex items-center gap-1.5"
+                  :disabled="archiveActionLoading"
+                  @click="downloadSelectedArchive"
+                >
+                  <Icon name="download" size="sm" />
+                  {{ t('admin.kittyRisk.archiveDownload') }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary inline-flex items-center gap-1.5 text-red-600 dark:text-red-300"
+                  :disabled="archiveActionLoading"
+                  @click="deleteSelectedArchive"
+                >
+                  <Icon name="trash" size="sm" />
+                  {{ t('admin.kittyRisk.archiveDelete') }}
+                </button>
+              </div>
+            </div>
+            <div v-if="archivePreview" class="rounded-md bg-gray-50 p-3 dark:bg-dark-900/50" data-test="archive-preview">
+              <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.kittyRisk.archivePreviewBytes', { returned: archivePreview.returned_bytes, total: archivePreview.total_bytes }) }}
+                <span v-if="archivePreview.truncated"> · {{ t('admin.kittyRisk.archivePreviewTruncated') }}</span>
+              </div>
+              <pre class="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-gray-700 dark:text-gray-300">{{ archivePreview.content }}</pre>
+            </div>
+            <p v-if="selectedLog.archive_incomplete" class="text-xs text-amber-700 dark:text-amber-300">
+              {{ t('admin.kittyRisk.archiveIncomplete') }}
+            </p>
+          </section>
+
+          <div
+            v-if="selectedLog.user_id && selectedLog.user_status === 'disabled'"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900/50 dark:bg-amber-900/10"
+            data-test="unban-control"
+          >
+            <span class="text-sm text-amber-900 dark:text-amber-100">{{ t('admin.kittyRisk.autoBanned') }}</span>
+            <button
+              type="button"
+              class="btn btn-secondary inline-flex items-center gap-1.5"
+              :disabled="unbanActionLoading"
+              @click="requestUnbanSelectedUser"
+            >
+              <Icon name="check" size="sm" />
+              {{ t('admin.kittyRisk.unbanUser') }}
+            </button>
+          </div>
+        </div>
+        <template #footer>
+          <button type="button" class="btn btn-secondary" @click="closeLogDetail">{{ t('common.close') }}</button>
+        </template>
+      </BaseDialog>
+    </div>
+  </AppLayout>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import AppLayout from '@/components/layout/AppLayout.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import Icon from '@/components/icons/Icon.vue'
+import Toggle from '@/components/common/Toggle.vue'
+import Pagination from '@/components/common/Pagination.vue'
+import { REVIEWER_PROVIDER_PRESETS as OPENAI_COMPATIBLE_PROVIDER_PRESETS } from '@/api/admin/kittyRiskPresets'
+import { riskControlAPI as kittyRiskAPI } from '@/api/admin/kittyRiskControl'
+import { adminAPI } from '@/api/admin'
+import type {
+  ContentModerationConfig,
+  ContentModerationEvidenceMatch,
+  ContentModerationEvidenceWindow,
+  ContentModerationFirstLayerStage,
+  ContentModerationLayerStage,
+  ContentModerationLog,
+  ContentModerationLogView,
+  ContentModerationModelFilterType,
+  ContentModerationRemoteUnavailablePolicy,
+  ContentModerationRuntimeStatus,
+  ContentModerationChannelHeartbeat,
+  ContentModerationArchivePreview,
+  DeepSeekModerationChannel,
+  TestDeepSeekChannelResponse,
+  UpdateContentModerationConfig,
+} from '@/api/admin/kittyRiskControl'
+import type { AdminGroup } from '@/types'
+import { useAppStore } from '@/stores/app'
+import { extractApiErrorMessage } from '@/utils/apiError'
+import { formatDateTime as formatDateTimeValue } from '@/utils/format'
+
+type EditableDeepSeekChannel = DeepSeekModerationChannel & {
+  api_key: string
+  clear_api_key: boolean
+}
+
+type LayerID = 'layer1' | 'layer2'
+type AuditDecisionState =
+  | 'default'
+  | 'evidence_capacity'
+  | 'evidence_truncated'
+  | 'review_disagreement'
+  | 'review_unavailable'
+  | 'restricted_confirmed'
+  | 'restricted_single_vote'
+  | 'restricted_unconfirmed'
+type OverviewIcon = 'shield' | 'cloud' | 'swap' | 'document' | 'database'
+
+interface OverviewCacheMetrics {
+  hits: number
+  misses: number
+  writes: number
+  errors: number
+}
+
+interface OverviewItem {
+  key: string
+  label: string
+  value: string
+  meta: string
+  icon: OverviewIcon
+  iconClass: string
+  cacheMetrics?: OverviewCacheMetrics
+}
+
+interface EvidenceTextSegment {
+  text: string
+  matched: boolean
+  matches: ContentModerationEvidenceMatch[]
+}
+
+const remotePoolMinimumProviders = 1
+const restrictedConsensusRequired = 2
+
+const { t } = useI18n()
+const appStore = useAppStore()
+
+const loading = ref(true)
+const configLoaded = ref(false)
+const configLoadError = ref(false)
+const refreshing = ref(false)
+const saving = ref(false)
+const logsLoading = ref(false)
+const sourceLogLoading = ref(false)
+const sourceLogError = ref(false)
+const statusLoading = ref(false)
+const statusLoadError = ref(false)
+const hashActionLoading = ref(false)
+const flaggedHashInput = ref('')
+const archivePreview = ref<ContentModerationArchivePreview | null>(null)
+const archiveActionLoading = ref(false)
+const unbanActionLoading = ref(false)
+const testingChannelID = ref<string | null>(null)
+const status = ref<ContentModerationRuntimeStatus | null>(null)
+const groups = ref<AdminGroup[]>([])
+const logs = ref<ContentModerationLog[]>([])
+const selectedLog = ref<ContentModerationLog | null>(null)
+const originalLog = ref<ContentModerationLog | null>(null)
+const channelTestResults = reactive<Record<string, TestDeepSeekChannelResponse | undefined>>({})
+const savedChannelDigests = reactive<Record<string, string | undefined>>({})
+let refreshTimer: number | null = null
+let logRequestSequence = 0
+
+const isFlaggedHashInputValid = computed(() => /^[a-f0-9]{64}$/i.test(flaggedHashInput.value))
+const contextFilterOptions = computed(() =>
+  [...new Set(logs.value.map((row) => row.context_class).filter((value): value is string => Boolean(value)))].sort()
+)
+
+const heartbeatByChannelID = computed(() => {
+  const entries = status.value?.remote_heartbeats ?? []
+  return new Map(entries.map((heartbeat) => [heartbeat.channel_id, heartbeat]))
+})
+
+const evidenceLog = computed(() => originalLog.value || selectedLog.value)
+const evidenceWindows = computed(() => evidenceLog.value?.evidence_windows ?? [])
+
+const defaultBlockMessage = () => t('admin.kittyRisk.defaultBlockMessage')
+
+const configForm = reactive({
+  enabled: false,
+  evidence_enabled: false,
+  mode: 'pre_block' as const,
+  deepseek_enabled: true,
+  remote_reviewers_enabled: true,
+  remote_consensus_required: remotePoolMinimumProviders,
+  remote_unavailable_policy: 'fail_closed' as ContentModerationRemoteUnavailablePolicy,
+  deepseek_total_timeout_ms: 10000,
+  deepseek_threshold: 0.8,
+  policy_version: '',
+  deepseek_channels: [] as EditableDeepSeekChannel[],
+  all_groups: true,
+  group_ids: [] as number[],
+  user_email_whitelist_text: '',
+  record_non_hits: false,
+  block_status: 403,
+  block_message: defaultBlockMessage(),
+  email_on_hit: true,
+  auto_ban_enabled: true,
+  cyber_policy_exclude_from_ban_count: false,
+  ban_threshold: 10,
+  violation_window_hours: 720,
+  hit_retention_days: 180,
+  non_hit_retention_days: 3,
+  model_filter_type: 'all' as ContentModerationModelFilterType,
+  model_filter_models_text: '',
+  first_layer_stage: 'shadow' as ContentModerationFirstLayerStage,
+  second_layer_stage: 'shadow' as ContentModerationLayerStage,
+  layer1_keywords_text: '',
+  layer2_keywords_text: '',
+})
+
+const pagination = reactive({ page: 1, page_size: 20, total: 0, pages: 1 })
+const filters = reactive({
+  result: 'risky_shadow' as ContentModerationLogView,
+  search: '',
+  from: '',
+  to: '',
+  group_id: 0,
+  endpoint: '',
+  context_class: '',
+  model_profile: '',
+  decision_source: '',
+})
+
+const statusClasses = {
+  healthy: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300',
+  warning: 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
+  danger: 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-300',
+  unknown: 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300',
+}
+
+const policyCategories = [
+  'cyber',
+  'accountAbuse',
+  'deepfakeDoxThreat',
+  'selfHarm',
+  'weapons',
+  'sexualContent',
+  'fraudFinancialCrime',
+  'controlledSubstances',
+  'humanExploitation',
+  'terrorismExtremism',
+  'illegalGambling',
+  'forgeryCounterfeit',
+  'corruptionTaxEvasion',
+  'hateHarassment',
+]
+
+const logColumns = ['time', 'user', 'request', 'decision', 'modelResult', 'channelAttempts', 'latency', 'input']
+
+const recordTabs = computed<Array<{ value: ContentModerationLogView; label: string }>>(() => [
+  { value: 'risky_shadow', label: t('admin.kittyRisk.recordTabs.riskyShadow') },
+  { value: 'violation_blocked', label: t('admin.kittyRisk.recordTabs.violationBlocked') },
+  { value: 'restricted', label: t('admin.kittyRisk.recordTabs.restricted') },
+  { value: 'review_unavailable', label: t('admin.kittyRisk.recordTabs.reviewUnavailable') },
+  { value: 'evidence_capacity_exceeded', label: t('admin.kittyRisk.recordTabs.evidenceCapacityExceeded') },
+  { value: 'cyber_policy', label: t('admin.kittyRisk.recordTabs.cyberPolicy') },
+])
+
+const stageOptions = computed(() => [
+  {
+    value: 'shadow' as const,
+    label: t('admin.kittyRisk.stageShadow'),
+    activeClass: 'bg-amber-100 text-amber-800 shadow-sm dark:bg-amber-900/30 dark:text-amber-300',
+  },
+  {
+    value: 'enforce' as const,
+    label: t('admin.kittyRisk.stageEnforce'),
+    activeClass: 'bg-red-100 text-red-800 shadow-sm dark:bg-red-900/30 dark:text-red-300',
+  },
+])
+
+const layerRows = computed(() => [
+  {
+    id: 'layer1' as const,
+    label: t('admin.kittyRisk.layer1Title'),
+    meta: t('admin.kittyRisk.layer1Meta'),
+    stage: configForm.first_layer_stage,
+  },
+  {
+    id: 'layer2' as const,
+    label: t('admin.kittyRisk.layer2Title'),
+    meta: t('admin.kittyRisk.layer2Meta'),
+    stage: configForm.second_layer_stage,
+  },
+])
+
+const managedProviderRows = computed(() =>
+  OPENAI_COMPATIBLE_PROVIDER_PRESETS.map((provider) => ({
+    ...provider,
+    label: t(`admin.kittyRisk.managedProviders.${provider.labelKey}`),
+  }))
+)
+
+const enabledChannelCount = computed(() => configForm.deepseek_channels.filter((channel) => channel.enabled).length)
+const reachableChannelCount = computed(
+  () => configForm.deepseek_channels.filter((channel) => channel.enabled && isChannelReachable(channel)).length
+)
+const reachableProviderCount = computed(
+  () =>
+    new Set(
+      configForm.deepseek_channels
+        .filter((channel) => channel.enabled && isChannelReachable(channel))
+        .map((channel) => normalizeReviewerProvider(channel.provider))
+    ).size
+)
+const restrictionConsensusReady = computed(
+  () => configForm.remote_reviewers_enabled && reachableProviderCount.value >= restrictedConsensusRequired
+)
+
+const secondLayerEnforceReady = computed(() => {
+  if (status.value?.second_layer_enforce_ready !== undefined) {
+    return status.value.second_layer_enforce_ready
+  }
+  if (!configForm.remote_reviewers_enabled) return false
+  return configForm.remote_reviewers_enabled && reachableProviderCount.value >= remotePoolMinimumProviders
+})
+
+const enforceGateText = computed(() => {
+  if (secondLayerEnforceReady.value) return t('admin.kittyRisk.enforceGateReady')
+  return status.value?.second_layer_enforce_reason || t('admin.kittyRisk.enforceGateBlocked')
+})
+
+const layer1Keywords = computed(() => parseLineList(configForm.layer1_keywords_text))
+const layer2Keywords = computed(() => parseLineList(configForm.layer2_keywords_text))
+
+const overviewItems = computed<OverviewItem[]>(() => [
+  {
+    key: 'runtime',
+    label: t('admin.kittyRisk.overview.status'),
+    value: configForm.enabled ? t('admin.kittyRisk.overview.enabled') : t('admin.kittyRisk.overview.disabled'),
+    meta: t('admin.kittyRisk.overview.reviewed', { count: status.value?.pre_block_checked ?? 0 }),
+    icon: 'shield',
+    iconClass: configForm.enabled
+      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+      : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-gray-400',
+  },
+  {
+    key: 'remote-reviewers',
+    label: t('admin.kittyRisk.onlineReviewersTitle'),
+    value: configForm.remote_reviewers_enabled
+      ? t('admin.kittyRisk.overview.enabled')
+      : t('admin.kittyRisk.overview.disabled'),
+    meta: t('admin.kittyRisk.channelHealthSummary', {
+      reachable: reachableChannelCount.value,
+      enabled: enabledChannelCount.value,
+    }),
+    icon: 'cloud',
+    iconClass: 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300',
+  },
+  {
+    key: 'failover',
+    label: t('admin.kittyRisk.overview.failover'),
+    value: String(status.value?.remote_failover_count ?? status.value?.deepseek_failover_count ?? 0),
+    meta: t('admin.kittyRisk.overview.unavailable', {
+      count: status.value?.remote_unavailable_count ?? status.value?.deepseek_unavailable_count ?? 0,
+      enforced: status.value?.review_unavailable_enforced_count ?? 0,
+      degraded: status.value?.review_unavailable_degraded_count ?? 0,
+    }),
+    icon: 'swap',
+    iconClass: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+  },
+  {
+    key: 'second-layer-cache',
+    label: t('admin.kittyRisk.overview.secondLayerCache'),
+    value: t('admin.kittyRisk.overview.cacheHits', {
+      count: status.value?.second_layer_cache_hits ?? 0,
+    }),
+    meta: t('admin.kittyRisk.overview.cacheActivity', {
+      misses: status.value?.second_layer_cache_misses ?? 0,
+      writes: status.value?.second_layer_cache_writes ?? 0,
+      errors: status.value?.second_layer_cache_errors ?? 0,
+    }),
+    icon: 'database',
+    iconClass:
+      (status.value?.second_layer_cache_errors ?? 0) > 0
+        ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+        : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300',
+    cacheMetrics: {
+      hits: status.value?.second_layer_cache_hits ?? 0,
+      misses: status.value?.second_layer_cache_misses ?? 0,
+      writes: status.value?.second_layer_cache_writes ?? 0,
+      errors: status.value?.second_layer_cache_errors ?? 0,
+    },
+  },
+  {
+    key: 'logs',
+    label: t('admin.kittyRisk.overview.logs'),
+    value: String(pagination.total),
+    meta: t('admin.kittyRisk.overview.currentFilter'),
+    icon: 'document',
+    iconClass: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300',
+  },
+])
+
+const selectedLogMeta = computed(() => {
+  const row = selectedLog.value
+  if (!row) return []
+  return [
+    { label: t('admin.kittyRisk.auditRequestID'), value: row.request_id || '-' },
+    { label: t('admin.kittyRisk.auditDecisionSource'), value: row.decision_source || '-' },
+    {
+      label: t('admin.kittyRisk.table.modelResult'),
+      value: `${row.deepseek_category || row.highest_category || '-'} / ${confidenceText(row)}`,
+    },
+    { label: t('admin.kittyRisk.reviewOutcome'), value: resultLabel(row) },
+    { label: t('admin.kittyRisk.reviewConsensus'), value: decisionMeta(row) || '-' },
+  ]
+})
+
+const reviewerProviderOptions = [
+  { value: 'deepseek', label: 'DeepSeek', model: 'deepseek-v4-flash', baseURL: 'https://api.deepseek.com' },
+  {
+    value: 'alibaba_qwen',
+    label: 'Qwen',
+    model: 'qwen3.7-flash',
+    baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  },
+  {
+    value: 'zhipu_glm',
+    label: 'GLM',
+    model: 'glm-4.7-flashx',
+    baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+  },
+  { value: 'mimo', label: 'MiMo', model: 'mimo-v2.5', baseURL: 'https://api.xiaomimimo.com/v1' },
+] as const
+
+function normalizeReviewerProvider(provider?: string): string {
+  const raw = (provider || '').trim().toLowerCase()
+  if (raw === 'qwen' || raw === 'alibaba-qwen') return 'alibaba_qwen'
+  if (raw === 'glm' || raw === 'zhipu-glm') return 'zhipu_glm'
+  if (raw === 'mi-mo') return 'mimo'
+  return raw || 'deepseek'
+}
+
+function reviewerProviderLabel(provider?: string): string {
+  const normalized = normalizeReviewerProvider(provider)
+  return reviewerProviderOptions.find((option) => option.value === normalized)?.label || normalized
+}
+
+function reviewerProviderPreset(provider?: string) {
+  return reviewerProviderOptions.find((option) => option.value === normalizeReviewerProvider(provider)) || reviewerProviderOptions[0]
+}
+
+function defaultChannel(provider = 'deepseek', index = 0): EditableDeepSeekChannel {
+  const preset = reviewerProviderPreset(provider)
+  return {
+    id: `${provider}-primary`,
+    name: preset.label,
+    provider: preset.value,
+    base_url: preset.baseURL,
+    model: preset.model,
+    enabled: true,
+    order: index,
+    timeout_ms: 3000,
+    api_key_configured: false,
+    api_key_masked: '',
+    health_status: 'unknown',
+    breaker_status: 'unknown',
+    api_key: '',
+    clear_api_key: false,
+  }
+}
+
+function editableChannel(channel: DeepSeekModerationChannel, index: number): EditableDeepSeekChannel {
+  const provider = normalizeReviewerProvider(channel.provider)
+  const preset = reviewerProviderPreset(provider)
+  return {
+    ...channel,
+    provider,
+    order: Number.isFinite(channel.order) ? channel.order : index,
+    model: channel.model || preset.model,
+    base_url: channel.base_url || preset.baseURL,
+    timeout_ms: channel.timeout_ms || 3000,
+    api_key_configured: Boolean(channel.api_key_configured),
+    api_key_masked: channel.api_key_masked || '',
+    api_key: '',
+    clear_api_key: false,
+  }
+}
+
+function applyConfig(config: ContentModerationConfig) {
+  configForm.enabled = config.enabled ?? false
+  configForm.evidence_enabled = config.evidence_enabled ?? false
+  configForm.remote_reviewers_enabled = config.remote_reviewers_enabled ?? config.deepseek_enabled ?? true
+  configForm.deepseek_enabled = config.deepseek_enabled ?? configForm.remote_reviewers_enabled
+  configForm.remote_consensus_required = remotePoolMinimumProviders
+  configForm.remote_unavailable_policy =
+    config.remote_unavailable_policy === 'risk_tiered' ? 'risk_tiered' : 'fail_closed'
+  configForm.deepseek_total_timeout_ms = config.deepseek_total_timeout_ms ?? 10000
+  configForm.deepseek_threshold = config.deepseek_threshold ?? 0.8
+  configForm.policy_version = config.policy_version || config.keyword_policy_version || ''
+  const channels = config.remote_reviewers ?? config.deepseek_channels ?? reviewerProviderOptions.map((provider, index) => defaultChannel(provider.value, index))
+  configForm.deepseek_channels = [...channels]
+    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+    .map(editableChannel)
+  for (const id of Object.keys(savedChannelDigests)) delete savedChannelDigests[id]
+  for (const channel of configForm.deepseek_channels) {
+    savedChannelDigests[channel.id] = channelDigest(channel)
+  }
+  configForm.all_groups = config.all_groups ?? true
+  configForm.group_ids = [...(config.group_ids ?? [])]
+  configForm.user_email_whitelist_text = (config.user_email_whitelist ?? []).join('\n')
+  configForm.record_non_hits = config.record_non_hits ?? false
+  configForm.block_status = config.block_status ?? 403
+  configForm.block_message = config.block_message || defaultBlockMessage()
+  configForm.email_on_hit = config.email_on_hit ?? true
+  configForm.auto_ban_enabled = config.auto_ban_enabled ?? true
+  configForm.cyber_policy_exclude_from_ban_count = config.cyber_policy_exclude_from_ban_count ?? false
+  configForm.ban_threshold = config.ban_threshold ?? 10
+  configForm.violation_window_hours = config.violation_window_hours ?? 720
+  configForm.hit_retention_days = config.hit_retention_days ?? 180
+  configForm.non_hit_retention_days = config.non_hit_retention_days ?? 3
+  configForm.model_filter_type = config.model_filter?.type ?? 'all'
+  configForm.model_filter_models_text = (config.model_filter?.models ?? []).join('\n')
+  configForm.first_layer_stage = config.first_layer_stage === 'enforce' ? 'enforce' : 'shadow'
+  configForm.second_layer_stage = config.second_layer_stage === 'enforce' ? 'enforce' : 'shadow'
+  configForm.layer1_keywords_text = (config.layer1_keywords ?? []).join('\n')
+  configForm.layer2_keywords_text = (config.layer2_keywords ?? []).join('\n')
+}
+
+async function loadInitial() {
+  loading.value = true
+  configLoadError.value = false
+  configLoaded.value = false
+  try {
+    const [config, availableGroups] = await Promise.all([
+      kittyRiskAPI.getConfig(),
+      adminAPI.groups.getAll().catch(() => [] as AdminGroup[]),
+    ])
+    applyConfig(config)
+    configLoaded.value = true
+    groups.value = availableGroups
+    await Promise.all([loadStatus(true), loadLogs()])
+  } catch (error: unknown) {
+    configLoadError.value = true
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.loadFailed')))
+  } finally {
+    loading.value = false
+  }
+}
+
+async function refreshAll() {
+  if (refreshing.value || !configLoaded.value) return
+  refreshing.value = true
+  try {
+    const config = await kittyRiskAPI.getConfig()
+    applyConfig(config)
+    await Promise.all([loadStatus(false), loadLogs()])
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.loadFailed')))
+  } finally {
+    refreshing.value = false
+  }
+}
+
+async function loadStatus(silent: boolean) {
+  if (statusLoading.value) return
+  statusLoading.value = true
+  try {
+    status.value = await kittyRiskAPI.getStatus()
+    statusLoadError.value = false
+  } catch (error: unknown) {
+    statusLoadError.value = true
+    status.value = null
+    if (!silent) appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.statusFailed')))
+  } finally {
+    statusLoading.value = false
+  }
+}
+
+async function loadLogs() {
+  const requestID = ++logRequestSequence
+  logsLoading.value = true
+  logs.value = []
+  try {
+    const result = await kittyRiskAPI.listLogs({
+      page: pagination.page,
+      page_size: pagination.page_size,
+      result: filters.result,
+      search: filters.search || undefined,
+      from: normalizeLocalDateTime(filters.from),
+      to: normalizeLocalDateTime(filters.to),
+      group_id: filters.group_id > 0 ? filters.group_id : undefined,
+      endpoint: filters.endpoint || undefined,
+      context_class: filters.context_class || undefined,
+      model_profile: filters.model_profile || undefined,
+      decision_source: filters.decision_source || undefined,
+    })
+    if (requestID !== logRequestSequence) return
+    logs.value = result.items
+    pagination.total = result.total
+    pagination.page = result.page
+    pagination.page_size = result.page_size
+    pagination.pages = result.pages
+  } catch (error: unknown) {
+    if (requestID === logRequestSequence) {
+      pagination.total = 0
+      appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.logsFailed')))
+    }
+  } finally {
+    if (requestID === logRequestSequence) logsLoading.value = false
+  }
+}
+
+async function saveConfig() {
+  if (saving.value || !validateConfig()) return
+  saving.value = true
+  try {
+    const payload: UpdateContentModerationConfig = {
+      enabled: configForm.enabled,
+      evidence_enabled: configForm.evidence_enabled,
+      mode: 'pre_block',
+      deepseek_enabled: configForm.deepseek_enabled,
+      remote_reviewers_enabled: configForm.remote_reviewers_enabled,
+      remote_consensus_required: remotePoolMinimumProviders,
+      remote_unavailable_policy: configForm.remote_unavailable_policy,
+      deepseek_total_timeout_ms: clampInteger(configForm.deepseek_total_timeout_ms, 100, 120000, 10000),
+      deepseek_threshold: 0.8,
+      deepseek_channels: configForm.deepseek_channels.map((channel, index) => ({
+        id: channel.id.trim(),
+        name: channel.name.trim(),
+        provider: normalizeReviewerProvider(channel.provider),
+        base_url: channel.base_url.trim().replace(/\/$/, ''),
+        model: channel.model.trim() || reviewerProviderPreset(channel.provider).model,
+        enabled: channel.enabled,
+        order: index,
+        timeout_ms: clampInteger(channel.timeout_ms, 100, 30000, 3000),
+        api_key: channel.api_key.trim() || undefined,
+        clear_api_key: channel.clear_api_key || undefined,
+      })),
+      remote_reviewers: configForm.deepseek_channels.map((channel, index) => ({
+        id: channel.id.trim(),
+        name: channel.name.trim(),
+        provider: normalizeReviewerProvider(channel.provider),
+        base_url: channel.base_url.trim().replace(/\/$/, ''),
+        model: channel.model.trim() || reviewerProviderPreset(channel.provider).model,
+        enabled: channel.enabled,
+        order: index,
+        timeout_ms: clampInteger(channel.timeout_ms, 100, 30000, 3000),
+        api_key: channel.api_key.trim() || undefined,
+        clear_api_key: channel.clear_api_key || undefined,
+      })),
+      first_layer_stage: configForm.first_layer_stage,
+      second_layer_enabled: configForm.remote_reviewers_enabled,
+      second_layer_stage: configForm.second_layer_stage,
+      layer1_keywords: layer1Keywords.value,
+      layer2_keywords: layer2Keywords.value,
+      all_groups: configForm.all_groups,
+      group_ids: configForm.all_groups ? [] : [...configForm.group_ids],
+      user_email_whitelist: parseEmailList(configForm.user_email_whitelist_text),
+      record_non_hits: configForm.record_non_hits,
+      block_status: clampInteger(configForm.block_status, 400, 599, 403),
+      block_message: configForm.block_message.trim() || defaultBlockMessage(),
+      email_on_hit: configForm.email_on_hit,
+      auto_ban_enabled: configForm.auto_ban_enabled,
+      cyber_policy_exclude_from_ban_count: configForm.cyber_policy_exclude_from_ban_count,
+      ban_threshold: clampInteger(configForm.ban_threshold, 1, 1000, 10),
+      violation_window_hours: clampInteger(configForm.violation_window_hours, 1, 8760, 720),
+      hit_retention_days: clampInteger(configForm.hit_retention_days, 1, 3650, 180),
+      non_hit_retention_days: clampInteger(configForm.non_hit_retention_days, 1, 3, 3),
+      model_filter: {
+        type: configForm.model_filter_type,
+        models: configForm.model_filter_type === 'all' ? [] : parseLineList(configForm.model_filter_models_text),
+      },
+    }
+    const updated = await kittyRiskAPI.updateConfig(payload)
+    applyConfig(updated)
+    await Promise.all([loadStatus(true), loadLogs()])
+    appStore.showSuccess(t('admin.kittyRisk.saved'))
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.saveFailed')))
+  } finally {
+    saving.value = false
+  }
+}
+
+function validateConfig(): boolean {
+  if (!configForm.enabled) return true
+  if (configForm.remote_reviewers_enabled && enabledChannelCount.value === 0) {
+    appStore.showError(t('admin.kittyRisk.enabledChannelRequired'))
+    return false
+  }
+  const ids = new Set<string>()
+  for (const channel of configForm.deepseek_channels) {
+    const id = channel.id.trim()
+    if (!isValidChannelID(id) || !channel.name.trim() || !channel.model.trim() || !isAllowedBaseURL(channel.base_url)) {
+      appStore.showError(t('admin.kittyRisk.invalidChannel'))
+      return false
+    }
+    if (ids.has(id)) {
+      appStore.showError(t('admin.kittyRisk.duplicateChannelID'))
+      return false
+    }
+    ids.add(id)
+  }
+  if (configForm.model_filter_type !== 'all' && parseLineList(configForm.model_filter_models_text).length === 0) {
+    appStore.showError(t('admin.kittyRisk.modelFilterModelsRequired'))
+    return false
+  }
+  return true
+}
+
+function addChannel() {
+  const index = configForm.deepseek_channels.length
+  configForm.deepseek_channels.push({
+    ...defaultChannel('deepseek', index),
+    id: `reviewer-channel-${Date.now()}`,
+    name: t('admin.kittyRisk.newChannelName', { number: index + 1 }),
+    order: index,
+    enabled: false,
+  })
+}
+
+function setReviewerProvider(channel: EditableDeepSeekChannel, provider: string) {
+  const normalized = normalizeReviewerProvider(provider)
+  const preset = reviewerProviderPreset(normalized)
+  channel.provider = normalized
+  channel.base_url = preset.baseURL
+  channel.model = preset.model
+}
+
+function removeChannel(index: number) {
+  const channel = configForm.deepseek_channels[index]
+  if (!channel) return
+  if (channel.api_key_configured && !window.confirm(t('admin.kittyRisk.removeChannelConfirm'))) return
+  configForm.deepseek_channels.splice(index, 1)
+  normalizeChannelOrder()
+}
+
+function moveChannel(index: number, direction: -1 | 1) {
+  const target = index + direction
+  if (target < 0 || target >= configForm.deepseek_channels.length) return
+  const [channel] = configForm.deepseek_channels.splice(index, 1)
+  configForm.deepseek_channels.splice(target, 0, channel)
+  normalizeChannelOrder()
+}
+
+function normalizeChannelOrder() {
+  configForm.deepseek_channels.forEach((channel, index) => {
+    channel.order = index
+  })
+}
+
+function isModelFilterSelected(model: string): boolean {
+  return parseLineList(configForm.model_filter_models_text).includes(model)
+}
+
+function toggleModelFilterModel(model: string) {
+  const models = parseLineList(configForm.model_filter_models_text)
+  const index = models.indexOf(model)
+  if (index >= 0) models.splice(index, 1)
+  else models.push(model)
+  configForm.model_filter_models_text = models.join('\n')
+}
+
+function toggleClearChannelKey(channel: EditableDeepSeekChannel) {
+  channel.clear_api_key = !channel.clear_api_key
+  if (channel.clear_api_key) channel.api_key = ''
+}
+
+function canTestChannel(channel: EditableDeepSeekChannel): boolean {
+  return channel.api_key_configured && isChannelPersisted(channel)
+}
+
+async function testChannel(channel: EditableDeepSeekChannel) {
+  if (!canTestChannel(channel) || testingChannelID.value !== null) return
+  testingChannelID.value = channel.id
+  try {
+    channelTestResults[channel.id] = await kittyRiskAPI.testAPIAvailability(channel.id)
+    await loadStatus(true)
+    appStore.showSuccess(t('admin.kittyRisk.channelTestComplete'))
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.channelTestFailed')))
+  } finally {
+    testingChannelID.value = null
+  }
+}
+
+function setLayerStage(layer: LayerID, stage: ContentModerationLayerStage) {
+  if (layer === 'layer1') configForm.first_layer_stage = stage
+  else configForm.second_layer_stage = stage
+}
+
+function selectLogView(view: ContentModerationLogView) {
+  if (filters.result === view) return
+  filters.result = view
+  reloadLogs()
+}
+
+function reloadLogs() {
+  pagination.page = 1
+  void loadLogs()
+}
+
+function changePage(page: number) {
+  pagination.page = page
+  void loadLogs()
+}
+
+function changePageSize(pageSize: number) {
+  pagination.page = 1
+  pagination.page_size = pageSize
+  void loadLogs()
+}
+
+function openLog(row: ContentModerationLog) {
+  selectedLog.value = row
+  originalLog.value = null
+  sourceLogLoading.value = false
+  sourceLogError.value = false
+}
+
+function closeLogDetail() {
+  selectedLog.value = null
+  originalLog.value = null
+  archivePreview.value = null
+  archiveActionLoading.value = false
+  unbanActionLoading.value = false
+  sourceLogLoading.value = false
+  sourceLogError.value = false
+}
+
+async function requestDeleteFlaggedHash() {
+  const inputHash = flaggedHashInput.value.trim().toLowerCase()
+  if (!/^[a-f0-9]{64}$/.test(inputHash) || hashActionLoading.value) return
+  hashActionLoading.value = true
+  try {
+    const result = await kittyRiskAPI.deleteFlaggedHash(inputHash)
+    flaggedHashInput.value = ''
+    appStore.showSuccess(
+      result.deleted ? t('admin.kittyRisk.flaggedHashDeleted') : t('admin.kittyRisk.flaggedHashNotFound')
+    )
+    await loadStatus(true)
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.flaggedHashDeleteFailed')))
+  } finally {
+    hashActionLoading.value = false
+  }
+}
+
+async function requestClearFlaggedHashes() {
+  if (hashActionLoading.value || !window.confirm(t('admin.kittyRisk.clearFlaggedHashesConfirm'))) return
+  hashActionLoading.value = true
+  try {
+    const result = await kittyRiskAPI.clearFlaggedHashes()
+    appStore.showSuccess(t('admin.kittyRisk.flaggedHashesCleared', { count: result.deleted }))
+    await loadStatus(true)
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.flaggedHashesClearFailed')))
+  } finally {
+    hashActionLoading.value = false
+  }
+}
+
+async function previewSelectedArchive() {
+  const log = selectedLog.value
+  if (!log || archiveActionLoading.value) return
+  archiveActionLoading.value = true
+  try {
+    archivePreview.value = await kittyRiskAPI.previewArchive(log.id)
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.archivePreviewFailed')))
+  } finally {
+    archiveActionLoading.value = false
+  }
+}
+
+async function downloadSelectedArchive() {
+  const log = selectedLog.value
+  if (!log || archiveActionLoading.value) return
+  archiveActionLoading.value = true
+  try {
+    const blob = await kittyRiskAPI.downloadArchive(log.id)
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href
+    link.download = `content-moderation-${log.id}.json`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(href)
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.archiveDownloadFailed')))
+  } finally {
+    archiveActionLoading.value = false
+  }
+}
+
+async function deleteSelectedArchive() {
+  const log = selectedLog.value
+  if (!log || archiveActionLoading.value || !window.confirm(t('admin.kittyRisk.archiveDeleteConfirm'))) return
+  archiveActionLoading.value = true
+  try {
+    const result = await kittyRiskAPI.deleteArchive(log.id)
+    if (result.deleted) {
+      log.archive_status = 'deleted'
+      log.archive_deleted_at = new Date().toISOString()
+      archivePreview.value = null
+      appStore.showSuccess(t('admin.kittyRisk.archiveDeleted'))
+      await loadLogs()
+    }
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.archiveDeleteFailed')))
+  } finally {
+    archiveActionLoading.value = false
+  }
+}
+
+async function requestUnbanSelectedUser() {
+  const log = selectedLog.value
+  if (!log?.user_id || unbanActionLoading.value) return
+  unbanActionLoading.value = true
+  try {
+    await kittyRiskAPI.unbanUser(log.user_id)
+    log.user_status = 'active'
+    appStore.showSuccess(t('admin.kittyRisk.unbanSuccess'))
+    await loadLogs()
+  } catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.unbanFailed')))
+  } finally {
+    unbanActionLoading.value = false
+  }
+}
+
+async function openReplaySource() {
+  const replay = selectedLog.value
+  const sourceID = replay?.source_log_id
+  if (!replay || !sourceID || sourceID === replay.id || sourceLogLoading.value) return
+
+  sourceLogError.value = false
+  const inPage = logs.value.find((item) => item.id === sourceID)
+  if (inPage) {
+    originalLog.value = inPage
+    return
+  }
+
+  sourceLogLoading.value = true
+  try {
+    const original = await kittyRiskAPI.getLog(sourceID)
+    // Do not replace a newer selection if the request completed after the
+    // administrator opened another record.
+    if (selectedLog.value?.id === replay.id) originalLog.value = original
+  } catch (error: unknown) {
+    if (selectedLog.value?.id === replay.id) {
+      sourceLogError.value = true
+      appStore.showError(extractApiErrorMessage(error, t('admin.kittyRisk.replaySourceUnavailable')))
+    }
+  } finally {
+    sourceLogLoading.value = false
+  }
+}
+
+function evidenceSegments(window: ContentModerationEvidenceWindow): EvidenceTextSegment[] {
+  const characters = Array.from(window.text || '')
+  if (characters.length === 0) return []
+
+  const spans = (window.matches || [])
+    .map((match) => ({
+      match,
+      start: Number.isFinite(match.start) ? Math.trunc(match.start) : -1,
+      end: Number.isFinite(match.end) ? Math.trunc(match.end) : -1,
+    }))
+    .filter((span) => span.start >= 0 && span.start < characters.length && span.end > span.start)
+    .sort((left, right) => left.start - right.start || right.end - left.end)
+
+  const segments: EvidenceTextSegment[] = []
+  let cursor = 0
+  for (const span of spans) {
+    const start = Math.max(cursor, Math.min(characters.length, span.start))
+    const end = Math.max(start, Math.min(characters.length, span.end))
+    if (start > cursor) {
+      segments.push({ text: characters.slice(cursor, start).join(''), matched: false, matches: [] })
+    }
+    if (end <= cursor) continue
+    segments.push({
+      text: characters.slice(start, end).join(''),
+      matched: true,
+      matches: [span.match],
+    })
+    cursor = end
+  }
+  if (cursor < characters.length) {
+    segments.push({ text: characters.slice(cursor).join(''), matched: false, matches: [] })
+  }
+  return segments.length > 0
+    ? segments
+    : [{ text: characters.join(''), matched: false, matches: [] }]
+}
+
+function evidenceMatchTitle(matches: ContentModerationEvidenceMatch[]): string {
+  return matches
+    .map((match) => `${match.keyword} · ${match.tier}${match.rule_id ? ` · ${match.rule_id}` : ''}`)
+    .join('\n')
+}
+
+function channelKeyStatus(channel: EditableDeepSeekChannel): string {
+  if (channel.clear_api_key) return t('admin.kittyRisk.channelKeyWillClear')
+  if (channel.api_key.trim()) return t('admin.kittyRisk.channelKeyWillReplace')
+  if (channel.api_key_configured)
+    return t('admin.kittyRisk.channelKeyStored', { masked: channel.api_key_masked || '***' })
+  return t('admin.kittyRisk.channelKeyMissing')
+}
+
+function isChannelReachable(channel: EditableDeepSeekChannel): boolean {
+  if (!isChannelPersisted(channel)) return false
+  return channel.health_status === 'reachable' || channel.health_status === 'healthy' || channel.health_status === 'valid'
+}
+
+function channelStatusLabel(channel: EditableDeepSeekChannel): string {
+  if (!channel.enabled) return t('admin.kittyRisk.channelDisabled')
+  if (!isChannelPersisted(channel)) return t('admin.kittyRisk.channelNeedsSave')
+  if (isBreakerUnavailable(channel.breaker_status)) return t('admin.kittyRisk.channelCircuitOpen')
+  if (isChannelReachable(channel)) return t('admin.kittyRisk.channelReachable')
+  return t('admin.kittyRisk.channelNeedsTest')
+}
+
+function channelStatusClass(channel: EditableDeepSeekChannel): string {
+  if (!channel.enabled) return statusClasses.unknown
+  if (!isChannelPersisted(channel)) return statusClasses.warning
+  if (isBreakerUnavailable(channel.breaker_status)) return statusClasses.danger
+  if (isChannelReachable(channel)) return statusClasses.healthy
+  return statusClasses.warning
+}
+
+function channelHeartbeat(channel: EditableDeepSeekChannel): ContentModerationChannelHeartbeat | undefined {
+  const live = heartbeatByChannelID.value.get(channel.id)
+  if (live) return live
+  if (!channel.heartbeat_status && !channel.last_heartbeat_at && !channel.heartbeat_error) return undefined
+  return {
+    channel_id: channel.id,
+    provider: normalizeReviewerProvider(channel.provider),
+    status: channel.heartbeat_status || 'untested',
+    checked_at: channel.last_heartbeat_at,
+    latency_ms: channel.heartbeat_latency_ms,
+    http_status: channel.heartbeat_http_status,
+    error: channel.heartbeat_error,
+  }
+}
+
+function heartbeatStatus(channel: EditableDeepSeekChannel): string {
+  return channelHeartbeat(channel)?.status || 'untested'
+}
+
+function heartbeatStatusLabel(channel: EditableDeepSeekChannel): string {
+  const status = heartbeatStatus(channel)
+  if (status === 'reachable') return t('admin.kittyRisk.heartbeatReachable')
+  if (status === 'unreachable') return t('admin.kittyRisk.heartbeatUnreachable')
+  if (status === 'disabled') return t('admin.kittyRisk.heartbeatDisabled')
+  return t('admin.kittyRisk.heartbeatUntested')
+}
+
+function heartbeatStatusClass(channel: EditableDeepSeekChannel): string {
+  const status = heartbeatStatus(channel)
+  if (status === 'reachable') return statusClasses.healthy
+  if (status === 'unreachable') return statusClasses.warning
+  if (status === 'disabled') return statusClasses.unknown
+  return statusClasses.unknown
+}
+
+function heartbeatCheckedAt(channel: EditableDeepSeekChannel): string | undefined {
+  return channelHeartbeat(channel)?.checked_at
+}
+
+function heartbeatLatency(channel: EditableDeepSeekChannel): number | undefined {
+  const value = channelHeartbeat(channel)?.latency_ms
+  return value === undefined || value === null || value <= 0 ? undefined : value
+}
+
+function heartbeatHTTPStatus(channel: EditableDeepSeekChannel): number | undefined {
+  const value = channelHeartbeat(channel)?.http_status
+  return value === undefined || value === null || value <= 0 ? undefined : value
+}
+
+function heartbeatError(channel: EditableDeepSeekChannel): string | undefined {
+  return channelHeartbeat(channel)?.error || undefined
+}
+
+function channelDigest(channel: EditableDeepSeekChannel): string {
+  return JSON.stringify({
+    id: channel.id.trim(),
+    base_url: channel.base_url.trim().replace(/\/$/, ''),
+    model: channel.model.trim(),
+    timeout_ms: Number(channel.timeout_ms),
+  })
+}
+
+function isBreakerUnavailable(state?: string): boolean {
+  return state === 'open' || state === 'disabled' || state === 'auth_disabled' || state === 'cooldown'
+}
+
+function isChannelPersisted(channel: EditableDeepSeekChannel): boolean {
+  return (
+    channel.api_key.trim() === '' &&
+    !channel.clear_api_key &&
+    savedChannelDigests[channel.id] === channelDigest(channel)
+  )
+}
+
+function breakerLabel(channel: EditableDeepSeekChannel): string {
+  const state = channel.breaker_status || 'unknown'
+  const until = channel.cooldown_until ? ` / ${formatDateTime(channel.cooldown_until)}` : ''
+  return `${t(`admin.kittyRisk.breakerStates.${state}`)}${until}`
+}
+
+function channelTestResultText(result: TestDeepSeekChannelResponse): string {
+  const verdict = result.verdict
+    ? result.verdict === 'violation'
+      ? t('admin.kittyRisk.apiTestVerdictViolation')
+      : result.verdict === 'restricted'
+        ? t('admin.kittyRisk.apiTestVerdictRestricted')
+        : t('admin.kittyRisk.apiTestVerdictSafe')
+    : '-'
+  return t(result.reachable ? 'admin.kittyRisk.apiTestReachable' : 'admin.kittyRisk.apiTestUnreachable', {
+    latency: result.latency_ms,
+    status: result.http_status || '-',
+    provider: result.provider || '-',
+    model: result.model || '-',
+    verdict,
+    category: result.category || '-',
+    error: result.error || '-',
+  })
+}
+
+function normalizedAuditValue(value?: string): string {
+  return (value || '').trim().toLowerCase()
+}
+
+function successfulAttemptVerdict(attempt: NonNullable<ContentModerationLog['review_attempts']>[number]): string {
+  const verdict = normalizedAuditValue(attempt.verdict)
+  return verdict === 'safe' || verdict === 'restricted' || verdict === 'violation' ? verdict : ''
+}
+
+function attemptProviderID(attempt: NonNullable<ContentModerationLog['review_attempts']>[number]): string {
+  return normalizedAuditValue(attempt.provider || attempt.reviewer)
+}
+
+function restrictedVoteStats(row: ContentModerationLog) {
+  const allProviders = new Set<string>()
+  const providersByChunk = new Map<number, Set<string>>()
+
+  for (const attempt of row.review_attempts ?? []) {
+    if (successfulAttemptVerdict(attempt) !== 'restricted') continue
+    const provider = attemptProviderID(attempt)
+    if (!provider) continue
+    allProviders.add(provider)
+    if (!Number.isInteger(attempt.chunk_index)) continue
+    const chunkIndex = attempt.chunk_index as number
+    const providers = providersByChunk.get(chunkIndex) ?? new Set<string>()
+    providers.add(provider)
+    providersByChunk.set(chunkIndex, providers)
+  }
+
+  const maxChunkVotes = Math.max(0, ...[...providersByChunk.values()].map((providers) => providers.size))
+  const explicitVotes = Number.isInteger(row.remote_votes) && (row.remote_votes ?? 0) >= 0 ? row.remote_votes : undefined
+  return { explicitVotes, maxChunkVotes, observedProviders: allProviders.size }
+}
+
+function hasChunkReviewDisagreement(row: ContentModerationLog): boolean {
+  const votes = (row.review_attempts ?? [])
+    .map((attempt) => ({
+      chunkIndex: attempt.chunk_index,
+      provider: attemptProviderID(attempt),
+      verdict: successfulAttemptVerdict(attempt),
+    }))
+    .filter(
+      (vote): vote is { chunkIndex: number; provider: string; verdict: string } =>
+        Number.isInteger(vote.chunkIndex) && Boolean(vote.provider) && Boolean(vote.verdict)
+    )
+
+  return votes.some((vote, index) =>
+    votes.slice(index + 1).some(
+      (candidate) =>
+        candidate.chunkIndex === vote.chunkIndex &&
+        candidate.provider !== vote.provider &&
+        ((candidate.verdict === 'safe' && vote.verdict === 'restricted') ||
+          (candidate.verdict === 'restricted' && vote.verdict === 'safe'))
+    )
+  )
+}
+
+function hasReviewDisagreement(row: ContentModerationLog): boolean {
+  const outcome = normalizedAuditValue(row.review_outcome)
+  const consensus = normalizedAuditValue(row.consensus_status)
+  return (
+    Boolean(row.reviewer_disagreement) ||
+    outcome === 'disagreement' ||
+    outcome === 'disagreement_restricted' ||
+    consensus.includes('disagreement') ||
+    consensus.includes('mismatch') ||
+    hasChunkReviewDisagreement(row)
+  )
+}
+
+function isRestrictionRecord(row: ContentModerationLog): boolean {
+  const outcome = normalizedAuditValue(row.review_outcome)
+  return row.action === 'restricted_block' || outcome === 'policy_restricted'
+}
+
+function auditDecisionState(row: ContentModerationLog): AuditDecisionState {
+  const outcome = normalizedAuditValue(row.review_outcome)
+  const consensus = normalizedAuditValue(row.consensus_status)
+
+  if (row.action === 'evidence_capacity_exceeded' || outcome === 'evidence_capacity_exceeded') {
+    return 'evidence_capacity'
+  }
+  if (hasReviewDisagreement(row)) return 'review_disagreement'
+  if (
+    row.action === 'review_unavailable' ||
+    outcome === 'unavailable' ||
+    consensus === 'unavailable' ||
+    consensus === 'consensus_unavailable' ||
+    Boolean(row.error)
+  ) {
+    return 'review_unavailable'
+  }
+  if (row.evidence_truncated) return 'evidence_truncated'
+  if (!isRestrictionRecord(row)) return 'default'
+
+  const votes = restrictedVoteStats(row)
+  const confirmationVotes = votes.explicitVotes ?? votes.maxChunkVotes
+  const explicitlyConfirmed = consensus === 'confirmed_restricted'
+  const confirmationStatusAllows = explicitlyConfirmed || (!consensus && outcome === 'policy_restricted')
+  if (confirmationVotes >= restrictedConsensusRequired && confirmationStatusAllows) {
+    return 'restricted_confirmed'
+  }
+  if (
+    consensus === 'single_restricted' ||
+    votes.explicitVotes === 1 ||
+    (votes.explicitVotes === undefined && votes.observedProviders === 1)
+  ) {
+    return 'restricted_single_vote'
+  }
+  return 'restricted_unconfirmed'
+}
+
+function resultLabel(row: ContentModerationLog): string {
+  switch (auditDecisionState(row)) {
+    case 'evidence_capacity':
+      return t('admin.kittyRisk.result.evidenceCapacityUndetermined')
+    case 'evidence_truncated':
+      return t('admin.kittyRisk.result.evidenceTruncatedUndetermined')
+    case 'review_disagreement':
+      return t('admin.kittyRisk.result.disagreementUndetermined')
+    case 'review_unavailable':
+      return t('admin.kittyRisk.result.unavailableUndetermined')
+    case 'restricted_confirmed':
+      return t('admin.kittyRisk.result.restrictedConfirmed')
+    case 'restricted_single_vote':
+      return t('admin.kittyRisk.result.singleVoteUndetermined')
+    case 'restricted_unconfirmed':
+      return t('admin.kittyRisk.result.restrictedUnconfirmed')
+  }
+  if (row.action === 'degraded_allow') return t('admin.kittyRisk.result.degradedAllow')
+  if (row.review_outcome === 'safe') return t('admin.kittyRisk.result.pass')
+  if (row.review_outcome === 'risky' || row.review_outcome === 'confirmed_violation') {
+    return t('admin.kittyRisk.result.blocked')
+  }
+  if (row.action?.includes('shadow')) return t('admin.kittyRisk.result.shadow')
+  if (row.action?.includes('block') || row.flagged) return t('admin.kittyRisk.result.blocked')
+  return t('admin.kittyRisk.result.pass')
+}
+
+function resultClass(row: ContentModerationLog): string {
+  if (auditDecisionState(row) !== 'default') return statusClasses.warning
+  if (row.action === 'degraded_allow') return statusClasses.warning
+  if (row.action?.includes('shadow')) return statusClasses.warning
+  if (row.action?.includes('block') || row.flagged) return statusClasses.danger
+  return statusClasses.healthy
+}
+
+function decisionMeta(row: ContentModerationLog): string {
+  const state = auditDecisionState(row)
+  if (state === 'restricted_confirmed') {
+    const votes = restrictedVoteStats(row)
+    return t('admin.kittyRisk.confirmedVoteCount', {
+      count: votes.explicitVotes ?? votes.maxChunkVotes,
+    })
+  }
+  if (state === 'restricted_single_vote') return t('admin.kittyRisk.singleVoteDetail')
+  if (state === 'restricted_unconfirmed') return t('admin.kittyRisk.consensusUnknownDetail')
+  if (
+    state === 'evidence_capacity' ||
+    state === 'evidence_truncated' ||
+    state === 'review_disagreement' ||
+    state === 'review_unavailable'
+  ) {
+    return t('admin.kittyRisk.undeterminedNonViolation')
+  }
+  return ''
+}
+
+function contextLabel(value: string): string {
+  const key = `admin.kittyRisk.context.${value}`
+  const translated = t(key)
+  return translated === key ? value : translated
+}
+
+function confidenceText(row: ContentModerationLog): string {
+  const value = row.deepseek_confidence ?? row.highest_score
+  return value === undefined ? '-' : percent(value)
+}
+
+function firstAttemptName(row: ContentModerationLog): string {
+  const first = row.review_attempts?.[0]
+  return first?.channel_name || first?.channel_id || first?.reviewer || row.provider || '-'
+}
+
+function attemptSummary(row: ContentModerationLog): string {
+  const attempts = row.review_attempts ?? []
+  if (attempts.length === 0) return '-'
+  return t('admin.kittyRisk.attemptCount', { count: attempts.length })
+}
+
+function parseLineList(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter((item, index, values) => item.length > 0 && values.indexOf(item) === index)
+}
+
+function parseEmailList(value: string): string[] {
+  return parseLineList(value.toLowerCase())
+}
+
+function isValidChannelID(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)
+}
+
+function isAllowedBaseURL(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    if (parsed.username || parsed.password || parsed.search || parsed.hash) return false
+    if (parsed.protocol === 'https:') return true
+    if (parsed.protocol !== 'http:') return false
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    return host === 'localhost' || host === '::1' || /^127(?:\.\d{1,3}){3}$/.test(host)
+  } catch {
+    return false
+  }
+}
+
+function clampInteger(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback
+  return Math.max(min, Math.min(max, Math.trunc(value)))
+}
+
+function percent(value: number): string {
+  if (!Number.isFinite(value)) return '-'
+  return `${(value * 100).toFixed(0)}%`
+}
+
+function latencyText(value?: number | null): string {
+  return value === undefined || value === null ? '-' : `${value} ms`
+}
+
+function formatDateTime(value: string): string {
+  return formatDateTimeValue(value)
+}
+
+function dateOrDash(value?: string): string {
+  return value ? formatDateTime(value) : '-'
+}
+
+function normalizeLocalDateTime(value: string): string | undefined {
+  if (!value) return undefined
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+}
+
+onMounted(() => {
+  void loadInitial()
+  refreshTimer = window.setInterval(() => {
+    void loadStatus(true)
+  }, 60000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer !== null) window.clearInterval(refreshTimer)
+})
+</script>

@@ -624,9 +624,6 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
-	if err := ValidateCursorAccount(account); err != nil {
-		return nil, err
-	}
 	if err := s.accountRepo.Create(ctx, account); err != nil {
 		return nil, err
 	}
@@ -932,9 +929,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		account.AutoPauseOnExpired = *input.AutoPauseOnExpired
 	}
 
-	if err := ValidateCursorAccount(account); err != nil {
-		return nil, err
-	}
 	// 先验证分组是否存在（在任何写操作之前）
 	if input.GroupIDs != nil {
 		if err := s.validateGroupIDsExist(ctx, *input.GroupIDs); err != nil {
@@ -1098,9 +1092,6 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	}
 	targetsByID := make(map[int64]*Account, len(cachedTargets))
 	for _, account := range cachedTargets {
-		if account.IsCursor() && ((input.ProxyID != nil && *input.ProxyID != 0) || len(input.Credentials) > 0) {
-			return nil, infraerrors.BadRequest("CURSOR_BULK_CREDENTIALS_UNSUPPORTED", "Cursor 凭据请在单个账号的编辑窗口修改，当前不支持账号级代理")
-		}
 		if account != nil {
 			targetsByID[account.ID] = account
 		}

@@ -32,7 +32,6 @@ const (
 //   - session_id/x-claude-code-session-id/x-grok-conv-id 等：逐请求会话隔离头，
 //     固定值会造成会话串扰。
 var headerOverrideBlockedNames = map[string]struct{}{
-	"x-kitty-cursor-api-key":   {},
 	"host":                     {},
 	"content-length":           {},
 	"content-type":             {},
@@ -186,12 +185,6 @@ func (a *Account) ApplyHeaderOverrides(h http.Header) {
 	// 全量 EqualFold 扫描兜底删除任意 casing 的既有键：透传链路可能保留客户端
 	// 原始 casing，非 canonical/wire casing 的键 deleteHeaderAllForms 覆盖不到。
 	for name, value := range overrides {
-		if strings.EqualFold(name, CursorKeyHeader) {
-			continue
-		}
-		if a.IsCursor() && (name == "authorization" || name == "x-api-key" || name == "x-opencodex-api-key" || name == "host") {
-			continue
-		}
 		for existing := range h {
 			if strings.EqualFold(existing, name) {
 				delete(h, existing)
