@@ -88,6 +88,8 @@ export function useKittyStudio() {
   const videoMode = computed(() => isVideoMode(form.mode))
   const maxReferenceCount = computed(() => form.mode === 'image-video' ? 1 : 5)
   const canGenerate = computed(() => !generating.value
+    && !loadingKeys.value
+    && !loadingModels.value
     && !!form.prompt.trim()
     && !!selectedKey.value
     && !!selectedModel.value
@@ -108,6 +110,9 @@ export function useKittyStudio() {
 
   async function loadModels(): Promise<void> {
     modelController?.abort()
+    modelController = null
+    gatewayModelIds.value = []
+    loadingModels.value = false
     const key = selectedKey.value
     if (!key) {
       gatewayModelIds.value = []
@@ -120,10 +125,11 @@ export function useKittyStudio() {
     error.value = ''
     try {
       const models = await listGatewayModels(key.key, key.group?.platform || '', controller.signal)
+      if (controller.signal.aborted || modelController !== controller) return
       gatewayModelIds.value = models.map((model) => model.id)
       syncModel()
     } catch (loadError) {
-      if (!isAbortError(loadError)) {
+      if (modelController === controller && !controller.signal.aborted && !isAbortError(loadError)) {
         gatewayModelIds.value = []
         syncModel()
         error.value = errorMessage(loadError, '模型列表加载失败。')
@@ -363,7 +369,9 @@ export function useKittyStudio() {
   }
 
   watch(form, () => saveStudioDraft({ ...form }), { deep: true })
-  watch(modelOptions, syncModel)
+  watch(modelOptions, () => {
+    if (!loadingModels.value) syncModel()
+  })
 
   onBeforeUnmount(() => {
     generationController?.abort()

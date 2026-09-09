@@ -15,6 +15,24 @@ const GPT_IMAGE_OPTION: StudioModelOption = {
   type: 'image',
 }
 
+const GPT_IMAGE_25_LABELS: Record<string, string> = {
+  'gpt-image-2.5': 'GPT Image 2.5',
+  'gpt-image-2.5-flare': 'GPT Image 2.5 Flare',
+  'gpt-image-2.5-sunburst': 'GPT Image 2.5 Sunburst',
+}
+
+function gptImageOption(id: string): StudioModelOption | null {
+  if (id === GPT_IMAGE_MODEL) return GPT_IMAGE_OPTION
+  if (!/^gpt-image-2\.5(?:-[a-z0-9][a-z0-9.-]*)?$/i.test(id)) return null
+  return {
+    id,
+    label: GPT_IMAGE_25_LABELS[id] || id,
+    description: 'OpenAI 图片生成与参考图编辑',
+    strategy: 'openai-image',
+    type: 'image',
+  }
+}
+
 const GROK_IMAGE_OPTIONS: StudioModelOption[] = [
   {
     id: GROK_IMAGE_MODEL,
@@ -110,7 +128,10 @@ export function studioModelOptions(
   const ids = new Set(availableModelIds.map((id) => id.trim()).filter(Boolean))
   const options: StudioModelOption[] = []
   if (normalized === 'openai' || normalized === 'composite' || ids.has(GPT_IMAGE_MODEL)) {
-    options.push(GPT_IMAGE_OPTION)
+    for (const id of ids) {
+      const option = gptImageOption(id)
+      if (option) options.push(option)
+    }
   }
   if (normalized === 'grok' || normalized === 'composite' || [...ids].some((id) => id.startsWith('grok-imagine-image'))) {
     options.push(...GROK_IMAGE_OPTIONS)

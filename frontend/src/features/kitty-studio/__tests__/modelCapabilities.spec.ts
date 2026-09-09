@@ -11,9 +11,28 @@ import {
 } from '../modelCapabilities'
 
 describe('Kitty Studio model catalog', () => {
-  it('keeps GPT image generation limited to gpt-image-2', () => {
+  it('keeps Image 2 for groups which only advertise the old model', () => {
     expect(studioModelOptions('openai', ['gpt-5.6', GPT_IMAGE_MODEL], 'text-image').map((item) => item.id))
       .toEqual([GPT_IMAGE_MODEL])
+  })
+
+  it.each(['text-image', 'image-image'] as const)('offers advertised Image 2.5 variants in %s mode', (mode) => {
+    const models = ['gpt-image-2', 'gpt-image-2.5', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']
+    const options = studioModelOptions('openai', ['gpt-6-astra', ...models, ' gpt-image-2.5 '], mode)
+    expect(options.map((item) => item.id)).toEqual(models)
+    expect(options.map((item) => item.label)).toEqual([
+      'GPT Image 2', 'GPT Image 2.5', 'GPT Image 2.5 Flare', 'GPT Image 2.5 Sunburst',
+    ])
+    expect(options.every((item) => item.strategy === 'openai-image')).toBe(true)
+  })
+
+  it('keeps exact dated IDs and does not invent unavailable GPT variants', () => {
+    const id = 'gpt-image-2.5-flare-2026-09-08'
+    expect(studioModelOptions('openai', [id], 'image-image').map((item) => item.id)).toEqual([id])
+    expect(studioModelOptions('openai', [], 'text-image')).toEqual([])
+    expect(studioModelOptions('openai', ['gpt-6', 'gpt-image-25', 'gpt-image-2.50'], 'text-image')).toEqual([])
+    expect(studioModelOptions('openai', [id], 'text-video')).toEqual([])
+    expect(studioModelOptions('composite', [id], 'text-image').filter((item) => item.id.startsWith('gpt-')).map((item) => item.id)).toEqual([id])
   })
 
   it('exposes the three approved Grok image models', () => {
