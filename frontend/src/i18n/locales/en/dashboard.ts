@@ -327,8 +327,6 @@ export default {
     accountCost: 'Cost',
     userBilled: 'User billed',
     accountBilled: 'Account billed',
-    estimatedCapacity: 'Est. total ≈${amount}',
-    estimatedCapacityHint: 'Estimated from the 7-day account cost ${cost} ÷ ${percent}% used: about ${total} total and ${remaining} remaining. Low percentages or upstream rounding can cause a large error.',
     resetNow: 'Now',
     resetPending: 'Pending refresh',
     accountMultiplier: 'Account rate',

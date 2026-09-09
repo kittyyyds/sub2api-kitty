@@ -332,8 +332,6 @@ export default {
     accountCost: '成本',
     userBilled: '用户扣费',
     accountBilled: '账号计费',
-    estimatedCapacity: '预估可跑 ≈${amount}',
-    estimatedCapacityHint: '按 7D 窗口账号计费 ${cost} ÷ 已用 ${percent}% 估算：总额约 ${total}，剩余约 ${remaining}。低百分比或上游取整时误差较大。',
     resetNow: '现在',
     resetPending: '待刷新',
     accountMultiplier: '账号倍率',

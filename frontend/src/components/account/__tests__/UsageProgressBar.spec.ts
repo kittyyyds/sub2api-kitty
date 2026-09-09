@@ -167,13 +167,13 @@ describe('UsageProgressBar', () => {
     expect(mountAt(90).get('.h-1\\.5 + span').classes()).toContain('text-red-600')
   })
 
-  it('根据 7D 账号计费和使用率实时估算总额度', async () => {
+  it('在统计行显示官方预计总费用并随传入估值更新', async () => {
     const wrapper = mount(UsageProgressBar, {
       props: {
         label: '7d',
         utilization: 1,
         resetsAt: '2026-03-23T23:00:00Z',
-        showCapacityEstimate: true,
+        estimatedTotalCost: 370,
         color: 'emerald',
         windowStats: {
           requests: 48,
@@ -185,30 +185,30 @@ describe('UsageProgressBar', () => {
       }
     })
 
-    const estimate = wrapper.get('[data-test="capacity-estimate"]')
-    expect(estimate.text()).toContain('370')
-    expect(estimate.attributes('title')).toContain('366.30')
+    const estimate = wrapper.get('[data-test="estimated-total-cost"]')
+    expect(estimate.text()).toBe('admin.accounts.usageWindow.estimatedTotalCost:{"cost":"370.00"}')
+    expect(estimate.attributes('title')).toBe('admin.accounts.usageWindow.estimatedTotalCostTooltip')
+    expect(estimate.element.parentElement?.textContent).toContain('U $0.74')
+    expect(wrapper.find('[data-test="capacity-estimate"]').exists()).toBe(false)
 
-    await wrapper.setProps({ utilization: 2 })
-    expect(wrapper.get('[data-test="capacity-estimate"]').text()).toContain('185')
-    expect(wrapper.get('[data-test="capacity-estimate"]').attributes('title')).toContain('181.30')
+    await wrapper.setProps({ utilization: 2, estimatedTotalCost: 185 })
+    expect(wrapper.get('[data-test="estimated-total-cost"]').text()).toContain('185.00')
+
+    await wrapper.setProps({ estimatedTotalCost: null })
+    expect(wrapper.find('[data-test="estimated-total-cost"]').exists()).toBe(false)
   })
 
-  it('0% 或没有有效账号计费时不显示额度预估', async () => {
+  it('未提供预计总费用时不显示估值标签', () => {
     const wrapper = mount(UsageProgressBar, {
       props: {
         label: '7d',
         utilization: 0,
-        showCapacityEstimate: true,
         color: 'emerald',
-        windowStats: { requests: 0, tokens: 0, cost: 3.7 }
+        windowStats: { requests: 1, tokens: 100, cost: 3.7 }
       }
     })
 
-    expect(wrapper.find('[data-test="capacity-estimate"]').exists()).toBe(false)
-
-    await wrapper.setProps({ utilization: 1, windowStats: { requests: 1, tokens: 1, cost: 0 } })
-    expect(wrapper.find('[data-test="capacity-estimate"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="estimated-total-cost"]').exists()).toBe(false)
   })
 
   it('labelWidth 默认 fixed：标签保持定宽居中，百分比列不变', () => {

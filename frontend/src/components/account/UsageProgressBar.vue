@@ -22,6 +22,14 @@
         >
           U ${{ formatUserCost }}
         </span>
+        <span
+          v-if="estimatedTotalCost != null"
+          data-test="estimated-total-cost"
+          class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800"
+          :title="t('admin.accounts.usageWindow.estimatedTotalCostTooltip')"
+        >
+          {{ t('admin.accounts.usageWindow.estimatedTotalCost', { cost: estimatedTotalCost.toFixed(2) }) }}
+        </span>
       </div>
     </div>
 
@@ -49,15 +57,6 @@
       <span v-if="shouldShowResetTime" class="shrink-0 text-[10px] text-gray-400">
         {{ formatResetTime }}
       </span>
-
-      <span
-        v-if="capacityEstimate"
-        data-test="capacity-estimate"
-        class="shrink-0 rounded bg-emerald-50 px-1 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-        :title="capacityEstimateTitle"
-      >
-        {{ t('usage.estimatedCapacity', { amount: formatEstimatedUSD(capacityEstimate.total) }) }}
-      </span>
     </div>
   </div>
 </template>
@@ -76,9 +75,9 @@ const props = withDefaults(
     resetsAt?: string | null
     color: 'indigo' | 'emerald' | 'purple' | 'amber'
     windowStats?: WindowStats | null
+    estimatedTotalCost?: number | null
     showNowWhenIdle?: boolean
     remainingCapacity?: boolean
-    showCapacityEstimate?: boolean
     /** fixed: 定宽居中徽章（账号页纵向对齐）；auto: 限宽截断左对齐（监控页组合标签） */
     labelWidth?: 'fixed' | 'auto'
   }>(),
@@ -181,53 +180,6 @@ const displayPercent = computed(() => {
   )
   return percent > 999 ? '>999%' : `${percent}%`
 })
-
-const capacityEstimate = computed(() => {
-  if (!props.showCapacityEstimate || !props.windowStats) return null
-
-  const usedPercent = Number(props.utilization)
-  const accountCost = Number(props.windowStats.cost)
-  if (
-    !Number.isFinite(usedPercent) ||
-    !Number.isFinite(accountCost) ||
-    usedPercent <= 0 ||
-    usedPercent > 100 ||
-    accountCost <= 0
-  ) {
-    return null
-  }
-
-  const total = accountCost * 100 / usedPercent
-  if (!Number.isFinite(total) || total < accountCost) return null
-
-  return {
-    accountCost,
-    usedPercent,
-    total,
-    remaining: Math.max(0, total - accountCost)
-  }
-})
-
-const capacityEstimateTitle = computed(() => {
-  if (!capacityEstimate.value) return ''
-  const estimate = capacityEstimate.value
-  return t('usage.estimatedCapacityHint', {
-    cost: estimate.accountCost.toFixed(2),
-    percent: formatEstimatePercent(estimate.usedPercent),
-    total: estimate.total.toFixed(2),
-    remaining: estimate.remaining.toFixed(2)
-  })
-})
-
-function formatEstimatePercent(value: number): string {
-  return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
-}
-
-function formatEstimatedUSD(value: number): string {
-  if (value >= 100) return value.toFixed(0)
-  if (value >= 10) return value.toFixed(1)
-  return value.toFixed(2)
-}
 
 const shouldShowResetTime = computed(() => {
   if (props.resetsAt) return true
