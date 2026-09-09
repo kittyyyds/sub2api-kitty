@@ -59,6 +59,7 @@ vi.mock('@/api/auth', () => ({
 }))
 
 const agreementSettings = {
+  registration_enabled: true,
   turnstile_enabled: false,
   tencent_captcha_enabled: false,
   aliyun_captcha_enabled: false,
@@ -134,5 +135,18 @@ describe('LoginView agreement gate UX', () => {
     expect(loginMock).not.toHaveBeenCalled()
     wrapper.unmount()
   })
-})
 
+  it.each([true, false])('honors registration_enabled=%s without enabling login Turnstile', async (enabled) => {
+    getPublicSettingsMock.mockResolvedValueOnce({
+      ...agreementSettings,
+      registration_enabled: enabled,
+      turnstile_enabled: true,
+      turnstile_site_key: 'test-site-key'
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text().includes('auth.signUp')).toBe(enabled)
+    expect(wrapper.findComponent({ name: 'TurnstileWidget' }).exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

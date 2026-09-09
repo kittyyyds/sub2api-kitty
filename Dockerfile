@@ -15,6 +15,7 @@ ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 ARG NPM_CONFIG_REGISTRY=
 ARG KITTY_FRONTEND_STAGE=frontend-builder
+ARG KITTY_BACKEND_STAGE=backend-builder
 
 # -----------------------------------------------------------------------------
 # Stage 1: Frontend Builder
@@ -107,6 +108,15 @@ RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
     ./cmd/server
 
 # -----------------------------------------------------------------------------
+# Optional verified Linux binary built outside the production host.
+# The default remains the full source build above.
+# -----------------------------------------------------------------------------
+FROM scratch AS backend-prebuilt
+COPY --from=kitty_backend /sub2api /app/sub2api
+
+FROM ${KITTY_BACKEND_STAGE} AS backend-output
+
+# -----------------------------------------------------------------------------
 # Stage 3: PostgreSQL Client (version-matched with docker-compose)
 # -----------------------------------------------------------------------------
 FROM ${POSTGRES_IMAGE} AS pg-client
@@ -148,8 +158,8 @@ RUN addgroup -g 1000 sub2api && \
 WORKDIR /app
 
 # Copy binary/resources with ownership to avoid extra full-layer chown copy
-COPY --from=backend-builder --chown=sub2api:sub2api /app/sub2api /app/sub2api
-COPY --from=backend-builder --chown=sub2api:sub2api /app/backend/resources /app/resources
+COPY --from=backend-output --chown=sub2api:sub2api --chmod=0755 /app/sub2api /app/sub2api
+COPY --chown=sub2api:sub2api backend/resources /app/resources
 
 # Create data directory
 RUN mkdir -p /app/data && chown sub2api:sub2api /app/data

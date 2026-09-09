@@ -107,7 +107,15 @@ func (i *PluginPackageInstaller) Install(ctx context.Context, reader io.Reader, 
 	if err != nil {
 		return nil, fmt.Errorf("插件包不是有效的 ZIP: %w", err)
 	}
-	defer func() { _ = archive.Close() }()
+	archiveClosed := false
+	closeArchive := func() error {
+		if !archiveClosed {
+			archiveClosed = true
+			return archive.Close()
+		}
+		return nil
+	}
+	defer closeArchive()
 	manifest, _, signatureStatus, err := i.inspectArchive(&archive.Reader)
 	if err != nil {
 		return nil, err
@@ -139,7 +147,7 @@ func (i *PluginPackageInstaller) Install(ctx context.Context, reader io.Reader, 
 	}
 	// Windows does not allow the uploaded archive to be renamed while the ZIP
 	// reader still holds its file handle. Close it before committing either path.
-	if err := archive.Close(); err != nil {
+	if err := closeArchive(); err != nil {
 		return nil, fmt.Errorf("关闭插件包: %w", err)
 	}
 	if err := os.Rename(extractPath, installPath); err != nil {

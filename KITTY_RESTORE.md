@@ -1,5 +1,13 @@
 # Kitty Upgrade And Restore Guide
 
+## v0.2.4 release requirements
+
+- Preserve Kitty's existing features, registration-only Turnstile, custom payment UI, group visibility boundaries, and selected risk controls. Both selected risk switches must reset off after a version/commit upgrade. Cursor and variant-lock features remain retired; do not import third-party SVIP rules or platform removals.
+- Use the official OpenAI weekly total-cost badge only. Keep Luna's selected default input/output prices at 0.40/2.40 USD per million tokens and Astra at 10/50, with existing overrides and multipliers.
+- Frontend and the Linux/amd64 Go binary may both be compiled locally. Build the binary with CGO_ENABLED=0, `-tags embed`, and explicit Version/Commit/Date/BuildType metadata after generating Ent/Wire and building the matching frontend. Validate its build settings with `go version -m`.
+- When using `KITTY_BACKEND_STAGE=backend-prebuilt`, supply the verified `kitty_backend` named context containing `sub2api`. The release driver must bind its SHA-256 to the clean source commit and frontend manifest and verify both again on the server before assembling the image. Keep the complete source resources directory and default source-build path. The resulting candidate must pass Linux runtime, migration, authorization, billing, and risk-control smoke checks before switching traffic.
+- Never compile source or run test compilation concurrently on a production host. Check live memory/disk headroom before any work and use a site-specific worker with hard resource limits for image assembly. Verify the primary site, secondary direct domain, and secondary API domain through the primary site after release.
+
 ## Repository baseline
 
 - Upstream tag: `v0.1.173`

@@ -373,7 +373,7 @@
           >
             <div>
               <p id="checkout-help-title">{{ t('payment.needHelp') }}</p>
-              <span v-if="checkout.help_text">{{ checkout.help_text }}</span>
+              <div v-if="checkout.help_text" class="checkout-help__text markdown-body overflow-x-auto break-words" v-html="renderedHelpText"></div>
             </div>
             <button
               v-if="checkout.help_image_url"
@@ -460,6 +460,9 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import '@/styles/announcement-markdown.css'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePaymentStore } from '@/stores/payment'
@@ -714,6 +717,10 @@ const checkout = ref<CheckoutInfoResponse>({
   plans: [], balance_disabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
   recharge_bonus_rules: [], recharge_bonus_summary: { available_amount: 0, active_grants: 0 },
 })
+
+const renderedHelpText = computed(() => DOMPurify.sanitize(
+  marked.parse(checkout.value.help_text || '', { async: false, gfm: true, breaks: false }),
+))
 
 const tabs = computed(() => {
   const result: { key: 'recharge' | 'subscription'; label: string }[] = []
@@ -2126,6 +2133,16 @@ onMounted(async () => {
   color: var(--checkout-ink);
   font-size: 13px;
   font-weight: 700;
+}
+
+.checkout-help > div {
+  min-width: 0;
+}
+
+.checkout-help__text {
+  color: var(--checkout-muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .checkout-help span {
