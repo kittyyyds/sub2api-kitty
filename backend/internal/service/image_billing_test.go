@@ -68,9 +68,12 @@ func TestOpenAIImageModelPricesAreIndependentFinalUSDCustomerPrices(t *testing.T
 	service := &BillingService{}
 	config := &ImagePriceConfig{
 		ModelPrices: NormalizeImageModelPrices(map[string]map[string]float64{
-			"gpt-image-1":        {ImageBillingSize1K: 0.011},
-			"gpt-image-1.5":      {ImageBillingSize2K: 0.022},
-			"openai/gpt-image-2": {ImageBillingSize4K: 0.01},
+			"gpt-image-1":            {ImageBillingSize1K: 0.011},
+			"gpt-image-1.5":          {ImageBillingSize2K: 0.022},
+			"openai/gpt-image-2":     {ImageBillingSize4K: 0.01},
+			"gpt-image-2.5":          {ImageBillingSize1K: 0.03},
+			"gpt-image-2.5-flare":    {ImageBillingSize1K: 0.04, ImageBillingSize4K: 0},
+			"gpt-image-2.5-sunburst": {ImageBillingSize1K: 0.05, ImageBillingSize2K: 0.08},
 		}),
 	}
 
@@ -82,6 +85,11 @@ func TestOpenAIImageModelPricesAreIndependentFinalUSDCustomerPrices(t *testing.T
 		{model: "gpt-image-1", tier: ImageBillingSize1K, want: 0.011},
 		{model: "gpt-image-1.5", tier: ImageBillingSize2K, want: 0.022},
 		{model: "models/gpt-image-2", tier: ImageBillingSize4K, want: 0.01},
+		{model: "gpt-image-2.5", tier: ImageBillingSize1K, want: 0.03},
+		{model: "gpt-image-2.5-flare", tier: ImageBillingSize1K, want: 0.04},
+		{model: "gpt-image-2.5-flare", tier: ImageBillingSize4K, want: 0},
+		{model: "gpt-image-2.5-sunburst", tier: ImageBillingSize1K, want: 0.05},
+		{model: "gpt-image-2.5-sunburst", tier: ImageBillingSize2K, want: 0.08},
 	}
 
 	for _, tt := range tests {

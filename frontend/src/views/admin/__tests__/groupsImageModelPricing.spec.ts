@@ -151,4 +151,45 @@ describe('Grok image model pricing form', () => {
       0.201
     )).toBeCloseTo(0.1005)
   })
+
+  it('exposes Image 2.5 tiers without creating prices or inheriting Image 2 overrides', () => {
+    const form = createImageModelPricesForm({ 'gpt-image-2': { '1K': 0.02 } })
+    const models = ['gpt-image-2.5', 'gpt-image-2.5-flare', 'gpt-image-2.5-sunburst']
+    const rows = imageModelPriceRows(form, 'openai').map(({ key }) => key)
+
+    for (const model of models) {
+      expect(rows.filter((key) => key === model)).toHaveLength(1)
+      expect(form[model]).toEqual({ '1K': null, '2K': null, '4K': null })
+      expect(resolveImageModelCustomerPrice(form, model, '1K', 0.1, 0.5)).toBe(0.05)
+    }
+    expect(serializeImageModelPrices(form)).toEqual({ 'gpt-image-2': { '1K': 0.02 } })
+    expect(imageModelPriceRows(form, 'grok').map(({ key }) => key)).not.toEqual(
+      expect.arrayContaining(models)
+    )
+  })
+
+  it('keeps Image 2.5 variant prices independent after save and reopen', () => {
+    const form = createImageModelPricesForm({ 'gpt-image-2': { '1K': 0.02 } })
+    form['gpt-image-2.5']['1K'] = '0.03'
+    form['gpt-image-2.5-flare']['1K'] = '0.04'
+    form['gpt-image-2.5-sunburst']['1K'] = '0.05'
+    form['gpt-image-2.5']['2K'] = '0.08'
+    form['gpt-image-2.5-flare']['4K'] = '0'
+    form['gpt-image-2.5-sunburst']['4K'] = ''
+
+    const saved = JSON.parse(JSON.stringify(serializeImageModelPrices(form)))
+    expect(saved).toEqual({
+      'gpt-image-2': { '1K': 0.02 },
+      'gpt-image-2.5': { '1K': 0.03, '2K': 0.08 },
+      'gpt-image-2.5-flare': { '1K': 0.04, '4K': 0 },
+      'gpt-image-2.5-sunburst': { '1K': 0.05 }
+    })
+    const reopened = createImageModelPricesForm(saved)
+    for (const [model, tiers] of Object.entries(saved)) {
+      for (const [tier, price] of Object.entries(tiers as Record<string, number>)) {
+        expect(resolveImageModelCustomerPrice(reopened, model, tier, 1, 3)).toBe(price)
+      }
+    }
+    expect(reopened['gpt-image-2.5-sunburst']['4K']).toBeNull()
+  })
 })

@@ -14,7 +14,10 @@ export const grokImagePriceModels = [
 export const openAIImagePriceModels = [
   { key: 'gpt-image-1', label: 'gpt-image-1' },
   { key: 'gpt-image-1.5', label: 'gpt-image-1.5' },
-  { key: 'gpt-image-2', label: 'gpt-image-2' }
+  { key: 'gpt-image-2', label: 'gpt-image-2' },
+  { key: 'gpt-image-2.5', label: 'gpt-image-2.5' },
+  { key: 'gpt-image-2.5-flare', label: 'gpt-image-2.5-flare' },
+  { key: 'gpt-image-2.5-sunburst', label: 'gpt-image-2.5-sunburst' }
 ] as const
 
 const imagePriceModelsByPlatform: Record<
