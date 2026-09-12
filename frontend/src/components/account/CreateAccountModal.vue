@@ -3227,6 +3227,14 @@
         </div>
       </div>
 
+      <div v-if="form.platform === 'openai' && accountCategory === 'oauth-based'" class="space-y-2 border-t border-gray-200 pt-4 dark:border-dark-600">
+        <label class="input-label" for="create-client-profile">GPT 客户端身份方案</label>
+        <select id="create-client-profile" v-model="clientProfilePreset" data-testid="create-client-profile" class="input">
+          <option v-for="option in presetOptions" :key="option.value" :value="option.value">{{ option.label }}{{ option.value === 'default' ? '（保持现状）' : '' }}</option>
+        </select>
+        <p class="input-hint">{{ presetOptions.find(option => option.value === clientProfilePreset)?.description }}。选择 Mac／Linux／Windows 后仅启用身份声明，连接设置与请求节奏保持原样；保存后可点账号旁的“指纹配置”调整。</p>
+      </div>
+
       <!-- Codex 指纹收敛模式（仅 OpenAI OAuth） -->
       <div
         v-if="form.platform === 'openai' && accountCategory === 'oauth-based'"
@@ -3868,6 +3876,7 @@ import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
 import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
+import { defaultClientProfile, presetOptions, type ClientPreset } from '@/components/account/clientProfile'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
@@ -4312,6 +4321,7 @@ const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
 const codexFingerprintMode = ref<CodexFingerprintMode>('off')
+const clientProfilePreset = ref<ClientPreset>('default')
 const codexFingerprintModeOptions = computed(() => [
   { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
   { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
@@ -5229,6 +5239,7 @@ const resetForm = () => {
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
   codexFingerprintMode.value = 'off'
+  clientProfilePreset.value = 'default'
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
   webSearchEmulationMode.value = 'default'
@@ -5334,6 +5345,9 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     extra.codex_fingerprint_mode = codexFingerprintMode.value
   } else {
     delete extra.codex_fingerprint_mode
+  }
+  if (accountCategory.value === 'oauth-based' && clientProfilePreset.value !== 'default') {
+    extra.openai_client_profile = { ...defaultClientProfile(), enabled: true, preset: clientProfilePreset.value }
   }
   if (openAICompactMode.value !== 'auto') {
     extra.openai_compact_mode = openAICompactMode.value

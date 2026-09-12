@@ -917,6 +917,10 @@ func (s *OpenAIGatewayService) writeOpenAIWSFallbackErrorResponse(c *gin.Context
 }
 
 func (s *OpenAIGatewayService) openAIWSRetryBackoff(attempt int) time.Duration {
+	return s.openAIWSRetryBackoffForAccount(attempt, nil)
+}
+
+func (s *OpenAIGatewayService) openAIWSRetryBackoffForAccount(attempt int, account *Account) time.Duration {
 	if attempt <= 0 {
 		return 0
 	}
@@ -934,6 +938,14 @@ func (s *OpenAIGatewayService) openAIWSRetryBackoff(attempt int) time.Duration {
 		}
 		if wsCfg.RetryJitterRatio >= 0 {
 			jitterRatio = wsCfg.RetryJitterRatio
+		}
+	}
+	if profile := account.GetOpenAIClientProfile(); profile != nil {
+		if profile.RetryBackoffInitialMS > 0 {
+			initial = time.Duration(profile.RetryBackoffInitialMS) * time.Millisecond
+		}
+		if profile.RetryBackoffMaxMS > 0 {
+			maxBackoff = time.Duration(profile.RetryBackoffMaxMS) * time.Millisecond
 		}
 	}
 	if initial <= 0 {
@@ -979,6 +991,13 @@ func (s *OpenAIGatewayService) openAIWSRetryBackoff(attempt int) time.Duration {
 }
 
 func (s *OpenAIGatewayService) openAIWSRetryTotalBudget() time.Duration {
+	return s.openAIWSRetryTotalBudgetForAccount(nil)
+}
+
+func (s *OpenAIGatewayService) openAIWSRetryTotalBudgetForAccount(account *Account) time.Duration {
+	if profile := account.GetOpenAIClientProfile(); profile != nil && profile.RetryTotalBudgetMS > 0 {
+		return time.Duration(profile.RetryTotalBudgetMS) * time.Millisecond
+	}
 	if s != nil && s.cfg != nil {
 		ms := s.cfg.Gateway.OpenAIWS.RetryTotalBudgetMS
 		if ms <= 0 {

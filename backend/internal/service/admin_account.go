@@ -402,6 +402,13 @@ func normalizeOpenAILongContextBillingExtra(platform string, extra map[string]an
 	return normalized, nil
 }
 
+func normalizeOpenAIClientProfileExtra(platform, accountType string, extra map[string]any) (map[string]any, error) {
+	if err := ValidateOpenAIClientProfileExtra(platform, accountType, extra); err != nil {
+		return nil, err
+	}
+	return maps.Clone(extra), nil
+}
+
 func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *UpdateAccountInput) (map[string]any, error) {
 	normalized, err := normalizeOpenAILongContextBillingExtra(account.Platform, input.Extra)
 	if err != nil || account.Platform != PlatformOpenAI {
@@ -414,6 +421,33 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 		if hasCurrent {
 			normalized[openAILongContextBillingEnabledKey] = current
 		}
+	}
+	return normalized, nil
+}
+
+func normalizeOpenAIClientProfileUpdateExtra(account *Account, input *UpdateAccountInput, normalized map[string]any) (map[string]any, error) {
+	if account == nil || input == nil || input.Extra == nil {
+		return normalized, nil
+	}
+	if raw, provided := input.Extra[OpenAIClientProfileExtraKey]; provided {
+		candidate := maps.Clone(input.Extra)
+		effectiveType := account.Type
+		if input.Type != "" {
+			effectiveType = input.Type
+		}
+		effectiveAccount := *account
+		effectiveAccount.Type = effectiveType
+		if err := validateAccountOpenAIClientProfileExtra(&effectiveAccount, candidate); err != nil {
+			return nil, err
+		}
+		if raw == nil {
+			delete(candidate, OpenAIClientProfileExtraKey)
+		}
+	} else if current, exists := account.Extra[OpenAIClientProfileExtraKey]; exists {
+		if normalized == nil {
+			normalized = make(map[string]any)
+		}
+		normalized[OpenAIClientProfileExtraKey] = current
 	}
 	return normalized, nil
 }
@@ -504,6 +538,9 @@ func normalizeGrokMediaCompatibilityUpdateExtra(account *Account, input *UpdateA
 }
 
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
+	if err := ValidateOpenAIClientProfileExtra(input.Platform, input.Type, accountExtra); err != nil {
+		return nil, err
+	}
 	// Probe/session state is system-managed. New accounts always start with automatic refresh disabled.
 	delete(accountExtra, UpstreamBillingProbeEnabledExtraKey)
 	delete(accountExtra, UpstreamBillingRateSyncEnabledExtraKey)
@@ -576,6 +613,10 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		return nil, err
 	}
 	accountExtra, err = normalizeGrokMediaCompatibilityExtra(input.Platform, accountExtra)
+	if err != nil {
+		return nil, err
+	}
+	accountExtra, err = normalizeOpenAIClientProfileExtra(input.Platform, input.Type, accountExtra)
 	if err != nil {
 		return nil, err
 	}
@@ -682,6 +723,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		if err != nil {
 			return nil, err
 		}
+		normalizedExtra, err = normalizeOpenAIClientProfileUpdateExtra(account, input, normalizedExtra)
+		if err != nil {
+			return nil, err
+		}
 		effectiveType := account.Type
 		if input.Type != "" {
 			effectiveType = input.Type
@@ -784,6 +829,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			OllamaCloudUsageAutoRefreshExtraKey,
 			OllamaCloudUsageSnapshotExtraKey,
 			OpenAIAutoResetCreditStateExtraKey,
+			openAIClientProfileEgressKey,
 		} {
 			if v, ok := account.Extra[key]; ok {
 				normalizedExtra[key] = v
@@ -1028,6 +1074,15 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 			return err
 		}
 	}
+	if raw, exists := updates[OpenAIClientProfileExtraKey]; exists && raw != nil {
+		account, err := s.accountRepo.GetByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := validateAccountOpenAIClientProfileExtra(account, updates); err != nil {
+			return err
+		}
+	}
 	if len(updates) == 0 {
 		return nil
 	}
@@ -1083,7 +1138,8 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 
 	// 预取所有目标账号，供凭据守卫/代理守卫/混合渠道检查共用，避免多次 DB 查询。
 	var cachedTargets []*Account
-	if len(input.Credentials) > 0 || input.ProxyID != nil || needMixedChannelCheck || openAISettings.any() || hasLongContextBillingUpdate || hasGrokMediaCompatibilityUpdate || input.ProbeEnabled != nil || input.RateMultiplier != nil {
+	_, hasClientProfileUpdate := input.Extra[OpenAIClientProfileExtraKey]
+	if len(input.Credentials) > 0 || input.ProxyID != nil || needMixedChannelCheck || openAISettings.any() || hasLongContextBillingUpdate || hasGrokMediaCompatibilityUpdate || hasClientProfileUpdate || input.ProbeEnabled != nil || input.RateMultiplier != nil {
 		loaded, err := s.accountRepo.GetByIDs(ctx, input.AccountIDs)
 		if err != nil {
 			return nil, err
@@ -1149,6 +1205,17 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			return nil, err
 		}
 		input.Extra = normalizedExtra
+	}
+	if hasClientProfileUpdate {
+		for _, accountID := range input.AccountIDs {
+			account := targetsByID[accountID]
+			if account == nil {
+				return nil, ErrAccountNotFound
+			}
+			if err := validateAccountOpenAIClientProfileExtra(account, input.Extra); err != nil {
+				return nil, err
+			}
+		}
 	}
 	// 影子账号绝不持有凭据:批量更新携带凭据时,目标中不得含影子(外审 G5,与单账号
 	// UpdateAccount 守卫对齐)。覆盖显式 IDs 与 filter 解析出的 IDs(此处 AccountIDs 已解析完成)。

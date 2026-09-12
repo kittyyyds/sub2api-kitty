@@ -958,6 +958,12 @@ func (m *PluginManager) ShouldRouteOpenAIOAuth(account *Account) bool {
 	if m == nil || account == nil || account.Platform != PlatformOpenAI || account.Type != AccountTypeOAuth {
 		return false
 	}
+	// Profile experiments explicitly select the core transport. An external
+	// plugin cannot be assumed to honor the TLS/proxy/pool choices. The UI
+	// discloses this before enabling; disabled accounts retain plugin routing.
+	if account.GetOpenAIClientProfile() != nil {
+		return false
+	}
 	route := m.route.Load()
 	return route != nil && route.rolloutPercent > 0 && int(stablePluginBucket(account.ID)) < route.rolloutPercent
 }

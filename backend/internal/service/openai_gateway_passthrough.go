@@ -713,6 +713,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	// （User-Agent / originator / version 同源自洽），客户端自报身份不会到达上游。
 	if account.UsesOpenAICodexProtocol() {
 		enforceCodexIdentityHeadersWithUA(req.Header, s.codexIdentityOverrideUA(account))
+		ApplyOpenAIClientProfileHeaders(req.Header, account)
 	}
 
 	if req.Header.Get("content-type") == "" {

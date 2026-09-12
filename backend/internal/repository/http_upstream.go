@@ -198,9 +198,15 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 //   - 调用方必须关闭 resp.Body，否则会导致 inFlight 计数泄漏
 //   - inFlight > 0 的客户端不会被淘汰，确保活跃请求不被中断
 func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	if req == nil || req.URL == nil {
+		return nil, fmt.Errorf("upstream request URL is required")
+	}
 	applyGrokCLIProxyHeaders(req)
 	if err := s.validateRequestHost(req); err != nil {
 		return nil, err
+	}
+	if custom := service.OpenAIClientProfileFromContext(req.Context()); custom != nil && custom.TLSProfile != "" && custom.TLSProfile != "inherit" && (req.URL == nil || req.URL.Scheme != "https") {
+		return nil, fmt.Errorf("TLS experiment requires an HTTPS upstream URL")
 	}
 	profile := service.HTTPUpstreamProfileDefault
 	if req != nil {
@@ -208,7 +214,7 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 	}
 
 	// 获取或创建对应的客户端，并标记请求占用
-	entry, err := s.acquireClientWithProfile(proxyURL, accountID, accountConcurrency, profile)
+	entry, err := s.getClientEntryWithClientProfile(proxyURL, accountID, accountConcurrency, profile, service.OpenAIClientProfileFromContext(req.Context()), true, true)
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +250,12 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 // profile 为 nil 时不启用 TLS 指纹，行为与 Do 方法相同。
 // profile 非 nil 时使用指定的 Profile 进行 TLS 指纹伪装。
 func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	if req == nil || req.URL == nil {
+		return nil, fmt.Errorf("upstream request URL is required")
+	}
+	if service.OpenAIClientProfileFromContext(req.Context()) != nil {
+		return s.Do(req, proxyURL, accountID, accountConcurrency)
+	}
 	if profile == nil {
 		return s.Do(req, proxyURL, accountID, accountConcurrency)
 	}
@@ -661,6 +673,10 @@ func (s *httpUpstreamService) getOrCreateClient(proxyURL string, accountID int64
 // markInFlight=true 时会标记进行中请求，用于请求路径防止被淘汰
 // enforceLimit=true 时会限制客户端数量，超限且无法淘汰时返回错误
 func (s *httpUpstreamService) getClientEntry(proxyURL string, accountID int64, accountConcurrency int, profile service.HTTPUpstreamProfile, markInFlight bool, enforceLimit bool) (*upstreamClientEntry, error) {
+	return s.getClientEntryWithClientProfile(proxyURL, accountID, accountConcurrency, profile, nil, markInFlight, enforceLimit)
+}
+
+func (s *httpUpstreamService) getClientEntryWithClientProfile(proxyURL string, accountID int64, accountConcurrency int, profile service.HTTPUpstreamProfile, clientProfile *service.OpenAIClientProfile, markInFlight bool, enforceLimit bool) (*upstreamClientEntry, error) {
 	// 获取隔离模式
 	isolation := s.getIsolationMode()
 	// 标准化代理 URL 并解析
@@ -672,10 +688,21 @@ func (s *httpUpstreamService) getClientEntry(proxyURL string, accountID int64, a
 	protocolMode := s.resolveProtocolMode(profile, proxyKey, parsedProxy)
 	settings := s.resolvePoolSettings(isolation, accountConcurrency)
 	settings = s.applyProfilePoolSettings(settings, profile)
+	if clientProfile != nil {
+		// Explicit profiles always have account+proxy isolation, regardless of
+		// the legacy global pool-sharing mode.
+		isolation = config.ConnectionPoolIsolationAccountProxy
+		settings, protocolMode = applyOpenAIClientTransportSettings(settings, protocolMode, clientProfile)
+	}
 	// 构建缓存键（根据隔离策略不同）
 	cacheKey := buildCacheKey(isolation, proxyKey, accountID, protocolMode)
 	// 构建连接池配置键（用于检测配置变更）
 	poolKey := buildPoolKey(settings, protocolMode)
+	if clientProfile != nil {
+		profileKey := openAIClientTransportKey(clientProfile)
+		cacheKey += "|client:" + profileKey
+		poolKey += "|client:" + profileKey
+	}
 
 	now := time.Now()
 	nowUnix := now.UnixNano()
@@ -719,11 +746,18 @@ func (s *httpUpstreamService) getClientEntry(proxyURL string, accountID int64, a
 
 	// 缓存未命中或需要重建，创建新客户端
 	transport, err := buildUpstreamTransport(settings, parsedProxy, protocolMode)
+	if err == nil && clientProfile != nil {
+		err = applyOpenAIClientTransport(transport, parsedProxy, clientProfile)
+	}
 	if err != nil {
 		s.mu.Unlock()
 		return nil, fmt.Errorf("build transport: %w", err)
 	}
-	client := &http.Client{Transport: transport}
+	var roundTripper http.RoundTripper = transport
+	if clientProfile != nil && clientProfile.TLSProfile != "" && clientProfile.TLSProfile != "inherit" {
+		roundTripper = &openAIClientSecureTransport{Transport: transport}
+	}
+	client := &http.Client{Transport: roundTripper}
 	if s.shouldValidateResolvedIP() {
 		client.CheckRedirect = s.redirectChecker
 	}

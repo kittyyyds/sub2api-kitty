@@ -191,6 +191,10 @@
           @select-all-results="handleSelectAllResults"
           @toggle-schedulable="handleBulkToggleSchedulable"
         />
+        <div v-if="selIds.length" class="mb-3 flex items-center gap-3">
+          <button class="btn btn-secondary text-sm" @click="openBulkClientProfile"><Icon name="cog" size="sm" />批量设置 GPT 指纹</button>
+          <span class="text-xs text-gray-500 dark:text-gray-400">仅对选中的 GPT 授权账号生效</span>
+        </div>
         <div ref="accountTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DataTable
           ref="dataTableRef"
@@ -242,6 +246,7 @@
                 </template>
               </HelpTooltip>
               <span v-else class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <button v-if="isClientProfileAccount(row)" class="mt-1 self-start rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-xs text-gray-600 hover:border-primary-300 hover:text-primary-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300" title="查看与修改已保存的客户端身份方案" @click="handleClientProfile(row)">身份：{{ clientProfileLabel(row.extra) }}</button>
               <span
                 v-if="accountDisplayEmail(row)"
                 class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]"
@@ -445,6 +450,9 @@
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
+              <button v-if="isClientProfileAccount(row)" @click="handleClientProfile(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
+                <Icon name="cog" size="sm" /><span class="whitespace-nowrap text-xs">指纹配置</span>
+              </button>
               <button @click="handleDelete(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                 <span class="text-xs">{{ t('common.delete') }}</span>
@@ -462,6 +470,7 @@
     </TablePageLayout>
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
+    <ClientProfileModal :show="showClientProfile" :account="clientProfileAcc" :account-ids="clientProfileIds" :proxies="proxies" @close="showClientProfile = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
@@ -514,6 +523,8 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
+import ClientProfileModal from '@/components/account/ClientProfileModal.vue'
+import { clientProfileLabel, isClientProfileAccount } from '@/components/account/clientProfile'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
@@ -610,6 +621,9 @@ const selTypes = computed<AccountType[]>(() => {
 })
 const showCreate = ref(false)
 const showEdit = ref(false)
+const showClientProfile = ref(false)
+const clientProfileAcc = ref<Account | null>(null)
+const clientProfileIds = ref<number[]>([])
 const showSync = ref(false)
 const showImportData = ref(false)
 const showExportDataDialog = ref(false)
@@ -1428,6 +1442,7 @@ const isAnyModalOpen = computed(() => {
   return (
     showCreate.value ||
     showEdit.value ||
+    showClientProfile.value ||
     showSync.value ||
     showImportData.value ||
     showExportDataDialog.value ||
@@ -1926,6 +1941,18 @@ const handleEdit = async (a: AccountListItem) => {
   if (!account) return
   edAcc.value = account
   showEdit.value = true
+}
+const handleClientProfile = async (a: AccountListItem) => {
+  const account = await loadAccountDetails(a)
+  if (!account) return
+  clientProfileAcc.value = account
+  clientProfileIds.value = []
+  showClientProfile.value = true
+}
+const openBulkClientProfile = () => {
+  clientProfileAcc.value = null
+  clientProfileIds.value = [...selIds.value]
+  showClientProfile.value = true
 }
 const openMenu = (a: Account, e: MouseEvent) => {
   menu.acc = a

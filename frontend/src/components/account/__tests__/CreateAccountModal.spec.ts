@@ -214,6 +214,26 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('imports an explicitly selected Mac profile without changing connection or fingerprint convergence defaults', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('[data-testid="create-client-profile"]').setValue('macos')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Mac account')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    const extra = importCodexSessionMock.mock.calls[0]?.[0]?.extra
+    expect(extra?.openai_client_profile).toMatchObject({ enabled: true, preset: 'macos', ws_mode: 'inherit', http_version: 'inherit' })
+    expect(extra?.codex_fingerprint_mode).toBeUndefined()
+  })
+
+  it('does not add a client profile to default OAuth imports', async () => {
+    const wrapper = await openCodexImportStep()
+    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await flushPromises()
+    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_client_profile).toBeUndefined()
+  })
+
   it('sets month and year expiry presets without submitting the account form', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-01-31T12:34:00'))

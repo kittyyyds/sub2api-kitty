@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
@@ -80,6 +81,7 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSHandshakeCompatibilityKey struct {
+	clientProfile       string
 	betaFeatures        string
 	codexInstallationID string
 	sessionIDHyphen     string
@@ -264,10 +266,11 @@ type openAIWSConn struct {
 	readMu  sync.Mutex
 	writeMu sync.Mutex
 
-	waiters       atomic.Int32
-	createdAtNano atomic.Int64
-	lastUsedNano  atomic.Int64
-	prewarmed     atomic.Bool
+	waiters            atomic.Int32
+	createdAtNano      atomic.Int64
+	lastUsedNano       atomic.Int64
+	prewarmed          atomic.Bool
+	profileIdleTimeout time.Duration
 }
 
 func newOpenAIWSConn(id string, _ int64, ws openAIWSClientConn, handshakeHeaders http.Header) *openAIWSConn {
@@ -549,6 +552,16 @@ func (c *openAIWSConn) handshakeHeader(name string) string {
 
 func (c *openAIWSConn) matchesHandshakeCompatibility(compatibility openAIWSHandshakeCompatibilityKey) bool {
 	return c != nil && c.handshakeCompatibility == compatibility
+}
+
+// A configured profile change affects new sockets. A known continuation can
+// finish on its old socket when every existing isolation field still matches.
+func (c *openAIWSConn) matchesContinuationCompatibility(compatibility openAIWSHandshakeCompatibilityKey) bool {
+	if c == nil {
+		return false
+	}
+	compatibility.clientProfile = c.handshakeCompatibility.clientProfile
+	return c.handshakeCompatibility == compatibility
 }
 
 func (c *openAIWSConn) matchesRoutingAffinity(routingAffinity string) bool {
@@ -851,6 +864,11 @@ func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireReque
 	if p != nil {
 		p.metrics.acquireTotal.Add(1)
 	}
+	// Fresh applies to a new conversation. A known continuation retains its
+	// pinned socket so tool results and previous_response_id remain valid.
+	if profile := req.Account.GetOpenAIClientProfile(); profile != nil && profile.ConnectionReuse == "fresh" && req.PreferredConnID == "" && !req.ForcePreferredConn {
+		req.ForceNewConn = true
+	}
 	return p.acquire(ctx, cloneOpenAIWSAcquireRequest(req), 0)
 }
 
@@ -864,7 +882,7 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 
 retryAcquire:
 	accountID := req.Account.ID
-	compatibility := normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	compatibility := normalizeOpenAIWSAcquireCompatibility(req)
 	routingAffinity := normalizeOpenAIWSRoutingAffinity(req.Headers)
 	effectiveMaxConns := p.effectiveMaxConnsByAccount(req.Account)
 	if effectiveMaxConns <= 0 {
@@ -893,7 +911,7 @@ retryAcquire:
 				return nil, errOpenAIWSPreferredConnUnavailable
 			}
 			preferredConn, ok := ap.conns[preferredConnID]
-			if !ok || !preferredConn.matchesHandshakeCompatibility(compatibility) {
+			if !ok || !preferredConn.matchesContinuationCompatibility(compatibility) {
 				p.recordConnPickDuration(time.Since(pickStartedAt))
 				ap.mu.Unlock()
 				closeOpenAIWSConns(evicted)
@@ -976,7 +994,7 @@ retryAcquire:
 		}
 
 		if preferredConnID != "" {
-			if conn, ok := ap.conns[preferredConnID]; ok && conn.matchesHandshakeCompatibility(compatibility) && conn.tryAcquire() {
+			if conn, ok := ap.conns[preferredConnID]; ok && conn.matchesContinuationCompatibility(compatibility) && conn.tryAcquire() {
 				connPick := time.Since(pickStartedAt)
 				p.recordConnPickDuration(connPick)
 				ap.mu.Unlock()
@@ -1356,9 +1374,13 @@ func (p *openAIWSConnPool) cleanupAccountLocked(ap *openAIWSAccountPool, now tim
 		if p.isConnPinnedLocked(ap, id) {
 			continue
 		}
+		idleTimeout := openAIWSConnIdleRecycleAfter
+		if conn.profileIdleTimeout > 0 {
+			idleTimeout = conn.profileIdleTimeout
+		}
 		if !conn.isLeased() && conn.waiters.Load() == 0 &&
 			!conn.supportsIdlePingWithoutReader() &&
-			conn.idleDuration(now) >= openAIWSConnIdleRecycleAfter {
+			conn.idleDuration(now) >= idleTimeout {
 			delete(ap.conns, id)
 			if len(ap.pinnedConns) > 0 {
 				delete(ap.pinnedConns, id)
@@ -1380,6 +1402,11 @@ func (p *openAIWSConnPool) cleanupAccountLocked(ap *openAIWSAccountPool, now tim
 		maxConns = p.maxConnsHardCap()
 	}
 	maxIdle := p.maxIdlePerAccount()
+	if ap.lastAcquire != nil {
+		if profile := ap.lastAcquire.Account.GetOpenAIClientProfile(); profile != nil && profile.MaxIdleConnsPerHost > 0 {
+			maxIdle = profile.MaxIdleConnsPerHost
+		}
+	}
 	if maxIdle < 0 || maxIdle > maxConns {
 		maxIdle = maxConns
 	}
@@ -1435,7 +1462,7 @@ func (p *openAIWSConnPool) pickLeastBusyConnLocked(
 	}
 	preferredConnID = stringsTrim(preferredConnID)
 	if preferredConnID != "" {
-		if conn, ok := ap.conns[preferredConnID]; ok && conn.matchesHandshakeCompatibility(compatibility) {
+		if conn, ok := ap.conns[preferredConnID]; ok && conn.matchesContinuationCompatibility(compatibility) {
 			return conn
 		}
 	}
@@ -1536,6 +1563,9 @@ func (p *openAIWSConnPool) ensureTargetIdleAsync(accountID int64) {
 	defer ap.mu.Unlock()
 	if ap.lastAcquire == nil {
 		return
+	}
+	if profile := ap.lastAcquire.Account.GetOpenAIClientProfile(); profile != nil && profile.ConnectionReuse == "fresh" {
+		return // Fresh conversations never consume prewarmed sockets.
 	}
 	if ap.prewarmActive {
 		return
@@ -1798,7 +1828,8 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 			return nil, err
 		}
 	}
-	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, headers, req.ProxyURL)
+	profile := req.Account.GetOpenAIClientProfile()
+	conn, status, handshakeHeaders, err := p.clientDialer.Dial(withOpenAIAccountClientProfile(ctx, req.Account), req.WSURL, headers, req.ProxyURL)
 	if err != nil {
 		var handshakeErr *openAIWSHandshakeError
 		var responseBody []byte
@@ -1821,7 +1852,10 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 	}
 	id := p.nextConnID(req.Account.ID)
 	pooledConn := newOpenAIWSConn(id, req.Account.ID, conn, handshakeHeaders)
-	pooledConn.handshakeCompatibility = normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	if profile != nil && profile.IdleConnTimeoutSeconds > 0 {
+		pooledConn.profileIdleTimeout = time.Duration(profile.IdleConnTimeoutSeconds) * time.Second
+	}
+	pooledConn.handshakeCompatibility = normalizeOpenAIWSAcquireCompatibility(req)
 	pooledConn.routingAffinity = normalizeOpenAIWSRoutingAffinity(req.Headers)
 	return pooledConn, nil
 }
@@ -1883,6 +1917,9 @@ func (p *openAIWSConnPool) maxConnsFactorByAccount(account *Account) float64 {
 
 func (p *openAIWSConnPool) effectiveMaxConnsByAccount(account *Account) int {
 	hardCap := p.maxConnsHardCap()
+	if profile := account.GetOpenAIClientProfile(); profile != nil && profile.MaxConnsPerHost > 0 {
+		hardCap = min(hardCap, profile.MaxConnsPerHost)
+	}
 	if hardCap <= 0 {
 		return 0
 	}
@@ -2004,7 +2041,7 @@ func cloneOpenAIWSAcquireRequestPtr(req *openAIWSAcquireRequest) *openAIWSAcquir
 func sameOpenAIWSPrewarmTarget(a, b openAIWSAcquireRequest) bool {
 	return stringsTrim(a.WSURL) == stringsTrim(b.WSURL) &&
 		stringsTrim(a.ProxyURL) == stringsTrim(b.ProxyURL) &&
-		normalizeOpenAIWSHandshakeCompatibility(a.Account, a.Headers) == normalizeOpenAIWSHandshakeCompatibility(b.Account, b.Headers)
+		normalizeOpenAIWSAcquireCompatibility(a) == normalizeOpenAIWSAcquireCompatibility(b)
 }
 
 func normalizeOpenAIWSBetaFeatures(headers http.Header) string {
@@ -2032,9 +2069,24 @@ func normalizeOpenAIWSBetaFeatures(headers http.Header) string {
 	return strings.Join(normalized, ",")
 }
 
+func normalizeOpenAIWSAcquireCompatibility(req openAIWSAcquireRequest) openAIWSHandshakeCompatibilityKey {
+	key := normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	if key.clientProfile != "" {
+		// Hash the selected route without storing proxy credentials in a
+		// diagnostic identity. New conversations must dial the current proxy.
+		route := sha256.Sum256([]byte(strings.TrimSpace(req.ProxyURL)))
+		key.clientProfile += fmt.Sprintf(":%x", route[:8])
+	}
+	return key
+}
+
 func normalizeOpenAIWSHandshakeCompatibility(account *Account, headers http.Header) openAIWSHandshakeCompatibilityKey {
 	key := openAIWSHandshakeCompatibilityKey{
-		betaFeatures: normalizeOpenAIWSBetaFeatures(headers),
+		betaFeatures:  normalizeOpenAIWSBetaFeatures(headers),
+		clientProfile: OpenAIClientProfileKey(account.GetOpenAIClientProfile()),
+	}
+	if key.clientProfile != "" {
+		key.clientProfile += ":" + headers.Get("User-Agent") + ":" + headers.Get("Version") + ":" + headers.Get("Accept-Language")
 	}
 	mode := activeCodexFingerprintMode(account)
 	if mode == codexFingerprintOff {

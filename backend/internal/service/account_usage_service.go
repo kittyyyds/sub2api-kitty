@@ -895,13 +895,14 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 	// 上面写进 header 的指纹缓存 UA 只在强制统一被关闭时才参与配对（保持回滚后的历史语义）；
 	// 强制统一开启时客户端身份不参与构造，探针与真实转发用同一套规范身份出站。
 	enforceCodexIdentityHeadersWithUA(req.Header, account.GetOpenAIUserAgent())
+	ApplyOpenAIClientProfileHeaders(req.Header, account)
 	setOpenAIChatGPTAccountHeaders(req.Header, account)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
-	client, err := httppool.GetClient(httppool.Options{
+	client, err := GetOpenAIClientProfileHTTPClient(account, httppool.Options{
 		ProxyURL:              proxyURL,
 		Timeout:               15 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,

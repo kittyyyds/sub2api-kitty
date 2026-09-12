@@ -1891,6 +1891,11 @@ func (a *Account) GetOpenAIUserAgent() string {
 	if !a.IsOpenAI() {
 		return ""
 	}
+	if profile := a.GetOpenAIClientProfile(); profile != nil {
+		if ua := OpenAIClientProfilePresetUA(profile.Preset, profile.ClientVersion); ua != "" {
+			return ua
+		}
+	}
 	return a.GetCredential("user_agent")
 }
 
@@ -2243,6 +2248,9 @@ func (a *Account) IsOpenAIResponsesWebSocketV2Enabled() bool {
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
 		return false
 	}
+	if mode := a.GetOpenAIWSMode(); mode != "inherit" {
+		return mode != "off"
+	}
 	if a.IsOpenAIOAuthLike() {
 		if enabled, ok := a.Extra["openai_oauth_responses_websockets_v2_enabled"].(bool); ok {
 			return enabled
@@ -2312,6 +2320,9 @@ func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) stri
 	if a == nil || !a.IsOpenAI() {
 		return OpenAIWSIngressModeOff
 	}
+	if mode := a.GetOpenAIWSMode(); mode != "inherit" {
+		return mode
+	}
 	if a.Extra == nil {
 		return resolvedDefault
 	}
@@ -2380,6 +2391,9 @@ func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) stri
 func (a *Account) IsOpenAIWSForceHTTPEnabled() bool {
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
 		return false
+	}
+	if mode := a.GetOpenAIWSMode(); mode != "inherit" {
+		return mode == "off"
 	}
 	enabled, ok := a.Extra["openai_ws_force_http"].(bool)
 	return ok && enabled

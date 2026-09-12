@@ -278,6 +278,40 @@ export async function update(id: number, updates: UpdateAccountRequest): Promise
   return data
 }
 
+export interface ClientProfileEgress {
+  account_id: number
+  ip: string
+  timezone: string
+  observed_at: string
+  proxy_id: number | null
+  proxy_name: string
+  city: string
+  region: string
+  country: string
+  country_code: string
+  latency_ms: number
+  timezone_sent: false
+  source: 'proxy' | 'direct'
+  binding: string
+}
+
+export async function getClientProfileEgress(id: number): Promise<ClientProfileEgress | null> {
+  const { data } = await apiClient.get<ClientProfileEgress | null>(`/admin/accounts/${id}/client-profile/egress`)
+  return data
+}
+
+export async function probeClientProfileEgress(id: number, proxyId?: number): Promise<ClientProfileEgress> {
+  const { data } = await apiClient.post<ClientProfileEgress>(`/admin/accounts/${id}/client-profile/egress`, proxyId === undefined ? {} : { proxy_id: proxyId })
+  return data
+}
+
+export async function updateClientProfile(id: number, profile: Record<string, unknown>, fingerprintMode?: string): Promise<Account> {
+  const payload: Record<string, unknown> = { profile }
+  if (fingerprintMode !== undefined) payload.fingerprint_mode = fingerprintMode
+  const { data } = await apiClient.put<Account>(`/admin/accounts/${id}/client-profile`, payload)
+  return data
+}
+
 export async function getGrokMediaEligibility(id: number): Promise<GrokMediaEligibilityState> {
   const { data } = await apiClient.get<GrokMediaEligibilityState>(
     `/admin/accounts/${id}/grok-media-eligibility`
@@ -1113,6 +1147,9 @@ export const accountsAPI = {
   create,
   duplicate,
   update,
+  getClientProfileEgress,
+  probeClientProfileEgress,
+  updateClientProfile,
   getGrokMediaEligibility,
   updateGrokMediaEligibility,
   checkMixedChannelRisk,

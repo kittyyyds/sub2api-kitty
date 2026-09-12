@@ -231,6 +231,9 @@ func NewAccountService(accountRepo AccountRepository, groupRepo GroupRepository)
 
 // Create 创建账号
 func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (*Account, error) {
+	if err := ValidateOpenAIClientProfileExtra(req.Platform, req.Type, req.Extra); err != nil {
+		return nil, err
+	}
 	// 验证分组是否存在（如果指定了分组）
 	if len(req.GroupIDs) > 0 {
 		if err := s.validateGroupIDsExist(ctx, req.GroupIDs); err != nil {
@@ -341,9 +344,17 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 	}
 
 	if req.Extra != nil {
+		if err := validateAccountOpenAIClientProfileExtra(account, *req.Extra); err != nil {
+			return nil, err
+		}
 		extra := make(map[string]any, len(*req.Extra))
 		for key, value := range *req.Extra {
 			extra[key] = value
+		}
+		if _, supplied := extra[OpenAIClientProfileExtraKey]; !supplied {
+			if profile, exists := account.Extra[OpenAIClientProfileExtraKey]; exists {
+				extra[OpenAIClientProfileExtraKey] = profile
+			}
 		}
 		delete(extra, OllamaCloudUsageSessionExtraKey)
 		delete(extra, OllamaCloudUsageAutoRefreshExtraKey)

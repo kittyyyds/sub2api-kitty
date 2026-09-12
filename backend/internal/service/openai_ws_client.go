@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	httppool "github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
 	openaiwsv2 "github.com/Wei-Shaw/sub2api/internal/service/openai_ws_v2"
 	coderws "github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -117,6 +118,18 @@ func (d *coderOpenAIWSClientDialer) Dial(
 			return nil, 0, nil, err
 		}
 		opts.HTTPClient = proxyClient
+	}
+	if profile := OpenAIClientProfileFromContext(ctx); profile != nil {
+		accountID, _ := ctx.Value(openAIClientProfileAccountContextKey{}).(int64)
+		client, err := getOpenAIProfileHTTPClient(accountID, profile, httppool.Options{
+			ProxyURL:            proxyURL,
+			MaxIdleConns:        openAIWSProxyTransportMaxIdleConns,
+			MaxIdleConnsPerHost: openAIWSProxyTransportMaxIdleConnsPerHost,
+		}, true)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		opts.HTTPClient = client
 	}
 
 	conn, resp, err := coderws.Dial(ctx, targetURL, opts)

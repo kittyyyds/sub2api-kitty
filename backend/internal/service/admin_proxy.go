@@ -253,6 +253,7 @@ func (s *adminServiceImpl) TestProxy(ctx context.Context, id int64) (*ProxyTestR
 		Region:      exitInfo.Region,
 		Country:     exitInfo.Country,
 		CountryCode: exitInfo.CountryCode,
+		Timezone:    exitInfo.Timezone,
 	}, nil
 }
 

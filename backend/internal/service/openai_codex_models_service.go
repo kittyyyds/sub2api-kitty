@@ -1667,6 +1667,11 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 		}
 		return nil, infraerrors.Newf(http.StatusInternalServerError, "OPENAI_CODEX_MODELS_REQUEST_FAILED", "parse codex models request URL: %v", err)
 	}
+	if profile := credAccount.GetOpenAIClientProfile(); profile != nil && profile.ClientVersion != "" {
+		query := requestURL.Query()
+		query.Set("client_version", profile.ClientVersion)
+		requestURL.RawQuery = query.Encode()
+	}
 
 	headers := make(http.Header)
 	if useAPIKeyUpstream {
@@ -1701,6 +1706,9 @@ func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, acc
 		headerVersion = identity.version
 	}
 	headers.Set("Version", headerVersion)
+	if !useAPIKeyUpstream {
+		ApplyOpenAIClientProfileHeaders(headers, credAccount)
+	}
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
@@ -1845,6 +1853,7 @@ func (s *OpenAIGatewayService) fetchCodexModelsManifestUpstreamForRequest(reques
 }
 
 func (s *OpenAIGatewayService) fetchOpenAIModelsUpstream(ctx context.Context, request openAIModelsRequest, ifNoneMatch string) (*OpenAIModelsResponse, error) {
+	ctx = WithOpenAIClientProfile(ctx, request.credentialAccount.GetOpenAIClientProfile())
 	reqCtx, cancel := context.WithTimeout(ctx, codexModelsManifestRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, request.url, nil)
@@ -1869,7 +1878,7 @@ func (s *OpenAIGatewayService) fetchOpenAIModelsUpstream(ctx context.Context, re
 			resp, handled, err = s.pluginManager.RoundTripOpenAIOAuth(reqCtx, req, request.proxyURL, request.credentialAccount)
 		}
 		if !handled {
-			client, clientErr := httpclient.GetClient(httpclient.Options{
+			client, clientErr := GetOpenAIClientProfileHTTPClient(request.credentialAccount, httpclient.Options{
 				ProxyURL:              request.proxyURL,
 				Timeout:               codexModelsManifestRequestTimeout,
 				ResponseHeaderTimeout: 10 * time.Second,
@@ -2482,6 +2491,9 @@ func validateCodexModelsManifestEnvelope(body []byte) error {
 
 func buildOpenAIModelsCacheKey(request openAIModelsRequest) string {
 	hasher := sha256.New()
+	if profile := request.credentialAccount.GetOpenAIClientProfile(); profile != nil {
+		_, _ = fmt.Fprintf(hasher, "profile:%s\n", OpenAIClientProfileKey(profile))
+	}
 	_, _ = fmt.Fprintf(hasher, "%d\n%d\n%t\n%s\n%s\n", request.accountID, request.credentialAccountID, request.standardModelsList, request.proxyURL, request.url)
 	headerNames := make([]string, 0, len(request.headers))
 	for name := range request.headers {

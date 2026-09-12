@@ -870,7 +870,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			)
 			return true
 		}
-		retryBudget := s.openAIWSRetryTotalBudget()
+		retryBudget := s.openAIWSRetryTotalBudgetForAccount(account)
 		retryStartedAt := time.Now()
 	wsRetryLoop:
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -916,7 +916,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				continue
 			}
 			if retryable && attempt < maxAttempts {
-				backoff := s.openAIWSRetryBackoff(attempt)
+				backoff := s.openAIWSRetryBackoffForAccount(attempt, account)
 				if retryBudget > 0 && time.Since(retryStartedAt)+backoff > retryBudget {
 					s.recordOpenAIWSRetryExhausted()
 					logOpenAIWSModeInfo(
@@ -1483,6 +1483,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// 客户端自报身份不参与构造，浏览器型 UA 也因此不会再到达上游（原浏览器 UA 兜底已被吸收）。
 	if account.UsesOpenAICodexProtocol() {
 		enforceCodexIdentityHeadersWithUA(req.Header, s.codexIdentityOverrideUA(account))
+		ApplyOpenAIClientProfileHeaders(req.Header, account)
 	}
 
 	// Ensure required headers exist
