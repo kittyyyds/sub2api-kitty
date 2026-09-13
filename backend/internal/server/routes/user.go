@@ -25,6 +25,10 @@ func RegisterUserRoutes(
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
 	authenticated.Use(gin.HandlerFunc(auditLog))
 	{
+		if h.CandyTest != nil {
+			authenticated.GET("/candy-tests", h.CandyTest.List)
+			authenticated.GET("/candy-tests/:id/history", h.CandyTest.History)
+		}
 		// 用户接口
 		user := authenticated.Group("/user")
 		{

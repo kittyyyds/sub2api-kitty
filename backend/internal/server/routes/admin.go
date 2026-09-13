@@ -48,6 +48,13 @@ func RegisterAdminRoutes(
 
 		// 模型能力与身份审计
 		registerModelCapabilityAuditRoutes(admin, h)
+		if h.CandyTest != nil {
+			admin.GET("/candy-tests", h.CandyTest.AdminList)
+			admin.GET("/candy-tests/keys", h.CandyTest.Keys)
+			admin.GET("/candy-tests/:id/history", h.CandyTest.AdminHistory)
+			admin.POST("/candy-tests", h.CandyTest.Save)
+			admin.POST("/candy-tests/:id/run", h.CandyTest.Run)
+		}
 
 		// 公告管理
 		registerAnnouncementRoutes(admin, h)

@@ -579,6 +579,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/candy-test',
+    name: 'CandyTest',
+    component: () => import('@/views/CandyTestView.vue'),
+    meta: { requiresAuth: true, title: '糖果测试' }
+  },
+  {
+    path: '/admin/candy-test',
+    name: 'AdminCandyTest',
+    component: () => import('@/views/CandyTestView.vue'),
+    props: { admin: true },
+    meta: { requiresAuth: true, requiresAdmin: true, title: '分组糖果测试' }
+  },
+  {
     path: '/admin/model-capability',
     name: 'AdminModelCapability',
     component: () => import('@/views/admin/ModelCapabilityView.vue'),

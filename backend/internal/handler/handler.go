@@ -57,6 +57,7 @@ type Handlers struct {
 	Subscription      *SubscriptionHandler
 	Announcement      *AnnouncementHandler
 	AIIntelligence    *AIIntelligenceHandler
+	CandyTest         *CandyTestHandler
 	ChannelMonitor    *ChannelMonitorUserHandler
 	ChannelMonitorV2  *ChannelMonitorV2Handler
 	Admin             *AdminHandlers
