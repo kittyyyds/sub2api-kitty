@@ -120,8 +120,9 @@ func candyTestPayload(c CandyTestConfig) []byte {
 	return body
 }
 
-// Compare the entire final answer, never a substring in the explanation.
-// Ambiguous/missing markers need review, not an automatic wrong-answer verdict.
+// Compare explicit final quantities independently of units and explanations.
+// Non-quantity keys retain exact matching; never search the reasoning for an
+// incidental expected number. Unclear or conflicting answers need review.
 func judgeCandyAnswer(output string, expected []string) (status, answer string) {
 	output = strings.TrimSpace(strings.ReplaceAll(output, "\r\n", "\n"))
 	stripMarkup := func(v string) string {
@@ -135,6 +136,9 @@ func judgeCandyAnswer(output string, expected []string) (status, answer string) 
 	}
 	normalize := func(v string) string {
 		return stripMarkup(strings.TrimSuffix(strings.TrimSpace(v), "。"))
+	}
+	if quantity, ok := candyQuantityKey(expected); ok {
+		return judgeCandyQuantity(output, quantity, stripMarkup)
 	}
 	for _, line := range strings.Split(output, "\n") {
 		line = stripMarkup(line)

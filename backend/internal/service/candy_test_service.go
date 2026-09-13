@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -287,6 +288,16 @@ func (s *CandyTestService) history(ctx context.Context, id int64, limit int) ([]
 		}
 		run.Model = config.Model
 		run.ReasoningEffort = config.ReasoningEffort
+		// Re-evaluate complete legacy answers against their original answer key.
+		// Reads never write records, queue work, or call the model. Errors and
+		// incomplete or ambiguous legacy responses remain untouched.
+		if (run.Status == "passed" || run.Status == "failed") && strings.TrimSpace(run.Output) != "" {
+			judgedStatus, judgedAnswer := judgeCandyAnswer(run.Output, config.ExpectedAnswers)
+			if judgedStatus != run.Status || judgedAnswer != run.Answer {
+				run.Status, run.Answer = judgedStatus, judgedAnswer
+				run.Message = "已按保存的回答原文重新核对，未重新调用模型"
+			}
+		}
 		result = append(result, run)
 	}
 	return result, rows.Err()
