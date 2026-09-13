@@ -59,13 +59,13 @@ func TestCandyHistoryRejudgesSavedAnswerWithoutWritingOrNewRequests(t *testing.T
 			stored, _ := json.Marshal(CandyTestRun{Status: storedStatus, Output: original, Answer: oldAnswer})
 			created := time.Now().Add(-time.Hour)
 			finished := created.Add(time.Minute)
-			mock.ExpectQuery("SELECT id,status,snapshot,result").WithArgs(int64(2), 12).
+			mock.ExpectQuery("SELECT id,status,snapshot,result").WithArgs(int64(2), 10, true).
 				WillReturnRows(sqlmock.NewRows([]string{"id", "status", "snapshot", "result", "created", "finished"}).
 					AddRow(42, storedStatus, string(snapshot), string(stored), created, finished))
 			// No configured endpoint or Key repository: rejudging must need only
 			// the immutable response and its original snapshot, and only SELECT.
 			s := &CandyTestService{db: db}
-			runs, err := s.history(context.Background(), 2, 12)
+			runs, err := s.history(context.Background(), 2, 10, true)
 			require.NoError(t, err)
 			require.Len(t, runs, 1)
 			r := runs[0]

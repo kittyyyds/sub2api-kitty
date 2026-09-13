@@ -162,7 +162,7 @@ onUnmounted(() => { disposed = true; active?.abort(); if (timer) clearInterval(t
           <label class="full-field">可接受的最终答案（每行一个）<textarea v-model="answerText" class="input" rows="2" required placeholder="例如不同但等价的表述，分别填写一行" /></label>
           <p class="help">题目原文会发送给分组接口；标准答案仅在本站核对。模型需在末行写“最终答案：…”，按完整答案匹配；格式缺失、截断或超时不判为答错。</p>
           <div class="switch-row"><label><input v-model="edit.enabled" type="checkbox" /> 开启定时测试（产生实际用量）</label><label><input v-model="edit.published" type="checkbox" /> 在客户前台展示此分组</label></div>
-          <p class="help">每轮每组发起 1 个请求，最多保存最近 12 次。极高思考仍可能消耗较多 Token；输出上限由上游是否支持决定，实际费用以该 Key 的使用记录为准。保存新配置会取消尚未开始的旧任务，已发出的请求继续记录。测试从服务器内部调用，不经过公网 CDN。</p>
+          <p class="help">每轮每组发起 1 个请求，最多保存最近 10 次。极高思考仍可能消耗较多 Token；输出上限由上游是否支持决定，实际费用以该 Key 的使用记录为准。保存新配置会取消尚未开始的旧任务，已发出的请求继续记录。测试从服务器内部调用，不经过公网 CDN。</p>
           <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? '保存中…' : '保存配置' }}</button>
         </form>
       </section>
@@ -192,7 +192,7 @@ onUnmounted(() => { disposed = true; active?.abort(); if (timer) clearInterval(t
       </div>
       <p class="page-footnote">通过表示这次回答与预设答案一致。单道题的结果不能证明模型真实身份或判断账号是否被降级；请求失败与答错分开记录。</p>
       <BaseDialog :show="!!detail" title="本轮完整回答" width="wide" @close="detail = null"><CandyResult v-if="detail" :run="detail" expanded /></BaseDialog>
-      <BaseDialog :show="!!history" :title="`${history?.label || ''} · 最近 12 次测试`" width="wide" @close="history = null"><div class="history-list"><button v-for="run in history?.history || []" :key="run.id" @click="detail = run; history = null"><span>{{ time(run.created_at) }}</span><span>{{ candyStatusLabels[run.status] }}</span><span>查看原文 →</span></button></div></BaseDialog>
+      <BaseDialog :show="!!history" :title="`${history?.label || ''} · 最近 10 次测试`" width="wide" @close="history = null"><div class="history-list"><button v-for="run in history?.history || []" :key="run.id" @click="detail = run; history = null"><span>{{ time(run.created_at) }}</span><span>{{ candyStatusLabels[run.status] }}</span><span>查看原文 →</span></button></div></BaseDialog>
     </main>
   </AppLayout>
 </template>

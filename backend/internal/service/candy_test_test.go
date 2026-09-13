@@ -171,7 +171,7 @@ func TestCandyCustomerRefreshIsReadOnlyAndContainsNoPrivateConfig(t *testing.T) 
 	c.ExpectedAnswers = []string{"21", "private-alternate"}
 	snapshot, _ := json.Marshal(c)
 	mock.ExpectQuery("SELECT t.id,t.config").WithArgs(false).WillReturnRows(sqlmock.NewRows([]string{"id", "config", "next", "count"}).AddRow(1, string(snapshot), nil, 1))
-	mock.ExpectQuery("SELECT id,status,snapshot,result").WithArgs(int64(1), 1).WillReturnRows(sqlmock.NewRows([]string{"id", "status", "snapshot", "result", "created", "finished"}).AddRow(2, "passed", string(snapshot), `{"output":"hello"}`, time.Now(), time.Now()))
+	mock.ExpectQuery("SELECT id,status,snapshot,result").WithArgs(int64(1), 1, false).WillReturnRows(sqlmock.NewRows([]string{"id", "status", "snapshot", "result", "created", "finished"}).AddRow(2, "passed", string(snapshot), `{"output":"hello"}`, time.Now(), time.Now()))
 	s := &CandyTestService{db: db}
 	cards, err := s.List(context.Background(), false)
 	require.NoError(t, err)
@@ -239,10 +239,11 @@ func TestCandyCanDisableScheduleEvenWhenKeyIsNoLongerUsable(t *testing.T) {
 	c.Enabled = false
 	mock.ExpectBegin()
 	mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT group_id").WithArgs(c.ID).WillReturnRows(sqlmock.NewRows([]string{"group_id"}).AddRow(c.GroupID))
 	mock.ExpectExec("UPDATE kitty_candy_tests SET config").WithArgs(c.ID, sqlmock.AnyArg(), false, false, 25).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE kitty_candy_test_runs SET status='cancelled'").WithArgs(c.ID).WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("DELETE FROM kitty_candy_test_runs").WithArgs(c.ID).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DELETE FROM kitty_candy_test_runs").WithArgs(c.ID, 10).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 	// No credential repository is available: disabling must not require one.
 	s := &CandyTestService{db: db}

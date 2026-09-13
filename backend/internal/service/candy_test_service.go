@@ -16,7 +16,10 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
-const candyTestTimeout = 3 * time.Minute
+const (
+	candyTestTimeout      = 3 * time.Minute
+	candyTestHistoryLimit = 10
+)
 
 // One bounded worker per process; a transaction lock also enforces the global
 // two-job limit across replicas. Reads never enqueue jobs or contact upstreams.
@@ -98,6 +101,9 @@ func (s *CandyTestService) Save(ctx context.Context, input CandyTestConfig) (*Ca
 	defer tx.Rollback()
 	// Serialize configuration creation to keep the feature bounded.
 	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(78140201)"); err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(78140202)"); err != nil {
 		return nil, err
 	}
 	if c.ID == 0 {
@@ -185,7 +191,7 @@ func (s *CandyTestService) RunNow(ctx context.Context, id int64) (int64, error) 
 
 func (s *CandyTestService) List(ctx context.Context, admin bool) ([]CandyTestCard, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.config,t.next_run_at,
-		(SELECT COUNT(*) FROM kitty_candy_test_runs r WHERE r.test_id=t.id) FROM kitty_candy_tests t
+		(SELECT COUNT(*) FROM kitty_candy_test_runs r WHERE r.test_id=t.id AND r.status NOT IN ('queued','running')) FROM kitty_candy_tests t
 		JOIN groups g ON g.id=t.group_id WHERE ($1 OR (t.published AND g.status='active' AND g.deleted_at IS NULL)) ORDER BY t.id LIMIT 20`, admin)
 	if err != nil {
 		return nil, err
@@ -211,7 +217,7 @@ func (s *CandyTestService) List(ctx context.Context, admin bool) ([]CandyTestCar
 		if admin {
 			card.Config = &c
 		}
-		card.HistoryCount = min(count, 12)
+		card.HistoryCount = min(count, candyTestHistoryLimit)
 		cards = append(cards, card)
 	}
 	err = rows.Err()
@@ -220,7 +226,7 @@ func (s *CandyTestService) List(ctx context.Context, admin bool) ([]CandyTestCar
 		return nil, err
 	}
 	for i := range cards {
-		history, err := s.history(ctx, cards[i].ID, 1)
+		history, err := s.history(ctx, cards[i].ID, 1, false)
 		if err != nil {
 			return nil, err
 		}
@@ -239,7 +245,7 @@ func (s *CandyTestService) History(ctx context.Context, id int64, admin bool) ([
 	if !allowed {
 		return nil, infraerrors.NotFound("CANDY_TEST_NOT_FOUND", "测试不存在或未公开")
 	}
-	return s.history(ctx, id, 12)
+	return s.history(ctx, id, candyTestHistoryLimit, true)
 }
 
 // Return only public test ownership for authorization, never private config.
@@ -253,8 +259,9 @@ func (s *CandyTestService) PublishedGroupID(ctx context.Context, id int64) (int6
 	return groupID, err
 }
 
-func (s *CandyTestService) history(ctx context.Context, id int64, limit int) ([]CandyTestRun, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,status,snapshot,result,created_at,finished_at FROM kitty_candy_test_runs WHERE test_id=$1 ORDER BY id DESC LIMIT $2`, id, limit)
+func (s *CandyTestService) history(ctx context.Context, id int64, limit int, completedOnly bool) ([]CandyTestRun, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,status,snapshot,result,created_at,finished_at FROM kitty_candy_test_runs
+		WHERE test_id=$1 AND (NOT $3 OR status NOT IN ('queued','running')) ORDER BY id DESC LIMIT $2`, id, limit, completedOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -321,6 +328,11 @@ func (s *CandyTestService) tick(ctx context.Context) error {
 		WHERE status='running' AND started_at<NOW()-INTERVAL '5 minutes'`); err != nil {
 		return err
 	}
+	// Also trim old/disabled groups on the first worker tick after an upgrade.
+	// The table is bounded to 20 groups; active jobs never consume history slots.
+	if err = pruneCandyHistory(dbCtx, tx, 0); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(dbCtx, `WITH due AS (
 		SELECT t.id,t.config FROM kitty_candy_tests t JOIN groups g ON g.id=t.group_id
 		WHERE t.enabled AND t.next_run_at<=NOW() AND g.status='active' AND g.deleted_at IS NULL
@@ -366,12 +378,29 @@ func (s *CandyTestService) tick(ctx context.Context) error {
 	// Persist outcome after cancellation too, using a short independent context.
 	writeCtx, done := context.WithTimeout(context.Background(), 10*time.Second)
 	defer done()
+	return s.finishRun(writeCtx, id, testID, run)
+}
+
+// Publish the outcome and remove the oldest surplus result in one transaction.
+// The same lock serializes completion, stale-job recovery and cancellation.
+func (s *CandyTestService) finishRun(ctx context.Context, id, testID int64, run CandyTestRun) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(78140202)"); err != nil {
+		return err
+	}
 	data, _ := json.Marshal(run)
-	if _, err = s.db.ExecContext(writeCtx, `UPDATE kitty_candy_test_runs SET status=$2,result=$3,finished_at=NOW()
+	if _, err = tx.ExecContext(ctx, `UPDATE kitty_candy_test_runs SET status=$2,result=$3,finished_at=NOW()
 		WHERE id=$1 AND status='running'`, id, run.Status, string(data)); err != nil {
 		return err
 	}
-	return pruneCandyHistory(writeCtx, s.db, testID)
+	if err = pruneCandyHistory(ctx, tx, testID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 type candyHistoryExecer interface {
@@ -379,8 +408,14 @@ type candyHistoryExecer interface {
 }
 
 func pruneCandyHistory(ctx context.Context, db candyHistoryExecer, id int64) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM kitty_candy_test_runs WHERE test_id=$1 AND status NOT IN ('queued','running')
-		AND id NOT IN (SELECT id FROM kitty_candy_test_runs WHERE test_id=$1 ORDER BY id DESC LIMIT 12)`, id)
+	// ID zero is internal-only and prunes all groups independently.
+	_, err := db.ExecContext(ctx, `DELETE FROM kitty_candy_test_runs WHERE id IN (
+		SELECT id FROM (
+			SELECT id,ROW_NUMBER() OVER (PARTITION BY test_id ORDER BY id DESC) AS position
+			FROM kitty_candy_test_runs WHERE ($1::bigint=0 OR test_id=$1)
+			AND status NOT IN ('queued','running')
+		) completed WHERE position>$2
+	)`, id, candyTestHistoryLimit)
 	return err
 }
 
