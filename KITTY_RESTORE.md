@@ -1,5 +1,17 @@
 # Kitty Upgrade And Restore Guide
 
+## v0.2.5 release requirements
+
+- Upgrade the verified `0.2.4-kitty.7` source at `0d5227968338949578a3b801397f19191126629c` to official `v0.2.5` while preserving Kitty customizations. The candidate version is `0.2.5-kitty.1`.
+- Archive the verified current source in its private GitHub Release before upgrading production. Preserve every historical release, tag, source archive, image, and recovery set; the old two-release cleanup policy is retired.
+- Build and test the frontend and embedded Linux/amd64 binary locally with resource limits. Production must not compile source or assemble images. Export and verify the current production image first; use the reviewed offline overlay tool locally to produce an image equivalent to `deploy/kitty-overlay.Dockerfile`. The new layer must whiteout the old `/app/resources` directory, include the complete matching resource tree, and replace `/app/sub2api` with the verified binary. Production only loads the finished image and switches to its immutable ID after validation.
+- Bind the source commit, old image ID/archive SHA-256, frontend manifest, binary SHA-256, resources manifest, final image ID, build toolchain and timestamp in the release manifest. Run the candidate in a resource-limited isolated Linux environment with recovery copies and isolated ports before production rollout. The legacy Dockerfile prebuilt stage is not the release driver for this upgrade; do not rely on an unavailable external driver.
+- Preserve per-model/resolution image prices, the ten-result candy-test limit, recharge bonuses, Kitty Apps, provider payment handling, registration-only Turnstile, custom group picker, site-specific endpoints, and client-profile/connection settings. Keep the selected risk controls reset off on upgrade; retired Cursor and variant-lock features remain removed. Account/browser auto-login is outside this release.
+- Retain all existing SQL migration filenames and checksums. Preflight `238_purge_unlimited_user_platform_quotas.sql` against the recovery copy before production migration and preserve the old database recovery set. `238_opencode_go_platform.sql` adds upstream platform support. The extra historical `231_disable_long_context_pricing.sql` ledger row is not deleted or recreated.
+- Keep Kitty routes and UI while applying upstream subscription visibility, API-key bulk editing/provider selection, scheduling thresholds, and WebSocket keepalive/queue fixes. Verify both custom and upstream regression tests before release.
+- `deploy/offline-overlay.py` writes an OCI archive for Docker's containerd image store. Its required build receipt binds the binary SHA-256, source commit, version/date, and matching frontend manifests recorded before and after compilation. Verify the loaded Linux image and served frontend assets before switching traffic.
+- A temporary process sharing the live database during traffic handoff must set `KITTY_DEPLOYMENT_HANDOFF=true`. This skips only the active channel-monitor and scheduled-account-test runners so they cannot duplicate paid probes. API requests, manual tests and other workers keep their existing behavior. Leave this variable unset on the final production process and restart it to restore these two runners; the variable is read at startup, not dynamically.
+
 ## v0.2.4 release requirements
 
 - Preserve Kitty's existing features, registration-only Turnstile, custom payment UI, group visibility boundaries, and selected risk controls. Both selected risk switches must reset off after a version/commit upgrade. Cursor and variant-lock features remain retired; do not import third-party SVIP rules or platform removals.
@@ -21,26 +33,26 @@ The repository intentionally excludes `.env`, `config.yaml`, database dumps, API
 
 ## Production backup retention
 
-`UPGRADE_BACKUP_POLICY.md` is mandatory for every upgrade. This repository
-retains only the two newest successful production release units for its bound
-site. A release unit is not merely a branch: it is an annotated production tag,
+`UPGRADE_BACKUP_POLICY.md` is mandatory for every upgrade. As requested on
+2026-09-16, this repository retains all historical production release units for
+its bound site. A release unit is not merely a branch: it is an annotated production tag,
 an immutable image digest, a sanitized deployment manifest, and the checksummed
 off-repository PostgreSQL/Redis recovery set.
 
-Create the third production tag only after the candidate passes production and
-rollback acceptance. Then make `main` point to that candidate,
-`rollback/previous` point to the immediately preceding production tag, preview
-the rotation, and explicitly apply it:
+Create each new production tag only after the candidate passes production and
+rollback acceptance. Then make `main` point to that candidate and
+`rollback/previous` point to the immediately preceding production tag. Retain
+every older tag, Release, image and recovery set. Inspect the retained tag list:
 
 ```sh
 ./deploy/rotate-production-backups.sh <site-id> <primary-domain>
-./deploy/rotate-production-backups.sh <site-id> <primary-domain> --apply
 ```
 
-The rotation script deletes only older `prod/<site-id>/...` Git tags. Delete the
-matching off-repository recovery set only after its manifest checksum and exact
-path have been verified. Operational/PITR/compliance backups are outside this
-policy and must never be pruned by release rotation.
+The compatibility-named rotation script now only lists locally available
+production tags and refuses its former `--apply` mode. It never deletes tags or
+off-repository recovery sets. Insufficient space requires separate storage
+planning; it does not authorize release-history deletion. Operational/PITR/
+compliance backups also remain outside the release script's management scope.
 
 ## Upgrade workflow
 
@@ -147,7 +159,7 @@ Do not restore the retired repository, service, user/admin handlers, routes, Vue
 - Keep the marker-based duplicate guard and preserve existing client instructions. Prompt content remains administrator-only in HTTP DTOs.
 - After deployment, enable the feature only for the intended Grok group and invalidate API-key auth cache entries for that group through the normal group update path.
 - Migration `187` is additive. An older binary ignores the new columns, but the enhancement is inactive while that binary is running.
-- Migration `188_enable_grok_enhancement_group.sql` enables the built-in prepend prompt only for the exact active Grok group named `Grok 增强版` and queues auth-cache invalidation for its API keys.
+- Migration `188_enable_grok_enhancement_group.sql` enables the built-in prepend prompt only for the exact active Grok group named `Grok 澧炲己鐗坄 and queues auth-cache invalidation for its API keys.
 
 ## v0.1.165 integration notes
 
@@ -195,7 +207,7 @@ Do not restore the retired repository, service, user/admin handlers, routes, Vue
 - Available-channel composite-group expansion comes from upstream and must coexist with Kitty's platform-filtered supported-model pricing view.
 - Production deployment must include `/app/resources` with the embedded binary so the model-pricing fallback catalog is available at runtime.
 - Keep `security_opt: no-new-privileges:true` in the production Compose service while retaining the existing Kitty timeout environment variables and proxy configuration.
-- Kitty `0.1.169-kitty.2` originally added `free-media-studio` as a client-managed catalog entry. The current Kitty tree supersedes that design: the four-mode workspace requires the persisted Kitty Apps runtime and optional planner migration `195_application_center_optional_planner.sql`. Do not restore `ClientManaged`, a standalone runtime fallback, direct media execution, `kittyImageHistory`, or `kittyVideoTask`. Keep the customer navigation branded `Kitty应用 / Kitty Apps` and attach the existing hot badge to that route.
+- Kitty `0.1.169-kitty.2` originally added `free-media-studio` as a client-managed catalog entry. The current Kitty tree supersedes that design: the four-mode workspace requires the persisted Kitty Apps runtime and optional planner migration `195_application_center_optional_planner.sql`. Do not restore `ClientManaged`, a standalone runtime fallback, direct media execution, `kittyImageHistory`, or `kittyVideoTask`. Keep the customer navigation branded `Kitty搴旂敤 / Kitty Apps` and attach the existing hot badge to that route.
 - Kitty `0.1.169-kitty.3` updates the built-in xAI media rate card to the official resolution-specific prices. Keep Grok group media price overrides empty when multiple Imagine models share a group so the model-specific defaults remain effective; use the image/video multipliers for customer pricing instead.
 - Kitty `0.1.169-kitty.4` adds channel-level video billing tiers in USD per second. Preserve the `video` billing mode, resolution-tier editor, duration/count multiplication, and legacy `image`/`per_request` per-call behavior. Production Grok media pricing stores the upstream balance rates per model and resolution in the channel, then applies independent image/video group multipliers of `1.5`.
 - Kitty `0.1.169-kitty.5` adds an account-scoped `openai_compatible` Grok media contract for third-party relays. Preserve image `1K/2K` to `1024x1024/2048x2048` normalization, `b64_json` responses, multipart image-edit forwarding with indexed `image[n]` fields and `mask`, the five-value video aspect-ratio whitelist, bounded duration/resolution checks, original 4xx/422 response passthrough, and the official-xAI default path. Application Center uses `json_object` for Grok planners while keeping strict JSON Schema for other planner platforms.

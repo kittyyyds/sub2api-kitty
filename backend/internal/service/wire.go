@@ -486,6 +486,7 @@ func ProvideRateLimitService(
 	openAI403CounterCache OpenAI403CounterCache,
 	settingService *SettingService,
 	tokenCacheInvalidator TokenCacheInvalidator,
+	ollamaCloudUsage *OllamaCloudUsageService,
 ) *RateLimitService {
 	svc := NewRateLimitService(accountRepo, usageRepo, cfg, geminiQuotaService, tempUnschedCache)
 	if healthCache, ok := tempUnschedCache.(OpenAIAPIKeyHealthCache); ok {
@@ -495,6 +496,7 @@ func ProvideRateLimitService(
 	svc.SetOpenAI403CounterCache(openAI403CounterCache)
 	svc.SetSettingService(settingService)
 	svc.SetTokenCacheInvalidator(tokenCacheInvalidator)
+	svc.SetOllamaCloudUsageProbeScheduler(ollamaCloudUsage)
 	return svc
 }
 
@@ -633,7 +635,11 @@ func ProvideScheduledTestRunnerService(
 	cfg *config.Config,
 ) *ScheduledTestRunnerService {
 	svc := NewScheduledTestRunnerService(planRepo, scheduledSvc, accountTestSvc, rateLimitSvc, cfg)
-	svc.Start()
+	if os.Getenv("KITTY_DEPLOYMENT_HANDOFF") != "true" {
+		svc.Start()
+	} else {
+		logger.LegacyPrintf("service.scheduled_test_runner", "[ScheduledTestRunner] paused for deployment handoff")
+	}
 	return svc
 }
 
@@ -1029,7 +1035,11 @@ func ProvideChannelMonitorRunner(
 		svc.SetScheduler(r)
 		svc.SetQuotaFetcher(quotaFetcher)
 	}
-	r.Start()
+	if os.Getenv("KITTY_DEPLOYMENT_HANDOFF") != "true" {
+		r.Start()
+	} else {
+		logger.LegacyPrintf("service.channel_monitor_runner", "[ChannelMonitorRunner] paused for deployment handoff")
+	}
 	return r
 }
 

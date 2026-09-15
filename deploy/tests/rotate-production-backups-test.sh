@@ -33,7 +33,6 @@ set -eu
 [ "$1" = "${KITTY_TEST_SITE_ID}" ]
 [ "$2" = "${KITTY_TEST_DOMAIN}" ]
 EOF
-chmod +x "${work}/deploy/verify-kitty-site.sh" "${work}/deploy/rotate-production-backups.sh"
 
 export KITTY_TEST_SITE_ID="${site_id}"
 export KITTY_TEST_DOMAIN="${domain}"
@@ -48,12 +47,17 @@ previous=$(git -C "${work}" tag --list "prod/${site_id}/*" --sort=-refname | sed
 previous_commit=$(git -C "${work}" rev-list -n 1 "${previous}")
 git -C "${work}" push -q origin "${previous_commit}:refs/heads/rollback/previous"
 
-dry_run=$(cd "${work}" && ./deploy/rotate-production-backups.sh "${site_id}" "${domain}")
-printf '%s\n' "${dry_run}" | grep -q '^DRY RUN:'
+dry_run=$(cd "${work}" && sh ./deploy/rotate-production-backups.sh "${site_id}" "${domain}")
+printf '%s\n' "${dry_run}" | grep -q '^OK: retain all 3 '
+[ "$(printf '%s\n' "${dry_run}" | grep -c '^KEEP ')" = 3 ]
 [ "$(git --git-dir="${remote}" tag --list "prod/${site_id}/*" | wc -l | tr -d ' ')" = 3 ]
 
-(cd "${work}" && ./deploy/rotate-production-backups.sh "${site_id}" "${domain}" --apply)
-[ "$(git --git-dir="${remote}" tag --list "prod/${site_id}/*" | wc -l | tr -d ' ')" = 2 ]
+if (cd "${work}" && sh ./deploy/rotate-production-backups.sh "${site_id}" "${domain}" --apply); then
+    echo "ERROR: retired deletion mode unexpectedly succeeded." >&2
+    exit 1
+fi
+[ "$(git --git-dir="${remote}" tag --list "prod/${site_id}/*" | wc -l | tr -d ' ')" = 3 ]
+[ "$(git -C "${work}" tag --list "prod/${site_id}/*" | wc -l | tr -d ' ')" = 3 ]
 [ "$(git --git-dir="${remote}" rev-parse refs/heads/main)" = "$(git -C "${work}" rev-list -n 1 "${newest}")" ]
 
-echo "OK: production backup rotation keeps exactly two tags."
+echo "OK: all historical production tags remain and deletion mode is refused."

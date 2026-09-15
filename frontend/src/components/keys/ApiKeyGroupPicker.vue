@@ -14,6 +14,8 @@ interface Props {
   modelValue: number | null
   groups: Group[]
   userRates?: Record<number, number>
+  inputId?: string
+  accessibleLabel?: string
 }
 
 interface Emits {
@@ -210,6 +212,8 @@ onUnmounted(() => {
   <div class="group-picker">
     <button
       ref="triggerRef"
+      :id="inputId"
+      :aria-label="accessibleLabel"
       type="button"
       class="group-picker-trigger"
       :class="isOpen && 'group-picker-trigger-open'"

@@ -54,12 +54,15 @@ vi.mock('@/utils/featureFlags', () => ({
   FeatureFlags: {
     channelMonitor: 'channelMonitor',
     payment: 'payment',
+    subscription: 'subscription',
     availableChannels: 'availableChannels',
     modelPlaza: 'modelPlaza',
     affiliate: 'affiliate',
-    riskControl: 'riskControl'
+    riskControl: 'riskControl',
+    pluginManagement: 'pluginManagement'
   },
-  makeSidebarFlag: () => () => true
+  makeSidebarFlag: () => () => true,
+  resolveFeatureFlag: () => true
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -179,6 +182,7 @@ describe('AppSidebar customer flat navigation', () => {
       '/apps',
       '/available-channels',
       '/monitor',
+      '/candy-test',
       '/custom/billing-rules',
       '/subscriptions',
       '/purchase',

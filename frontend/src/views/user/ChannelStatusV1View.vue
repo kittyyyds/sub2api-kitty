@@ -71,7 +71,6 @@ const autoRefresh = useAutoRefresh({
   onRefresh: () => reload(true),
   shouldPause: () => document.hidden || loading.value,
 })
-const countdown = autoRefresh.countdown
 
 function normalizeGroupName(name: string): string {
   return name.trim().toLocaleLowerCase()
@@ -108,7 +107,7 @@ async function reload(silent = false) {
   } finally {
     if (abortController === ctrl) {
       if (!silent) loading.value = false
-      countdown.value = DEFAULT_INTERVAL_SECONDS
+      autoRefresh.resetCountdown()
       abortController = null
     }
   }

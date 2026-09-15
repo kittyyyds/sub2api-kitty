@@ -27,5 +27,5 @@ configuration are not part of this repository and must remain isolated from
 the second site.
 
 All upgrades and backups must follow `UPGRADE_BACKUP_POLICY.md`. This site
-independently retains only its two newest successful production release units;
-an unverified candidate never triggers backup rotation.
+independently retains every historical production release unit. No release,
+tag, image, source archive, or recovery set is automatically rotated or deleted.

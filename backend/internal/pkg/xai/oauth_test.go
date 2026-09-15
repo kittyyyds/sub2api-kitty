@@ -401,7 +401,7 @@ func TestCanonicalMediaModels(t *testing.T) {
 
 	require.True(t, IsMediaCompatibilityAlias("grok-imagine-edit"))
 	require.True(t, IsMediaCompatibilityAlias("grok-imagine-image-pro"))
-	require.True(t, IsMediaCompatibilityAlias(DefaultImagineVideo15Model))
+	require.True(t, IsMediaCompatibilityAlias(DefaultImagineVideo15LegacyModel))
 	require.False(t, IsMediaCompatibilityAlias(ModelGrokImagineImage))
 	require.False(t, IsMediaCompatibilityAlias(ModelGrokImagineVideo15))
 	require.False(t, IsMediaCompatibilityAlias("customer-video"))

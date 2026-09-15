@@ -38,7 +38,7 @@ describe('native customer dashboard skin contract', () => {
     expect(stats).toContain('dashboard-stats-row')
     expect(stats).toContain('dashboard-platform-section')
     expect(stats).toContain('dashboard-platform-grid')
-    expect(stats).toContain("platformCount', { count: platformCards.length }")
+    expect(stats).toContain("platformCount', { count: platformCount }")
     expect(stats).toContain("grok: 'Grok'")
     expect(charts).toContain('dashboard-filter-bar')
     expect(charts).toContain('dashboard-charts-grid')
