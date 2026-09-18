@@ -644,6 +644,7 @@ describe('user KeysView column settings', () => {
 
     it('classifies all configured platforms and retains the complete table filter', async () => {
       const wrapper = await openCreate()
+      expect(groupSelect(wrapper).props('showPlatformTabs')).toBe(false)
       expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(4)
       expect(optionIds(wrapper)).toEqual([1])
       await chooseProvider(wrapper, 'openai')
@@ -652,6 +653,7 @@ describe('user KeysView column settings', () => {
       expect(optionIds(wrapper)).toEqual([3, 4, 5, 6])
       await chooseProvider(wrapper, 'other')
       expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11])
+      expect(groupSelect(wrapper).props('showPlatformTabs')).toBe(false)
       expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(13)
     })
 
@@ -711,6 +713,7 @@ describe('user KeysView column settings', () => {
       await getButtonByText(wrapper, 'common.edit').trigger('click')
       expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
       expect(optionIds(wrapper)).toHaveLength(11)
+      expect(groupSelect(wrapper).props('showPlatformTabs')).toBe(true)
     })
   })
 })

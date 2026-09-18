@@ -78,9 +78,10 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>'
 }
 
-const mountPicker = (modelValue: number | null = null) => mount(ApiKeyGroupPicker, {
+const mountPicker = (modelValue: number | null = null, showPlatformTabs?: boolean) => mount(ApiKeyGroupPicker, {
   props: {
     modelValue,
+    ...(showPlatformTabs === undefined ? {} : { showPlatformTabs }),
     groups,
     userRates: { 1: 0.16 }
   },
@@ -145,5 +146,27 @@ describe('ApiKeyGroupPicker', () => {
 
     expect(wrapper.emitted('update:modelValue')).toEqual([[2]])
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+  })
+
+  it('shows every supplied platform without tabs and searches and selects across them', async () => {
+    const wrapper = mountPicker(null, false)
+    const otherGroups = groups.filter((group) => [3, 4, 5].includes(group.id))
+    await wrapper.setProps({ groups: otherGroups })
+    await wrapper.get('button[aria-haspopup="listbox"]').trigger('click')
+
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-group-id]').map((item) => item.attributes('data-group-id')))
+      .toEqual(['3', '4', '5'])
+
+    await wrapper.get('input[type="search"]').setValue(' FAST ')
+    expect(wrapper.findAll('[data-group-id]').map((item) => item.attributes('data-group-id')))
+      .toEqual(['4'])
+    await wrapper.get('input[type="search"]').setValue('mixed provider')
+    expect(wrapper.findAll('[data-group-id]').map((item) => item.attributes('data-group-id')))
+      .toEqual(['5'])
+    await wrapper.get('[data-group-id="5"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toEqual([[5]])
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 })

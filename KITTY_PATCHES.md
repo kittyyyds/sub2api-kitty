@@ -1,5 +1,11 @@
 # Kitty Custom Patches
 
+## v0.2.6-kitty.2 API key group selection
+
+- Creating an API key uses the existing provider selector as its only platform filter. The group picker hides its redundant platform tabs and searches every group supplied for that provider, including all Gemini, Grok, Antigravity, composite, and OpenCode Go groups under Other.
+- Editing an API key keeps the existing platform tabs. Group icons, descriptions, prices, selection resets, and dropdown sizing remain unchanged.
+- This frontend-only change preserves the official v0.2.6 integration and all Kitty customizations. It adds no database migration or gateway/account behavior change.
+
 This image tracks upstream Sub2API `v0.1.173` on branch `kitty/v0.1.173`. The Kitty release version is `0.1.173-kitty.2` and carries the production-specific changes below.
 
 ## v0.1.173 upstream integration

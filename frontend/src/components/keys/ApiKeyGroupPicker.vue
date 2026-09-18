@@ -16,6 +16,7 @@ interface Props {
   userRates?: Record<number, number>
   inputId?: string
   accessibleLabel?: string
+  showPlatformTabs?: boolean
 }
 
 interface Emits {
@@ -29,7 +30,8 @@ interface CategoryItem {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  userRates: () => ({})
+  userRates: () => ({}),
+  showPlatformTabs: true
 })
 const emit = defineEmits<Emits>()
 const { t } = useI18n()
@@ -62,7 +64,7 @@ const selectedGroup = computed(() => props.groups.find((group) => group.id === p
 const visibleGroups = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return props.groups.filter((group) => {
-    if (getCategory(group.platform) !== activeCategory.value) return false
+    if (props.showPlatformTabs && getCategory(group.platform) !== activeCategory.value) return false
     if (!query) return true
     return (
       group.name.toLowerCase().includes(query) ||
@@ -268,7 +270,7 @@ onUnmounted(() => {
             />
           </div>
 
-          <div class="group-picker-tabs" role="tablist" :aria-label="t('keys.groupPicker.platforms')">
+          <div v-if="showPlatformTabs" class="group-picker-tabs" role="tablist" :aria-label="t('keys.groupPicker.platforms')">
             <button
               v-for="category in categories"
               :key="category.id"

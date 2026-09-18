@@ -543,7 +543,8 @@
             input-id="key-form-group"
             :accessible-label="t('keys.groupLabel')"
             v-model="formData.group_id"
-            :groups="formGroups"
+              :groups="formGroups"
+              :show-platform-tabs="showEditModal"
             :user-rates="userGroupRates"
             data-tour="key-form-group"
           />

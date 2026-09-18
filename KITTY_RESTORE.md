@@ -1,5 +1,12 @@
 # Kitty Upgrade And Restore Guide
 
+## v0.2.6-kitty.2 release requirements
+
+- Base this UI-only release on verified production commit `4ac1af3af860bd5405b1a05f6eb45408bd104f3b` and retain the complete `0.2.6-kitty.1` release and recovery set.
+- Creating an API key disables the picker platform tabs and their secondary filter; editing keeps the default tabs. Preserve the parent provider filter and its clearing of an obsolete group selection.
+- Verify multi-platform Other groups, name/description search, group selection, and the creation/editing mode boundary. Build the embedded frontend and Linux image locally with exact commit/version provenance using the established offline overlay procedure.
+- No database migration or backend business logic changes are introduced. An image rollback to `0.2.6-kitty.1` restores the previous picker without a database downgrade.
+
 ## v0.2.6 release requirements
 
 - Merge official `v0.2.6` (`49a39b6dc1abed30fd227611e8af1108bc427610`) into the verified `0.2.5-kitty.1` baseline (`cb8aea7180d87034f209d837c2f06b19976cf4ce`). Candidate version: `0.2.6-kitty.1`.
