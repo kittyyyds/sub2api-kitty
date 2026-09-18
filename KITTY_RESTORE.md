@@ -1,5 +1,16 @@
 # Kitty Upgrade And Restore Guide
 
+## v0.2.6 release requirements
+
+- Merge official `v0.2.6` (`49a39b6dc1abed30fd227611e8af1108bc427610`) into the verified `0.2.5-kitty.1` baseline (`cb8aea7180d87034f209d837c2f06b19976cf4ce`). Candidate version: `0.2.6-kitty.1`.
+- Preserve all Kitty Apps/media history, recharge bonus and payment integrations, registration-only Turnstile with fail-closed settings loading, account proxy pools and client profiles, model capability tests, risk controls, channel monitoring, pricing, and site-specific API routes. The eight textual merge conflicts do not require retiring any of these features.
+- Add upstream Codex turn-ticket support with its upstream default disabled. Do not enable harvest or inject automatically during deployment. When explicitly enabled later, its default fail-closed policy can exclude accounts without a valid ticket and its background probes create upstream requests; this is a separate operational choice from installing the code.
+- Keep both account `ProxyPool` and upstream `CodexTurnTickets` DTO fields. Preserve client-profile validation together with the upstream protection of system-managed ticket state. Regenerate Wire so Kitty model capability/risk providers and the upstream settings dependency remain present.
+- The upstream invalid-amount input fix already exists in Kitty. Preserve the recharge-bonus component and both sets of validation cases. Preserve registration bootstrap tests and add the upstream promo-field flicker cases without opening registration before security settings finish loading.
+- Upstream adds no migration or Ent schema changes in this release. All historical Kitty/upstream SQL filenames and contents remain unchanged.
+- Include upstream paused-account OAuth refresh, durable response affinity after client cancellation, group-usage rollup query optimization, DeepSeek tool-output media handling, Gemini mixed-model discovery, strict Chat role normalization, redemption pagination, TOTP/payment/UI fixes, and the grpc dependency update.
+- Use a locally built embedded frontend and Linux binary with explicit candidate commit/version metadata. Assemble the OCI archive locally using the verified historical runtime-layer archive and replace the complete resources directory. Production receives only the finished artifact; current production backups and resource headroom checks remain required before switching traffic.
+
 ## v0.2.5 release requirements
 
 - Upgrade the verified `0.2.4-kitty.7` source at `0d5227968338949578a3b801397f19191126629c` to official `v0.2.5` while preserving Kitty customizations. The candidate version is `0.2.5-kitty.1`.
