@@ -1,6 +1,8 @@
+
+import { KITTY_MODE } from "@/lib/kitty";
 import { FileText, ImagePlus, Images, Maximize2, Music2, Video } from "lucide-react";
 
-export const navigationTools = [
+const allNavigationTools = [
     {
         slug: "canvas",
         label: "我的画布",
@@ -33,4 +35,5 @@ export const navigationTools = [
     },
 ] as const;
 
-export type NavigationToolSlug = (typeof navigationTools)[number]["slug"];
+export const navigationTools = KITTY_MODE ? allNavigationTools.filter((tool) => ["canvas", "assets"].includes(tool.slug)) : allNavigationTools;
+export type NavigationToolSlug = (typeof allNavigationTools)[number]["slug"];

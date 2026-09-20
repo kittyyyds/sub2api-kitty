@@ -1,5 +1,9 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
+import { createUserLocalStore } from "@/lib/user-localforage";
+
 import localforage from "localforage";
 import { nanoid } from "nanoid";
 
@@ -10,7 +14,7 @@ import { useUserStore } from "@/stores/use-user-store";
 
 export type UploadedFile = { url: string; storageKey: string; bytes: number; mimeType: string; width?: number; height?: number; durationMs?: number };
 
-const store = localforage.createInstance({ name: "infinite-canvas", storeName: "media_files" });
+const store = createUserLocalStore({ name: "infinite-canvas", storeName: "media_files" });
 const objectUrls = new Map<string, string>();
 let storageConfigPromise: Promise<StorageConfig> | null = null;
 
@@ -104,6 +108,7 @@ async function cacheAnonymousMedia(uploaded: UploadedFile, blob: Blob) {
 }
 
 async function loadStorageConfig() {
+    if (KITTY_MODE) return { mode: "local", allowUserProvider: false, allowUserGlobalProvider: false, autoSyncAllAssets: false };
     storageConfigPromise ||= apiGet<StorageConfig>("/api/storage/config");
     return storageConfigPromise;
 }

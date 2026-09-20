@@ -1,5 +1,8 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+import { KittyRootInit } from "./kitty-root-init";
+
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
@@ -11,6 +14,10 @@ import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
+    return KITTY_MODE ? <KittyRootInit>{children}</KittyRootInit> : <OriginalClientRootInit>{children}</OriginalClientRootInit>;
+}
+
+function OriginalClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const pathname = usePathname();

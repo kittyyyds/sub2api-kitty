@@ -1,5 +1,9 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+import { downloadKittyVideo } from "@/services/api/kitty-video";
+import { VideoRequestError } from "@/services/api/video";
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import dynamic from "next/dynamic";
@@ -624,7 +628,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     .then((task) => {
                         setNodes((prev) => applyCanvasVideoTaskUpdate(prev, node.id, task, generationConfig, node.metadata?.startedAt || Date.now(), { width: node.width, height: node.height }));
                     })
-                    .catch(() => undefined)
+                    .catch((error) => { if (KITTY_MODE) setNodes((items) => items.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails: error instanceof Error ? error.message : "任务查询失败，可在本站任务页继续查询" } } : item)); })
                     .finally(() => {
                         pollingVideoNodeIdsRef.current.delete(node.id);
                     });
@@ -2142,7 +2146,22 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
         [message],
     );
 
+    const kittyDownloads = useRef(new Map<string, AbortController>());
+    useEffect(() => () => { for (const controller of kittyDownloads.current.values()) controller.abort(); }, []);
     const downloadNodeImage = useCallback((node: CanvasNodeData) => {
+        if (KITTY_MODE && node.type === CanvasNodeType.Video && node.metadata?.kittyVideoKeyId && !node.metadata.storageKey) {
+            const existing = kittyDownloads.current.get(node.id);
+            if (existing) { existing.abort(); return; }
+            const controller = new AbortController();
+            kittyDownloads.current.set(node.id, controller);
+            const updateDownload = (status: string) => setNodes((nodes) => nodes.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, kittyVideoDownload: status } } : item));
+            updateDownload("正在下载；再次点击下载可取消");
+            void downloadKittyVideo(canvasVideoTaskFromMetadata(node.metadata), controller.signal, (received, total) => updateDownload(`下载 ${(received / 1048576).toFixed(1)} MB${total ? ` / ${(total / 1048576).toFixed(1)} MB` : ""}；再次点击可取消`)).then((media) => {
+                setNodes((nodes) => nodes.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, content: media.url, storageKey: media.storageKey, bytes: media.bytes, mimeType: media.mimeType, kittyVideoDownload: "已保存到本地" } } : item));
+                saveAs(media.blob, `canvas-video-${node.id}.mp4`);
+            }).catch((error) => { const detail = controller.signal.aborted ? "下载已取消，可重试下载已有视频" : error instanceof Error ? error.message : "下载失败，可重试"; updateDownload(detail); message.error(detail); }).finally(() => kittyDownloads.current.delete(node.id));
+            return;
+        }
         if ((!isCanvasImageNodeType(node.type) && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
         saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
     }, []);
@@ -3140,12 +3159,12 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                         position: isEmptyVideoNode ? sourceNode.position : { x: parent.x + (sourceNode?.width || spec.width) + 96, y: parent.y },
                         width: isEmptyVideoNode ? sourceNode.width : spec.width,
                         height: isEmptyVideoNode ? sourceNode.height : spec.height,
-                        metadata: { prompt: effectivePrompt, cameraControl: sourceNode?.metadata?.cameraControl, status: NODE_STATUS_LOADING, model: videoGenerationConfig.model, channelId: videoGenerationConfig.videoChannelId || videoGenerationConfig.activeChannelId, size: videoGenerationConfig.size, seconds: videoGenerationConfig.videoSeconds, vquality: videoGenerationConfig.vquality, mode: videoGenerationConfig.videoMode, negativePrompt: videoGenerationConfig.videoNegativePrompt, multiShot: videoGenerationConfig.videoMultiShot, shotType: videoGenerationConfig.videoShotType, generateAudio: videoGenerationConfig.videoGenerateAudio, characterOrientation: videoGenerationConfig.videoCharacterOrientation, watermark: videoGenerationConfig.videoWatermark, references: generationReferenceUrls({ ...generationContext, referenceImages: videoReferenceImages, firstFrame, lastFrame }), firstFrameNodeId: sourceNode?.metadata?.firstFrameNodeId, lastFrameNodeId: sourceNode?.metadata?.lastFrameNodeId, klingImageNodeIds: sourceNode?.metadata?.klingImageNodeIds, klingMultiPrompt: sourceNode?.metadata?.klingMultiPrompt, klingElementList: sourceNode?.metadata?.klingElementList, startedAt: generationStartedAt, progress: 0, videoTaskId: clientTaskId },
+                        metadata: { prompt: effectivePrompt, cameraControl: sourceNode?.metadata?.cameraControl, status: NODE_STATUS_LOADING, model: videoGenerationConfig.model, channelId: videoGenerationConfig.videoChannelId || videoGenerationConfig.activeChannelId, size: videoGenerationConfig.size, seconds: videoGenerationConfig.videoSeconds, vquality: videoGenerationConfig.vquality, mode: videoGenerationConfig.videoMode, negativePrompt: videoGenerationConfig.videoNegativePrompt, multiShot: videoGenerationConfig.videoMultiShot, shotType: videoGenerationConfig.videoShotType, generateAudio: videoGenerationConfig.videoGenerateAudio, characterOrientation: videoGenerationConfig.videoCharacterOrientation, watermark: videoGenerationConfig.videoWatermark, references: generationReferenceUrls({ ...generationContext, referenceImages: videoReferenceImages, firstFrame, lastFrame }), firstFrameNodeId: sourceNode?.metadata?.firstFrameNodeId, lastFrameNodeId: sourceNode?.metadata?.lastFrameNodeId, klingImageNodeIds: sourceNode?.metadata?.klingImageNodeIds, klingMultiPrompt: sourceNode?.metadata?.klingMultiPrompt, klingElementList: sourceNode?.metadata?.klingElementList, startedAt: generationStartedAt, progress: 0, videoTaskId: KITTY_MODE ? "" : clientTaskId, kittyVideoImageURLs: sourceNode?.metadata?.kittyVideoImageURLs, kittyVideoAudioURLs: sourceNode?.metadata?.kittyVideoAudioURLs },
                     };
                     pendingChildIds = [videoId];
                     setNodes((prev) => (isEmptyVideoNode ? prev.map((node) => (node.id === nodeId ? { ...node, ...videoNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), videoNode]));
                     if (!isEmptyVideoNode) setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId }]);
-                    const created = await createVideoGenerationTask(videoGenerationConfig, requestPrompt, { references: videoReferenceImages, firstFrame, lastFrame, videoReferences: generationContext.referenceVideos, audioReferences: generationContext.referenceAudios }, undefined, { clientTaskId, source: "canvas", sourceId: videoId });
+                    const created = await createVideoGenerationTask(videoGenerationConfig, requestPrompt, { references: videoReferenceImages, firstFrame, lastFrame, videoReferences: generationContext.referenceVideos, audioReferences: generationContext.referenceAudios, kittyImageURLs: sourceNode?.metadata?.kittyVideoImageURLs, kittyAudioURLs: sourceNode?.metadata?.kittyVideoAudioURLs }, undefined, { clientTaskId, source: "canvas", sourceId: videoId });
                     setNodes((prev) => applyCanvasVideoTaskUpdate(prev, videoId, created.task, videoGenerationConfig, generationStartedAt, spec));
                     return;
                 }
@@ -3225,7 +3244,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 const errorDetails = error instanceof Error ? error.message : "生成失败";
                 message.error(errorDetails);
                 setNodes((prev) =>
-                    prev.map((node) => (node.id === nodeId || pendingChildIds.includes(node.id) ? (node.id === nodeId && !markSourceStatus ? node : { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails } }) : node)),
+                    prev.map((node) => (node.id === nodeId || pendingChildIds.includes(node.id) ? (node.id === nodeId && !markSourceStatus ? node : { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails, ...(KITTY_MODE && error instanceof VideoRequestError ? { kittySubmissionUnknown: error.submissionUnknown === true } : {}) } }) : node)),
                 );
             } finally {
                 setRunningNodeId(null);
@@ -3703,6 +3722,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
 
     const handleRetryNode = useCallback(
         async (node: CanvasNodeData) => {
+            if (KITTY_MODE && (node.metadata?.kittySubmissionUnknown || node.metadata?.kittyVideoKeyId)) { message.info("请在本站视频任务页查询已有任务或重试下载，画布不会重新提交。"); return; }
             const sourceNode = findRetrySourceNode(node.id, nodesRef.current, connectionsRef.current) || node;
             const isPanorama = isPanoramaNodeType(node.type);
             const batchRoot = node.metadata?.batchRootId ? nodesRef.current.find((item) => item.id === node.metadata?.batchRootId) : null;
@@ -3748,7 +3768,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             const retryVideoTaskId = node.type === CanvasNodeType.Video ? `client_video_task_${node.id}` : "";
             const retryImageTaskId = isCanvasImageNodeType(node.type) ? `client_image_task_${node.id}` : "";
             const retryAudioTaskId = node.type === CanvasNodeType.Audio ? `client_audio_task_${node.id}` : "";
-            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, content: undefined, storageKey: "", progress: 0, startedAt: retryStartedAt, ...(item.type === CanvasNodeType.Video ? { videoTaskId: retryVideoTaskId, videoTaskVideoId: undefined } : {}), ...(isCanvasImageNodeType(item.type) ? { imageTaskId: retryImageTaskId, imageTaskResultId: undefined } : {}), ...(item.type === CanvasNodeType.Audio ? { audioTaskId: retryAudioTaskId, audioTaskResultId: undefined } : {}) } } : item)));
+            setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_LOADING, errorDetails: undefined, content: undefined, storageKey: "", progress: 0, startedAt: retryStartedAt, ...(item.type === CanvasNodeType.Video ? { videoTaskId: KITTY_MODE ? "" : retryVideoTaskId, videoTaskVideoId: undefined } : {}), ...(isCanvasImageNodeType(item.type) ? { imageTaskId: retryImageTaskId, imageTaskResultId: undefined } : {}), ...(item.type === CanvasNodeType.Audio ? { audioTaskId: retryAudioTaskId, audioTaskResultId: undefined } : {}) } } : item)));
 
             try {
                 if (node.type === CanvasNodeType.Text) {
@@ -3767,7 +3787,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     const firstFrame = frameReferencesEnabled ? context?.firstFrame || null : null;
                     const lastFrame = frameReferencesEnabled ? context?.lastFrame || null : null;
                     const references = frameReferencesEnabled || isAutoDLConfig(videoGenerationConfig) ? retryImages : [...retryImages, ...[context?.firstFrame, context?.lastFrame].filter((image): image is ReferenceImage => Boolean(image))];
-                    const created = await createVideoGenerationTask(videoGenerationConfig, requestPrompt, { references, firstFrame, lastFrame, videoReferences: context?.referenceVideos || [], audioReferences: context?.referenceAudios || [] }, undefined, { clientTaskId: retryVideoTaskId, source: "canvas", sourceId: node.id });
+                    const created = await createVideoGenerationTask(videoGenerationConfig, requestPrompt, { references, firstFrame, lastFrame, videoReferences: context?.referenceVideos || [], audioReferences: context?.referenceAudios || [], kittyImageURLs: node.metadata?.kittyVideoImageURLs, kittyAudioURLs: node.metadata?.kittyVideoAudioURLs }, undefined, { clientTaskId: retryVideoTaskId, source: "canvas", sourceId: node.id });
                     setNodes((prev) => applyCanvasVideoTaskUpdate(prev, node.id, created.task, videoGenerationConfig, retryStartedAt, { width: node.width, height: node.height }));
                     return;
                 }
@@ -4391,7 +4411,8 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                             disabled={trimmingAudio || audioTrimDuration < 0.5}
                             ariaLabelForHandle={["截取开始时间", "截取结束时间"]}
                             tooltip={{ formatter: (value) => `${(value ?? 0).toFixed(2)} 秒` }}
-                            onChange={([start, end]) => {
+                            onChange={(values: number[]) => {
+                                const [start, end] = values;
                                 if (Math.round((end - start) * 100) < 50) return;
                                 audioTrimRef.current?.pause();
                                 if (audioTrimRef.current) audioTrimRef.current.currentTime = start;
@@ -5168,12 +5189,12 @@ function applyCanvasVideoTaskUpdate(nodes: CanvasNodeData[], nodeId: string, tas
         const progress = typeof task.progress === "number" ? Math.max(0, Math.min(100, task.progress)) : node.metadata?.progress || 0;
         const url = task.video_url || task.url || "";
         const completed = canvasVideoTaskCompleted(task);
-        const failed = canvasVideoTaskFailed(task) || (completed && !url);
+        const failed = canvasVideoTaskFailed(task) || (!KITTY_MODE && completed && !url);
         const taskStartedAt = parseCanvasVideoTaskTime(task.started_at ?? task.startedAt ?? task.created_at ?? task.createdAt) || startedAt;
         const metadata: CanvasNodeMetadata = {
             ...node.metadata,
             status: failed ? NODE_STATUS_ERROR : completed ? NODE_STATUS_SUCCESS : NODE_STATUS_LOADING,
-            errorDetails: failed ? task.error?.message || (completed ? "视频生成完成但没有返回视频地址" : "视频生成失败") : undefined,
+            errorDetails: failed ? task.error?.message || (task.status === "expired" ? "视频结果已过期" : completed ? "视频生成完成但没有返回视频地址" : "视频生成失败") : undefined,
             model: task.model || config.model,
             size: task.size || node.metadata?.size || config.size,
             seconds: task.seconds || node.metadata?.seconds || config.videoSeconds,
@@ -5188,6 +5209,7 @@ function applyCanvasVideoTaskUpdate(nodes: CanvasNodeData[], nodeId: string, tas
             progress,
             videoTaskId: task.task_id || task.id || node.metadata?.videoTaskId,
             videoTaskVideoId: task.video_id || node.metadata?.videoTaskVideoId,
+            ...(KITTY_MODE ? { kittyVideoKeyId: task.kittyKeyId || node.metadata?.kittyVideoKeyId, kittyVideoState: task.status, kittySubmissionUnknown: false } : {}),
         };
         if (!completed || !url) return { ...node, metadata };
         const taskSize = parseCanvasVideoTaskSize(task.size, fallbackSize);
@@ -5356,7 +5378,8 @@ function canvasVideoTaskFromMetadata(metadata?: CanvasNodeMetadata): VideoRespon
         task_id: metadata?.videoTaskId,
         video_id: metadata?.videoTaskVideoId,
         model: metadata?.model,
-        status: metadata?.status,
+        status: metadata?.kittyVideoState || metadata?.status,
+        kittyKeyId: metadata?.kittyVideoKeyId,
         progress: metadata?.progress,
     };
 }
@@ -5370,7 +5393,7 @@ function canvasVideoTaskCompleted(task: VideoResponse) {
 }
 
 function canvasVideoTaskFailed(task: VideoResponse) {
-    return ["failed", "fail", "error", "cancelled", "canceled"].includes((task.status || "").toLowerCase());
+    return ["failed", "fail", "error", "cancelled", "canceled", "expired"].includes((task.status || "").toLowerCase());
 }
 
 function parseCanvasVideoTaskSize(value: unknown, fallback: { width: number; height: number }) {
@@ -5466,7 +5489,7 @@ function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefine
     const activeChannelId = mode === "image" ? imageChannelId : mode === "video" ? videoChannelId : mode === "text" ? textChannelId : mode === "audio" ? audioChannelId || config.activeChannelId : config.activeChannelId;
     return {
         ...config,
-        model: mode === "text" ? resolveModelForCapability(config, node?.metadata?.model, "text") : node?.metadata?.model || defaultModel || (mode === "audio" ? defaultConfig.audioModel : config.model || defaultConfig.model),
+        model: mode === "text" ? (KITTY_MODE && node?.metadata?.model ? node.metadata.model : resolveModelForCapability(config, node?.metadata?.model, "text")) : node?.metadata?.model || defaultModel || (mode === "audio" ? defaultConfig.audioModel : config.model || defaultConfig.model),
         activeChannelId,
         imageChannelId,
         videoChannelId,
@@ -5503,7 +5526,7 @@ function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | undefine
 }
 
 function resetInterruptedGeneration(nodes: CanvasNodeData[]) {
-    return nodes.map((node) => (node.metadata?.status === "loading" && !canvasRecoverableTaskId(node) ? { ...node, metadata: { ...node.metadata, status: "error" as const, errorDetails: "页面刷新后生成已中断，请重新生成。" } } : node));
+    return nodes.map((node) => (node.metadata?.status === "loading" && !canvasRecoverableTaskId(node) ? { ...node, metadata: { ...node.metadata, status: "error" as const, ...(KITTY_MODE && node.type === CanvasNodeType.Video ? { kittySubmissionUnknown: true, errorDetails: "视频提交结果待确认，请先在本站视频任务页核对，避免重复生成。" } : { errorDetails: "页面刷新后生成已中断，请重新生成。" }) } } : node));
 }
 
 function canvasRecoverableTaskId(node: CanvasNodeData) {
@@ -5518,7 +5541,7 @@ function canvasTaskCompleted(status?: string) {
 }
 
 function canvasTaskFailed(status?: string) {
-    return ["failed", "fail", "error", "cancelled", "canceled"].includes((status || "").toLowerCase());
+    return ["failed", "fail", "error", "cancelled", "canceled", "expired"].includes((status || "").toLowerCase());
 }
 
 function findRetrySourceNode(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {

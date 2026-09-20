@@ -1,5 +1,7 @@
 "use client";
 
+import { canvasAssetPath } from "@/lib/kitty";
+
 import { Menu } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -28,8 +30,8 @@ export function AppTopNav() {
                                 <span
                                     className="size-5 shrink-0 bg-current"
                                     style={{
-                                        mask: "url(/logo.svg) center / contain no-repeat",
-                                        WebkitMask: "url(/logo.svg) center / contain no-repeat",
+                                        mask: `url(${canvasAssetPath("/logo.svg")}) center / contain no-repeat`,
+                                        WebkitMask: `url(${canvasAssetPath("/logo.svg")}) center / contain no-repeat`,
                                     }}
                                 />
                                 <span className="text-base font-medium">无限画布</span>

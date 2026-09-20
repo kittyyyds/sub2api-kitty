@@ -1,3 +1,10 @@
+
+import { confirmKittyVideoQuote } from "./kitty-quote";
+
+import { kittyVideoTaskHeaders } from "./kitty-video";
+import { buildSuanliVideoRequest, splitReferenceURLs, type SuanliVideoRatio } from "@/lib/kitty-suanli-video";
+
+import { KITTY_MODE, kittyHeaders, loadKittyBootstrap } from "@/lib/kitty";
 import axios from "axios";
 
 import { dataUrlToFile, readFileAsDataUrl } from "@/lib/image-utils";
@@ -16,7 +23,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-export type VideoResponse = { id: string; task_id?: string; video_id?: string; source_id?: string; sourceId?: string; channelId?: string; userChannelId?: string; channelName?: string; channel_id?: string; user_channel_id?: string; channel_name?: string; status?: string; video_url?: string; url?: string; storageKey?: string; progress?: number; error?: { message?: string }; size?: string; seconds?: string; model?: string; created_at?: string | number; createdAt?: string | number; started_at?: string | number; startedAt?: string | number; request_body?: string };
+export type VideoResponse = { id: string; kittyKeyId?: string; task_id?: string; video_id?: string; source_id?: string; sourceId?: string; channelId?: string; userChannelId?: string; channelName?: string; channel_id?: string; user_channel_id?: string; channel_name?: string; status?: string; video_url?: string; url?: string; storageKey?: string; progress?: number; error?: { message?: string }; size?: string; seconds?: string; model?: string; created_at?: string | number; createdAt?: string | number; started_at?: string | number; startedAt?: string | number; request_body?: string };
 type ApiVideoEnvelope = { code: number; data?: VideoResponse | VideoResponse[] | null; msg?: string; message?: string };
 type ApiVideoResponse = VideoResponse | ApiVideoEnvelope;
 export type VideoGenerationResult = { id: string; url: string; durationMs: number; width: number; height: number; bytes: number; mimeType: string; task: VideoResponse };
@@ -27,6 +34,7 @@ export const VIDEO_POLL_INTERVAL_MS = 5000;
 
 export class VideoRequestError extends Error {
     detail?: string;
+    submissionUnknown?: boolean;
 
     constructor(message: string, detail?: unknown) {
         super(message);
@@ -36,17 +44,20 @@ export class VideoRequestError extends Error {
 }
 
 function usesAccountProxy(config: AiConfig) {
+    if (KITTY_MODE) return false;
     const token = useUserStore.getState().token;
     return config.channelMode === "remote" || (config.channelMode === "local" && Boolean(token));
 }
 
 function aiApiUrl(config: AiConfig, path: string) {
+    if (KITTY_MODE) return `/canvas-api/v1${path}`;
     if (usesAccountProxy(config)) return `/api/v1${path}`;
     const channel = localChannelForActiveModel(config);
     return buildApiUrl(channel?.baseUrl || config.baseUrl, path);
 }
 
 function aiVideoPollUrl(config: AiConfig, model: string, id: string) {
+    if (KITTY_MODE) return aiApiUrl(config, `/videos/${encodeURIComponent(id)}`);
     if (!usesAccountProxy(config) && isGeminiConfig(config, model)) {
         const channel = localChannelForActiveModel(config);
         return geminiOperationUrl(channel?.baseUrl || config.baseUrl, id);
@@ -79,6 +90,7 @@ function agnesBaseUrl(baseUrl: string) {
 }
 
 function aiHeaders(config: AiConfig) {
+    if (KITTY_MODE) return kittyHeaders(config);
     const token = useUserStore.getState().token;
     if (config.channelMode === "remote" && !token) throw new Error("请先登录后再使用云端渠道");
     if (config.channelMode === "remote") return { Authorization: `Bearer ${token}`, ...(channelIdForActiveModel(config) ? { "X-Model-Channel-ID": channelIdForActiveModel(config) } : {}) };
@@ -88,6 +100,7 @@ function aiHeaders(config: AiConfig) {
 }
 
 function refreshRemoteUser(config: AiConfig) {
+    if (KITTY_MODE) { void loadKittyBootstrap(true).then((data) => useUserStore.setState((state) => ({ user: state.user ? { ...state.user, credits: data.user.balance } : null }))).catch(() => {}); return; }
     if (usesAccountProxy(config)) void useUserStore.getState().hydrateUser();
 }
 
@@ -95,6 +108,8 @@ export type VideoReferenceInput = {
     references?: ReferenceImage[];
     videoReferences?: ReferenceVideo[];
     audioReferences?: ReferenceAudio[];
+    kittyImageURLs?: string;
+    kittyAudioURLs?: string;
     firstFrame?: ReferenceImage | null;
     lastFrame?: ReferenceImage | null;
 };
@@ -107,13 +122,27 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
     return pollCreatedVideoGenerationTask(config, created.task, { startedAt: created.startedAt, requestBody: created.requestBody, onProgress: onProgress ? (progress) => onProgress(progress) : undefined });
 }
 
+const kittyPendingCreates = new Map<string, Promise<CreatedVideoGenerationTask>>();
 export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] | VideoReferenceInput = [], onProgress?: VideoProgressHandler, options?: string | VideoTaskCreateOptions): Promise<CreatedVideoGenerationTask> {
+    const id = KITTY_MODE ? normalizeVideoTaskCreateOptions(options).clientTaskId : "";
+    if (!id) return submitVideoGenerationTask(config, prompt, references, onProgress, options);
+    const pending = kittyPendingCreates.get(id);
+    if (pending) return pending;
+    const request = submitVideoGenerationTask(config, prompt, references, onProgress, options).finally(() => kittyPendingCreates.delete(id));
+    kittyPendingCreates.set(id, request);
+    return request;
+}
+
+async function submitVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] | VideoReferenceInput = [], onProgress?: VideoProgressHandler, options?: string | VideoTaskCreateOptions): Promise<CreatedVideoGenerationTask> {
     const model = config.model || config.videoModel;
     const systemPrompt = (config.systemPrompts.video || config.systemPrompt).trim();
     const body = await createVideoRequestBody(config, model, systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt, normalizeVideoReferenceInput(references));
+    if (KITTY_MODE) await confirmKittyVideoQuote(config);
     const startedAt = Date.now();
+    let submitted = false;
     try {
         const createOptions = normalizeVideoTaskCreateOptions(options);
+        if (KITTY_MODE && createOptions.source === "canvas") await (await import("@/app/(user)/canvas/stores/use-canvas-store")).flushCanvasPersistence();
         const accountProxy = usesAccountProxy(config);
         const headers = { ...aiHeaders(config), ...(accountProxy && createOptions.clientTaskId ? { "X-Client-Video-Task-ID": createOptions.clientTaskId } : {}), ...(accountProxy && createOptions.source ? { "X-Video-Task-Source": createOptions.source } : {}), ...(accountProxy && createOptions.sourceId ? { "X-Video-Task-Source-ID": createOptions.sourceId } : {}) };
         const directProvider = !accountProxy ? directAIProviderForConfig(config) : null;
@@ -124,17 +153,20 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
                 ? miniMaxApiUrl(config, "/v2/video_generation")
                 : aiApiUrl(config, !accountProxy && (isGrok2APIVideoConfig(config, model) || isCogVideoX3Model(model)) ? "/videos/generations" : "/videos");
         const requestBody = !accountProxy && isGeminiConfig(config, model) ? withoutVideoModel(body) : body;
+        const send = () => { submitted = true; return axios.post<ApiVideoResponse>(createUrl, requestBody, { headers }); };
         const created = directProvider
             ? await (await import("@/services/api/direct-ai")).createDirectVideoTask(config, directProvider, body)
-            : unwrapVideoResponseForConfig(config, model, (await axios.post<ApiVideoResponse>(createUrl, requestBody, { headers })).data);
+            : unwrapVideoResponseForConfig(config, model, (await send()).data);
         if (!created.id && !created.video_id) throw new Error("视频接口没有返回任务 ID");
-        const task = await syncGeneratedVideo(created, config);
+        const task = await syncGeneratedVideo(KITTY_MODE ? { ...created, kittyKeyId: (headers as Record<string, string>)["X-Canvas-Key-ID"] } : created, config);
         if (typeof task.progress === "number") onProgress?.(task.progress, task);
         return { task, pollId: videoPollId(model, task), startedAt, requestBody: body };
     } catch (error) {
         const { message, detail } = readAxiosError(error, "视频生成失败");
         void writeVideoAICallLog(config, model, "/videos", "POST", startedAt, axios.isAxiosError(error) ? error.response?.status || 0 : 0, stringifyLogPayload(summarizeVideoRequestBody(body)), stringifyLogPayload(detail), message);
-        throw new VideoRequestError(message, detail);
+        const failure = new VideoRequestError(message, detail);
+        if (KITTY_MODE && submitted && (!axios.isAxiosError(error) || !error.response || error.response.status >= 500)) { failure.submissionUnknown = true; failure.message = "提交结果待确认：请先在本站视频任务页核对，避免重复生成。"; }
+        throw failure;
     }
 }
 
@@ -179,6 +211,13 @@ export async function pollCreatedVideoGenerationTask(config: AiConfig, task: Vid
 }
 
 export async function pollVideoGenerationTaskStatus(config: AiConfig, task: VideoResponse) {
+    if (KITTY_MODE) {
+        const id = task.task_id || task.id;
+        const response = await axios.get(`/canvas-api/v1/videos/${encodeURIComponent(id)}`, { headers: kittyVideoTaskHeaders(task) });
+        const value = normalizeVideoResponse(response.data?.data || response.data);
+        if (isCompletedVideoStatus(value.status) && !isCompletedVideoStatus(task.status)) refreshRemoteUser(config);
+        return { ...value, url: "", video_url: "", kittyKeyId: task.kittyKeyId, model: task.model || config.model };
+    }
     const model = config.model || config.videoModel;
     const pollId = videoPollId(model, task);
     if (!pollId) throw new VideoRequestError("视频接口没有返回任务 ID", task);
@@ -195,6 +234,7 @@ function videoSyncKey(config: AiConfig, task: VideoResponse) {
 }
 
 async function syncGeneratedVideo(task: VideoResponse, config: AiConfig, contentResolved = false): Promise<VideoResponse> {
+    if (KITTY_MODE) return { ...task, url: "", video_url: "" };
     const url = task.video_url || task.url || "";
     if (task.storageKey || isFailedVideoStatus(task.status) || (!isCompletedVideoStatus(task.status) && !url)) return task;
     const media = await autoSyncToCloud(`video:${videoSyncKey(config, task)}`, async () => {
@@ -321,6 +361,11 @@ async function create88APIVideoRequestBody(config: AiConfig, model: string, prom
 }
 
 async function createVideoRequestBody(config: AiConfig, model: string, prompt: string, input: Required<VideoReferenceInput>) {
+    if (KITTY_MODE) {
+        kittyHeaders(config);
+        if (input.videoReferences.length || input.firstFrame || input.lastFrame) throw new Error("当前型号请使用普通参考图片/音频的公开链接，不支持视频或首尾帧参数。");
+        return buildSuanliVideoRequest({ modelID: model, prompt, duration: Number(config.videoSeconds), ratio: normalizeSeedanceRatio(config.size) as SuanliVideoRatio, imageURLs: [...input.references.map((item) => item.url || item.dataUrl), ...splitReferenceURLs(input.kittyImageURLs)], audioURLs: [...input.audioReferences.map((item) => item.url), ...splitReferenceURLs(input.kittyAudioURLs)] });
+    }
     if (videoChannelProtocol(config, model) === "autodl") {
         const capabilities = getAutoDLCapabilities(await fetchAutoDLWorkflow(autoDLBaseUrl(config, model), model));
         if (!capabilities) throw new VideoRequestError("当前 AutoDL 工作流尚未适配");
@@ -646,8 +691,8 @@ function normalizeKlingV26AspectRatio(value: string) {
 }
 
 function normalizeVideoReferenceInput(input: ReferenceImage[] | VideoReferenceInput): Required<VideoReferenceInput> {
-    if (Array.isArray(input)) return { references: input, videoReferences: [], audioReferences: [], firstFrame: null, lastFrame: null };
-    return { references: input.references || [], videoReferences: input.videoReferences || [], audioReferences: input.audioReferences || [], firstFrame: input.firstFrame || null, lastFrame: input.lastFrame || null };
+    if (Array.isArray(input)) return { references: input, videoReferences: [], audioReferences: [], firstFrame: null, lastFrame: null, kittyImageURLs: "", kittyAudioURLs: "" };
+    return { references: input.references || [], videoReferences: input.videoReferences || [], audioReferences: input.audioReferences || [], firstFrame: input.firstFrame || null, lastFrame: input.lastFrame || null, kittyImageURLs: input.kittyImageURLs || "", kittyAudioURLs: input.kittyAudioURLs || "" };
 }
 
 async function imageReferenceToFile(image: ReferenceImage) {
@@ -1030,7 +1075,7 @@ function isCompletedVideoStatus(status?: string) {
 }
 
 function isFailedVideoStatus(status?: string) {
-    return ["failed", "fail", "error", "cancelled", "canceled"].includes((status || "").toLowerCase());
+    return ["failed", "fail", "error", "cancelled", "canceled", "expired"].includes((status || "").toLowerCase());
 }
 
 function videoPayloadErrorMessage(value: unknown): string {

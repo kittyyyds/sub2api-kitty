@@ -1,5 +1,8 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+import { KittyConfigModal } from "./kitty-config-modal";
+
 import { App, Button, Form, Input, Modal, Segmented, Select, Switch } from "antd";
 import { useEffect, useState } from "react";
 
@@ -36,6 +39,10 @@ const modelGroups: ModelGroup[] = [
 ];
 
 export function AppConfigModal() {
+    return KITTY_MODE ? <KittyConfigModal /> : <OriginalAppConfigModal />;
+}
+
+function OriginalAppConfigModal() {
     const { message } = App.useApp();
     const [loadingModels, setLoadingModels] = useState(false);
     const [savingConfig, setSavingConfig] = useState(false);

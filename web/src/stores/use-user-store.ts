@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -25,8 +27,9 @@ export const useUserStore = create<UserStore>()(
             isReady: false,
             isLoading: false,
             setSession: (token, user) => set({ token, user, isReady: true }),
-            clearSession: () => set({ token: "", user: null, isReady: true }),
+            clearSession: () => { if (KITTY_MODE) { ["auth_token", "auth_user", "refresh_token", "token_expires_at", "pending_auth_session"].forEach((key) => window.localStorage.removeItem(key)); window.location.href = "/login"; } set({ token: "", user: null, isReady: true }); },
             hydrateUser: async () => {
+                if (KITTY_MODE) return;
                 const token = get().token;
                 if (!token) {
                     set({ user: null, isReady: true });
@@ -69,7 +72,8 @@ export const useUserStore = create<UserStore>()(
         }),
         {
             name: AUTH_TOKEN_KEY,
-            partialize: (state) => ({ token: state.token }),
+            partialize: (state) => ({ token: KITTY_MODE ? "" : state.token }),
+            skipHydration: KITTY_MODE,
             onRehydrateStorage: () => (state) => {
                 if (state) state.isReady = false;
             },

@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
 import type { CSSProperties } from "react";
 import { Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Settings2, Video } from "lucide-react";
 import { Button, Segmented } from "antd";
@@ -121,17 +123,17 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, videoFram
             <Button
                 type="primary"
                 className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
-                disabled={isRunning || !canGenerate}
+                disabled={isRunning || !canGenerate || (KITTY_MODE && mode === "audio")}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={() => onGenerate(node.id)}
             >
                 <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1">
+                    {!KITTY_MODE ? <span className="inline-flex items-center gap-1">
                         <CreditSymbol />
                         {credits.toLocaleString()}
-                    </span>
+                    </span> : null}
                     {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
-                    <span>开始生成</span>
+                    <span>{KITTY_MODE && mode === "audio" ? "暂不支持" : KITTY_MODE && mode === "video" ? "报价并生成" : "开始生成"}</span>
                 </span>
             </Button>
         </div>

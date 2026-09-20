@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
 import { ArrowRight } from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { App, Button, Image, Tag } from "antd";
@@ -51,6 +53,16 @@ function toPendingAgentAsset(payload: InsertAssetPayload, label: string): Pendin
 }
 
 export default function IndexPage() {
+    return KITTY_MODE ? <KittyCanvasLanding /> : <OriginalHomePage />;
+}
+
+function KittyCanvasLanding() {
+    const router = useRouter();
+    useEffect(() => { router.replace("/canvas"); }, [router]);
+    return <p className="p-6">正在进入我的画布…</p>;
+}
+
+function OriginalHomePage() {
     const { message } = App.useApp();
     const router = useRouter();
     const effectiveConfig = useEffectiveConfig();

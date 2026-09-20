@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
 import { useEffect, useRef, useState } from "react";
 import {
     createCodexAgentClient, normalizeCodexEndpoint, readCodexAgentConfig, type CodexConnection, type CodexModel, type CodexRpcEvent, type CodexToolEvent,
@@ -39,7 +41,7 @@ export function useCodexAgent(options: {
     const [status, setStatus] = useState<"idle" | "connecting" | "ready" | "error">("idle");
     const [error, setError] = useState("");
     const [retry, setRetry] = useState(0);
-    const [enabled, setEnabled] = useState(true);
+    const [enabled, setEnabled] = useState(!KITTY_MODE);
     const connectionAttempt = useRef(0);
     const client = useRef<Client | null>(null);
     const active = useRef<ActiveRun | null>(null);
@@ -66,7 +68,7 @@ export function useCodexAgent(options: {
                 await readCodexAgentConfig(value.endpoint);
                 throw new Error("已发现本地 Agent，请使用插件自动连接，或手动填写 Token");
             }
-            try { localStorage.setItem(CONNECTION_KEY, JSON.stringify(value)); } catch { /* 仍允许当前页面连接 */ }
+            try { if (!KITTY_MODE) localStorage.setItem(CONNECTION_KEY, JSON.stringify(value)); } catch { /* 仍允许当前页面连接 */ }
             setConnectionState(value);
             setEnabled(true);
             setRetry((value) => value + 1);
@@ -81,7 +83,7 @@ export function useCodexAgent(options: {
     };
     useEffect(() => {
         try {
-            const stored = JSON.parse(localStorage.getItem(CONNECTION_KEY) || "null");
+            const stored = KITTY_MODE ? null : JSON.parse(localStorage.getItem(CONNECTION_KEY) || "null");
             if (stored && typeof stored.endpoint === "string" && typeof stored.token === "string") setConnectionState(stored);
         } catch { /* 本地配置不可用时使用默认值 */ }
         const bootstrap = () => {
@@ -94,6 +96,12 @@ export function useCodexAgent(options: {
                 disconnect();
                 setError("自动连接链接缺少地址或 Token，请重新通过插件连接");
                 setStatus("error");
+                return;
+            }
+            if (KITTY_MODE) {
+                setConnectionState({ endpoint: params.get("agentUrl")!, token: params.get("agentToken")! });
+                setEnabled(false);
+                latest.current.onBootstrap();
                 return;
             }
             void connect({ endpoint: params.get("agentUrl")!, token: params.get("agentToken")! }).then((connected) => {

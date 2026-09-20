@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE, canvasAssetPath, kittyModelMatches } from "@/lib/kitty";
+
 import { useEffect, useId, useMemo, useState } from "react";
 import { Cpu } from "lucide-react";
 
@@ -30,19 +32,20 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
                 : normalizeLocalChannels(config).map((channel) => ({ id: channel.id, protocol: channel.protocol, name: channel.name || "本地渠道", baseUrl: channel.baseUrl, models: channel.models }));
         const models = channels.flatMap((channel) => (channel.models ?? []).map((model) => ({ key: `${channel.id}::${model}`, channelId: channel.id, channelName: channel.name, protocol: channel.protocol, baseUrl: channel.baseUrl, model })));
         if (!capability) return models;
+        if (KITTY_MODE) return models.filter((item) => kittyModelMatches(item.model, capability, item.channelId));
         return models.filter((item) => filterModelsByCapability([item.model], capability, item.protocol || "").length > 0);
     }, [capability, config]);
     const modelLabel = useAutoDLWorkflowNames(channelOptions);
     const currentOption = useMemo(() => {
         if (!value) return undefined;
-        return channelOptions.find((item) => item.model === value && item.channelId === channelId) || channelOptions.find((item) => item.model === value);
+        return channelOptions.find((item) => item.model === value && item.channelId === channelId) || (!KITTY_MODE ? channelOptions.find((item) => item.model === value) : undefined);
     }, [channelId, channelOptions, value]);
     const options = channelOptions;
     const current = value || "";
     const currentValue = current && currentOption ? currentOption.key : "";
 
     useEffect(() => {
-        if (value && currentOption?.channelId && channelId !== currentOption.channelId) onChange(value, currentOption.channelId);
+        if (!KITTY_MODE && value && currentOption?.channelId && channelId !== currentOption.channelId) onChange(value, currentOption.channelId);
     }, [channelId, currentOption?.channelId, onChange, value]);
 
     useEffect(() => {
@@ -82,7 +85,7 @@ export function ModelPicker({ config, value, channelId, capability, onChange, cl
                 title={current || placeholder}
             >
                 <ModelIcon model={current} />
-                <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{modelLabel(current, currentOption) || placeholder}</span>
+                <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{current && KITTY_MODE && !currentOption ? `${current}（请重新选择 Key）` : modelLabel(current, currentOption) || placeholder}</span>
             </SelectTrigger>
             <SelectContent
                 data-canvas-no-zoom
@@ -122,7 +125,7 @@ function ModelLabel({ model, label, channelName }: { model: string; label?: stri
 
 function ModelIcon({ model }: { model: string }) {
     const icon = resolveModelIcon(model);
-    return icon ? <img src={icon} alt="" className="size-4 shrink-0 dark:invert" /> : <Cpu className="size-4 shrink-0 opacity-70" />;
+    return icon ? <img src={canvasAssetPath(icon)} alt="" className="size-4 shrink-0 dark:invert" /> : <Cpu className="size-4 shrink-0 opacity-70" />;
 }
 
 function resolveModelIcon(model: string) {

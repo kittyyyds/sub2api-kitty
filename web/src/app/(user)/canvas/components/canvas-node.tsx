@@ -524,7 +524,7 @@ function ErrorContent({ node, theme, onRetry }: Pick<NodeContentRendererProps, "
     return (
         <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
             <div className="text-xs leading-5 text-red-300">{node.metadata?.errorDetails || "生成失败"}</div>
-            <button
+            {node.metadata?.kittySubmissionUnknown || node.metadata?.kittyVideoKeyId ? <a href="/video-tasks" className="text-sm underline">查看本站视频任务</a> : <button
                 type="button"
                 className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:scale-[1.02]"
                 style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
@@ -536,7 +536,7 @@ function ErrorContent({ node, theme, onRetry }: Pick<NodeContentRendererProps, "
             >
                 <RefreshCw className="size-3.5" />
                 重试
-            </button>
+            </button>}
         </div>
     );
 }
@@ -676,7 +676,7 @@ function VideoNodeContent({ node, theme, isSelected, onViewImage }: NodeContentR
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
                 <Video className="size-7 opacity-35" />
-                <span className="text-sm">空视频节点</span>
+                <span className="text-sm">{node.metadata?.kittyVideoDownload || (["completed", "complete", "done", "succeeded", "success"].includes(node.metadata?.kittyVideoState || "") ? "视频已生成，请选中节点点击下载" : node.metadata?.kittyVideoState === "expired" ? "视频结果已过期" : "空视频节点")}</span>
             </div>
         );
     const controlStyle = { background: theme.toolbar.panel, color: theme.toolbar.item };

@@ -1,0 +1,56 @@
+# Insert into the EXISTING same-origin HTTPS server block on the host.
+# Render only SUB_EXISTING_UPSTREAM and CANVAS_SOURCE_DIR with envsubst.
+# SUB_EXISTING_UPSTREAM: the already-used SUB upstream name or host:port.
+# CANVAS_SOURCE_DIR: absolute directory containing the reviewed source + LICENSE.
+# Existing /v1, /api/v1, /, certificates, auth policy and real-IP trust stay intact.
+
+location = /canvas {
+    return 302 /canvas/canvas;
+}
+
+# Exact static routes take precedence over the /canvas/ Next location.
+location = /canvas/source/kitty-canvas-source.tar.gz {
+    alias ${CANVAS_SOURCE_DIR}/kitty-canvas-source.tar.gz;
+    default_type application/gzip;
+    add_header Content-Disposition 'attachment; filename="kitty-canvas-source.tar.gz"' always;
+    add_header X-Content-Type-Options nosniff always;
+}
+
+location = /canvas/source/LICENSE {
+    alias ${CANVAS_SOURCE_DIR}/LICENSE;
+    default_type text/plain;
+    add_header X-Content-Type-Options nosniff always;
+}
+
+location ^~ /canvas/ {
+    # No trailing URI: preserve /canvas for the compiled Next basePath.
+    proxy_pass http://127.0.0.1:3101;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 60s;
+}
+
+# Same SUB process and port as the existing panel/API reverse proxy.
+# The SUB application commonly listens on 7070; use the verified live upstream,
+# never infer the host-published port. No /v1 routing block is added or replaced.
+# If an existing equivalent location already forwards /canvas-api/, retain that
+# location instead of installing a duplicate. Keep its current access controls.
+location ^~ /canvas-api/ {
+    proxy_pass http://${SUB_EXISTING_UPSTREAM};
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+}

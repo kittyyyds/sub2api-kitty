@@ -1,3 +1,5 @@
+
+import { createUserLocalStore } from "@/lib/user-localforage";
 import localforage from "localforage";
 import { uploadImage } from "./image-storage";
 import { uploadMediaBlob } from "./file-storage";
@@ -8,8 +10,8 @@ import { fetchUserConfig, syncUserAssetData, syncUserImageHistory } from "./api/
 import { saveVideoGenerationLogs } from "./api/generation-logs";
 
 export async function checkLocalAssetsExist(): Promise<boolean> {
-    const imageStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
-    const mediaStore = localforage.createInstance({ name: "infinite-canvas", storeName: "media_files" });
+    const imageStore = createUserLocalStore({ name: "infinite-canvas", storeName: "image_files" });
+    const mediaStore = createUserLocalStore({ name: "infinite-canvas", storeName: "media_files" });
 
     let found = false;
     try {
@@ -43,8 +45,8 @@ export async function migrateLocalAssetsToCloud(
     const userConfig = await fetchUserConfig(token).catch(() => null);
     const remoteAssets = userConfig?.assetData as { assets?: any[] } | undefined;
 
-    const imageStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
-    const mediaStore = localforage.createInstance({ name: "infinite-canvas", storeName: "media_files" });
+    const imageStore = createUserLocalStore({ name: "infinite-canvas", storeName: "image_files" });
+    const mediaStore = createUserLocalStore({ name: "infinite-canvas", storeName: "media_files" });
 
     // 1. Gather all local keys and their blobs
     const imagesToUpload: { key: string; blob: Blob }[] = [];
@@ -138,8 +140,7 @@ export async function migrateLocalAssetsToCloud(
             const finalCanvas = {
                 projects: nextCanvas.projects || [],
             };
-            await localforage
-                .createInstance({
+            await createUserLocalStore({
                     name: "infinite-canvas",
                     storeName: "app_state",
                 })
@@ -174,7 +175,7 @@ export async function migrateLocalAssetsToCloud(
             const mergedAssets = mergeAssets(remoteAssets?.assets || [], nextAssets.assets);
             const finalAssets = { assets: mergedAssets };
             // Save locally
-            await localforage.createInstance({ name: "infinite-canvas", storeName: "app_state" })
+            await createUserLocalStore({ name: "infinite-canvas", storeName: "app_state" })
                 .setItem("infinite-canvas:asset_store", JSON.stringify({ state: finalAssets }));
             // Set in Zustand store
             useAssetStore.setState(finalAssets);
@@ -186,8 +187,8 @@ export async function migrateLocalAssetsToCloud(
     }
 
     // 6. Update Image Generation Logs
-    const imageLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
-    const imageCategoryStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_categories" });
+    const imageLogStore = createUserLocalStore({ name: "infinite-canvas", storeName: "image_generation_logs" });
+    const imageCategoryStore = createUserLocalStore({ name: "infinite-canvas", storeName: "image_generation_categories" });
     const localLogs: any[] = [];
     await imageLogStore.iterate((value) => {
         localLogs.push(value);
@@ -215,7 +216,7 @@ export async function migrateLocalAssetsToCloud(
     }
 
     // 7. Update Video Generation Logs
-    const videoLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
+    const videoLogStore = createUserLocalStore({ name: "infinite-canvas", storeName: "video_generation_logs" });
     const localVideoLogs: any[] = [];
     await videoLogStore.iterate((value) => {
         localVideoLogs.push(value);

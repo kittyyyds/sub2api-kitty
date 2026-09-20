@@ -9,3 +9,10 @@ data/
 *.tsbuildinfo
 .DS_Store
 .idea
+
+# Generated public release files; root LICENSE and all build/deploy sources stay tracked.
+/web/public/source/kitty-canvas-source.tar.gz
+/web/public/source/kitty-canvas-source.tar.gz.sha256
+/web/public/source/SHA256SUMS
+/web/public/source/source-manifest.json
+/web/public/source/LICENSE

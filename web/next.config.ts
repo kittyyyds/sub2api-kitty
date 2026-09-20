@@ -15,9 +15,10 @@ export default function nextConfig(phase: string): NextConfig {
 
     return {
         output: "standalone",
+        basePath: process.env.NEXT_PUBLIC_KITTY_MODE === "true" ? "/canvas" : "",
         allowedDevOrigins: isDev ? ["*.*.*.*"] : [],
         typescript: {
-            ignoreBuildErrors: true,
+            ignoreBuildErrors: process.env.NEXT_PUBLIC_KITTY_MODE !== "true",
         },
         env: {
             NEXT_PUBLIC_APP_VERSION: localVersion,

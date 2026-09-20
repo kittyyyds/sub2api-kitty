@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
 import { nanoid } from "nanoid";
+import { KITTY_MODE, loadKittyBootstrap } from "@/lib/kitty";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { listCanvasProjects, saveCanvasProject, syncCanvasProjects } from "@/services/api/canvas-tasks";
 import { fetchUserConfig } from "@/services/api/user-config";
@@ -58,6 +59,7 @@ let accountCanvasSyncEnabled = false;
 const projectSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function waitForUserStoreHydration() {
+    if (KITTY_MODE) return loadKittyBootstrap().then(() => undefined);
     if (useUserStore.persist.hasHydrated()) return Promise.resolve();
 
     return new Promise<void>((resolve) => {
@@ -400,4 +402,10 @@ export function mergeCanvasProjects(
             Date.parse(b.updatedAt || "") -
             Date.parse(a.updatedAt || ""),
     );
+}
+export async function flushCanvasPersistence() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    const state = { projects: useCanvasStore.getState().projects };
+    queuedPersistState = state;
+    await localForageStorage.setItem(CANVAS_STORE_KEY, JSON.stringify({ state, version: 0 }));
 }

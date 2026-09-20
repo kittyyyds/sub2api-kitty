@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
 import type { CSSProperties, RefObject } from "react";
 import { Avatar, Dropdown, Tooltip } from "antd";
 import { Keyboard, LogOut, Settings2, Shield } from "lucide-react";
@@ -44,6 +46,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const gitHubStyle = iconStyle;
     const avatarStyle: CSSProperties | undefined = variant === "canvas" ? { borderColor: canvasTheme.toolbar.border, color: canvasTheme.node.text, background: "transparent" } : undefined;
     const menuItems: ItemType[] = [
+        ...(KITTY_MODE ? [{ key: "source", label: <a href="/canvas/source/kitty-canvas-source.tar.gz">画布源码（基于 Infinite Canvas）</a> }, { key: "license", label: <a href="/canvas/source/LICENSE">AGPL-3.0 许可证</a> }] : []),
         { key: "user", disabled: true, label: <span className="font-medium text-current">{userName}</span> },
         ...(user?.role === "admin" ? [{ key: "admin", icon: <Shield className="size-4" />, label: <Link href="/admin">管理后台</Link> }] : []),
         ...(onOpenShortcuts ? [{ key: "shortcuts", icon: <Keyboard className="size-4" />, label: "快捷键", onClick: onOpenShortcuts }] : []),
@@ -53,6 +56,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
 
     return (
         <div className="inline-flex shrink-0 items-center gap-1">
+            {KITTY_MODE ? <><a href="/apps" className="px-2 text-xs" style={iconStyle}>返回 Kitty</a><a href="/video-tasks" className="px-2 text-xs" style={iconStyle}>视频任务</a></> : null}
             {showConfig ? (
                 <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label="配置" title="配置">
                     <Settings2 className="size-4" />
@@ -62,9 +66,9 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
             <VersionReleaseModal style={versionStyle} />
             <GitHubLink className={cn("bg-transparent hover:bg-transparent dark:hover:bg-transparent", gitHubClassName)} style={gitHubStyle} />
             {variant === "canvas" && user ? (
-                <Tooltip title="当前算力点余额" placement="bottom">
+                <Tooltip title={KITTY_MODE ? "Kitty 本站余额" : "当前算力点余额"} placement="bottom">
                     <div className="flex h-8 shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium tabular-nums opacity-75 transition hover:opacity-100" style={{ color: canvasTheme.node.text }}>
-                        <CreditSymbol className="text-sm leading-none" />
+                        {KITTY_MODE ? <span>$</span> : <CreditSymbol className="text-sm leading-none" />}
                         <span>{credits.toLocaleString()}</span>
                     </div>
                 </Tooltip>

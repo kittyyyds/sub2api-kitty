@@ -1,3 +1,5 @@
+
+import { KITTY_MODE, kittyHeaders, loadKittyBootstrap } from "@/lib/kitty";
 import axios from "axios";
 
 import { isMiniMaxChannel, miniMaxModels } from "@/lib/minimax-video";
@@ -384,6 +386,7 @@ function retryDelay(attempt: number) {
 }
 
 async function requestWithTransientRetry(run: () => Promise<Response>, retries = 2) {
+    if (KITTY_MODE) return run();
     let lastError: unknown;
     for (let attempt = 0; attempt <= retries; attempt += 1) {
         try {
@@ -517,17 +520,20 @@ function withPromptGuard(config: AiConfig, prompt: string) {
 }
 
 function usesAccountProxy(config: AiConfig) {
+    if (KITTY_MODE) return false;
     const token = useUserStore.getState().token;
     return config.channelMode === "remote" || (config.channelMode === "local" && Boolean(token));
 }
 
 export function aiApiUrl(config: AiConfig, path: string) {
+    if (KITTY_MODE) return `/canvas-api/v1${path}`;
     if (usesAccountProxy(config)) return `/api/v1${path}`;
     const channel = localChannelForActiveModel(config);
     return buildApiUrl(channel?.baseUrl || config.baseUrl, path);
 }
 
 export function aiHeaders(config: AiConfig, contentType?: string) {
+    if (KITTY_MODE) return kittyHeaders(config, contentType);
     const token = useUserStore.getState().token;
     if (config.channelMode === "remote" && !token) throw new Error("请先登录后再使用云端渠道");
     if (config.channelMode === "remote") {
@@ -553,6 +559,7 @@ export function aiHeaders(config: AiConfig, contentType?: string) {
 }
 
 export function refreshRemoteUser(config: AiConfig) {
+    if (KITTY_MODE) { void loadKittyBootstrap(true).then((data) => useUserStore.setState((state) => ({ user: state.user ? { ...state.user, credits: data.user.balance } : null }))).catch(() => {}); return; }
     if (usesAccountProxy(config)) void useUserStore.getState().hydrateUser();
 }
 
@@ -1020,6 +1027,7 @@ export async function createCanvasImageTask(config: AiConfig & { seedIndex?: num
             status: "completed",
             progress: 100,
             image_url: image.dataUrl,
+            storageKey: image.storageKey,
             ...(isKIESeedreamLayerDecompositionModel(config.model) ? { image_urls: images.map((item) => item.dataUrl) } : {}),
         }, image.id);
     }

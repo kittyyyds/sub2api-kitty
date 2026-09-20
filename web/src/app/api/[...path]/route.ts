@@ -27,6 +27,7 @@ function responseHeaders(response: Response) {
 }
 
 async function proxy(request: NextRequest, context: RouteContext) {
+    if (process.env.NEXT_PUBLIC_KITTY_MODE === "true") return Response.json({ code: 404, msg: "Kitty 画布未启用原站 API" }, { status: 404 });
     const { path } = await context.params;
     const apiBaseUrl = process.env.API_BASE_URL || "http://127.0.0.1:8080";
     const target = `${apiBaseUrl.replace(/\/$/, "")}/api/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;

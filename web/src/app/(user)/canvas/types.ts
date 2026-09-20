@@ -93,6 +93,12 @@ export type CanvasNodeMetadata = {
     audioTaskId?: string;
     audioTaskResultId?: string;
     videoTaskId?: string;
+    kittyVideoImageURLs?: string;
+    kittyVideoAudioURLs?: string;
+    kittyVideoKeyId?: string;
+    kittyVideoState?: string;
+    kittyVideoDownload?: string;
+    kittySubmissionUnknown?: boolean;
     videoTaskVideoId?: string;
     firstFrameNodeId?: string;
     lastFrameNodeId?: string;

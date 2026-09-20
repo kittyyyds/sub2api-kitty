@@ -1,3 +1,5 @@
+
+import { KITTY_MODE } from "@/lib/kitty";
 import { apiDelete, apiGet, apiPost } from "@/services/api/request";
 
 export const AGENT_SKILL_CONTENT_MAX_LENGTH = 20_000;
@@ -29,6 +31,7 @@ export type AgentSkill = {
 };
 
 export function fetchSystemAgentSkills() {
+    if (KITTY_MODE) return Promise.resolve([] as AgentSkill[]);
     return apiGet<AgentSkill[]>("/api/agent-skills");
 }
 

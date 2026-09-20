@@ -1,5 +1,7 @@
 "use client";
 
+import { canvasAssetPath } from "@/lib/kitty";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CanvasDirectorCapture, CanvasDirectorPanorama, CanvasDirectorVideo } from "../types";
@@ -125,7 +127,7 @@ export function CanvasDirector({
 
     return (
         <div className="fixed inset-0 z-[2000]">
-            <iframe ref={iframeRef} title="3D导演台" src="/director/index.html" className="block h-full w-full border-0" />
+            <iframe ref={iframeRef} title="3D导演台" src={canvasAssetPath("/director/index.html")} className="block h-full w-full border-0" />
         </div>
     );
 }

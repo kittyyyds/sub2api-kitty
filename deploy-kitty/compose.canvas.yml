@@ -1,0 +1,52 @@
+name: kitty-canvas
+
+services:
+  canvas:
+    image: "${CANVAS_IMAGE:?Set CANVAS_IMAGE to the reviewed immutable Canvas release tag or digest}"
+    build:
+      # Dockerfile.kitty COPYs web/, VERSION and CHANGELOG.md from this root.
+      context: ..
+      dockerfile: Dockerfile.kitty
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    ports:
+      - "127.0.0.1:3101:3101"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3101"
+      NEXT_PUBLIC_KITTY_MODE: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    # Browser IndexedDB owns projects/media/history. No application data volume.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+      - /app/web/.next/cache:rw,noexec,nosuid,size=128m,uid=1000,gid=1000,mode=0750
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpus: "1.0"
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3101/canvas/canvas',{redirect:'manual',signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    labels:
+      # This does not replace disabling existing deployment automations.
+      com.centurylinklabs.watchtower.enable: "false"

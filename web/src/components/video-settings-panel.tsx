@@ -1,5 +1,8 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+import { KittyVideoSettings } from "./kitty-video-settings";
+
 import { type CSSProperties, type ReactNode } from "react";
 import { Input, Switch } from "antd";
 
@@ -49,6 +52,7 @@ export function VideoSettingsPanel({ config, modelName, onConfigChange, theme, s
     const model = modelName || config.model || config.videoModel;
     const autodl = isAutoDLConfig(config, model);
     const { data: workflow } = useAutoDLWorkflow(config, model);
+    if (KITTY_MODE) return <KittyVideoSettings config={config} model={model} onChange={onConfigChange} />;
     if (isAPIMartKlingV26Config(config, modelName || config.model || config.videoModel) || isAPIMartKlingV3Config(config, modelName || config.model || config.videoModel) || isKIEKlingV3Config(config, modelName || config.model || config.videoModel)) {
         return <KlingV26VideoSettingsPanel config={config} modelName={modelName} onConfigChange={onConfigChange} theme={theme} showTitle={showTitle} className={className} hideNegativePrompt={hideNegativePrompt} visualOnly={visualOnly} />;
     }

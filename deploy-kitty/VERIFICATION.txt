@@ -1,0 +1,20 @@
+Kitty Canvas packaged deployment verification
+Date: 2026-09-21
+Working directory: repository root (canvas/)
+Command: node deploy-kitty/verify-static.cjs
+Inputs: deploy-kitty/compose.canvas.yml, nginx.canvas.locations.conf.template, 部署与回退.md, LICENSE.canvas; root Dockerfile.kitty and LICENSE.
+YAML parser: web/node_modules/yaml (available after npm ci in web/).
+
+Literal output:
+PASS compose YAML, loopback-only port, root build context, read-only root, tmpfs, resource limits, no media volumes
+PASS healthcheck uses GET /canvas/canvas only; no paid endpoint
+PASS Nginx preserves /v1 and uses explicit existing-SUB placeholder; source and LICENSE routes present
+PASS Dockerfile.kitty standalone/static/public paths and node server.js entrypoint
+PASS LICENSE.canvas byte-for-byte SHA256=6f1e622c82a380075843bb084a7ec3b1f1d12a4a02526d75e78b0924a860aa75
+NOT RUN Docker build/start, container read-only smoke test, nginx -t, production deployment
+Exit status: 0
+
+This self-contained copy lives inside the Canvas repository. Compose context '..' points from deploy-kitty/ to the repository root. Original sibling deploy/ material remains unchanged.
+The static checks do not run Docker, nginx, paid models, or a production switch. Linux container root/cache/tmpfs permissions and live proxy behavior remain candidate-host acceptance items.
+The final source archive must be generated from the exact release commit after source/documentation freeze, before the release Docker build. git archive excludes untracked generated source files. Docker includes public/source so the archive and LICENSE can be served.
+The original project LICENSE and attribution remain present. LICENSE.canvas is a byte-for-byte copy of root LICENSE.

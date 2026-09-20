@@ -1,3 +1,5 @@
+
+import { KITTY_MODE } from "@/lib/kitty";
 import axios from "axios";
 
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
@@ -52,6 +54,7 @@ export async function apiDelete<T>(url: string, token?: string) {
 }
 
 async function apiRequest<T>(config: { url: string; method: "GET" | "POST" | "DELETE"; params?: ApiParams; data?: unknown; headers?: Record<string, string> }) {
+    if (KITTY_MODE) throw new Error("Kitty 画布使用本地工程与素材，此云端功能未启用。");
     let response;
     try {
         response = await axios.request<ApiResponse<T>>({

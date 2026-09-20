@@ -1,5 +1,9 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
+import { createUserLocalStore } from "@/lib/user-localforage";
+
 import localforage from "localforage";
 
 import { nanoid } from "nanoid";
@@ -53,7 +57,7 @@ export type StorageConfig = {
     autoSyncAllAssets: boolean;
 };
 
-const store = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
+const store = createUserLocalStore({ name: "infinite-canvas", storeName: "image_files" });
 const objectUrls = new Map<string, string>();
 const serverUrls = new Map<string, string>();
 export const USER_STORAGE_PROVIDER_KEY = "infinite-canvas:user_storage_provider";
@@ -93,6 +97,7 @@ export function clearAutoSyncCache(storageKey: string) {
 
 export async function autoSyncImage(url: string, resultId: string, storageKey?: string) {
     if (!url || storageKey) return null;
+    if (KITTY_MODE) return uploadImage(url, { localOnly: true });
     return autoSyncToCloud(`image:${resultId}`, async () => {
         try {
             return await uploadRemoteImageToServer(url, "image");
@@ -150,6 +155,7 @@ function isLocalNetworkHost(hostname: string) {
 }
 
 export function getProxyUrl(url: string): string {
+    if (KITTY_MODE) return url;
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
         return url;
     }
@@ -334,6 +340,7 @@ async function cacheAnonymousImage(uploaded: UploadedImage, blob: Blob) {
 }
 
 export async function loadStorageConfig() {
+    if (KITTY_MODE) return { mode: "local", allowUserProvider: false, allowUserGlobalProvider: false, autoSyncAllAssets: false };
     storageConfigPromise ||= apiGet<StorageConfig>("/api/storage/config");
     return storageConfigPromise;
 }
@@ -492,6 +499,7 @@ export function loadUserWebDAVStorageProvider() {
 }
 
 export function loadUserStorageProvider(): UserStorageProvider | null {
+    if (KITTY_MODE) return null;
     const s3 = loadUserS3StorageProvider();
     const webdav = loadUserWebDAVStorageProvider();
     if (s3?.enabled && webdav?.enabled) return null;

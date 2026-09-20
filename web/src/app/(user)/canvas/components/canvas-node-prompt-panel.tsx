@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE } from "@/lib/kitty";
+
 import { useEffect, useState } from "react";
 import { ArrowUp, LoaderCircle, Maximize2 } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
@@ -134,15 +136,15 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 <Button
                     type="primary"
                     className="!h-10 !min-w-16 shrink-0 !rounded-full !px-3"
-                    disabled={isRunning || !canSubmit}
+                    disabled={isRunning || !canSubmit || (KITTY_MODE && mode === "audio")}
                     onClick={submit}
                     aria-label="生成"
                 >
                     <span className="flex items-center gap-1.5">
-                        <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
+                        {KITTY_MODE ? <span>{mode === "audio" ? "暂不支持" : mode === "video" ? "报价并生成" : "生成"}</span> : <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
                             <CreditSymbol />
                             {credits.toLocaleString()}
-                        </span>
+                        </span>}
                         {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                     </span>
                 </Button>

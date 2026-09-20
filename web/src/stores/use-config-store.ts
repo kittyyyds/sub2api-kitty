@@ -1,5 +1,9 @@
 "use client";
 
+import { createJSONStorage } from "zustand/middleware";
+import { localForageStorage } from "@/lib/localforage-storage";
+import { KITTY_MODE, kittyModelMatches, kittySelectedChannelId, kittyHeaders } from "@/lib/kitty";
+
 import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -180,6 +184,7 @@ type ConfigStore = {
 };
 
 function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null, canUseRemoteChannel: boolean) {
+    if (KITTY_MODE) return { ...config, channelMode: "local" as const };
     const channelMode = canUseRemoteChannel ? (modelChannel?.allowCustomChannel ? config.channelMode : "remote") : "local";
     if (channelMode === "local" || !modelChannel) {
         const localChannels = normalizeLocalChannels(config);
@@ -320,6 +325,7 @@ function isTextModelName(model: string) {
 }
 
 export function modelMatchesCapability(model: string, capability?: ModelCapability, protocol = "") {
+    if (KITTY_MODE) return kittyModelMatches(model, capability);
     if (!capability) return true;
     if (protocol === "autodl") {
         if (capability === "audio") return model === "indextts2-v1";
@@ -357,6 +363,7 @@ export function selectableModelsByCapability(config: AiConfig, capability?: Mode
 }
 
 export function resolveModelForCapability(config: AiConfig, currentModel: string | undefined, capability: ModelCapability) {
+    if (KITTY_MODE && currentModel) return currentModel;
     const configuredModel = capability === "image" ? config.imageModel : capability === "video" ? config.videoModel : capability === "audio" ? config.audioModel : config.textModel;
     const fallbackModel = capability === "image" ? defaultConfig.imageModel : capability === "video" ? defaultConfig.videoModel : capability === "audio" ? defaultConfig.audioModel : defaultConfig.textModel;
     const selectableModels = selectableModelsByCapability(config, capability);
@@ -367,6 +374,7 @@ export function resolveModelForCapability(config: AiConfig, currentModel: string
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
+    if (KITTY_MODE) { try { kittyHeaders({ ...config, model }); return true; } catch { return false; } }
     const channel = localChannelForActiveModel({ ...config, model });
     return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(channel?.baseUrl.trim() && channel?.apiKey.trim()));
 }
@@ -402,6 +410,7 @@ export const useConfigStore = create<ConfigStore>()(
         }),
         {
             name: CONFIG_STORE_KEY,
+            ...(KITTY_MODE ? { storage: createJSONStorage(() => localForageStorage), skipHydration: true } : {}),
             partialize: (state) => ({ config: state.config }),
             merge: (persisted, current) => {
                 const persistedState = (persisted || {}) as Partial<ConfigStore>;
@@ -509,6 +518,7 @@ function normalizeVersionedBaseUrl(baseUrl: string) {
 
 export function normalizeLocalChannels(config: Partial<AiConfig>): LocalModelChannel[] {
     const channels = Array.isArray(config.localChannels) ? config.localChannels : [];
+    if (KITTY_MODE) return channels;
     const normalized: LocalModelChannel[] = channels.map((channel, index) => ({
         id: channel.id || `local-${index + 1}`,
         protocol: channel.protocol || "openai",
@@ -524,6 +534,7 @@ export function normalizeLocalChannels(config: Partial<AiConfig>): LocalModelCha
 }
 
 export function channelIdForActiveModel(config: AiConfig) {
+    if (KITTY_MODE) return kittySelectedChannelId(config);
     const channels = config.channelMode === "remote" ? config.publicChannels : normalizeLocalChannels(config);
     const selectedChannelId = config.model === config.imageModel ? config.imageChannelId : config.model === config.videoModel ? config.videoChannelId : config.model === config.audioModel ? config.audioChannelId : config.model === config.textModel ? config.textChannelId : "";
     const selectedChannel = channels.find((channel) => channel.id === selectedChannelId);
@@ -546,6 +557,7 @@ export function channelIdForActiveModel(config: AiConfig) {
 export function localChannelForActiveModel(config: AiConfig) {
     const channels = normalizeLocalChannels(config);
     const preferredId = channelIdForActiveModel(config);
+    if (KITTY_MODE) return channels.find((channel) => channel.id === preferredId);
     return channels.find((channel) => channel.id === preferredId && channel.models.includes(config.model)) || channels.find((channel) => channel.models.includes(config.model)) || channels.find((channel) => channel.id === preferredId) || channels[0];
 }
 
@@ -559,5 +571,6 @@ export function channelProtocolForConfig(config: AiConfig): LocalModelChannel["p
 export type { DirectAIProvider } from "@/lib/model-channel";
 
 export function directAIProviderForConfig(config: AiConfig): DirectAIProvider | null {
+    if (KITTY_MODE) return null;
     return directAIProviderForProtocol(channelProtocolForConfig(config));
 }

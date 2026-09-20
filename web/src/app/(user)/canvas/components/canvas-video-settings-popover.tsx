@@ -1,5 +1,7 @@
 "use client";
 
+import { KITTY_MODE, kittyCapability } from "@/lib/kitty";
+
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Image as ImageIcon, Music2, Plus, Settings2, Trash2, Video as VideoIcon, X } from "lucide-react";
@@ -95,7 +97,7 @@ function VideoSettingsPortal({ buttonRect, panelRef, placement, theme, config, o
     const kieKlingOmni = kieKlingOmniVariant(config, model);
     const isKlingMotionControl = isAPIMartKlingMotionControlConfig(config, model) || isKIEKlingMotionControlConfig(config, model);
     const isKlingV3 = isAPIMartKlingV3 || isKIEKlingV3;
-    const frameReferencesEnabled = !isKlingV3 && supportsVideoFrameReferences(model, channelProtocolForConfig({ ...config, model }));
+    const frameReferencesEnabled = !KITTY_MODE && !isKlingV3 && supportsVideoFrameReferences(model, channelProtocolForConfig({ ...config, model }));
     const optionIds = useMemo(() => new Set(frameOptions.map((item) => item.nodeId)), [frameOptions]);
     const firstFrameValue = firstFrameNodeId && optionIds.has(firstFrameNodeId) ? firstFrameNodeId : "";
     const lastFrameValue = lastFrameNodeId && optionIds.has(lastFrameNodeId) ? lastFrameNodeId : "";
@@ -114,6 +116,11 @@ function VideoSettingsPortal({ buttonRect, panelRef, placement, theme, config, o
                         </div>
                     </CanvasSettingGroup>
                 ) : null}
+                {KITTY_MODE && onMetadataChange ? <div className="space-y-3 text-sm">
+                    <label className="block">公开参考图片链接（每行一个）<Input.TextArea value={metadata?.kittyVideoImageURLs || ""} rows={3} placeholder="https://example.com/reference.png" onChange={(event) => onMetadataChange({ kittyVideoImageURLs: event.target.value })} /></label>
+                    {(kittyCapability(model, config.videoChannelId)?.reference_audios?.max || 0) > 0 ? <label className="block">公开参考音频链接（每行一个）<Input.TextArea value={metadata?.kittyVideoAudioURLs || ""} rows={2} placeholder="https://example.com/reference.mp3" onChange={(event) => onMetadataChange({ kittyVideoAudioURLs: event.target.value })} /></label> : null}
+                    <p className="text-xs opacity-70">也可连接含公开链接的素材节点。本地文件不会上传为公开链接。</p>
+                </div> : null}
                 <VideoSettingsPanel config={config} modelName={visualOnly ? config.videoModel || config.model : undefined} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} showTitle={false} className="space-y-4" hideNegativePrompt={isKlingV3} visualOnly={visualOnly} />
             </div>
         </div>,

@@ -1,3 +1,5 @@
+
+import { KITTY_MODE } from "@/lib/kitty";
 import axios from "axios";
 import { nanoid } from "nanoid";
 
@@ -342,6 +344,7 @@ function decodeMiMoAudio(payload: MiMoAudioResponse, format: string) {
 }
 
 function assertAudioConfig(config: AiConfig, model: string) {
+    if (KITTY_MODE) throw new Error("Kitty 画布暂不支持音频生成，请选择文本、图片或视频节点。");
     if (!model) throw new Error("请先配置音频模型");
     if (config.channelMode !== "local") return;
     if (!isMimoTtsModel(model) && !isGeminiConfig(config, model) && !isAutoDLConfig(config, model)) {
