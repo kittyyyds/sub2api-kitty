@@ -1,7 +1,8 @@
 "use client";
 
 import { KITTY_MODE } from "@/lib/kitty";
-import { downloadKittyVideo } from "@/services/api/kitty-video";
+import { downloadKittyVideo, downloadKittyVideoBlob, downloadKittyVideoToFile, kittyVideoDownloadIdentity } from "@/services/api/kitty-video";
+import { pickVideoDownloadFile, supportsVideoFileDownload, type VideoFileDownloadSession } from "@/lib/video-download";
 import { VideoRequestError } from "@/services/api/video";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -2147,6 +2148,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     );
 
     const kittyDownloads = useRef(new Map<string, AbortController>());
+    const kittyFileDownloads = useRef(new Map<string, VideoFileDownloadSession>());
     useEffect(() => () => { for (const controller of kittyDownloads.current.values()) controller.abort(); }, []);
     const downloadNodeImage = useCallback((node: CanvasNodeData) => {
         if (KITTY_MODE && node.type === CanvasNodeType.Video && node.metadata?.kittyVideoKeyId && !node.metadata.storageKey) {
@@ -2157,7 +2159,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             const updateDownload = (status: string) => setNodes((nodes) => nodes.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, kittyVideoDownload: status } } : item));
             updateDownload("正在下载；再次点击下载可取消");
             void downloadKittyVideo(canvasVideoTaskFromMetadata(node.metadata), controller.signal, (received, total) => updateDownload(`下载 ${(received / 1048576).toFixed(1)} MB${total ? ` / ${(total / 1048576).toFixed(1)} MB` : ""}；再次点击可取消`)).then((media) => {
-                setNodes((nodes) => nodes.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, content: media.url, storageKey: media.storageKey, bytes: media.bytes, mimeType: media.mimeType, kittyVideoDownload: "已保存到本地" } } : item));
+                setNodes((nodes) => nodes.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, content: media.url, storageKey: media.storageKey, bytes: media.bytes, mimeType: media.mimeType, kittyVideoDownload: "已保存到本地画布" } } : item));
                 saveAs(media.blob, `canvas-video-${node.id}.mp4`);
             }).catch((error) => { const detail = controller.signal.aborted ? "下载已取消，可重试下载已有视频" : error instanceof Error ? error.message : "下载失败，可重试"; updateDownload(detail); message.error(detail); }).finally(() => kittyDownloads.current.delete(node.id));
             return;
@@ -2165,6 +2167,41 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
         if ((!isCanvasImageNodeType(node.type) && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
         saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
     }, []);
+
+    const saveNodeVideoFile = useCallback((node: CanvasNodeData) => {
+        if (!KITTY_MODE || node.type !== CanvasNodeType.Video || !node.metadata?.kittyVideoKeyId) return;
+        const existing = kittyDownloads.current.get(node.id);
+        if (existing) { existing.abort(); return; }
+        const controller = new AbortController();
+        kittyDownloads.current.set(node.id, controller);
+        const updateDownload = (status: string) => setNodes((items) => items.map((item) => item.id === node.id ? { ...item, metadata: { ...item.metadata, kittyVideoDownload: status } } : item));
+        const task = canvasVideoTaskFromMetadata(node.metadata);
+        const progress = (received: number, total?: number) => updateDownload(`保存到文件 ${(received / 1048576).toFixed(1)} MB${total ? ` / ${(total / 1048576).toFixed(1)} MB` : ""}；再次点击可暂停`);
+        void (async () => {
+            const identity = kittyVideoDownloadIdentity(task);
+            if (!supportsVideoFileDownload()) {
+                message.info("当前浏览器使用普通下载：先缓存完整视频，再保存到文件，不会自动加入画布。");
+                const blob = await downloadKittyVideoBlob(task, controller.signal, progress);
+                saveAs(blob, `canvas-video-${node.id}.mp4`);
+            } else {
+                let session = kittyFileDownloads.current.get(node.id);
+                if (!session || session.identity !== identity || session.complete) {
+                    session = await pickVideoDownloadFile(identity, `canvas-video-${node.id}.mp4`);
+                    kittyFileDownloads.current.set(node.id, session);
+                }
+                await downloadKittyVideoToFile(task, session, controller.signal, (state) => progress(state.received, state.total));
+            }
+            // File-system handles and disk files are not IndexedDB assets or playable Blob URLs.
+            updateDownload("已保存到文件；如需画布内预览，请另选保存到画布。");
+            message.success("视频已保存到文件，没有重新生成。");
+        })().catch((error: unknown) => {
+            const detail = controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")
+                ? "下载已暂停；可在本页继续同一任务，不会重新生成。"
+                : error instanceof Error ? error.message : "文件保存失败，可重试下载已有任务。";
+            updateDownload(detail);
+            message.info(detail);
+        }).finally(() => kittyDownloads.current.delete(node.id));
+    }, [message]);
 
     const disconnectNodeReference = useCallback((fromNodeId: string, toNodeId: string) => {
         setConnections((prev) => prev.filter((connection) => connection.fromNodeId !== fromNodeId || connection.toNodeId !== toNodeId));
@@ -4258,6 +4295,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     onExtractAudio={(node) => void extractAudio(node)}
                     onTrimAudio={(node) => setAudioTrimNodeId(node.id)}
                     onDownload={downloadNodeImage}
+                    onSaveVideoFile={saveNodeVideoFile}
                     onSaveAsset={(node) => void saveNodeAsset(node)}
                     onUploadMediaToCloud={(node) => void uploadNodeMediaToCloud(node)}
                     onUploadImageToCloud={(node) => void uploadNodeImageToCloud(node)}

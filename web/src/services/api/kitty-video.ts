@@ -1,6 +1,7 @@
 import { assertKittySession, kittyToken, type KittyKey } from "@/lib/kitty";
 import { uploadMediaFile } from "@/services/file-storage";
 import type { VideoResponse } from "./video";
+import { downloadVideoToFile, type VideoFileDownloadSession, type VideoDownloadProgress } from "@/lib/video-download";
 
 export function kittyVideoTaskHeaders(task: VideoResponse) {
     const session = assertKittySession();
@@ -10,7 +11,31 @@ export function kittyVideoTaskHeaders(task: VideoResponse) {
     return { Authorization: `Bearer ${kittyToken()}`, "X-Canvas-Key-ID": keyId };
 }
 
-export async function downloadKittyVideo(task: VideoResponse, signal: AbortSignal, onProgress: (received: number, total?: number) => void) {
+export function kittyVideoDownloadIdentity(task: VideoResponse): string {
+    const owner = assertKittySession().user.id;
+    const taskId = task.task_id || task.id;
+    if (!taskId || !task.kittyKeyId) throw new Error("视频任务或绑定 Key 缺失");
+    kittyVideoTaskHeaders(task);
+    return `${owner}:${task.kittyKeyId}:${taskId}`;
+}
+
+export async function downloadKittyVideoToFile(task: VideoResponse, session: VideoFileDownloadSession, signal: AbortSignal, onProgress: (progress: VideoDownloadProgress) => void) {
+    const identity = kittyVideoDownloadIdentity(task);
+    const result = await downloadVideoToFile({
+        identity, session, signal,
+        request: (headers, requestSignal) => fetch(`/canvas-api/v1/videos/${encodeURIComponent(task.task_id || task.id)}/content`, {
+            headers: { ...kittyVideoTaskHeaders(task), ...headers }, signal: requestSignal, cache: "no-store",
+        }),
+        onProgress: (progress) => {
+            if (kittyVideoDownloadIdentity(task) !== identity) throw new Error("任务身份已变化，下载已停止。");
+            onProgress(progress);
+        },
+    });
+    assertKittySession();
+    return result;
+}
+
+export async function downloadKittyVideoBlob(task: VideoResponse, signal: AbortSignal, onProgress: (received: number, total?: number) => void): Promise<Blob> {
     const taskId = task.task_id || task.id;
     if (!taskId) throw new Error("视频任务 ID 缺失");
     const controller = new AbortController();
@@ -43,8 +68,12 @@ export async function downloadKittyVideo(task: VideoResponse, signal: AbortSigna
         }
         if (!received || (total && received !== total)) throw new Error("视频下载不完整，请重新下载已有任务。");
         assertKittySession();
-        const blob = new Blob(chunks, { type });
-        const stored = await uploadMediaFile(blob, "kitty-video");
-        return { ...stored, blob };
+        return new Blob(chunks, { type });
     } finally { clearTimeout(timer); signal.removeEventListener("abort", abort); }
+}
+
+export async function downloadKittyVideo(task: VideoResponse, signal: AbortSignal, onProgress: (received: number, total?: number) => void) {
+    const blob = await downloadKittyVideoBlob(task, signal, onProgress);
+    const stored = await uploadMediaFile(blob, "kitty-video");
+    return { ...stored, blob };
 }

@@ -119,7 +119,7 @@ function VideoSettingsPortal({ buttonRect, panelRef, placement, theme, config, o
                 {KITTY_MODE && onMetadataChange ? <div className="space-y-3 text-sm">
                     <label className="block">公开参考图片链接（每行一个）<Input.TextArea value={metadata?.kittyVideoImageURLs || ""} rows={3} placeholder="https://example.com/reference.png" onChange={(event) => onMetadataChange({ kittyVideoImageURLs: event.target.value })} /></label>
                     {(kittyCapability(model, config.videoChannelId)?.reference_audios?.max || 0) > 0 ? <label className="block">公开参考音频链接（每行一个）<Input.TextArea value={metadata?.kittyVideoAudioURLs || ""} rows={2} placeholder="https://example.com/reference.mp3" onChange={(event) => onMetadataChange({ kittyVideoAudioURLs: event.target.value })} /></label> : null}
-                    <p className="text-xs opacity-70">也可连接含公开链接的素材节点。本地文件不会上传为公开链接。</p>
+                    <p className="text-xs opacity-70">也可将本地图片或音频拖入画布，再连接到视频节点。仅在确认生成时上传所选素材供视频平台读取，24 小时后自动清理；每个文件最多 25MB，画布工程仍留在本机。</p>
                 </div> : null}
                 <VideoSettingsPanel config={config} modelName={visualOnly ? config.videoModel || config.model : undefined} onConfigChange={(key, value) => onConfigChange(key, value)} theme={theme} showTitle={false} className="space-y-4" hideNegativePrompt={isKlingV3} visualOnly={visualOnly} />
             </div>

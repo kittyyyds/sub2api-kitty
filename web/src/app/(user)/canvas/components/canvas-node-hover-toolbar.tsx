@@ -29,6 +29,7 @@ type CanvasNodeHoverToolbarProps = {
     onExtractAudio: (node: CanvasNodeData) => void;
     onTrimAudio: (node: CanvasNodeData) => void;
     onDownload: (node: CanvasNodeData) => void;
+    onSaveVideoFile: (node: CanvasNodeData) => void;
     onSaveAsset: (node: CanvasNodeData) => void;
     onUploadMediaToCloud: (node: CanvasNodeData) => void;
     onUploadImageToCloud: (node: CanvasNodeData) => void;
@@ -69,6 +70,7 @@ export function CanvasNodeHoverToolbar({
     onExtractAudio,
     onTrimAudio,
     onDownload,
+    onSaveVideoFile,
     onSaveAsset,
     onUploadMediaToCloud,
     onUploadImageToCloud,
@@ -180,7 +182,8 @@ export function CanvasNodeHoverToolbar({
             icon: <Scissors className="size-4" />,
             onClick: () => onTrimAudio(node),
         }] : []),
-        ...(hasImage || hasVideo || hasAudio || kittyVideoReady ? [{ id: "download", title: hasAudio ? "下载音频" : isVideo ? "下载视频" : "下载图片", label: kittyVideoReady && !node.metadata?.storageKey ? "下载 / 取消" : "下载", icon: <Download className="size-4" />, onClick: () => onDownload(node) }] : []),
+        ...(hasImage || hasVideo || hasAudio || kittyVideoReady ? [{ id: "download", title: hasAudio ? "下载音频" : isVideo ? "下载视频" : "下载图片", label: kittyVideoReady && !node.metadata?.storageKey ? "保存到画布 / 取消" : "下载", icon: <Download className="size-4" />, onClick: () => onDownload(node) }] : []),
+        ...(kittyVideoReady && node.metadata?.kittyVideoKeyId ? [{ id: "saveVideoFile", title: "仅保存到文件；支持的浏览器可流式写入和同任务续传，不占用画布素材库", label: "保存到文件 / 暂停", icon: <Download className="size-4" />, onClick: () => onSaveVideoFile(node) }] : []),
         ...(canOpenDialog ? [{ id: "edit", title: "编辑", label: "编辑", icon: <MessageSquare className="size-4" />, onClick: () => onToggleDialog(node) }] : []),
         ...(isText ? [{ id: "generateImage", title: "用文本生图", label: "生图", icon: <ImageIcon className="size-4" />, onClick: () => onGenerateImage(node) }] : []),
         ...(isConfig ? [{ id: "config", title: "生成配置", label: "生成配置", icon: <Settings2 className="size-4" />, onClick: () => onToggleDialog(node) }] : []),

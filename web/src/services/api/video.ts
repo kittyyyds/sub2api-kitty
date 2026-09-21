@@ -2,6 +2,7 @@
 import { confirmKittyVideoQuote } from "./kitty-quote";
 
 import { kittyVideoTaskHeaders } from "./kitty-video";
+import { kittyVideoReferenceURL } from "./kitty-video-references";
 import { buildSuanliVideoRequest, splitReferenceURLs, type SuanliVideoRatio } from "@/lib/kitty-suanli-video";
 
 import { KITTY_MODE, kittyHeaders, loadKittyBootstrap } from "@/lib/kitty";
@@ -136,8 +137,8 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
 async function submitVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] | VideoReferenceInput = [], onProgress?: VideoProgressHandler, options?: string | VideoTaskCreateOptions): Promise<CreatedVideoGenerationTask> {
     const model = config.model || config.videoModel;
     const systemPrompt = (config.systemPrompts.video || config.systemPrompt).trim();
-    const body = await createVideoRequestBody(config, model, systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt, normalizeVideoReferenceInput(references));
     if (KITTY_MODE) await confirmKittyVideoQuote(config);
+    const body = await createVideoRequestBody(config, model, systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt, normalizeVideoReferenceInput(references));
     const startedAt = Date.now();
     let submitted = false;
     try {
@@ -363,8 +364,15 @@ async function create88APIVideoRequestBody(config: AiConfig, model: string, prom
 async function createVideoRequestBody(config: AiConfig, model: string, prompt: string, input: Required<VideoReferenceInput>) {
     if (KITTY_MODE) {
         kittyHeaders(config);
-        if (input.videoReferences.length || input.firstFrame || input.lastFrame) throw new Error("当前型号请使用普通参考图片/音频的公开链接，不支持视频或首尾帧参数。");
-        return buildSuanliVideoRequest({ modelID: model, prompt, duration: Number(config.videoSeconds), ratio: normalizeSeedanceRatio(config.size) as SuanliVideoRatio, imageURLs: [...input.references.map((item) => item.url || item.dataUrl), ...splitReferenceURLs(input.kittyImageURLs)], audioURLs: [...input.audioReferences.map((item) => item.url), ...splitReferenceURLs(input.kittyAudioURLs)] });
+        if (input.videoReferences.length || input.firstFrame || input.lastFrame) throw new Error("当前型号支持普通参考图片/音频，不支持视频或首尾帧参数。");
+        const base = { modelID: model, prompt, duration: Number(config.videoSeconds), ratio: normalizeSeedanceRatio(config.size) as SuanliVideoRatio };
+        const imageURLs = splitReferenceURLs(input.kittyImageURLs);
+        const audioURLs = splitReferenceURLs(input.kittyAudioURLs);
+        // Check the model/count/parameters before uploading any local media.
+        buildSuanliVideoRequest({ ...base, imageURLs: [...imageURLs, ...input.references.map(() => 'https://reference.invalid/pending')], audioURLs: [...audioURLs, ...input.audioReferences.map(() => 'https://reference.invalid/pending')] });
+        for (const reference of input.references) imageURLs.push(await kittyVideoReferenceURL(config, reference, 'image'));
+        for (const reference of input.audioReferences) audioURLs.push(await kittyVideoReferenceURL(config, reference, 'audio'));
+        return buildSuanliVideoRequest({ ...base, imageURLs, audioURLs });
     }
     if (videoChannelProtocol(config, model) === "autodl") {
         const capabilities = getAutoDLCapabilities(await fetchAutoDLWorkflow(autoDLBaseUrl(config, model), model));

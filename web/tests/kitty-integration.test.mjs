@@ -103,7 +103,7 @@ test("video download uses the task Key, verifies complete bytes and stores only 
         calls.push({ url, options });
         let offset = 0;
         return { ok: status >= 200 && status < 300, status, headers: new Map([["content-length", length], ["content-type", "video/mp4"]]), body: { getReader: () => ({ read: async () => offset++ === 0 ? { done: false, value: new Uint8Array([1, 2, 3, 4]) } : { done: true } }) } };
-    } }, { "@/lib/kitty": kitty, "@/services/file-storage": { uploadMediaFile: async (blob) => { saved++; return { url: "blob:stored", storageKey: "kitty-video:fixture", bytes: blob.size }; } } });
+    } }, { "@/lib/kitty": kitty, "@/lib/video-download": {}, "@/services/file-storage": { uploadMediaFile: async (blob) => { saved++; return { url: "blob:stored", storageKey: "kitty-video:fixture", bytes: blob.size }; } } });
     const task = { id: "task-one", kittyKeyId: "12" };
     const result = await module.downloadKittyVideo(task, new AbortController().signal, () => {});
     assert.equal(result.bytes, 4);
@@ -120,6 +120,42 @@ test("video download uses the task Key, verifies complete bytes and stores only 
     await assert.rejects(module.downloadKittyVideo(task, new AbortController().signal, () => {}), /过期/);
     assert.equal(saved, 1);
     assert.equal(calls.every((call) => call.url.endsWith("/content")), true);
+});
+
+test("file download keeps the original task/key, avoids IndexedDB and leaves generation untouched", async () => {
+    const { kitty } = fixture();
+    await kitty.loadKittyChannels();
+    let saved = 0;
+    const calls = [];
+    const task = { id: "task-disk", kittyKeyId: "12" };
+    const module = loadModule("../src/services/api/kitty-video.ts", { fetch: async (url, options) => { calls.push({ url, options }); return { status: 206 }; } }, {
+        "@/lib/kitty": kitty,
+        "@/services/file-storage": { uploadMediaFile: async () => { saved++; } },
+        "@/lib/video-download": { downloadVideoToFile: async (options) => {
+            assert.equal(options.identity, "7:12:task-disk");
+            await options.request({ Range: "bytes=3-", "If-Range": '\"v1\"' }, options.signal);
+            options.onProgress({ received: 6, total: 6, resumed: true, restarted: false });
+            return { fileName: "task.mp4", bytes: 6, resumed: true };
+        } },
+    });
+    const value = await module.downloadKittyVideoToFile(task, { identity: "7:12:task-disk" }, new AbortController().signal, () => {});
+    assert.equal(value.bytes, 6); assert.equal(saved, 0); assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/canvas-api/v1/videos/task-disk/content");
+    assert.equal(calls[0].options.headers["X-Canvas-Key-ID"], "12");
+    assert.equal(calls[0].options.headers.Range, "bytes=3-");
+    assert.equal(calls[0].options.headers["If-Range"], '\"v1\"');
+    assert.equal(calls[0].options.method, undefined);
+    assert.equal("blob" in value, false); assert.equal("storageKey" in value, false);
+});
+
+test("Blob file fallback does not automatically save an IndexedDB asset", async () => {
+    const { kitty } = fixture(); await kitty.loadKittyChannels(); let saved = 0;
+    const module = loadModule("../src/services/api/kitty-video.ts", { AbortController, Blob, Uint8Array, setTimeout, clearTimeout, fetch: async () => {
+        let sent = false;
+        return { ok: true, status: 200, headers: new Map([["content-length", "4"], ["content-type", "video/mp4"]]), body: { getReader: () => ({ read: async () => sent ? { done: true } : (sent = true, { done: false, value: new Uint8Array([1, 2, 3, 4]) }) }) } };
+    } }, { "@/lib/kitty": kitty, "@/lib/video-download": {}, "@/services/file-storage": { uploadMediaFile: async () => { saved++; } } });
+    const blob = await module.downloadKittyVideoBlob({ id: "task-one", kittyKeyId: "12" }, new AbortController().signal, () => {});
+    assert.equal(blob.size, 4); assert.equal(saved, 0);
 });
 
 test("quote confirmation rejects failed, canceled or changed pricing", async () => {
