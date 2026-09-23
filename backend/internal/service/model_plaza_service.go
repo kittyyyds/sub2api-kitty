@@ -293,6 +293,9 @@ func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaMode
 	// Media prices are request prices, not token prices. Resolve them before the
 	// token ladder so a per-model final media price cannot be overwritten by an
 	// otherwise valid LiteLLM token schedule.
+	if groupPricing := matchGroupModelPricing(g, m.Name); groupPricing != nil {
+		m.Pricing = groupPricing
+	}
 	mediaPricing := plazaMediaDisplayPricing(m.Pricing, g, m.Name)
 	if mediaPricing != nil && (mediaPricing.BillingMode == BillingModeImage || mediaPricing.BillingMode == BillingModeVideo) {
 		m.Pricing = mediaPricing
@@ -305,7 +308,7 @@ func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaMode
 			Platform: m.Platform,
 		})
 		if err == nil && sched != nil && len(sched.Tiers) > 0 {
-			m.Pricing = withDefaultMaxReasoningEffortMultiplier(plazaPricingFromSchedule(m.Pricing, sched), m.Name)
+			m.Pricing = plazaPricingFromSchedule(m.Pricing, sched)
 			if len(sched.Tiers) > 1 {
 				m.LongContextBasis = sched.Basis
 			}
@@ -313,20 +316,7 @@ func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaMode
 			return
 		}
 	}
-	m.Pricing = withDefaultMaxReasoningEffortMultiplier(mediaPricing, m.Name)
-}
-
-func withDefaultMaxReasoningEffortMultiplier(pricing *ChannelModelPricing, model string) *ChannelModelPricing {
-	if pricing == nil || pricing.MaxReasoningEffortMultiplier != nil {
-		return pricing
-	}
-	multiplier := defaultMaxReasoningEffortMultiplier(model)
-	if multiplier == nil {
-		return pricing
-	}
-	cloned := pricing.Clone()
-	cloned.MaxReasoningEffortMultiplier = multiplier
-	return &cloned
+	m.Pricing = mediaPricing
 }
 
 // plazaPricingFromSchedule 把阶梯表压成展示用的 ChannelModelPricing：
@@ -337,7 +327,7 @@ func plazaPricingFromSchedule(raw *ChannelModelPricing, sched *ContextPricingSch
 		out.ImageInputPrice = raw.ImageInputPrice
 		out.ImageOutputPrice = raw.ImageOutputPrice
 		out.PerRequestPrice = raw.PerRequestPrice
-		out.MaxReasoningEffortMultiplier = raw.MaxReasoningEffortMultiplier
+		out.ReasoningEffortMultipliers = reasoningEffortMultipliersFromPricing(raw)
 	}
 	first := sched.Tiers[0]
 	out.InputPrice = first.Input

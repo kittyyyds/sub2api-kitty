@@ -10,6 +10,7 @@ import {
   BILLING_MODE_PER_REQUEST,
   BILLING_MODE_TOKEN,
   BILLING_MODE_VIDEO,
+  REASONING_EFFORT_LEVELS,
   type BillingMode,
 } from '@/constants/channel'
 import { platformAccentColor, platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
@@ -60,7 +61,7 @@ interface TokenPriceRow {
   tier: string
   period: PlazaTimePricingPeriod | null
   longContextBasis?: PlazaModel['long_context_basis']
-  maxReasoningEffortMultiplier?: number | null
+  reasoningEffortMultipliers: [string, number][]
   input: PricePair
   output: PricePair
   cacheWrite: PricePair
@@ -268,7 +269,11 @@ function buildTokenRow(
     tier: tokenPairLabel(intervalPair),
     period,
     longContextBasis: model.long_context_basis,
-    maxReasoningEffortMultiplier: model.pricing?.max_reasoning_effort_multiplier,
+    reasoningEffortMultipliers: REASONING_EFFORT_LEVELS.flatMap(effort => {
+      const multiplier = model.pricing?.reasoning_effort_multipliers?.[effort]
+      return typeof multiplier === 'number' && Number.isFinite(multiplier) && multiplier > 0
+        ? [[effort, multiplier] as [string, number]] : []
+    }),
     input,
     output,
     cacheWrite,
@@ -428,11 +433,13 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <div class="model-identity">
                   <span>{{ row.model }}</span>
                   <span
-                    v-if="row.maxReasoningEffortMultiplier"
+                    v-for="([effort, multiplier]) in row.reasoningEffortMultipliers"
+                    :key="effort"
+                    :data-reasoning-effort="effort"
                     class="reasoning-badge"
-                    :title="t('modelPlaza.table.maxReasoningMultiplierHint', { multiplier: row.maxReasoningEffortMultiplier })"
+                    :title="t('modelPlaza.table.reasoningMultiplierHint', { effort, multiplier })"
                   >
-                    {{ t('modelPlaza.table.maxReasoningMultiplierBadge', { multiplier: row.maxReasoningEffortMultiplier }) }}
+                    {{ t('modelPlaza.table.reasoningMultiplierBadge', { effort, multiplier }) }}
                   </span>
                   <span
                     v-if="row.period"

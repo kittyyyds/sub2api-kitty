@@ -95,14 +95,15 @@ describe('PlazaModelPricingTable customer pricing ledger', () => {
     expect(wrapper.text()).not.toContain('modelPlaza.table.paidPrice')
   })
 
-  it('shows the max reasoning billing multiplier', () => {
+  it('shows valid reasoning billing tiers without changing base prices', () => {
     const item = model('claude-fable-5-1')
-    item.pricing!.max_reasoning_effort_multiplier = 3
+    item.pricing!.reasoning_effort_multipliers = { max: 3, high: 1.5, low: 0, medium: Number.NaN }
 
     const wrapper = mountTable([item])
 
-    expect(wrapper.text()).toContain('modelPlaza.table.maxReasoningMultiplierBadge')
-    expect(wrapper.find('[title="modelPlaza.table.maxReasoningMultiplierHint"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('modelPlaza.table.reasoningMultiplierBadge')
+    expect(wrapper.findAll('[data-reasoning-effort]').map(b => b.attributes('data-reasoning-effort'))).toEqual(['high', 'max'])
+    expect(wrapper.get('tbody tr').text()).toContain('¥7.00')
   })
 
   it('sorts token models by official output price before falling back to model name', () => {
