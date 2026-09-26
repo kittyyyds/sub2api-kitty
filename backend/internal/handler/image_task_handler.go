@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -122,7 +123,8 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 		"poll_url":   pollURL,
 	})
 
-	go h.run(task.ID, platform, taskCtx, recorder, cancel)
+	managedDone := managedinstance.Track()
+	go func() { defer managedDone(); h.run(task.ID, platform, taskCtx, recorder, cancel) }()
 }
 
 func (h *AsyncImageHandler) checkSecurityAuditBeforeSubmit(c *gin.Context, apiKey *service.APIKey, platform string, body []byte) bool {

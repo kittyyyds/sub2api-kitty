@@ -454,6 +454,34 @@ func TestResolve_WithChannelOverride_ImageTierLabels(t *testing.T) {
 	require.InDelta(t, 0.0, r.GetRequestTierPrice(resolved, "8K"), 1e-12) // not found
 }
 
+func TestResolve_WithChannelOverride_Video(t *testing.T) {
+	r := newResolverWithChannel(t, []ChannelModelPricing{{
+		Platform:        PlatformAnthropic,
+		Models:          []string{"video-model"},
+		BillingMode:     BillingModeVideo,
+		PerRequestPrice: testPtrFloat64(0.08),
+		Intervals: []PricingInterval{
+			{TierLabel: VideoBillingResolution480P, PerRequestPrice: testPtrFloat64(0.08)},
+			{TierLabel: VideoBillingResolution720P, PerRequestPrice: testPtrFloat64(0.14)},
+			{TierLabel: VideoBillingResolution1080P, PerRequestPrice: testPtrFloat64(0.25)},
+		},
+	}})
+
+	resolved := r.Resolve(context.Background(), PricingInput{
+		Model:   "video-model",
+		GroupID: groupIDPtr(),
+	})
+
+	require.NotNil(t, resolved)
+	require.Equal(t, BillingModeVideo, resolved.Mode)
+	require.Equal(t, PricingSourceChannel, resolved.Source)
+	require.InDelta(t, 0.08, resolved.DefaultPerRequestPrice, 1e-12)
+	require.Len(t, resolved.RequestTiers, 3)
+	require.InDelta(t, 0.08, r.GetRequestTierPrice(resolved, VideoBillingResolution480P), 1e-12)
+	require.InDelta(t, 0.14, r.GetRequestTierPrice(resolved, VideoBillingResolution720P), 1e-12)
+	require.InDelta(t, 0.25, r.GetRequestTierPrice(resolved, VideoBillingResolution1080P), 1e-12)
+}
+
 // ---------------------------------------------------------------------------
 // 4. Source tracking & default mode
 // ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import (
 
 // stubMonitorSvc 实现 monitorRunnerSvc，用于隔离 runner 与真实 service/repo。
 type stubMonitorSvc struct {
+	runRelease <-chan struct{} // Explicit cleanup barrier, independent of request cancellation.
 	enabled    []*ChannelMonitor
 	runCount   atomic.Int64
 	runCalled  chan int64 // 每次 RunCheck 触发时 push 一次（缓冲足够大避免阻塞）
@@ -34,6 +35,9 @@ func (s *stubMonitorSvc) RunCheck(ctx context.Context, id int64) ([]*CheckResult
 		case s.runCalled <- id:
 		default:
 		}
+	}
+	if s.runRelease != nil {
+		<-s.runRelease
 	}
 	if s.runHoldFor > 0 {
 		select {
@@ -300,26 +304,30 @@ func TestStop_DrainsAllGoroutines(t *testing.T) {
 
 // TestStop_WaitsForInFlightCheck 验证 Stop 会等待正在执行的 RunCheck 退出（pool.StopAndWait）。
 func TestStop_WaitsForInFlightCheck(t *testing.T) {
-	svc := &stubMonitorSvc{
-		runCalled:  make(chan int64, 1),
-		runHoldFor: 200 * time.Millisecond,
-	}
+	release := make(chan struct{})
+	svc := &stubMonitorSvc{runCalled: make(chan int64, 1), runRelease: release}
 	r := newRunnerForTest(svc)
 	r.Start()
 	r.Schedule(&ChannelMonitor{ID: 1, Enabled: true, IntervalSeconds: 60})
-
 	select {
 	case <-svc.runCalled:
 	case <-time.After(2 * time.Second):
+		close(release)
 		t.Fatal("first fire never happened")
 	}
-
-	start := time.Now()
-	stoppedWithin(t, r, 3*time.Second)
-	elapsed := time.Since(start)
-	// Stop 必须等待 in-flight check 跑完（runHoldFor=200ms），耗时下界约 100ms。
-	if elapsed < 100*time.Millisecond {
-		t.Fatalf("Stop returned too fast (%v); did not wait for in-flight check", elapsed)
+	stopped := make(chan struct{})
+	go func() { r.Stop(); close(stopped) }()
+	select {
+	case <-stopped:
+		close(release)
+		t.Fatal("Stop returned before in-flight cleanup finished")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-stopped:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop did not complete after cleanup")
 	}
 }
 

@@ -3275,6 +3275,10 @@ data: {"type":"response.failed","error":{"message":"This content was flagged"}}
 	})
 }
 
+func (r *contentModerationHandlerTestRepo) UpdateLogOverturned(ctx context.Context, id int64) error {
+	return nil
+}
+
 // The loader simulates window usage reaching its limit while a connection is
 // waiting for its first account or between completed WebSocket turns.
 type simpleModeWSRateLimitRepo struct {

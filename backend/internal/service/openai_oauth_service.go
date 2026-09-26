@@ -345,10 +345,16 @@ func (s *OpenAIOAuthService) RefreshAccountToken(ctx context.Context, account *A
 	}
 
 	var proxyURL string
-	if account.ProxyID != nil && s.proxyRepo != nil {
-		proxy, err := s.proxyRepo.GetByID(ctx, *account.ProxyID)
-		if err == nil && proxy != nil {
+	if account.ProxyID != nil {
+		var proxy *Proxy
+		var proxyErr error
+		if s.proxyRepo != nil {
+			proxy, proxyErr = s.proxyRepo.GetByID(ctx, *account.ProxyID)
+		}
+		if proxyErr == nil && proxy != nil {
 			proxyURL = proxy.URL()
+		} else {
+			return nil, infraerrors.New(http.StatusServiceUnavailable, "OPENAI_OAUTH_PROXY_UNAVAILABLE", "configured proxy is unavailable; token refresh was not sent directly")
 		}
 	}
 

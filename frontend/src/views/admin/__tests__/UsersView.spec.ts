@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, shallowMount } from '@vue/test-utils'
 
 import type { AdminUser } from '@/types'
 import UsersView from '../UsersView.vue'
@@ -13,7 +13,8 @@ const {
   getAllGroups,
   getBatchUsersUsage,
   listEnabledDefinitions,
-  getBatchUserAttributes
+  getBatchUserAttributes,
+  auth
 } = vi.hoisted(() => ({
   listUsers: vi.fn(),
   toggleStatus: vi.fn(),
@@ -23,7 +24,8 @@ const {
   getAllGroups: vi.fn(),
   getBatchUsersUsage: vi.fn(),
   listEnabledDefinitions: vi.fn(),
-  getBatchUserAttributes: vi.fn()
+  getBatchUserAttributes: vi.fn(),
+  auth: { isSuperAdmin: true }
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -52,6 +54,11 @@ vi.mock('@/stores/app', () => ({
     showSuccess
   })
 }))
+
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
+vi.mock('@/components/admin/user/UserCleanupControl.vue', () => ({ default: {
+  name: 'UserCleanupControl', template: '<div />', methods: { refreshSummary: () => undefined }
+} }))
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
@@ -179,6 +186,7 @@ const getToggleStatusButton = (wrapper: ReturnType<typeof mountBulkDeleteView>, 
 
 describe('admin UsersView', () => {
   beforeEach(() => {
+    auth.isSuperAdmin = true
     vi.useRealTimers()
     localStorage.clear()
 
@@ -571,5 +579,25 @@ describe('admin UsersView', () => {
     expect(wrapper.get('[data-test="row-order"]').text()).toBe('refreshed-page-two@example.com')
     expect(wrapper.find('[data-test="bulk-edit-limits"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('')
+  })
+
+  it('hides elevated-user actions and rejects those selections for an ordinary administrator', async () => {
+    auth.isSuperAdmin = false
+    listUsers.mockResolvedValue({ items: [createAdminUser({ id: 1, role: 'user' }), createAdminUser({ id: 2, role: 'admin' }), createAdminUser({ id: 3, role: 'super_admin' })], total: 3, page: 1, page_size: 20, pages: 1 })
+    const wrapper = shallowMount(UsersView, { global: { stubs: {
+      AppLayout: { template: '<div><slot /></div>' },
+      TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /></div>' },
+      DataTable: DataTableStub,
+      UserCleanupControl: { template: '<div />', methods: { refreshSummary: () => undefined } }
+    } } })
+    await flushPromises()
+    expect(wrapper.get('[data-test="actions-1"]').findAll('button').length).toBeGreaterThan(0)
+    expect(wrapper.get('[data-test="actions-2"]').findAll('button')).toHaveLength(0)
+    expect(wrapper.get('[data-test="actions-3"]').findAll('button')).toHaveLength(0)
+    await wrapper.get('[data-test="select-2"]').trigger('click')
+    await wrapper.get('[data-test="select-3"]').trigger('click')
+    expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('')
+    await wrapper.get('[data-test="select-1"]').trigger('click')
+    expect(wrapper.get('[data-test="selected-keys"]').text()).toBe('1')
   })
 })

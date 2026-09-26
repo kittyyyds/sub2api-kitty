@@ -102,7 +102,11 @@ func TestListAvailable_InactiveGroupIDSilentlyDropped(t *testing.T) {
 		GroupIDs: []int64{1, 99},
 	}}
 	groupRepo := &stubGroupRepoForAvailable{
-		activeGroups: []Group{{ID: 1, Name: "g1", Platform: "anthropic"}},
+		activeGroups: []Group{{
+			ID: 1, Name: "g1", Platform: "anthropic",
+			ImageRateIndependent: true, ImageRateMultiplier: 1.5,
+			VideoRateIndependent: true, VideoRateMultiplier: 1.25,
+		}},
 	}
 	svc := newAvailableChannelService(channels, groupRepo)
 	out, err := svc.ListAvailable(context.Background())
@@ -110,6 +114,10 @@ func TestListAvailable_InactiveGroupIDSilentlyDropped(t *testing.T) {
 	require.Len(t, out, 1)
 	require.Len(t, out[0].Groups, 1)
 	require.Equal(t, int64(1), out[0].Groups[0].ID)
+	require.True(t, out[0].Groups[0].ImageRateIndependent)
+	require.Equal(t, 1.5, out[0].Groups[0].ImageRateMultiplier)
+	require.True(t, out[0].Groups[0].VideoRateIndependent)
+	require.Equal(t, 1.25, out[0].Groups[0].VideoRateMultiplier)
 }
 
 func TestListAvailable_SortedByName(t *testing.T) {

@@ -1,13 +1,29 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="dashboard-view-content">
       <div v-if="loading" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
       <template v-else-if="stats">
-        <UserDashboardStats :stats="stats" :balance="user?.balance || 0" :is-simple="authStore.isSimpleMode" :platform-quotas="platformQuotas" />
-        <UserDashboardCharts v-model:startDate="startDate" v-model:endDate="endDate" v-model:granularity="granularity" :loading="loadingCharts" :trend="trendData" :models="modelStats" @dateRangeChange="loadCharts" @granularityChange="loadCharts" @refresh="refreshAll" />
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div class="lg:col-span-2"><UserDashboardRecentUsage :data="recentUsage" :loading="loadingUsage" /></div>
-          <div class="lg:col-span-1"><UserDashboardQuickActions /></div>
+        <LowBalanceNotice v-if="user && !authStore.isSimpleMode" :balance="user.balance" :recharge-enabled="rechargeEnabled" />
+        <UserDashboardStats
+          :stats="stats"
+          :balance="user?.balance || 0"
+          :is-simple="authStore.isSimpleMode"
+          :platform-quotas="platformQuotas"
+        />
+        <UserDashboardCharts
+          v-model:startDate="startDate"
+          v-model:endDate="endDate"
+          v-model:granularity="granularity"
+          :loading="loadingCharts"
+          :trend="trendData"
+          :models="modelStats"
+          @dateRangeChange="loadCharts"
+          @granularityChange="loadCharts"
+          @refresh="refreshAll"
+        />
+        <div class="dashboard-recent-grid">
+          <UserDashboardRecentUsage :data="recentUsage" :loading="loadingUsage" />
+          <UserDashboardQuickActions />
         </div>
       </template>
     </div>
@@ -22,6 +38,12 @@ import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardR
 import type { UsageLog, TrendDataPoint, ModelStat, PlatformQuotaItem } from '@/types'
 import { getMyPlatformQuotas } from '@/api/user'
 import { formatDateLocalInput } from '@/utils/format'
+import LowBalanceNotice from '@/components/user/dashboard/LowBalanceNotice.vue'
+import { useAppStore } from '@/stores/app'
+import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
+
+const appStore = useAppStore()
+const rechargeEnabled = computed(() => resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.payment) && !appStore.cachedPublicSettings?.payment_balance_disabled)
 
 const authStore = useAuthStore(); const user = computed(() => authStore.user)
 const stats = ref<UserStatsType | null>(null); const loading = ref(false); const loadingUsage = ref(false); const loadingCharts = ref(false)

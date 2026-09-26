@@ -6,6 +6,7 @@ import enCommon from "@/i18n/locales/en/common";
 import enSettings from "@/i18n/locales/en/admin/settings";
 import zhCommon from "@/i18n/locales/zh/common";
 import zhSettings from "@/i18n/locales/zh/admin/settings";
+import { apiClient } from "@/api/client";
 import SettingsView from "../SettingsView.vue";
 import { apiClient } from "@/api/client";
 
@@ -81,6 +82,8 @@ const {
 }));
 
 const localeRef = vi.hoisted(() => ({ value: "zh-CN" }));
+
+vi.mock("@/stores/auth", () => ({ useAuthStore: () => ({ isAdmin: true, isSuperAdmin: true }) }));
 
 vi.mock("@/api", () => ({
   adminAPI: {
@@ -1061,6 +1064,39 @@ describe("admin SettingsView payment visible method controls", () => {
       custom_menu_items: [
         { ...menuItems[0], hide_open_button: true },
         { ...menuItems[1], hide_open_button: false },
+      ],
+    }));
+    wrapper.unmount();
+  });
+
+  it("preserves and saves endpoint descriptions and recommendations", async () => {
+    const endpoints = [
+      { name: "Global", endpoint: "https://global.example", description: "International route", recommended: true },
+      { name: "Backup", endpoint: "https://backup.example", description: "Backup route" },
+    ];
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      api_base_url_description: "Regional route",
+      custom_endpoints: endpoints,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    const description = wrapper.get<HTMLInputElement>('[data-testid="api-base-url-description"]');
+    expect(description.element.value).toBe("Regional route");
+    const toggles = wrapper.findAll<HTMLInputElement>('[data-testid="custom-endpoint-recommended"]');
+    expect(toggles.map(toggle => toggle.element.checked)).toEqual([true, false]);
+    await description.setValue("Regional default");
+    await toggles[0].setValue(false);
+    await toggles[1].setValue(true);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      api_base_url_description: "Regional default",
+      custom_endpoints: [
+        { ...endpoints[0], recommended: false },
+        { ...endpoints[1], recommended: true },
       ],
     }));
     wrapper.unmount();

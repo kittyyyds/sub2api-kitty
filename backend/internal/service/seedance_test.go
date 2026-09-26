@@ -110,3 +110,16 @@ func TestSeedancePreservesUpstreamErrorsWithoutRetry(t *testing.T) {
 	require.Contains(t, w.Body.String(), "QuotaExceeded")
 	require.Len(t, upstream.requests, 1)
 }
+
+func TestSeedanceCapabilityKeepsDedicatedVideoSeparate(t *testing.T) {
+	a := seedanceTestAccount()
+	a.Platform = PlatformVideo
+	require.False(t, a.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilitySeedance))
+	require.True(t, a.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityGrokMediaGeneration))
+	upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(`{"id":"must-not-submit"}`)}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+	c, _ := grokMediaContentTestContext(http.MethodPost, "/api/v3/contents/generations/tasks", nil)
+	_, err := svc.ForwardSeedance(context.Background(), c, a, SeedanceEndpointCreate, "", []byte(`{"model":"video","content":[{"type":"text","text":"waves"}]}`))
+	require.Error(t, err)
+	require.Empty(t, upstream.requests)
+}

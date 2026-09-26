@@ -97,6 +97,29 @@ func TestUpstreamModelMismatchTreatsGrokBuildRuntimeIDsAsAliases(t *testing.T) {
 	}
 }
 
+func TestUpstreamModelMismatchTreatsOfficialOpenAISnapshotsAsAliases(t *testing.T) {
+	for _, tt := range []struct {
+		sent, response string
+	}{
+		{"gpt-4o", "gpt-4o-2024-08-06"},
+		{"gpt-4o-latest", "gpt-4o-2024-08-06"},
+		{"o3-mini", "o3-mini-2025-01-31"},
+		{"gpt-4", "gpt-4-0613"},
+	} {
+		mismatch := upstreamModelMismatch(tt.sent, tt.response)
+		require.NotNil(t, mismatch)
+		require.False(t, *mismatch, "%s should match %s", tt.sent, tt.response)
+	}
+}
+
+func TestUpstreamModelMismatchRejectsNonSnapshotSuffixes(t *testing.T) {
+	for _, response := range []string{"gpt-5-mini", "gpt-5-build", "gpt-5-2025-99-99"} {
+		mismatch := upstreamModelMismatch("gpt-5", response)
+		require.NotNil(t, mismatch)
+		require.True(t, *mismatch, "gpt-5 must not match %s", response)
+	}
+}
+
 func TestUpstreamModelMismatchDoesNotCollapseDifferentModels(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -193,6 +216,62 @@ func TestUpstreamResponseModelObserverBoundsUntrustedModelName(t *testing.T) {
 	observer.Observe("  "+strings.Repeat("模", upstreamResponseModelMaxLength+1)+"  ", false)
 
 	require.Len(t, []rune(observer.Model()), upstreamResponseModelMaxLength)
+}
+
+func TestRedactUpstreamResponseModelSecrets(t *testing.T) {
+	longOverride := strings.Repeat("L", maxHeaderOverrideValueLength)
+	longOverridePrefix := string([]rune(longOverride)[:upstreamResponseModelMaxLength])
+	prefixedTruncatedLeak := "relay:" + longOverridePrefix[:upstreamResponseModelMaxLength-len("relay:")]
+	longCredential := strings.Repeat("C", maxHeaderOverrideValueLength)
+	longCredentialPrefix := string([]rune(longCredential)[:upstreamResponseModelMaxLength])
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":                    "api-key-secret-canary",
+			"access_token":               "access-token-secret-canary",
+			"refresh_token":              "Bearer refresh-token-secret-canary",
+			"id_token":                   longCredential,
+			credKeyHeaderOverrideEnabled: true,
+			credKeyHeaderOverrides: map[string]any{
+				"x-relay-key":     "relay-secret-canary",
+				"x-bearer-secret": "Bearer bearer-secret-canary",
+				"x-long-secret":   longOverride,
+			},
+		},
+	}
+
+	tests := []struct {
+		name  string
+		model string
+		want  string
+	}{
+		{name: "exact override", model: "relay-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "embedded override", model: "model-relay-secret-canary-runtime", want: upstreamResponseModelRedacted},
+		{name: "bearer token without scheme", model: "bearer-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "long override truncated by observer", model: longOverridePrefix, want: upstreamResponseModelRedacted},
+		{name: "prefixed long override truncated by observer", model: prefixedTruncatedLeak, want: upstreamResponseModelRedacted},
+		{name: "API key", model: "runtime-api-key-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "access token", model: "access-token-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "refresh token without scheme", model: "refresh-token-secret-canary", want: upstreamResponseModelRedacted},
+		{name: "long credential truncated by observer", model: longCredentialPrefix, want: upstreamResponseModelRedacted},
+		{name: "ordinary model", model: "gpt-5.5", want: "gpt-5.5"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, redactUpstreamResponseModelSecrets(account, tt.model))
+		})
+	}
+}
+
+func TestRedactUpstreamResponseModelCoversSensitiveCredentialTable(t *testing.T) {
+	for _, key := range SensitiveCredentialKeys {
+		t.Run(key, func(t *testing.T) {
+			secret := "credential-secret-canary-" + key
+			account := &Account{Credentials: map[string]any{key: secret}}
+			require.Equal(t, upstreamResponseModelRedacted, redactUpstreamResponseModelSecrets(account, "relay:"+secret))
+		})
+	}
 }
 
 func TestUpstreamResponseModelObserverServiceTierTerminalEventWins(t *testing.T) {

@@ -47,6 +47,11 @@ const (
 	AirwallexDemoStaticDomain = "https://static-demo.airwallex.com"
 	// AirwallexDemoCheckoutDomain 是 Airwallex 沙箱环境收银台元素和 iframe 域名。
 	AirwallexDemoCheckoutDomain = "https://checkout-demo.airwallex.com"
+	// FeishuWikiDomain 是内置新手文档所在的飞书知识库域名。
+	FeishuWikiDomain = "https://vcn7nwjngah3.feishu.cn"
+	// FeishuAccountsDomain 和 FeishuLoginDomain 用于文档未公开时的飞书登录跳转。
+	FeishuAccountsDomain = "https://accounts.feishu.cn"
+	FeishuLoginDomain    = "https://login.feishu.cn"
 )
 
 var requiredCSPDirectiveValues = []struct {
@@ -83,6 +88,12 @@ var requiredCSPDirectiveValues = []struct {
 	{"style-src", AirwallexDemoStaticDomain},
 	{"style-src", AirwallexDemoCheckoutDomain},
 	{"frame-src", AirwallexDemoCheckoutDomain},
+	{"frame-src", FeishuWikiDomain},
+	{"frame-src", FeishuAccountsDomain},
+	{"frame-src", FeishuLoginDomain},
+	// Persisted custom policies must allow authenticated browser Blob playback.
+	{"media-src", "blob:"},
+	{"media-src", "https:"},
 }
 
 // GenerateNonce generates a cryptographically secure random nonce.
@@ -163,8 +174,8 @@ func isAPIRoutePath(c *gin.Context) bool {
 		strings.HasPrefix(path, "/images")
 }
 
-// enhanceCSPPolicy 确保 CSP 策略包含 nonce 支持和运行时组件必需域名。
-// 这样旧配置文件没有及时补域名时，验证码和支付组件仍能正常加载。
+// enhanceCSPPolicy 确保 CSP 策略包含 nonce、验证码、支付 SDK 和浏览器媒体源。
+// 这样旧配置文件没有及时补域名时，运行时组件仍能正常加载。
 func enhanceCSPPolicy(policy string) string {
 	// Add nonce placeholder to script-src if not present
 	if !strings.Contains(policy, NonceTemplate) && !strings.Contains(policy, "'nonce-") {

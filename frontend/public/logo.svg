@@ -1,32 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Sub2API</title>
-  <desc id="desc">An interlocking S symbol representing subscription routing into APIs.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Kitty奇妙屋 Orbit</title>
+  <desc id="desc">The Kitty奇妙屋 routed K core surrounded by an API orbit.</desc>
   <defs>
-    <linearGradient id="s2a-bg" x1="72" y1="44" x2="442" y2="478" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#142B56"/>
-      <stop offset=".52" stop-color="#0A1A39"/>
-      <stop offset="1" stop-color="#061127"/>
+    <linearGradient id="core" x1="18" y1="13" x2="48" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#292E2B"/>
+      <stop offset="1" stop-color="#101411"/>
     </linearGradient>
-    <radialGradient id="s2a-ambient" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(168 92) rotate(51) scale(342 382)">
-      <stop stop-color="#3E68B0" stop-opacity=".28"/>
-      <stop offset="1" stop-color="#3E68B0" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="s2a-brand" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#79F4BD"/>
-      <stop offset=".48" stop-color="#39D9E7"/>
-      <stop offset="1" stop-color="#3875F6"/>
+    <linearGradient id="orbit" x1="7" y1="48" x2="58" y2="17" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55C8B8"/>
+      <stop offset=".5" stop-color="#F3D45F"/>
+      <stop offset="1" stop-color="#FF8E78"/>
     </linearGradient>
-    <filter id="s2a-shadow" x="-25%" y="-25%" width="150%" height="165%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy=".55" stdDeviation=".65" flood-color="#020817" flood-opacity=".34"/>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="165%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#291D18" flood-opacity=".25"/>
     </filter>
   </defs>
-
-  <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#s2a-bg)"/>
-  <rect x="16" y="16" width="480" height="480" rx="120" fill="url(#s2a-ambient)"/>
-  <rect x="16.75" y="16.75" width="478.5" height="478.5" rx="119.25" fill="none" stroke="#A5BFFF" stroke-opacity=".16" stroke-width="1.5"/>
-
-  <g transform="translate(52 52) scale(17)" fill="none" stroke="url(#s2a-brand)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.7" filter="url(#s2a-shadow)">
-    <path d="m19.25 7.65-2.55-3.2a1.33 1.33 0 0 0-1.03-.5H8.58c-.34 0-.67.13-.91.37L4.15 7.65c-.93.88-.6 1.52.65 2.3l9.55 5.97"/>
-    <path d="m4.75 16.35 2.55 3.2c.25.31.63.5 1.03.5h7.09c.34 0 .67-.13.91-.37l3.52-3.33c.93-.88.6-1.52-.65-2.3L9.65 8.08"/>
-  </g>
+  <path d="M18.2 21 19.8 10.4l8.2 6.2A19.7 19.7 0 0 1 32 16.2c1.37 0 2.7.14 4 .4l8.2-6.2L45.8 21A17.9 17.9 0 1 1 18.2 21Z" fill="url(#core)" filter="url(#shadow)"/>
+  <path d="M9.1 43.4c-3.1-5.7 4.8-15.8 17.7-22.7 12.8-6.8 25.8-7.7 28.9-2 3.1 5.8-4.8 15.9-17.7 22.8-12.8 6.8-25.8 7.7-28.9 1.9Z" fill="none" stroke="url(#orbit)" stroke-linecap="round" stroke-width="3.2"/>
+  <path d="M25 23v20M25.5 33.5c5-.7 8.3-5.2 13.5-9M25.5 33.5c5.4.7 8.8 5.5 14.5 9.1" fill="none" stroke="#F7F6EE" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.4"/>
+  <circle cx="9.1" cy="43.4" r="3" fill="#55C8B8" stroke="#171B19" stroke-width="1.4"/>
+  <circle cx="55.7" cy="18.7" r="3" fill="#FF8E78" stroke="#171B19" stroke-width="1.4"/>
+  <circle cx="42.6" cy="18.4" r="2.6" fill="#F3D45F" stroke="#171B19" stroke-width="1.2"/>
 </svg>

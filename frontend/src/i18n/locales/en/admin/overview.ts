@@ -740,6 +740,7 @@ export default {
       createdAt: 'Created',
       totalRecharged: 'Total Recharged',
       roles: {
+        super_admin: 'Super administrator',
         admin: 'Admin',
         user: 'User'
       },
@@ -1050,6 +1051,7 @@ export default {
         gemini: 'Gemini',
         antigravity: 'Antigravity',
         grok: 'Grok',
+        video: 'Video',
         kimi: 'Kimi',
         zhipu: 'Zhipu GLM',
         deepseek: 'DeepSeek',
@@ -1079,6 +1081,9 @@ export default {
       imagePricing: {
         title: 'Image Generation Pricing',
         description: 'Configure image generation access and base image prices. Leave empty to use default prices.',
+        modelOverridesTitle: 'Final image prices by model',
+        modelOverridesDescription: 'Set the final customer USD charge per image for each model at 1K, 2K, and 4K. Entering $0.01 charges exactly $0.01 without any group or image multiplier. Empty cells inherit the flat/default USD price and still apply the effective multiplier.',
+        fixedPriceUnit: '$/image',
         allowImageGeneration: 'Allow image generation for this group',
         allowBatchImageGeneration: 'Allow batch image generation for this group',
         independentMultiplier: 'Use independent image multiplier',
@@ -1088,21 +1093,24 @@ export default {
         batchSectionHint: 'Batch image settings only apply to batch jobs: settlement applies the batch discount, and the upfront hold is normal image price × batch hold price ratio. Reference images also create upstream input-token usage, so a batch image discount above 0.5 is recommended.',
         batchDisabledHint: 'Enable image generation for this group before enabling batch image generation.',
         batchGeminiOnlyHint: 'Batch image generation is currently available only for Gemini groups.',
-        modeHint: 'By default, image billing uses image price × current effective group multiplier. Independent mode uses image price × image multiplier.',
+        modeHint: 'All image prices are billed in USD. Populated Grok / OpenAI per-model prices are final USD charges and never receive another multiplier.',
         finalPricePreview: 'Final per-image price preview',
         notConfigured: 'Not configured'
       },
       videoPricing: {
         title: 'Video Generation Pricing',
         description:
-          'Configure Grok video generation prices in USD per second of output video. Leave empty to use the default per-second rates (grok-imagine-video: $0.05/s 480p, $0.07/s 720p; video-1.5: $0.08/s 480p, $0.14/s 720p, $0.25/s 1080p).',
-        modelOverridesTitle: 'Per-model video price overrides',
-        modelOverridesDescription: 'Each populated cell overrides the flat resolution price for that model family. Preview and legacy aliases for video-1.5 use the same family; empty cells fall back to the flat resolution price.',
+          'The flat resolution fields above remain USD-per-second fallback rates. Empty fields use the defaults (grok-imagine-video: $0.05/s 480p, $0.07/s 720p; video-1.5: $0.08/s 480p, $0.14/s 720p, $0.25/s 1080p).',
+        modelOverridesTitle: 'Final per-second prices by model',
+        modelOverridesDescription: 'Set the final customer USD-per-second rate for each model at 480p, 720p, and 1080p. Entering $0.07 charges $0.07 per second without group or video multipliers; duration and video count still determine the total. Empty cells fall back to the flat/default USD-per-second rate. Preview and legacy video-1.5 aliases share one family.',
+        fixedPriceUnit: '$/sec',
         independentMultiplier: 'Use independent video multiplier',
         videoMultiplier: 'Video multiplier',
         modeHint:
-          'Videos are billed per second: per-second price × duration (1-15s, default 8s). By default the current effective group multiplier applies; independent mode uses the video multiplier instead.',
-        finalPricePreview: 'Final per-second price preview',
+          'Populated USD model price: final per-second rate × duration × video count, without another multiplier. Empty model price: USD fallback rate × duration × video count × effective rate.',
+        finalPricePreview: 'Final per-second pricing by model',
+        finalPerSecondUnit: '/ sec (final model rate)',
+        perSecondUnit: '/ sec (fallback, rate applied)',
         notConfigured: 'Not configured'
       },
       explicitPricing: {
@@ -1334,7 +1342,16 @@ export default {
         geminiImage: 'Gemini Image',
         hint: 'Select at least one model family'
       }
-    },
+    ,
+    securityPolicy: {
+        title: 'Security Policy',
+        hint: 'When enabled, requests hitting sensitive topics (cracking, reversing, pentesting, etc.) are blocked. Off by default.',
+        mode: 'On-hit action',
+        modeSession: 'Terminate session (new session required)',
+        modeRequest: 'Block this request only',
+        email: 'Email the user on violation'
+      },
+  },
 
     // Available Channels (aggregated read-only view)
 }

@@ -20,7 +20,8 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key
+      t: (key: string, params?: Record<string, unknown>) => params && key.includes('codexTurnTicket')
+        ? `${key}:${JSON.stringify(params)}` : key
     })
   }
 })
@@ -501,8 +502,8 @@ describe('AccountUsageCell', () => {
       global: {
         stubs: {
           UsageProgressBar: {
-            props: ['label', 'utilization', 'resetsAt', 'windowStats', 'color'],
-            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}</div>'
+            props: ['label', 'utilization', 'resetsAt', 'windowStats', 'color', 'estimatedTotalCost'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ windowStats?.tokens }}|estimate={{ estimatedTotalCost?.toFixed(2) ?? "none" }}</div>'
           },
           AccountQuotaInfo: true
         }
@@ -513,7 +514,7 @@ describe('AccountUsageCell', () => {
 
     expect(getUsage).toHaveBeenCalledWith(2000)
     expect(wrapper.text()).toContain('5h|15|300')
-    expect(wrapper.text()).toContain('7d|77|300')
+    expect(wrapper.text()).toContain('7d|77|300|estimate=0.04')
   })
 
   it('OpenAI OAuth 有 codex 快照时仍然使用 /usage API 数据渲染', async () => {
@@ -590,7 +591,7 @@ describe('AccountUsageCell', () => {
         utilization: 40,
         resets_at: null,
         remaining_seconds: 0,
-        window_stats: { requests: 2, tokens: 200, cost: 12 }
+        window_stats: { requests: 2, tokens: 200, cost: 12, standard_cost: 24, user_cost: 6 }
       }
     })
 
@@ -613,6 +614,20 @@ describe('AccountUsageCell', () => {
 
     expect(wrapper.text()).toContain('5h|none')
     expect(wrapper.text()).toContain('7d|30')
+
+    getUsage.mockResolvedValue({
+      seven_day: {
+        utilization: 60,
+        resets_at: null,
+        remaining_seconds: 0,
+        window_stats: { requests: 3, tokens: 300, cost: 24 }
+      }
+    })
+    await wrapper.setProps({ manualRefreshToken: 1 })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('7d|40')
+    expect(wrapper.text()).not.toContain('7d|30')
   })
 
   it.each([

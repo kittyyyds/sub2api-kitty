@@ -10,6 +10,10 @@ import (
 func RegisterCommonRoutes(r *gin.Engine) {
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
+		// This endpoint is intentionally public so browser clients can measure
+		// alternate API routes without exposing credentials or application data.
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Cache-Control", "no-store")
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 

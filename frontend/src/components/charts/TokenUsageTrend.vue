@@ -1,5 +1,5 @@
 <template>
-  <div class="card p-4">
+  <div class="card dashboard-chart-panel dashboard-token-trend p-4" data-dashboard-chart="token-trend">
     <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
       {{ t('admin.dashboard.tokenUsageTrend') }}
     </h3>
@@ -23,6 +23,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Chart as ChartJS,
+  type ChartOptions,
   CategoryScale,
   LinearScale,
   PointElement,
@@ -34,6 +35,8 @@ import {
 } from 'chart.js'
 import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
+import { detectConsolePerformanceMode } from '@/utils/consolePerformance'
 import type { TrendDataPoint } from '@/types'
 
 ChartJS.register(
@@ -52,21 +55,45 @@ const { t } = useI18n()
 const props = defineProps<{
   trendData: TrendDataPoint[]
   loading?: boolean
+  variant?: 'default' | 'customer'
 }>()
 
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
+const { isDarkMode } = useDocumentDarkMode()
+const performanceMode = detectConsolePerformanceMode()
 
-const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb',
-  input: '#3b82f6',
-  output: '#10b981',
-  cacheCreation: '#f59e0b',
-  cacheRead: '#06b6d4',
-  cacheHitRate: '#8b5cf6'
-}))
+const chartColors = computed(() => {
+  if (props.variant === 'customer') {
+    return isDarkMode.value
+      ? {
+          text: '#b9c7c4',
+          grid: 'rgba(224, 235, 232, 0.12)',
+          input: '#8eeaff',
+          output: '#84d9b0',
+          cacheCreation: '#ffad68',
+          cacheRead: '#a2b2b6',
+          cacheHitRate: '#5dbfd0'
+        }
+      : {
+          text: '#42545a',
+          grid: 'rgba(20, 33, 38, 0.12)',
+          input: '#0a7f90',
+          output: '#28765f',
+          cacheCreation: '#9c641f',
+          cacheRead: '#60757d',
+          cacheHitRate: '#177d9a'
+        }
+  }
+
+  return {
+    text: isDarkMode.value ? '#e5e7eb' : '#374151',
+    grid: isDarkMode.value ? '#374151' : '#e5e7eb',
+    input: '#3b82f6',
+    output: '#10b981',
+    cacheCreation: '#f59e0b',
+    cacheRead: '#06b6d4',
+    cacheHitRate: '#8b5cf6'
+  }
+})
 
 const chartData = computed(() => {
   if (!props.trendData?.length) return null
@@ -95,6 +122,7 @@ const chartData = computed(() => {
         data: props.trendData.map((d) => d.cache_creation_tokens),
         borderColor: chartColors.value.cacheCreation,
         backgroundColor: `${chartColors.value.cacheCreation}20`,
+        borderDash: props.variant === 'customer' ? [10, 6] : undefined,
         fill: true,
         tension: 0.3
       },
@@ -103,6 +131,7 @@ const chartData = computed(() => {
         data: props.trendData.map((d) => d.cache_read_tokens),
         borderColor: chartColors.value.cacheRead,
         backgroundColor: `${chartColors.value.cacheRead}20`,
+        borderDash: props.variant === 'customer' ? [3, 4] : undefined,
         fill: true,
         tension: 0.3
       },
@@ -114,7 +143,7 @@ const chartData = computed(() => {
         }),
         borderColor: chartColors.value.cacheHitRate,
         backgroundColor: `${chartColors.value.cacheHitRate}20`,
-        borderDash: [5, 5],
+        borderDash: props.variant === 'customer' ? [2, 3, 8, 3] : [5, 5],
         fill: false,
         tension: 0.3,
         yAxisID: 'yPercent'
@@ -123,9 +152,20 @@ const chartData = computed(() => {
   }
 })
 
-const lineOptions = computed(() => ({
+const lineOptions = computed<ChartOptions<'line'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  animation: performanceMode === 'lite' ? false : { duration: 420 },
+  animations: performanceMode === 'lite' ? {} : undefined,
+  elements: {
+    point: {
+      radius: performanceMode === 'lite' ? 1.5 : 2.5,
+      hoverRadius: performanceMode === 'lite' ? 3 : 4,
+    },
+    line: {
+      borderWidth: performanceMode === 'lite' ? 1.25 : 1.8,
+    },
+  },
   interaction: {
     intersect: false,
     mode: 'index' as const
@@ -144,6 +184,16 @@ const lineOptions = computed(() => ({
       }
     },
     tooltip: {
+      backgroundColor:
+        props.variant === 'customer'
+          ? isDarkMode.value
+            ? 'rgba(6, 16, 20, 0.96)'
+            : 'rgba(20, 33, 38, 0.96)'
+          : undefined,
+      titleColor: props.variant === 'customer' ? '#f2f7f5' : undefined,
+      bodyColor: props.variant === 'customer' ? '#f2f7f5' : undefined,
+      borderColor: props.variant === 'customer' ? chartColors.value.input : undefined,
+      borderWidth: props.variant === 'customer' ? 1 : 0,
       callbacks: {
         label: (context: any) => {
           if (context.dataset.yAxisID === 'yPercent') {

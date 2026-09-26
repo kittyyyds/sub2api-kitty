@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -81,6 +82,16 @@ func isGitHubAPIURL(url *url.URL) bool {
 
 func githubAPICheckRedirect(previous func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
+		// Sanitize after a custom redirect hook as well. Supplying CheckRedirect
+		// replaces net/http's default ten-redirect limit.
+		defer func() {
+			if !isGitHubAPIURL(req.URL) {
+				req.Header.Del("Authorization")
+			}
+		}()
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
 		if !isGitHubAPIURL(req.URL) {
 			req.Header.Del("Authorization")
 		}
@@ -121,6 +132,9 @@ func (c *githubReleaseClientError) FetchChecksumFile(ctx context.Context, url st
 }
 
 func (c *githubReleaseClient) FetchLatestRelease(ctx context.Context, repo string) (*service.GitHubRelease, error) {
+	if !validGitHubRepository(repo) {
+		return nil, fmt.Errorf("invalid GitHub repository")
+	}
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
 
 	req, err := c.newAPIRequest(ctx, url)
@@ -138,8 +152,12 @@ func (c *githubReleaseClient) FetchLatestRelease(ctx context.Context, repo strin
 		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
 	}
 
+	body, err := readGitHubResponse(resp, maxGitHubReleaseMetadataSize)
+	if err != nil {
+		return nil, err
+	}
 	var release service.GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.Unmarshal(body, &release); err != nil {
 		return nil, err
 	}
 
@@ -147,6 +165,9 @@ func (c *githubReleaseClient) FetchLatestRelease(ctx context.Context, repo strin
 }
 
 func (c *githubReleaseClient) FetchRecentReleases(ctx context.Context, repo string, perPage int) ([]*service.GitHubRelease, error) {
+	if !validGitHubRepository(repo) {
+		return nil, fmt.Errorf("invalid GitHub repository")
+	}
 	if perPage <= 0 {
 		perPage = 10
 	}
@@ -170,8 +191,12 @@ func (c *githubReleaseClient) FetchRecentReleases(ctx context.Context, repo stri
 		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
 	}
 
+	body, err := readGitHubResponse(resp, maxGitHubReleaseMetadataSize)
+	if err != nil {
+		return nil, err
+	}
 	var releases []*service.GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+	if err := json.Unmarshal(body, &releases); err != nil {
 		return nil, err
 	}
 
@@ -179,13 +204,16 @@ func (c *githubReleaseClient) FetchRecentReleases(ctx context.Context, repo stri
 }
 
 func (c *githubReleaseClient) DownloadFile(ctx context.Context, url, dest string, maxSize int64) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if maxSize <= 0 || maxSize == math.MaxInt64 {
+		return fmt.Errorf("invalid maximum download size")
+	}
+	req, err := c.newReleaseAssetRequest(ctx, url)
 	if err != nil {
 		return err
 	}
 
 	// 使用预配置的下载客户端（已包含代理配置）
-	resp, err := c.downloadHTTPClient.Do(req)
+	resp, err := githubAssetHTTPClient(c.downloadHTTPClient).Do(req)
 	if err != nil {
 		return err
 	}
@@ -227,12 +255,12 @@ func (c *githubReleaseClient) DownloadFile(ctx context.Context, url, dest string
 }
 
 func (c *githubReleaseClient) FetchChecksumFile(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := c.newReleaseAssetRequest(ctx, url)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := githubAssetHTTPClient(c.httpClient).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -242,5 +270,5 @@ func (c *githubReleaseClient) FetchChecksumFile(ctx context.Context, url string)
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return readGitHubResponse(resp, maxGitHubChecksumSize)
 }

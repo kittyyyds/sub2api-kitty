@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminGroup, CodexModelsManifestConfig } from "@/types";
 import GroupsView from "@/views/admin/GroupsView.vue";
 
+vi.mock("@/stores/auth", () => ({ useAuthStore: () => ({ isAdmin: true, isSuperAdmin: true }) }));
+
 const {
   listGroups,
   getModelAllowlistCandidates,
@@ -47,6 +49,10 @@ vi.mock("@/stores/app", () => ({
     showError: vi.fn(),
     showSuccess: vi.fn(),
   }),
+}));
+
+vi.mock("@/stores/auth", () => ({
+  useAuthStore: () => ({ isAdmin: true }),
 }));
 
 vi.mock("@/stores/onboarding", () => ({

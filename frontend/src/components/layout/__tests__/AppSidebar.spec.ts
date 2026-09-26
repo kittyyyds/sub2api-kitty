@@ -4,10 +4,23 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import enCommon from '@/i18n/locales/en/common'
+import zhCommon from '@/i18n/locales/zh/common'
+
 const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppSidebar.vue')
 const componentSource = readFileSync(componentPath, 'utf8')
 const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
 const styleSource = readFileSync(stylePath, 'utf8')
+
+describe('AppSidebar theme integration', () => {
+  it('uses the shared theme composable instead of maintaining a second DOM theme state', () => {
+    expect(componentSource).toContain("import { useTheme } from '@/composables/useTheme'")
+    expect(componentSource).toContain('const { isDark, toggleTheme } = useTheme()')
+    expect(componentSource).not.toContain("const isDark = ref(document.documentElement.classList.contains('dark'))")
+    expect(componentSource).not.toContain("localStorage.setItem('theme'")
+    expect(componentSource).not.toContain("const savedTheme = localStorage.getItem('theme')")
+  })
+})
 
 describe('AppSidebar custom SVG styles', () => {
   it('does not override uploaded SVG fill or stroke colors', () => {
@@ -63,6 +76,52 @@ describe('AppSidebar header styles', () => {
   })
 })
 
+describe('AppSidebar regular-user grouped navigation contract', () => {
+  it('preserves the Kitty Studio brand and existing route translations', () => {
+    expect(zhCommon.nav.appCenter).toBe('Kitty生图')
+    expect(enCommon.nav.appCenter).toBe('Kitty Studio')
+    expect(zhCommon.appCenter.title).toBe('Kitty生图')
+    expect(enCommon.appCenter.title).toBe('Kitty Studio')
+    expect(zhCommon.nav.onlineChat).toBe('在线聊天')
+    expect(enCommon.nav.onlineChat).toBe('Online Chat')
+    expect(zhCommon.nav).not.toHaveProperty('kittyImage')
+    expect(enCommon.nav).not.toHaveProperty('kittyImage')
+  })
+
+  it('renders direct links and keeps the API-key onboarding selector on its link', () => {
+    expect(componentSource).toContain('v-for="section in customerNavSections"')
+    expect(componentSource).toContain('v-for="item in section.items"')
+    expect(componentSource).toContain(':to="item.path"')
+    expect(componentSource).toContain(":data-tour=\"item.path === '/keys' ? 'sidebar-my-keys' : undefined\"")
+    expect(componentSource).toContain('@click="handleMenuItemClick(item.path)"')
+    expect(componentSource).not.toContain('data-user-nav-group')
+  })
+
+  it('keeps legacy feature definitions without promotion badges in the customer menu', () => {
+    expect(componentSource).not.toContain(':data-sidebar-promo="item.badge.tone"')
+    expect(componentSource).toContain("label: t('nav.hotRecommendation')")
+    expect(componentSource).toContain("label: t('nav.limitedOffer')")
+    expect(componentSource).toContain("tone: 'deal'")
+    expect(componentSource).toContain("label: t('nav.affiliateBadge')")
+    expect(componentSource).toContain("tone: 'rebate'")
+    expect(componentSource).toContain("path: '/apps'")
+    expect(componentSource).toContain("path: '/chat'")
+    expect(componentSource).not.toContain("buildNativeFeatureNavItem('image-generator')")
+  })
+
+  it('keeps mobile close behavior and separate admin group state', () => {
+    expect(componentSource).toContain('appStore.setMobileOpen(false)')
+    expect(componentSource).toContain('const groupExpandOverrides = ref<Map<string, boolean>>(new Map())')
+    expect(componentSource).not.toContain('groupUserNavItems')
+    expect(componentSource).not.toContain('collapsedPath')
+  })
+
+  it('filters customer routes without changing the admin personal menu source', () => {
+    expect(componentSource).toContain('const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))')
+    expect(componentSource).toContain('const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))')
+  })
+})
+
 describe('AppSidebar subscription feature flag', () => {
   it('gates the My Subscriptions entry behind the subscription public-settings flag', () => {
     expect(componentSource).toContain('const flagSubscription = makeSidebarFlag(FeatureFlags.subscription)')
@@ -77,6 +136,6 @@ describe('AppSidebar subscription feature flag', () => {
     expect(componentSource).toContain("import { resolveSiteBillingMode } from '@/utils/siteBillingMode'")
     expect(componentSource).toMatch(/case 'recharge_only':\s*return t\('nav\.recharge'\)/)
     expect(componentSource).toMatch(/case 'subscription_only':\s*return t\('nav\.subscribe'\)/)
-    expect(componentSource).toMatch(/path: '\/purchase'[^\n]*label: purchaseNavLabel\.value/)
+    expect(componentSource).toMatch(/path: '\/purchase',\s*label: purchaseNavLabel\.value/)
   })
 })

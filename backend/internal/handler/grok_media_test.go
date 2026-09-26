@@ -85,6 +85,28 @@ func TestShouldRecordGrokMediaUsage(t *testing.T) {
 	}
 }
 
+func TestGrokMediaRequiresBillingEligibility(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint service.GrokMediaEndpoint
+		want     bool
+	}{
+		{name: "image generation", endpoint: service.GrokMediaEndpointImagesGenerations, want: true},
+		{name: "image edit", endpoint: service.GrokMediaEndpointImagesEdits, want: true},
+		{name: "video generation", endpoint: service.GrokMediaEndpointVideosGenerations, want: true},
+		{name: "video edit", endpoint: service.GrokMediaEndpointVideosEdits, want: true},
+		{name: "video extension", endpoint: service.GrokMediaEndpointVideosExtensions, want: true},
+		{name: "video status is read only", endpoint: service.GrokMediaEndpointVideoStatus, want: false},
+		{name: "video content is read only", endpoint: service.GrokMediaEndpointVideoContent, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, grokMediaRequiresBillingEligibility(tt.endpoint))
+		})
+	}
+}
+
 func TestGrokMediaRequiredCapability(t *testing.T) {
 	tests := []struct {
 		name     string

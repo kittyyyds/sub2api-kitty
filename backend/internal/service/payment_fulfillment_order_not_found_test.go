@@ -6,7 +6,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"testing"
+	"time"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -90,6 +92,46 @@ func TestHandlePaymentNotification_NonSuccessStatus_Skips(t *testing.T) {
 	err := svc.HandlePaymentNotification(ctx, notification, payment.TypeStripe)
 	require.NoError(t, err,
 		"non-success notifications must short-circuit before the DB lookup")
+}
+
+func TestFindNotificationOrderByPaymentTradeNoIsProviderScoped(t *testing.T) {
+	ctx := context.Background()
+	client := newOrderNotFoundTestClient(t)
+
+	user, err := client.User.Create().
+		SetEmail("dujiaopay-fallback@example.com").
+		SetPasswordHash("hash").
+		SetUsername("dujiaopay-fallback").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(5).
+		SetPayAmount(5).
+		SetFeeRate(0).
+		SetRechargeCode("DJP-FALLBACK-" + strconv.FormatInt(user.ID, 10)).
+		SetOutTradeNo("sub2_djp_fallback_1").
+		SetPaymentType(payment.TypeDujiaoPay).
+		SetPaymentTradeNo("do_djp_123").
+		SetOrderType(payment.OrderTypeBalance).
+		SetStatus(OrderStatusPending).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("merchant.example.com").
+		SetProviderKey(payment.TypeDujiaoPay).
+		Save(ctx)
+	require.NoError(t, err)
+
+	svc := &PaymentService{entClient: client, providersLoaded: true}
+	found, err := svc.findNotificationOrderByPaymentTradeNo(ctx, "do_djp_123", payment.TypeDujiaoPay)
+	require.NoError(t, err)
+	require.Equal(t, order.ID, found.ID)
+
+	_, err = svc.findNotificationOrderByPaymentTradeNo(ctx, "do_djp_123", payment.TypeStripe)
+	require.True(t, dbent.IsNotFound(err), "a different provider must not claim the platform order id")
 }
 
 // TestErrOrderNotFound_DistinctFromOtherErrors guards against an accidental

@@ -1,221 +1,274 @@
-<template>
-  <div class="space-y-3">
-    <!-- 一级:平台 -->
-    <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
-        {{ t('modelPlaza.filters.platformLabel') }}
-      </span>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          v-for="p in ['all', ...platforms]"
-          :key="`platform-${p}`"
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 disabled:grayscale"
-          :class="p === 'all' ? chipClass(platform === 'all') : platform === p ? 'chip-tinted-active' : 'chip-tinted'"
-          :style="p === 'all' ? undefined : { '--chip-accent': platformAccentColor(p) }"
-          :disabled="p !== 'all' && !platformEnabled(p)"
-          @click="$emit('update:platform', p)"
-        >
-          <PlatformIcon v-if="p !== 'all'" :platform="p as GroupPlatform" size="xs" />
-          {{ p === 'all' ? t('modelPlaza.filters.all') : p }}
-        </button>
-      </div>
-    </div>
-
-    <!-- 二级:分组(按所属平台着色,当前组合下无结果的置灰) -->
-    <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
-        {{ t('modelPlaza.filters.groupLabel') }}
-      </span>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-          :class="chipClass(groupId === 'all')"
-          @click="$emit('update:groupId', 'all')"
-        >
-          {{ t('modelPlaza.filters.all') }}
-        </button>
-        <button
-          v-for="g in groups"
-          :key="`group-${g.id}`"
-          type="button"
-          class="rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 disabled:grayscale"
-          :class="groupId === g.id ? 'chip-tinted-active' : 'chip-tinted'"
-          :style="{ '--chip-accent': platformAccentColor(g.platform) }"
-          :disabled="!groupEnabled(g)"
-          @click="$emit('update:groupId', g.id)"
-        >
-          {{ g.name }}
-        </button>
-      </div>
-    </div>
-
-    <!-- 三级:倍率(当前组合下不存在的置灰) -->
-    <div class="flex items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
-        {{ t('modelPlaza.filters.rateLabel') }}
-      </span>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
-          :class="chipClass(rate === 'all')"
-          @click="$emit('update:rate', 'all')"
-        >
-          {{ t('modelPlaza.filters.all') }}
-        </button>
-        <button
-          v-for="r in rates"
-          :key="`rate-${r}`"
-          type="button"
-          class="rounded-lg px-3 py-1.5 font-mono text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 disabled:grayscale"
-          :class="chipClass(rate === r)"
-          :disabled="!rateEnabled(r)"
-          @click="$emit('update:rate', r)"
-        >
-          {{ r }}x
-        </button>
-      </div>
-    </div>
-
-    <!-- 四级:模型名搜索(纯前端过滤) -->
-    <div class="flex flex-wrap items-start gap-2">
-      <span class="w-10 shrink-0 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-dark-500">
-        {{ t('modelPlaza.filters.modelLabel') }}
-      </span>
-      <div class="relative w-full sm:w-72">
-        <Icon
-          name="search"
-          size="sm"
-          class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500"
-        />
-        <input
-          :value="search"
-          type="text"
-          :placeholder="t('modelPlaza.filters.searchPlaceholder')"
-          class="input rounded-lg py-1.5 pl-9 pr-9"
-          @input="$emit('update:search', ($event.target as HTMLInputElement).value)"
-        />
-        <button
-          v-if="search"
-          type="button"
-          class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600 dark:text-dark-500 dark:hover:text-gray-300"
-          @click="$emit('update:search', '')"
-        >
-          <Icon name="x" size="xs" class="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import Icon from '@/components/icons/Icon.vue'
-import PlatformIcon from '@/components/common/PlatformIcon.vue'
-import { platformAccentColor } from '@/utils/platformColors'
-import type { GroupPlatform } from '@/types'
 
-const props = defineProps<{
-  /** 数据中出现的平台(去重排序后)。 */
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import Icon from '@/components/icons/Icon.vue'
+import type { GroupPlatform } from '@/types'
+import { platformAccentColor, platformLabel } from '@/utils/platformColors'
+
+defineProps<{
   platforms: string[]
-  /** 全量分组(含平台与生效倍率),三个维度的置灰联动由此推导。 */
-  groups: Array<{ id: number; name: string; platform: string; rate: number }>
-  /** 全量生效倍率去重升序。 */
-  rates: number[]
+  groups: Array<{
+    id: number
+    name: string
+    platform: string
+    rate: number
+    usesPersonalRate: boolean
+  }>
   platform: string
-  groupId: number | 'all'
-  rate: number | 'all'
-  /** 模型名搜索词(纯前端过滤)。 */
+  groupId: number | null
   search: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'update:platform': [value: string]
-  'update:groupId': [value: number | 'all']
-  'update:rate': [value: number | 'all']
+  'update:groupId': [value: number]
   'update:search': [value: string]
 }>()
 
 const { t } = useI18n()
 
-/**
- * 三个维度互为约束(faceted):某选项可点 ⟺ 在「其他两维」当前选择下仍有分组命中。
- * 「全部」永远可点,作为解除本维约束的出口;可点项组合恒有结果,无需选择修正。
- */
-function platformEnabled(p: string): boolean {
-  return props.groups.some(
-    (g) =>
-      g.platform === p &&
-      (props.groupId === 'all' || g.id === props.groupId) &&
-      (props.rate === 'all' || g.rate === props.rate)
-  )
+function pricingPlatformLabel(platform: string): string {
+  if (platform === 'openai') return t('modelPlaza.platforms.openai')
+  if (platform === 'anthropic') return t('modelPlaza.platforms.anthropic')
+  if (platform === 'grok') return t('modelPlaza.platforms.grok')
+  return t('modelPlaza.platforms.generic', { platform: platformLabel(platform) })
 }
 
-function groupEnabled(g: { platform: string; rate: number }): boolean {
-  return (
-    (props.platform === 'all' || g.platform === props.platform) &&
-    (props.rate === 'all' || g.rate === props.rate)
-  )
-}
-
-function rateEnabled(r: number): boolean {
-  return props.groups.some(
-    (g) =>
-      g.rate === r &&
-      (props.platform === 'all' || g.platform === props.platform) &&
-      (props.groupId === 'all' || g.id === props.groupId)
-  )
-}
-
-function chipClass(active: boolean): string {
-  return active
-    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-sm shadow-primary-500/30'
-    : 'bg-white text-gray-600 ring-1 ring-inset ring-gray-200 enabled:hover:bg-gray-50 enabled:hover:text-gray-900 enabled:hover:ring-gray-300 dark:bg-dark-800/60 dark:text-dark-300 dark:ring-dark-700 dark:enabled:hover:bg-dark-800 dark:enabled:hover:text-white'
+function rateLabel(value: number): string {
+  return `${Number(value.toFixed(3))}x`
 }
 </script>
 
+<template>
+  <section class="plaza-filters" :aria-label="t('modelPlaza.filters.ariaLabel')">
+    <div class="platform-tabs" role="tablist" :aria-label="t('modelPlaza.filters.platformLabel')">
+      <button
+        v-for="item in platforms"
+        :key="item"
+        type="button"
+        role="tab"
+        :aria-selected="platform === item"
+        :class="{ active: platform === item }"
+        :style="{ '--platform-accent': platformAccentColor(item) }"
+        @click="emit('update:platform', item)"
+      >
+        <PlatformIcon :platform="item as GroupPlatform" size="xs" />
+        {{ pricingPlatformLabel(item) }}
+      </button>
+    </div>
+
+    <div class="group-tools">
+      <div class="group-tabs" role="tablist" :aria-label="t('modelPlaza.filters.groupLabel')">
+        <button
+          v-for="group in groups"
+          :key="group.id"
+          type="button"
+          role="tab"
+          :aria-selected="groupId === group.id"
+          :class="{ active: groupId === group.id }"
+          @click="emit('update:groupId', group.id)"
+        >
+          <span>{{ group.name }}</span>
+          <small>
+            {{ group.usesPersonalRate
+              ? t('modelPlaza.filters.personalRate', { rate: rateLabel(group.rate) })
+              : rateLabel(group.rate) }}
+          </small>
+        </button>
+      </div>
+
+      <label class="model-search">
+        <span class="sr-only">{{ t('modelPlaza.filters.modelLabel') }}</span>
+        <Icon name="search" size="xs" />
+        <input
+          :value="search"
+          type="search"
+          :placeholder="t('modelPlaza.filters.searchPlaceholder')"
+          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
+        >
+        <button
+          v-if="search"
+          type="button"
+          :title="t('modelPlaza.filters.clearSearch')"
+          :aria-label="t('modelPlaza.filters.clearSearch')"
+          @click="emit('update:search', '')"
+        >
+          <Icon name="x" size="xs" />
+        </button>
+      </label>
+    </div>
+  </section>
+</template>
+
 <style scoped>
-/* 平台/分组 chip 的配色统一从 --chip-accent(平台主色)派生,新增平台无需扩展样式。
-   激活态与非激活态在模板上互斥挂载,避免选择器优先级互相覆盖。 */
-.chip-tinted {
-  color: var(--chip-accent);
-  color: color-mix(in srgb, var(--chip-accent) 78%, black);
-  background-color: color-mix(in srgb, var(--chip-accent) 9%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-accent) 25%, transparent);
+.plaza-filters {
+  padding: 18px 18px 16px;
+  border-bottom: 1px solid var(--plaza-line);
+  background: var(--plaza-surface);
 }
 
-.chip-tinted:not(:disabled):hover {
-  background-color: color-mix(in srgb, var(--chip-accent) 16%, transparent);
+.platform-tabs,
+.group-tabs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-color: var(--plaza-line-strong) transparent;
+  scrollbar-width: thin;
 }
 
-.dark .chip-tinted {
-  color: color-mix(in srgb, var(--chip-accent) 72%, white);
-  background-color: color-mix(in srgb, var(--chip-accent) 12%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-accent) 30%, transparent);
+.platform-tabs {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  border: 1px solid var(--plaza-line);
+  border-radius: 6px;
+  padding: 3px;
+  background: var(--plaza-surface-muted);
 }
 
-.dark .chip-tinted:not(:disabled):hover {
-  background-color: color-mix(in srgb, var(--chip-accent) 18%, transparent);
+.platform-tabs button,
+.group-tabs button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  color: var(--plaza-muted);
+  white-space: nowrap;
 }
 
-.chip-tinted-active {
-  color: #fff;
-  background-color: var(--chip-accent);
-  background-color: color-mix(in srgb, var(--chip-accent) 85%, black);
-  box-shadow: 0 1px 2px 0 color-mix(in srgb, var(--chip-accent) 35%, transparent);
+.platform-tabs button {
+  --platform-accent: var(--plaza-accent);
+  min-height: 34px;
+  gap: 6px;
+  border-radius: 4px;
+  padding: 0 18px;
+  font-size: 11px;
+  font-weight: 650;
 }
 
-.chip-tinted-active:not(:disabled):hover {
-  background-color: color-mix(in srgb, var(--chip-accent) 75%, black);
+.platform-tabs button:hover {
+  color: var(--platform-accent);
 }
 
-.dark .chip-tinted-active {
-  background-color: color-mix(in srgb, var(--chip-accent) 80%, transparent);
+.platform-tabs button.active {
+  border-color: color-mix(in srgb, var(--platform-accent) 52%, var(--plaza-line));
+  color: #ffffff;
+  background: color-mix(in srgb, var(--platform-accent) 84%, var(--plaza-active-mix));
+  font-weight: 750;
 }
 
-.dark .chip-tinted-active:not(:disabled):hover {
-  background-color: var(--chip-accent);
+.group-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 230px);
+  align-items: center;
+  gap: 12px;
+  max-width: 900px;
+  margin: 14px auto 0;
+}
+
+.group-tabs {
+  justify-content: flex-start;
+  gap: 7px;
+}
+
+.group-tabs button {
+  min-height: 32px;
+  gap: 6px;
+  border-color: var(--plaza-line);
+  border-radius: 5px;
+  padding: 0 11px;
+  background: var(--plaza-surface);
+  font-size: 10px;
+}
+
+.group-tabs button:hover {
+  border-color: color-mix(in srgb, var(--plaza-accent) 42%, var(--plaza-line));
+  color: var(--plaza-accent);
+}
+
+.group-tabs button.active {
+  border-color: var(--plaza-accent);
+  color: var(--plaza-accent);
+  background: var(--plaza-accent-soft);
+  font-weight: 700;
+}
+
+.group-tabs small {
+  color: inherit;
+  opacity: .78;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 9px;
+}
+
+.model-search {
+  display: flex;
+  height: 34px;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--plaza-line-strong);
+  border-radius: 5px;
+  padding: 0 8px;
+  color: var(--plaza-muted-soft);
+  background: var(--plaza-surface-muted);
+}
+
+.model-search:focus-within {
+  border-color: var(--plaza-accent);
+  box-shadow: 0 0 0 3px var(--plaza-accent-ring);
+}
+
+.model-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--plaza-text-strong);
+  background: transparent;
+  font-size: 10px;
+}
+
+.model-search input::placeholder {
+  color: var(--plaza-muted-soft);
+}
+
+.model-search button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 4px;
+}
+
+.model-search button:hover {
+  color: var(--plaza-accent);
+  background: var(--plaza-accent-soft);
+}
+
+@media (max-width: 760px) {
+  .plaza-filters {
+    padding-inline: 12px;
+  }
+
+  .platform-tabs {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .platform-tabs button {
+    padding-inline: 13px;
+  }
+
+  .group-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .model-search {
+    width: 100%;
+  }
 }
 </style>

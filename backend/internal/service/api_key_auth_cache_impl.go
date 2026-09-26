@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 26 // v26: group stream_only and user-group denied models (enforcing semantics)
+const apiKeyAuthSnapshotVersion = 27 // merged group/media policies, stream-only and denied models
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -401,6 +401,9 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			Name:                            apiKey.Group.Name,
 			Platform:                        apiKey.Group.Platform,
 			IsExclusive:                     apiKey.Group.IsExclusive,
+			SecurityPolicyEnabled:           apiKey.Group.SecurityPolicyEnabled,
+			SecurityPolicyMode:              apiKey.Group.SecurityPolicyMode,
+			SecurityPolicyEmailEnabled:      apiKey.Group.SecurityPolicyEmailEnabled,
 			Status:                          apiKey.Group.Status,
 			SubscriptionType:                apiKey.Group.SubscriptionType,
 			RateMultiplier:                  apiKey.Group.RateMultiplier,
@@ -414,6 +417,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			ImagePrice1K:                    apiKey.Group.ImagePrice1K,
 			ImagePrice2K:                    apiKey.Group.ImagePrice2K,
 			ImagePrice4K:                    apiKey.Group.ImagePrice4K,
+			ImageModelPrices:                NormalizeImageModelPrices(apiKey.Group.ImageModelPrices),
 			VideoRateIndependent:            apiKey.Group.VideoRateIndependent,
 			VideoRateMultiplier:             apiKey.Group.VideoRateMultiplier,
 			VideoPrice480P:                  apiKey.Group.VideoPrice480P,
@@ -504,6 +508,9 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Name:                            snapshot.Group.Name,
 			Platform:                        snapshot.Group.Platform,
 			IsExclusive:                     snapshot.Group.IsExclusive,
+			SecurityPolicyEnabled:           snapshot.Group.SecurityPolicyEnabled,
+			SecurityPolicyMode:              snapshot.Group.SecurityPolicyMode,
+			SecurityPolicyEmailEnabled:      snapshot.Group.SecurityPolicyEmailEnabled,
 			Status:                          snapshot.Group.Status,
 			Hydrated:                        true,
 			SubscriptionType:                snapshot.Group.SubscriptionType,
@@ -518,6 +525,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			ImagePrice1K:                    snapshot.Group.ImagePrice1K,
 			ImagePrice2K:                    snapshot.Group.ImagePrice2K,
 			ImagePrice4K:                    snapshot.Group.ImagePrice4K,
+			ImageModelPrices:                NormalizeImageModelPrices(snapshot.Group.ImageModelPrices),
 			VideoRateIndependent:            snapshot.Group.VideoRateIndependent,
 			VideoRateMultiplier:             snapshot.Group.VideoRateMultiplier,
 			VideoPrice480P:                  snapshot.Group.VideoPrice480P,

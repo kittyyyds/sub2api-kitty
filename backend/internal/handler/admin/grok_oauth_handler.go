@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -378,7 +379,9 @@ func (h *GrokOAuthHandler) CreateAccountsFromSSO(c *gin.Context) {
 	var wg sync.WaitGroup
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
+		managedDone := managedinstance.Track()
 		go func() {
+			defer managedDone()
 			defer wg.Done()
 			for job := range jobs {
 				items[job.index] = h.safeCreateAccountFromSSOToken(ctx, req, job.token, job.index+1, len(tokens))

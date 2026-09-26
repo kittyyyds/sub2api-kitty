@@ -26,8 +26,17 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <AccountTierRoutingFields v-model:enabled="tierRoutingEnabled" v-model:pool="tierRoutingPool" />
+      <OpenAIRequestTimezoneField v-if="account.platform === 'openai'" v-model="requestTimezone" />
+
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
+        <GrokMediaProviderSelect
+          v-if="account.platform === 'grok' || account.platform === 'video'"
+          :video-platform="account.platform === 'video'"
+          v-model="editGrokMediaProvider"
+          @use-suanli-url="editBaseUrl = 'https://suanliai.top'"
+        />
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
@@ -35,7 +44,9 @@
             type="text"
             class="input"
             :placeholder="
-              account.platform === 'openai'
+              account.platform === 'video'
+                ? 'https://video.example.com'
+                : account.platform === 'openai'
                 ? 'https://api.openai.com'
                 : account.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
@@ -215,7 +226,9 @@
             data-lpignore="true"
             data-bwignore="true"
             :placeholder="
-              account.platform === 'openai'
+              account.platform === 'video'
+                ? 'API Key'
+                : account.platform === 'openai'
                 ? 'sk-proj-...'
                 : account.platform === 'gemini'
                   ? 'AIza...'
@@ -299,7 +312,13 @@
 
             <!-- Whitelist Mode -->
             <div v-if="modelRestrictionMode === 'whitelist'">
-              <ModelWhitelistSelector v-model="allowedModels" :platform="account?.platform || 'anthropic'" :account-id="account?.id" />
+              <ModelWhitelistSelector
+                v-model="allowedModels"
+                :platform="account?.platform || 'anthropic'"
+                :account-id="account?.id"
+                :sync-credentials="editSyncCredentials"
+                :sync-blocked-reason="editSyncBlockedReason"
+              />
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
                 <span v-if="allowedModels.length === 0 && modelMappings.length === 0">{{
@@ -3208,6 +3227,10 @@
 </template>
 
 <script setup lang="ts">
+import OpenAIRequestTimezoneField from './OpenAIRequestTimezoneField.vue'
+import { readOpenAIRequestTimezone, withOpenAIRequestTimezone } from '@/utils/openAIRequestTimezone'
+import AccountTierRoutingFields from './AccountTierRoutingFields.vue'
+import { readAccountTierRouting, withAccountTierRouting, type AccountTierPool } from '@/utils/accountTierRouting'
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -3248,6 +3271,8 @@ import {
 } from '@/components/account/groupAllowedModels'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
+import GrokMediaProviderSelect from '@/components/account/GrokMediaProviderSelect.vue'
+import { applyGrokMediaProvider, readGrokMediaProvider, type GrokMediaProvider } from '@/components/account/grokMediaProvider'
 import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import OpenCodeGoProtocolRulesEditor from '@/components/account/OpenCodeGoProtocolRulesEditor.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
@@ -3481,6 +3506,38 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const editGrokMediaProvider = ref<GrokMediaProvider>('')
+
+// Preview cannot inherit the saved account's transport settings. Require a
+// normal save before syncing such accounts rather than silently connecting direct.
+const editSyncBlockedReason = computed(() => {
+  const account = props.account
+  if (account?.platform !== 'video' || account.type !== 'apikey' || !editApiKey.value.trim()) return undefined
+  if (!editBaseUrl.value.trim()) return t('videoModule.baseUrlRequired')
+  const credentials = account.credentials as Record<string, unknown> | undefined
+  const extra = account.extra as Record<string, unknown> | undefined
+  if (account.proxy_id || form.proxy_id || headerOverrideEnabled.value ||
+      credentials?.[HEADER_OVERRIDE_ENABLED_CREDENTIAL_KEY] === true ||
+      tlsFingerprintEnabled.value || account.enable_tls_fingerprint || extra?.enable_tls_fingerprint === true) {
+    return t('admin.accounts.syncUpstreamPreviewSaveConnectionFirst')
+  }
+  return undefined
+})
+
+// Only video editing opts in to unsaved-key preview. Other platform edit flows
+// continue syncing the saved account, and Update remains the persistence action.
+const editSyncCredentials = computed(() => {
+  const account = props.account
+  const apiKey = editApiKey.value.trim()
+  if (account?.platform !== 'video' || account.type !== 'apikey' || !apiKey || editSyncBlockedReason.value) return undefined
+
+  return {
+    platform: account.platform,
+    type: account.type,
+    base_url: editBaseUrl.value.trim(),
+    api_key: apiKey
+  }
+})
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）account_mode / api_protocol 编辑 ──
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
@@ -3646,6 +3703,10 @@ const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
 const GROK_CLIENT_TOOL_CACHE_EXTRA_KEY = 'grok_client_tool_cache_enabled'
+const requestTimezone = ref(readOpenAIRequestTimezone())
+const tierRoutingEnabled = ref(false)
+const tierRoutingPool = ref<AccountTierPool>('standard')
+
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
@@ -4123,6 +4184,7 @@ const tempUnschedPresets = computed(() => [
 
 // Computed: default base URL based on platform
 const defaultBaseUrl = computed(() => {
+  if (props.account?.platform === 'video') return ''
   if (props.account?.platform === 'openai') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
   if (props.account?.platform === 'grok') return 'https://api.x.ai/v1'
@@ -4257,6 +4319,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedChannelWarningRawMessage.value = ''
   mixedChannelWarningAction.value = null
   form.name = newAccount.name
+  editGrokMediaProvider.value = (newAccount.platform === 'grok' || newAccount.platform === 'video')
+    ? readGrokMediaProvider(newAccount.credentials as Record<string, unknown> | undefined)
+    : ''
   form.notes = newAccount.notes || ''
   form.proxy_id = newAccount.proxy_id
   form.concurrency = newAccount.concurrency
@@ -4289,6 +4354,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   mixedScheduling.value = false
   allowOverages.value = false
 	const extra = newAccount.extra as Record<string, unknown> | undefined
+    requestTimezone.value = readOpenAIRequestTimezone(extra)
+    const tier = readAccountTierRouting(extra)
+    tierRoutingEnabled.value = tier.enabled
+    tierRoutingPool.value = tier.pool
 	mixedScheduling.value = extra?.mixed_scheduling === true
 	allowOverages.value = extra?.allow_overages === true
 	upstreamRequestIdHeader.value = readUpstreamRequestIdHeader(extra)
@@ -4592,7 +4661,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
         ? 'https://api.openai.com'
         : newAccount.platform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
-          : newAccount.platform === 'grok'
+          : newAccount.platform === 'video'
+            ? ''
+            : newAccount.platform === 'grok'
             ? 'https://api.x.ai/v1'
             : newAccount.platform === 'kimi' ||
                 newAccount.platform === 'zhipu' ||
@@ -4670,7 +4741,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
         ? 'https://api.openai.com'
         : newAccount.platform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
-          : newAccount.platform === 'grok'
+          : newAccount.platform === 'video'
+            ? ''
+            : newAccount.platform === 'grok'
             ? 'https://api.x.ai/v1'
             : 'https://api.anthropic.com'
     editBaseUrl.value = platformDefaultUrl
@@ -5254,6 +5327,8 @@ const persistGrokMediaEligibility = async (accountID: number, updatedAccount: Ac
 }
 
 const submitUpdateAccount = async (accountID: number, updatePayload: Record<string, unknown>) => {
+  if (updatePayload.extra && typeof updatePayload.extra === 'object') {
+  }
   submitting.value = true
   try {
     let updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))
@@ -5321,6 +5396,10 @@ const handleSubmit = async () => {
 
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
+      if (props.account.platform === 'video' && !editBaseUrl.value.trim()) {
+        appStore.showError(t('videoModule.baseUrlRequired'))
+        return
+      }
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
       const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
       const shouldApplyModelMapping = !(props.account.platform === 'openai' && (openaiPassthroughEnabled.value || copilotSDKEnabled.value))
@@ -5330,6 +5409,7 @@ const handleSubmit = async () => {
         ...currentCredentials,
         base_url: newBaseUrl
       }
+      if (props.account.platform === 'grok' || props.account.platform === 'video') applyGrokMediaProvider(newCredentials, editGrokMediaProvider.value)
 
       // 国产供应商：模式与协议写入凭据（决定额度/余额探测与转发端点/格式）。
       if (isCNApiKeyAccount.value) {
@@ -6033,6 +6113,22 @@ const handleSubmit = async () => {
         delete newExtra.upstream_request_id_header
       }
       updatePayload.extra = newExtra
+    }
+
+
+    if (props.account.platform === 'openai' && JSON.stringify(requestTimezone.value) !== JSON.stringify(readOpenAIRequestTimezone(props.account.extra))) {
+      updatePayload.extra = withOpenAIRequestTimezone(
+        (updatePayload.extra || props.account.extra) as Record<string, unknown> | undefined,
+        requestTimezone.value
+      )
+    }
+
+    const originalTier = readAccountTierRouting(props.account.extra)
+    if (originalTier.enabled !== tierRoutingEnabled.value || originalTier.pool !== tierRoutingPool.value) {
+      updatePayload.extra = withAccountTierRouting(
+        (updatePayload.extra || props.account.extra) as Record<string, unknown> | undefined,
+        tierRoutingEnabled.value, tierRoutingPool.value
+      )
     }
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {

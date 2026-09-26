@@ -33,7 +33,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/home',
     name: 'Home',
-    component: () => import('@/views/HomeView.vue'),
+    component: () => import('@/views/HomeLandingView.vue'),
     meta: {
       requiresAuth: false,
       title: 'Home'
@@ -58,6 +58,10 @@ const routes: RouteRecordRaw[] = [
       title: 'Register',
       titleKey: 'auth.createAccount'
     }
+  },
+  {
+    path: '/signup',
+    redirect: (to) => ({ path: '/register', query: to.query, hash: to.hash }),
   },
   {
     path: '/email-verify',
@@ -241,6 +245,47 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/apps',
+    name: 'AppCenter',
+    component: () => import('@/features/kitty-studio/KittyStudioView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Kitty Studio',
+      titleKey: 'appCenter.title',
+      descriptionKey: 'appCenter.description'
+    }
+  },
+  {
+    path: '/creative-canvas',
+    name: 'CreativeCanvas',
+    component: () => import('@/views/user/CreativeCanvasView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '无限画布' }
+  },
+  {
+    path: '/video-tasks',
+    name: 'VideoTasks',
+    component: () => import('@/views/user/VideoTasksView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: '视频任务' }
+  },
+  {
+    path: '/admin/video-tasks',
+    name: 'AdminVideoTasks',
+    component: () => import('@/views/user/VideoTasksView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '视频任务管理' }
+  },
+  {
+    path: '/chat',
+    name: 'KittyChat',
+    component: () => import('@/features/kitty-chat/KittyChatView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Online Chat',
+      titleKey: 'nav.onlineChat'
+    }
+  },
+  {
     path: '/redeem',
     name: 'Redeem',
     component: () => import('@/views/user/RedeemView.vue'),
@@ -250,6 +295,30 @@ const routes: RouteRecordRaw[] = [
       title: 'Redeem Code',
       titleKey: 'redeem.title',
       descriptionKey: 'redeem.description'
+    }
+  },
+  {
+    path: '/billing',
+    name: 'Billing',
+    component: () => import('@/views/user/BillingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Billing Statement',
+      titleKey: 'billing.title',
+      descriptionKey: 'billing.description'
+    }
+  },
+  {
+    path: '/tickets',
+    name: 'Tickets',
+    component: () => import('@/views/user/TicketsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Support Tickets',
+      titleKey: 'tickets.title',
+      descriptionKey: 'tickets.description'
     }
   },
   {
@@ -386,6 +455,32 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/image-generator',
+    redirect: '/apps'
+  },
+  {
+    path: '/custom/image-generator',
+    redirect: '/apps'
+  },
+  {
+    path: '/reset-radar',
+    redirect: '/custom/reset-radar'
+  },
+  {
+    path: '/billing-rules',
+    redirect: '/custom/billing-rules'
+  },
+  ...(import.meta.env.DEV ? [{
+    path: '/billing-rules-preview',
+    name: 'BillingRulesPreview',
+    component: () => import('@/views/user/native/BillingRulesPanel.vue'),
+    meta: { requiresAuth: false, requiresAdmin: false, title: 'Billing Rules Preview' }
+  }] : []),
+  {
+    path: '/docs',
+    redirect: '/custom/docs'
+  },
+  {
     path: '/custom/:id',
     name: 'CustomPage',
     component: () => import('@/views/user/CustomPageView.vue'),
@@ -485,6 +580,42 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/global-pricing',
+    name: 'AdminGlobalPricing',
+    component: () => import('@/views/admin/GlobalPricingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Global Model Pricing',
+      titleKey: 'admin.globalPricing.title',
+      descriptionKey: 'admin.globalPricing.description'
+    }
+  },
+  {
+    path: '/admin/tiered-routing',
+    name: 'AdminTieredRouting',
+    component: () => import('@/views/admin/TieredRoutingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Tiered Routing',
+      titleKey: 'admin.tieredRouting.title',
+      descriptionKey: 'admin.tieredRouting.description'
+    }
+  },
+  {
+    path: '/admin/spend-guard',
+    name: 'AdminSpendGuard',
+    component: () => import('@/views/admin/SpendGuardView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Spend Guard',
+      titleKey: 'admin.spendGuard.title',
+      descriptionKey: 'admin.spendGuard.description'
+    }
+  },
+  {
     path: '/admin/channels/monitor',
     name: 'AdminChannelMonitor',
     component: () => import('@/views/admin/ChannelMonitorView.vue'),
@@ -503,6 +634,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
+      requiresChannelMonitor: true,
       title: 'Channel Status',
       titleKey: 'nav.channelStatus'
     }
@@ -571,6 +703,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
+      requiresSuperAdmin: true,
       title: 'Plugin Management',
       titleKey: 'admin.plugins.title',
       descriptionKey: 'admin.plugins.description'
@@ -586,6 +719,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Announcements',
       titleKey: 'admin.announcements.title',
       descriptionKey: 'admin.announcements.description'
+    }
+  },
+  {
+    path: '/admin/tickets',
+    name: 'AdminTickets',
+    component: () => import('@/views/admin/TicketsAdminView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Support Tickets',
+      titleKey: 'admin.tickets.title',
+      descriptionKey: 'admin.tickets.description'
     }
   },
   {
@@ -631,6 +776,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
+      requiresSuperAdmin: true,
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
@@ -638,6 +784,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/risk-control',
+    alias: '/admin/security-policy',
     name: 'AdminRiskControl',
     component: () => import('@/views/admin/RiskControlView.vue'),
     meta: {
@@ -645,8 +792,7 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Risk Control',
       titleKey: 'admin.riskControl.title',
-      descriptionKey: 'admin.riskControl.description',
-      requiresRiskControl: true
+      descriptionKey: 'admin.riskControl.description'
     }
   },
   {
@@ -658,8 +804,7 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Prompt Audit',
       titleKey: 'admin.promptAudit.title',
-      descriptionKey: 'admin.promptAudit.description',
-      requiresRiskControl: true
+      descriptionKey: 'admin.promptAudit.description'
     }
   },
   {
@@ -803,6 +948,7 @@ const BACKEND_MODE_CALLBACK_PATHS = [
 const BACKEND_MODE_PENDING_AUTH_PATHS = ['/register', '/email-verify']
 
 function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: boolean): boolean {
+  if (import.meta.env.DEV && path === '/billing-rules-preview') return true
   if (BACKEND_MODE_ALLOWED_PATHS.some((allowedPath) => path === allowedPath || path.startsWith(allowedPath))) {
     return true
   }
@@ -929,6 +1075,11 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
+  if (to.meta.requiresSuperAdmin && !authStore.isSuperAdmin) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
+  }
+
   if (requiresAdmin && authStore.isAdmin && to.meta.requiresRequestCapture) {
     await adminSettingsStore.fetch(true)
     if (!adminSettingsStore.requestCaptureEnabled) { next('/admin/settings'); return }
@@ -950,9 +1101,12 @@ router.beforeEach(async (to, _from, next) => {
 
 
   // 公共设置可能尚未加载（App.vue 的 onMounted 异步拉取晚于首次导航，且纯静态部署
-  // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
+  // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空可能把功能开关
   // 误判为“未启用”而错误拦截，故这里先确保设置加载完成。
-  if ((to.meta.requiresPayment || to.meta.requiresRiskControl || to.meta.requiresSubscription) && !appStore.publicSettingsLoaded) {
+  if (
+    (to.meta.requiresPayment || to.meta.requiresChannelMonitor || to.meta.requiresSubscription) &&
+    !appStore.publicSettingsLoaded
+  ) {
     try {
       await appStore.fetchPublicSettings()
     } catch (error) {
@@ -963,20 +1117,20 @@ router.beforeEach(async (to, _from, next) => {
   // Only an explicit value from successfully loaded settings can disable a route.
   // A transient settings failure is unknown state, not a confirmed feature toggle.
   if (
-    to.meta.requiresPayment &&
+    to.meta.requiresChannelMonitor &&
     appStore.publicSettingsLoaded &&
-    appStore.cachedPublicSettings?.payment_enabled === false
+    appStore.cachedPublicSettings?.channel_monitor_enabled === false
   ) {
     next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 
   if (
-    to.meta.requiresRiskControl &&
+    to.meta.requiresPayment &&
     appStore.publicSettingsLoaded &&
-    appStore.cachedPublicSettings?.risk_control_enabled === false
+    appStore.cachedPublicSettings?.payment_enabled === false
   ) {
-    next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
     return
   }
 

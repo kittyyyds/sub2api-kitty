@@ -88,6 +88,32 @@ type Account struct {
 	headerOverrideCacheRawSig         uint64
 }
 
+// ApplyAccountGroupPriority replaces the effective priority on an account that
+// belongs to groupID when the group-priority feature is enabled. Accounts that
+// do not have a matching relation retain their global accounts.priority.
+func ApplyAccountGroupPriority(account *Account, groupID *int64, enabled bool) {
+	if account == nil || !enabled || groupID == nil {
+		return
+	}
+	for _, group := range account.AccountGroups {
+		if group.GroupID == *groupID {
+			account.Priority = group.Priority
+			return
+		}
+	}
+}
+
+// ApplyAccountGroupPriorities applies the effective group priority to each
+// account in a scheduling candidate list.
+func ApplyAccountGroupPriorities(accounts []Account, groupID *int64, enabled bool) {
+	if !enabled || groupID == nil {
+		return
+	}
+	for i := range accounts {
+		ApplyAccountGroupPriority(&accounts[i], groupID, enabled)
+	}
+}
+
 type OpenAIEndpointCapability string
 
 const openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
@@ -129,6 +155,14 @@ const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
 // accounts.extra. true forces media routing on, false disables it, and an
 // absent/null value uses provider observations.
 const GrokMediaEligibleExtraKey = "grok_media_eligible"
+
+// GrokMediaCompatibilityExtraKey selects the request contract used by a Grok
+// API-key account's image/video endpoints. The default is the official xAI
+// contract; "openai_compatible" is for relays that expose an
+// OpenAI-compatible media API instead of xAI's native fields.
+const GrokMediaCompatibilityExtraKey = "grok_media_compatibility"
+
+const GrokMediaCompatibilityOpenAI = "openai_compatible"
 
 const (
 	OpenAIAuthModePersonalAccessToken = "personalAccessToken"
@@ -180,6 +214,27 @@ func (a *Account) BillingRateMultiplier() float64 {
 		return 1.0
 	}
 	return *a.RateMultiplier
+}
+
+// EffectiveBillingRateMultiplierAt returns the request-time account cost
+// multiplier. A fresh, successful upstream billing probe wins; otherwise the
+// administrator configured multiplier is used. Callers must persist the
+// returned value with the usage log so historical account cost is never recomputed
+// from mutable account state.
+func (a *Account) EffectiveBillingRateMultiplierAt(now time.Time) (float64, string) {
+	fallback := a.BillingRateMultiplier()
+	if !isUpstreamBillingProbeAccount(a) || !upstreamBillingProbeEnabled(a) {
+		return fallback, "manual"
+	}
+	snapshot := decodeUpstreamBillingProbeSnapshot(a.Extra)
+	if snapshot == nil || snapshot.Status != UpstreamBillingProbeStatusOK ||
+		snapshot.FreshUntil == nil || !now.Before(*snapshot.FreshUntil) {
+		return fallback, "manual"
+	}
+	if rate, ok := upstreamBillingRateAt(snapshot.Data, now); ok {
+		return rate, "probe"
+	}
+	return fallback, "manual"
 }
 
 // UserGroupRateMultiplier returns the account-level multiplier used with the
@@ -298,6 +353,20 @@ func (a *Account) IsGrokOAuth() bool {
 	return a.IsGrok() && a.Type == AccountTypeOAuth
 }
 
+// IsGrokOpenAICompatibleMedia reports whether this account's media relay uses
+// the OpenAI-compatible image/video request contract. It is deliberately
+// account-scoped so official xAI accounts keep their native request shape.
+func (a *Account) IsGrokOpenAICompatibleMedia() bool {
+	if a == nil || !a.IsGrok() {
+		return false
+	}
+	value := strings.ToLower(strings.TrimSpace(a.GetExtraString(GrokMediaCompatibilityExtraKey)))
+	if value == "" {
+		value = strings.ToLower(strings.TrimSpace(a.GetCredential(GrokMediaCompatibilityExtraKey)))
+	}
+	return value == GrokMediaCompatibilityOpenAI || value == "openai-compatible"
+}
+
 // IsKimi / IsZhipu / IsDeepseek 标识国产 OpenAI 兼容供应商账号。
 func (a *Account) IsKimi() bool {
 	return a.Platform == PlatformKimi
@@ -311,11 +380,7 @@ func (a *Account) IsDeepseek() bool {
 	return a.Platform == PlatformDeepseek
 }
 
-func (a *Account) IsMiniMax() bool {
-	return a.Platform == PlatformMiniMax
-}
-
-// IsCNProvider 报告是否为国产 OpenAI 兼容供应商（kimi/zhipu/deepseek/minimax）。
+// IsCNProvider 报告是否为国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）。
 func (a *Account) IsCNProvider() bool {
 	return a != nil && IsCNProvider(a.Platform)
 }
@@ -324,7 +389,7 @@ func (a *Account) IsCNProvider() bool {
 // openai/grok 原生走 OpenAI 网关；国产供应商同为 OpenAI Chat Completions
 // 兼容上游，也经 OpenAI 网关转发。OpenCode 同样经 OpenAI 网关按模型分流。
 func (a *Account) IsOpenAICompatible() bool {
-	return a != nil && (a.Platform == PlatformOpenAI || a.Platform == PlatformGrok || a.IsCNProvider() || a.IsOpenCodeGo())
+	return a != nil && (a.Platform == PlatformOpenAI || a.Platform == PlatformGrok || a.IsVideo() || a.IsCNProvider() || a.IsOpenCodeGo())
 }
 
 func (a *Account) GeminiOAuthType() string {
@@ -831,6 +896,19 @@ func normalizeRequestedModelForLookup(platform, requestedModel string) string {
 	trimmed := strings.TrimSpace(requestedModel)
 	if trimmed == "" {
 		return ""
+	}
+	if platform == PlatformGrok {
+		switch strings.ToLower(trimmed) {
+		case "grok-imagine", "grok-imagine-edit":
+			return xai.ModelGrokImagineImageQuality
+		}
+		if canonical, ok := xai.CanonicalImageGenerationModel(trimmed); ok {
+			return canonical
+		}
+		if canonical, ok := xai.CanonicalVideoGenerationModel(trimmed); ok {
+			return canonical
+		}
+		return trimmed
 	}
 	if platform != PlatformGemini && platform != PlatformAntigravity {
 		return trimmed
@@ -1437,7 +1515,7 @@ func (a *Account) IsCodingPlan() bool {
 
 // GetAPIProtocol 返回国产供应商账号的上游 API 协议。存储于
 // credentials["api_protocol"]；缺失或与平台不匹配时回退 chat_completions
-// （与既有行为完全一致）。responses 协议仅 deepseek / kimi / minimax 支持（官方原生
+// （与既有行为完全一致）。responses 协议仅 deepseek / kimi 支持（官方原生
 // Responses 端点，适配 Codex）；zhipu 无此端点。
 func (a *Account) GetAPIProtocol() string {
 	if a == nil || !a.IsMultiProtocolAPIKey() {
@@ -1463,7 +1541,7 @@ func (a *Account) GetAPIProtocol() string {
 
 // SupportsNativeCNResponses 报告该国产供应商是否提供原生 Responses 端点。
 // DeepSeek 官方为 /responses（无 /v1）；Kimi 按量付费与 Coding Plan 均为
-// /v1/responses（moonshot.cn / kimi.com/coding）；MiniMax 为 /v1/responses。
+// /v1/responses（moonshot.cn / kimi.com/coding）。
 func (a *Account) SupportsNativeCNResponses() bool {
 	if a == nil {
 		return false
@@ -1638,9 +1716,9 @@ func (a *Account) GetCNAPIKey() string {
 	return a.GetCredential("api_key")
 }
 
-// GetCodingPlanProvider 根据 base_url 识别 Coding Plan 供应商（kimi / zhipu / minimax），
+// GetCodingPlanProvider 根据 base_url 识别 Coding Plan 供应商（kimi / zhipu），
 // 用于路由到对应的额度查询端点。非 coding 模式或无法识别时返回空串。
-// 只认官方域名：自定义中转不得把第三方 Key 发往厂商官方额度端点。
+// 判定规则与 cc-switch coding_plan.rs::detect_provider 保持一致。
 func (a *Account) GetCodingPlanProvider() string {
 	if a == nil {
 		return ""
@@ -1652,15 +1730,14 @@ func (a *Account) GetCodingPlanProvider() string {
 		return ""
 	}
 	baseURL := strings.ToLower(a.GetOpenAIBaseURL())
+	if parsed, err := url.Parse(baseURL); a.Platform == PlatformMiniMax && err == nil && (parsed.Hostname() == "api.minimaxi.com" || parsed.Hostname() == "api.minimax.io") {
+		return PlatformMiniMax
+	}
 	switch {
 	case strings.Contains(baseURL, "api.kimi.com/coding"):
 		return PlatformKimi
 	case strings.Contains(baseURL, "bigmodel.cn"), strings.Contains(baseURL, "api.z.ai"):
 		return PlatformZhipu
-	case strings.Contains(baseURL, "minimax.io"),
-		strings.Contains(baseURL, "minimaxi.com"),
-		strings.Contains(baseURL, "minimax.com"):
-		return PlatformMiniMax
 	default:
 		return ""
 	}
@@ -1688,7 +1765,7 @@ func (a *Account) GetOpenAIRefreshToken() string {
 // traffic (OAuth authorization and token refresh) always uses the official
 // auth endpoints regardless of this value.
 func (a *Account) GetGrokBaseURL() string {
-	if a == nil || !a.IsGrok() {
+	if !a.IsGrokMediaAccount() {
 		return ""
 	}
 	if a.IsGrokOAuth() {
@@ -1701,7 +1778,7 @@ func (a *Account) GetGrokBaseURL() string {
 // supplied default. Official OAuth endpoints are normalized here; custom
 // endpoints are retained for the request builder's operator URL policy.
 func (a *Account) GetGrokBaseURLOr(defaultBaseURL string) string {
-	if a == nil || !a.IsGrok() {
+	if !a.IsGrokMediaAccount() {
 		return ""
 	}
 	defaultBaseURL = strings.TrimRight(strings.TrimSpace(defaultBaseURL), "/")
@@ -1738,7 +1815,7 @@ func (a *Account) GetGrokBaseURLOr(defaultBaseURL string) string {
 // selected endpoint (official/regional API hosts or custom relays) serves
 // media as-is.
 func (a *Account) GetGrokMediaBaseURL() string {
-	if !a.IsGrok() {
+	if !a.IsGrokMediaAccount() {
 		return ""
 	}
 	baseURL := a.GetGrokBaseURL()
@@ -1854,6 +1931,9 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 	if a == nil {
 		return false
 	}
+	if a.IsVideo() {
+		return a.Type == AccountTypeAPIKey && (capability == "" || capability == OpenAIEndpointCapabilityGrokMediaGeneration)
+	}
 	if capability == OpenAIEndpointCapabilitySeedance {
 		configured, _ := a.openAIEndpointCapabilitySet()
 		return configured["seedance"] && a.Platform == PlatformOpenAI && a.Type == AccountTypeAPIKey &&
@@ -1935,11 +2015,13 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 }
 
 // GrokMediaGenerationEligibility reports whether a Grok account may receive
-// new image/video generation requests. Explicit evidence of a forbidden or
-// free account blocks media, while an incomplete successful billing response
-// remains eligible for backwards compatibility. An explicit operator
-// override takes precedence over probe data.
+// new image/video generation requests. OAuth media fails closed unless billing
+// observations provide positive paid-entitlement evidence. An explicit
+// operator override takes precedence over probe data.
 func (a *Account) GrokMediaGenerationEligibility() (bool, string) {
+	if a.IsVideo() {
+		return a.Type == AccountTypeAPIKey, "video_api_key"
+	}
 	if a == nil || !a.IsGrok() {
 		return false, "not_grok"
 	}
@@ -1951,6 +2033,11 @@ func (a *Account) GrokMediaGenerationEligibility() (bool, string) {
 	}
 	if a.Type != AccountTypeOAuth {
 		return true, "non_oauth"
+	}
+	if tier, free := grokPaidSubscriptionTierEvidence(a); free {
+		return false, "billing_free_tier"
+	} else if tier != "" {
+		return true, "paid_subscription_tier"
 	}
 
 	billing, err := grokBillingSnapshotFromExtra(a.Extra)
@@ -1964,12 +2051,7 @@ func (a *Account) GrokMediaGenerationEligibility() (bool, string) {
 		return false, "billing_free_tier"
 	}
 	if !grokBillingHasAuthoritativeQuota(billing) {
-		// Billing endpoints can return 200 with an account-specific schema that
-		// omits plan/quota fields (for example, some SuperGrok accounts). An
-		// incomplete observation is not proof of ineligibility; keep the account
-		// routable and expose the reason for diagnostics. Operators can still
-		// quarantine a known-bad account with grok_media_eligible=false.
-		return true, "billing_inconclusive"
+		return false, "billing_inconclusive"
 	}
 	return true, "eligible"
 }
@@ -2521,8 +2603,8 @@ func (a *Account) IsAnthropicOAuthOrSetupToken() bool {
 }
 
 // IsTLSFingerprintEnabled 检查是否启用 TLS 指纹伪装
-// 仅适用于 Anthropic OAuth/SetupToken 类型账号
-// 启用后将模拟 Claude Code (Node.js) 客户端的 TLS 握手特征
+// 仅适用于 Anthropic OAuth/SetupToken 类型账号。
+// 与官方一致，使用 Claude Code (Node.js) 客户端的 TLS 握手特征。
 func (a *Account) IsTLSFingerprintEnabled() bool {
 	// 仅支持 Anthropic OAuth/SetupToken 账号
 	if !a.IsAnthropicOAuthOrSetupToken() {

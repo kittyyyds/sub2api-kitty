@@ -461,3 +461,16 @@ func (s *UsageService) GetStatsWithFilters(ctx context.Context, filters usagesta
 	}
 	return stats, nil
 }
+
+// GetUsageAuditStats returns usage authenticity coverage and deviation aggregates.
+func (s *UsageService) GetUsageAuditStats(ctx context.Context, filters usagestats.UsageLogFilters) (*UsageAuditStats, error) {
+	repo, ok := s.usageRepo.(UsageAuditRepository)
+	if !ok {
+		return nil, fmt.Errorf("usage audit repository is not configured")
+	}
+	stats, err := repo.GetUsageAuditStats(ctx, filters)
+	if err != nil {
+		return nil, fmt.Errorf("get usage audit stats: %w", err)
+	}
+	return stats, nil
+}

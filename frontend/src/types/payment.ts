@@ -19,7 +19,7 @@ export type OrderStatus =
   | 'REFUNDED'
   | 'REFUND_FAILED'
 
-export type PaymentType = 'alipay' | 'wxpay' | 'alipay_direct' | 'wxpay_direct' | 'stripe' | 'easypay' | 'airwallex'
+export type PaymentType = 'alipay' | 'wxpay' | 'alipay_direct' | 'wxpay_direct' | 'stripe' | 'easypay' | 'airwallex' | 'dujiaopay' | 'paypal'
 
 export type OrderType = 'balance' | 'subscription'
 
@@ -78,6 +78,23 @@ export interface CheckoutInfoResponse {
   alipay_force_qrcode?: boolean
   /** When true, official Alipay mobile orders use precreate plus an Alipay app deep link */
   alipay_mobile_precreate_deep_link?: boolean
+  recharge_bonus_rules: RechargeBonusRule[]
+  recharge_bonus_summary: RechargeBonusSummary
+}
+
+export interface RechargeBonusRule {
+  id: number
+  recharge_amount: number
+  bonus_amount: number
+  validity_days: number
+  starts_at?: string
+  ends_at?: string
+}
+
+export interface RechargeBonusSummary {
+  available_amount: number
+  next_expires_at?: string
+  active_grants: number
 }
 
 // ==================== Orders ====================

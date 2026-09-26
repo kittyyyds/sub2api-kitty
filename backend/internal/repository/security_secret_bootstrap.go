@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 )
 
 const (
@@ -33,6 +34,20 @@ func ensureBootstrapSecrets(ctx context.Context, client *ent.Client, cfg *config
 	}
 
 	cfg.JWT.Secret = strings.TrimSpace(cfg.JWT.Secret)
+	if managedinstance.Enabled() {
+		// Blue/green instances must share the persisted secret without racing
+		// bootstrap INSERTs or manufacturing a replacement session identity.
+		stored, err := client.SecuritySecret.Query().Where(securitysecret.KeyEQ(securitySecretKeyJWT)).Only(ctx)
+		if err != nil {
+			return fmt.Errorf("managed JWT secret must already exist: %w", err)
+		}
+		value := strings.TrimSpace(stored.Value)
+		if len([]byte(value)) < 32 {
+			return fmt.Errorf("managed persisted JWT secret must be at least 32 bytes")
+		}
+		cfg.JWT.Secret = value
+		return nil
+	}
 	if cfg.JWT.Secret != "" {
 		storedSecret, err := createSecuritySecretIfAbsent(ctx, client, securitySecretKeyJWT, cfg.JWT.Secret)
 		if err != nil {

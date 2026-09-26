@@ -42,13 +42,15 @@ export const PROVIDER_SUPPORTED_TYPES: Record<string, string[]> = {
   wxpay: ['wxpay'],
   stripe: ['card', 'alipay', 'wxpay', 'link'],
   airwallex: ['airwallex'],
+  dujiaopay: ['dujiaopay'],
+  paypal: ['paypal'],
 }
 
 /** Available payment modes for EasyPay providers. */
 export const EASYPAY_PAYMENT_MODES = ['qrcode', 'popup'] as const
 
 /** Fixed display order for user-facing payment methods */
-export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'stripe', 'airwallex'] as const
+export const METHOD_ORDER = ['alipay', 'alipay_direct', 'wxpay', 'wxpay_direct', 'dujiaopay', 'paypal', 'stripe', 'airwallex'] as const
 
 export function isBuiltInAlipayMethod(type: string): boolean {
   return type === 'alipay' || type === 'alipay_direct'
@@ -81,6 +83,11 @@ export const PAYMENT_CURRENCY_OPTIONS: TypeOption[] = [
   { value: 'NZD', label: 'NZD' },
 ]
 
+export const PAYPAL_ENVIRONMENT_OPTIONS: TypeOption[] = [
+  { value: 'sandbox', label: 'Sandbox' },
+  { value: 'live', label: 'Live' },
+]
+
 // 与后端当前集成的 stripe-go v85.0.0 的 stripe.APIVersion 保持一致。
 export const STRIPE_SDK_API_VERSION = '2026-03-25.dahlia'
 
@@ -110,6 +117,8 @@ export const WEBHOOK_PATHS: Record<string, string> = {
   wxpay: '/api/v1/payment/webhook/wxpay',
   stripe: '/api/v1/payment/webhook/stripe',
   airwallex: '/api/v1/payment/webhook/airwallex',
+  dujiaopay: '/api/v1/payment/webhook/dujiaopay',
+  paypal: '/api/v1/payment/webhook/paypal',
 }
 
 export const RETURN_PATH = '/payment/result'
@@ -160,6 +169,21 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
     { key: 'countryCode', label: '', sensitive: false, defaultValue: 'CN' },
     { key: 'currency', label: '', sensitive: false, defaultValue: 'CNY', hintKey: 'admin.settings.payment.field_paymentCurrencyHint', options: PAYMENT_CURRENCY_OPTIONS },
     { key: 'accountId', label: '', sensitive: false, optional: true, clearable: true, hintKey: 'admin.settings.payment.field_accountIdHint' },
+  ],
+  dujiaopay: [
+    { key: 'keyId', label: '', sensitive: false },
+    { key: 'apiSecret', label: '', sensitive: true },
+    { key: 'webhookSecret', label: '', sensitive: true, optional: true },
+    { key: 'apiBase', label: '', sensitive: false, defaultValue: 'https://www.dujiaopay.com', hintKey: 'admin.settings.payment.field_dujiaoPayApiBaseHint' },
+    { key: 'currency', label: '', sensitive: false, defaultValue: 'CNY', hintKey: 'admin.settings.payment.field_paymentCurrencyHint', options: PAYMENT_CURRENCY_OPTIONS },
+  ],
+  paypal: [
+    { key: 'clientId', label: '', sensitive: false },
+    { key: 'clientSecret', label: '', sensitive: true },
+    { key: 'webhookId', label: '', sensitive: false },
+    { key: 'environment', label: '', sensitive: false, defaultValue: 'sandbox', hintKey: 'admin.settings.payment.field_payPalEnvironmentHint', options: PAYPAL_ENVIRONMENT_OPTIONS },
+    { key: 'currency', label: '', sensitive: false, defaultValue: 'USD', hintKey: 'admin.settings.payment.field_payPalCurrencyHint', options: PAYMENT_CURRENCY_OPTIONS },
+    { key: 'brandName', label: '', sensitive: false, optional: true, clearable: true },
   ],
 }
 

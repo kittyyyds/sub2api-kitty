@@ -52,6 +52,7 @@ type RegisterRequest struct {
 	Password              string `json:"password" binding:"required,min=6"`
 	VerifyCode            string `json:"verify_code"`
 	TurnstileToken        string `json:"turnstile_token"`
+	TurnstileProof        string `json:"turnstile_proof"`
 	TencentCaptchaTicket  string `json:"tencent_captcha_ticket"`
 	TencentCaptchaRandstr string `json:"tencent_captcha_randstr"`
 	PromoCode             string `json:"promo_code"`      // 注册优惠码
@@ -63,14 +64,16 @@ type RegisterRequest struct {
 type SendVerifyCodeRequest struct {
 	Email                 string `json:"email" binding:"required,email"`
 	TurnstileToken        string `json:"turnstile_token"`
+	TurnstileProof        string `json:"turnstile_proof"`
 	TencentCaptchaTicket  string `json:"tencent_captcha_ticket"`
 	TencentCaptchaRandstr string `json:"tencent_captcha_randstr"`
 }
 
 // SendVerifyCodeResponse 发送验证码响应
 type SendVerifyCodeResponse struct {
-	Message   string `json:"message"`
-	Countdown int    `json:"countdown"` // 倒计时秒数
+	Message        string `json:"message"`
+	Countdown      int    `json:"countdown"` // 倒计时秒数
+	TurnstileProof string `json:"turnstile_proof,omitempty"`
 }
 
 // LoginRequest represents the login request payload
@@ -185,7 +188,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	// 验证当前启用的验证码（邮箱验证码注册场景避免重复校验一次性票据）
 	proof := captchaProof(req.TurnstileToken, req.TencentCaptchaTicket, req.TencentCaptchaRandstr)
-	if err := h.authService.VerifyCaptchaForRegister(c.Request.Context(), proof, ip.GetClientIP(c), req.VerifyCode); err != nil {
+	if err := h.authService.VerifyCaptchaForRegisterWithProof(c.Request.Context(), proof, req.TurnstileProof, req.Email, ip.GetClientIP(c), req.VerifyCode); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -217,7 +220,8 @@ func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 	}
 
 	proof := captchaProof(req.TurnstileToken, req.TencentCaptchaTicket, req.TencentCaptchaRandstr)
-	if err := h.authService.VerifyCaptcha(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
+	turnstileProof, err := h.authService.VerifyCaptchaForRegistrationEmail(c.Request.Context(), proof, req.TurnstileProof, req.Email, ip.GetClientIP(c))
+	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -229,8 +233,9 @@ func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 	}
 
 	response.Success(c, SendVerifyCodeResponse{
-		Message:   "Verification code sent successfully",
-		Countdown: result.Countdown,
+		Message:        "Verification code sent successfully",
+		Countdown:      result.Countdown,
+		TurnstileProof: turnstileProof,
 	})
 }
 
@@ -244,11 +249,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	proof := captchaProof(req.TurnstileToken, req.TencentCaptchaTicket, req.TencentCaptchaRandstr)
-	if err := h.authService.VerifyCaptcha(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
+	if err := h.authService.VerifyActionCaptchaIfEnabled(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-
 	token, user, err := h.authService.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -609,11 +613,10 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	}
 
 	proof := captchaProof(req.TurnstileToken, req.TencentCaptchaTicket, req.TencentCaptchaRandstr)
-	if err := h.authService.VerifyCaptcha(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
+	if err := h.authService.VerifyActionCaptchaIfEnabled(c.Request.Context(), proof, ip.GetClientIP(c)); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-
 	frontendBaseURL := strings.TrimSpace(h.settingSvc.GetFrontendURL(c.Request.Context()))
 	if frontendBaseURL == "" {
 		slog.Error("frontend_url not configured in settings or config; cannot build password reset link")
@@ -696,7 +699,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	// Backend mode: block non-admin token refresh
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && result.UserRole != "admin" {
+	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !service.IsAdminRole(result.UserRole) {
 		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
 		return
 	}

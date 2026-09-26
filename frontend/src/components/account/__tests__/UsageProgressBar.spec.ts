@@ -7,7 +7,8 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key
+      t: (key: string, params?: Record<string, string>) =>
+        params ? `${key}:${JSON.stringify(params)}` : key
     })
   }
 })
@@ -164,6 +165,50 @@ describe('UsageProgressBar', () => {
     expect(mountAt(75).get('.h-1\\.5 + span').classes()).toContain('text-amber-600')
     expect(mountAt(89).get('.h-1\\.5 + span').classes()).toContain('text-amber-600')
     expect(mountAt(90).get('.h-1\\.5 + span').classes()).toContain('text-red-600')
+  })
+
+  it('在统计行显示官方预计总费用并随传入估值更新', async () => {
+    const wrapper = mount(UsageProgressBar, {
+      props: {
+        label: '7d',
+        utilization: 1,
+        resetsAt: '2026-03-23T23:00:00Z',
+        estimatedTotalCost: 370,
+        color: 'emerald',
+        windowStats: {
+          requests: 48,
+          tokens: 3_920_000,
+          cost: 3.7,
+          standard_cost: 3.7,
+          user_cost: 0.74
+        }
+      }
+    })
+
+    const estimate = wrapper.get('[data-test="estimated-total-cost"]')
+    expect(estimate.text()).toBe('admin.accounts.usageWindow.estimatedTotalCost:{"cost":"370.00"}')
+    expect(estimate.attributes('title')).toBe('admin.accounts.usageWindow.estimatedTotalCostTooltip')
+    expect(estimate.element.parentElement?.textContent).toContain('U $0.74')
+    expect(wrapper.find('[data-test="capacity-estimate"]').exists()).toBe(false)
+
+    await wrapper.setProps({ utilization: 2, estimatedTotalCost: 185 })
+    expect(wrapper.get('[data-test="estimated-total-cost"]').text()).toContain('185.00')
+
+    await wrapper.setProps({ estimatedTotalCost: null })
+    expect(wrapper.find('[data-test="estimated-total-cost"]').exists()).toBe(false)
+  })
+
+  it('未提供预计总费用时不显示估值标签', () => {
+    const wrapper = mount(UsageProgressBar, {
+      props: {
+        label: '7d',
+        utilization: 0,
+        color: 'emerald',
+        windowStats: { requests: 1, tokens: 100, cost: 3.7 }
+      }
+    })
+
+    expect(wrapper.find('[data-test="estimated-total-cost"]').exists()).toBe(false)
   })
 
   it('labelWidth 默认 fixed：标签保持定宽居中，百分比列不变', () => {

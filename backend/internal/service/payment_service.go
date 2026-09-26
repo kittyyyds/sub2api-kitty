@@ -197,6 +197,8 @@ type PaymentService struct {
 	groupRepo                GroupRepository
 	resumeService            *PaymentResumeService
 	affiliateService         *AffiliateService
+	rechargeBonusRepo        RechargeBonusRepository
+	billingCacheService      *BillingCacheService
 	notificationEmailService *NotificationEmailService
 }
 
@@ -208,6 +210,37 @@ func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, load
 
 func (s *PaymentService) SetNotificationEmailService(notificationEmailService *NotificationEmailService) {
 	s.notificationEmailService = notificationEmailService
+}
+
+func (s *PaymentService) SetRechargeBonusRepository(repo RechargeBonusRepository) {
+	s.rechargeBonusRepo = repo
+}
+
+func (s *PaymentService) SetBillingCacheService(cache *BillingCacheService) {
+	s.billingCacheService = cache
+}
+
+func (s *PaymentService) ListRechargeBonusRules(ctx context.Context) ([]RechargeBonusRule, error) {
+	if s == nil || s.rechargeBonusRepo == nil {
+		return []RechargeBonusRule{}, nil
+	}
+	return s.rechargeBonusRepo.ListActiveRules(ctx, time.Now().UTC())
+}
+
+func (s *PaymentService) GetRechargeBonusSummary(ctx context.Context, userID int64) (*RechargeBonusSummary, error) {
+	if s == nil || s.rechargeBonusRepo == nil {
+		return &RechargeBonusSummary{}, nil
+	}
+	summary, err := s.rechargeBonusRepo.GetUserSummary(ctx, userID, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	if s.billingCacheService != nil {
+		if err := s.billingCacheService.InvalidateUserBalance(ctx, userID); err != nil {
+			slog.Warn("invalidate balance cache after bonus summary refresh failed", "user_id", userID, "error", err)
+		}
+	}
+	return summary, nil
 }
 
 // --- Provider Registry ---

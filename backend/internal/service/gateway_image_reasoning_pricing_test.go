@@ -120,7 +120,7 @@ func TestCalculateRecordUsageCost_MediaReasoningPricing(t *testing.T) {
 					svc := &GatewayService{billingService: resolver.billingService, resolver: resolver}
 					cost = svc.calculateRecordUsageCost(context.Background(), &ForwardResult{
 						ReasoningEffort: &effort, AudioUsage: &AudioUsage{Mode: "tts", DurationOrUnits: 2},
-					}, apiKey, model, 0.5, 0.5, time.Time{})
+					}, apiKey, model, model, 0.5, 0.5, time.Time{})
 				} else {
 					svc := &OpenAIGatewayService{billingService: resolver.billingService, resolver: resolver}
 					result := &OpenAIForwardResult{ReasoningEffort: &effort}
@@ -131,7 +131,7 @@ func TestCalculateRecordUsageCost_MediaReasoningPricing(t *testing.T) {
 					}
 					var err error
 					cost, err = svc.calculateOpenAIRecordUsageCost(context.Background(), result, apiKey,
-						[]string{model}, 0.5, 0.5, 0.5, 0.5, UsageTokens{}, "", nil, time.Time{})
+						[]string{model}, model, 0.5, 0.5, 0.5, 0.5, UsageTokens{}, "", nil, time.Time{})
 					require.NoError(t, err)
 				}
 				require.NotNil(t, cost)

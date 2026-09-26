@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from '../client'
-import type { AdminUsageLog, UsageQueryParams, PaginatedResponse, UsageRequestType } from '@/types'
+import type { AdminUsageLog, UsageQueryParams, PaginatedResponse, UsageRequestType, UsageAuditStatus } from '@/types'
 import type { EndpointStat } from '@/types'
 
 // ==================== Types ====================
@@ -24,6 +24,41 @@ export interface AdminUsageStatsResponse {
   endpoints?: EndpointStat[]
   upstream_endpoints?: EndpointStat[]
   endpoint_paths?: EndpointStat[]
+}
+
+export interface UsageAuditStatusCounts {
+  pass: number
+  warning: number
+  anomaly: number
+  unverifiable: number
+  not_applicable: number
+  unknown: number
+  missing: number
+}
+
+export interface UsageAuditDimensionStats {
+  key: string
+  name: string
+  total: number
+  counts: UsageAuditStatusCounts
+  average_input_deviation_pct?: number
+  maximum_input_deviation_pct?: number
+  average_output_deviation_pct?: number
+  maximum_output_deviation_pct?: number
+}
+
+export interface UsageAuditStatsResponse {
+  total_records: number
+  audited_records: number
+  coverage_pct: number
+  counts: UsageAuditStatusCounts
+  average_input_deviation_pct?: number
+  maximum_input_deviation_pct?: number
+  average_output_deviation_pct?: number
+  maximum_output_deviation_pct?: number
+  by_platform: UsageAuditDimensionStats[]
+  by_account: UsageAuditDimensionStats[]
+  by_model: UsageAuditDimensionStats[]
 }
 
 export interface SimpleUser {
@@ -87,11 +122,14 @@ export interface AdminUsageQueryParams extends UsageQueryParams {
   upstream_model_mismatch?: boolean
   sort_by?: string
   sort_order?: 'asc' | 'desc'
+  audit_status?: UsageAuditStatus | 'missing'
   // 错误请求 tab 专属筛选(仅传给错误列表接口;共用同一 filters 对象)
   error_phase?: string | null
   error_category?: string | null
   status_code?: number | null
 }
+
+export type UsageAuditQueryParams = Omit<AdminUsageQueryParams, 'page' | 'page_size' | 'sort_by' | 'sort_order'>
 
 // ==================== API Functions ====================
 
@@ -136,6 +174,29 @@ export async function getStats(params: {
     params
   })
   return data
+}
+
+export async function getAuditStats(
+  params: UsageAuditQueryParams,
+  options?: { signal?: AbortSignal }
+): Promise<UsageAuditStatsResponse> {
+  const { data } = await apiClient.get<UsageAuditStatsResponse>('/admin/usage/audit/stats', {
+    params,
+    signal: options?.signal
+  })
+  return data
+}
+
+export async function exportAudit(
+  params: UsageAuditQueryParams,
+  format: 'csv' | 'json'
+): Promise<Blob> {
+  const response = await apiClient.get('/admin/usage/audit/export', {
+    params: { ...params, format },
+    responseType: 'blob',
+    timeout: 120000
+  })
+  return response.data
 }
 
 /**
@@ -210,6 +271,8 @@ export async function cancelCleanupTask(taskId: number): Promise<{ id: number; s
 export const adminUsageAPI = {
   list,
   getStats,
+  getAuditStats,
+  exportAudit,
   searchUsers,
   searchApiKeys,
   listCleanupTasks,

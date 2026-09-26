@@ -490,6 +490,7 @@ export interface SystemSettings {
   site_logo: string;
   site_subtitle: string;
   api_base_url: string;
+  api_base_url_description?: string;
   contact_info: string;
   doc_url: string;
   home_content: string;
@@ -632,6 +633,7 @@ export interface SystemSettings {
 
   // 分组隔离
   allow_ungrouped_key_scheduling: boolean;
+  account_group_priority_enabled: boolean;
 
   // Gateway forwarding behavior
   openai_ttft_mode: string;
@@ -861,6 +863,7 @@ export interface UpdateSettingsRequest {
   site_logo?: string;
   site_subtitle?: string;
   api_base_url?: string;
+  api_base_url_description?: string;
   contact_info?: string;
   doc_url?: string;
   home_content?: string;
@@ -981,6 +984,7 @@ export interface UpdateSettingsRequest {
   min_claude_code_version?: string;
   max_claude_code_version?: string;
   allow_ungrouped_key_scheduling?: boolean;
+  account_group_priority_enabled?: boolean;
   openai_ttft_mode?: string;
   enable_fingerprint_unification?: boolean;
   enable_metadata_passthrough?: boolean;

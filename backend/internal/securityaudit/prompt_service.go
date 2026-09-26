@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"io"
 	"net"
 	"net/http"
@@ -129,7 +130,9 @@ func (s *PromptService) Enqueue(_ context.Context, req Request) error {
 	}
 	requestCopy := req.Clone()
 	s.enqueueWG.Add(1)
+	managedDone := managedinstance.Track()
 	go func() {
+		defer managedDone()
 		defer s.enqueueWG.Done()
 		defer func() { <-s.enqueueSlots }()
 		ctx, cancel := context.WithTimeout(background, 2*time.Second)

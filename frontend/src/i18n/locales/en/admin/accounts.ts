@@ -1,5 +1,7 @@
 export default {
     accounts: {
+      requestTimezone: {"enabled": "Rewrite request timezone", "target": "Target timezone", "hint": "Off by default. Rewrites only an existing timezone in a complete environment block, preserving client dates, times, ordinary messages and the server timezone.", "syncSearch": "Sync existing web search timezone", "searchHint": "Only updates an existing timezone, preserving country and city. Inactive when request timezone rewriting is off.", "loadFailed": "Could not load the timezone list or the current selection is unavailable. Reopen this form or choose a valid timezone."},
+      tierRouting: {"enabled": "Enable tiered routing", "pool": "Account pool", "premium": "Preferred pool", "standard": "Standard pool", "hint": "The global tiered routing switch must also be enabled. With this account switch off, it is not preferred. Existing fallback applies when no preferred account is available."},
       title: 'Account Management',
       description: 'Manage AI platform accounts and credentials',
       createAccount: 'Create Account',
@@ -97,6 +99,8 @@ export default {
       schedulableDisabled: 'Scheduling disabled',
       failedToToggleSchedulable: 'Failed to toggle scheduling status',
       groupCountTotal: '{count} groups total',
+      groupPriorityLabel: 'Group priority P{priority}',
+      accountPriorityLabel: 'Account-wide priority {priority}',
       platforms: {
         anthropic: 'Anthropic',
         claude: 'Claude',
@@ -840,6 +844,7 @@ export default {
       syncUpstreamModelsEmpty: 'Upstream returned no models to sync',
       syncUpstreamModelsFailed: 'Failed to sync upstream models',
       syncUpstreamModelsError: 'Failed to sync upstream models: {message}',
+      syncUpstreamPreviewSaveConnectionFirst: 'This account has a proxy, custom headers, or TLS fingerprint configured. Click Update to save, then reopen the account and sync models using its complete connection settings.',
       syncUpstreamModelsMetadataIncomplete:
         'Model IDs were synced, but no capability metadata could be updated.',
       syncUpstreamModelsMetadataPartial:

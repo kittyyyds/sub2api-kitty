@@ -255,39 +255,7 @@ describe('PendingOAuthCreateAccountForm', () => {
     expect(wrapper.text()).not.toContain('send failed')
   })
 
-  it('consumes the captcha proof when sending a verify code fails', async () => {
-    getPublicSettings.mockResolvedValue({
-      turnstile_enabled: true,
-      turnstile_site_key: 'site-key'
-    })
-    sendPendingOAuthVerifyCode.mockRejectedValue(new Error('send failed'))
-
-    const wrapper = mount(PendingOAuthCreateAccountForm, {
-      props: {
-        testIdPrefix: 'oidc',
-        initialEmail: 'user@example.com',
-        isSubmitting: false
-      },
-      global: {
-        stubs: {
-          TurnstileWidget: {
-            template: '<button data-testid="turnstile-verify" @click="$emit(\'verify\', \'proof-token\')">verify</button>',
-            methods: { reset: turnstileReset }
-          }
-        }
-      }
-    })
-
-    await flushPromises()
-    await wrapper.get('[data-testid="turnstile-verify"]').trigger('click')
-    await wrapper.get('[data-testid="oidc-create-account-send-code"]').trigger('click')
-    await flushPromises()
-
-    expect(turnstileReset).toHaveBeenCalledOnce()
-    expect(wrapper.get('[data-testid="oidc-create-account-send-code"]').attributes('disabled')).toBeDefined()
-  })
-
-  it('requires a turnstile token before sending a verify code when turnstile is enabled', async () => {
+  it('does not use turnstile for pending OAuth account completion', async () => {
     getPublicSettings.mockResolvedValue({
       turnstile_enabled: true,
       turnstile_site_key: 'site-key'
@@ -303,124 +271,20 @@ describe('PendingOAuthCreateAccountForm', () => {
         testIdPrefix: 'linuxdo',
         initialEmail: '',
         isSubmitting: false
-      },
-      global: {
-        stubs: {
-          TurnstileWidget: {
-            template: '<button data-testid="turnstile-verify" @click="$emit(\'verify\', \'turnstile-token\')">verify</button>',
-            methods: { reset: vi.fn() }
-          }
-        }
       }
     })
 
     await flushPromises()
     await wrapper.get('[data-testid="linuxdo-create-account-email"]').setValue('  user@example.com  ')
 
-    expect(wrapper.get('[data-testid="linuxdo-create-account-send-code"]').attributes('disabled')).toBeDefined()
-
-    await wrapper.get('[data-testid="turnstile-verify"]').trigger('click')
+    expect(wrapper.find('[data-testid="turnstile-verify"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="linuxdo-create-account-send-code"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('[data-testid="linuxdo-create-account-send-code"]').trigger('click')
     await flushPromises()
 
     expect(sendPendingOAuthVerifyCode).toHaveBeenCalledWith({
-      email: 'user@example.com',
-      turnstile_token: 'turnstile-token'
+      email: 'user@example.com'
     })
   })
 
-  it('requires a turnstile token before submitting when turnstile is enabled', async () => {
-    getPublicSettings.mockResolvedValue({
-      turnstile_enabled: true,
-      turnstile_site_key: 'site-key'
-    })
-
-    const wrapper = mount(PendingOAuthCreateAccountForm, {
-      props: {
-        testIdPrefix: 'linuxdo',
-        initialEmail: 'user@example.com',
-        isSubmitting: false
-      },
-      global: {
-        stubs: {
-          TurnstileWidget: {
-            template: '<button data-testid="turnstile-verify" @click="$emit(\'verify\', \'turnstile-token\')">verify</button>',
-            methods: { reset: turnstileReset }
-          }
-        }
-      }
-    })
-
-    await flushPromises()
-    await wrapper.get('[data-testid="linuxdo-create-account-password"]').setValue('secret-123')
-
-    expect(wrapper.get('[data-testid="linuxdo-create-account-submit"]').attributes('disabled')).toBeDefined()
-
-    // 隐式提交（输入框回车）绕过按钮 disabled，仍不能带着空票据发出请求
-    await wrapper.get('form').trigger('submit.prevent')
-    expect(wrapper.emitted('submit')).toBeUndefined()
-
-    await wrapper.get('[data-testid="turnstile-verify"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="linuxdo-create-account-submit"]').attributes('disabled')).toBeUndefined()
-
-    await wrapper.get('[data-testid="linuxdo-create-account-submit"]').trigger('click')
-
-    expect(wrapper.emitted('submit')).toEqual([
-      [
-        {
-          email: 'user@example.com',
-          password: 'secret-123',
-          verifyCode: '',
-          turnstileToken: 'turnstile-token',
-          invitationCode: undefined
-        }
-      ]
-    ])
-  })
-
-  it('blocks submit again after sending a verify code consumes the turnstile proof', async () => {
-    getPublicSettings.mockResolvedValue({
-      turnstile_enabled: true,
-      turnstile_site_key: 'site-key'
-    })
-    sendPendingOAuthVerifyCode.mockResolvedValue({ message: 'sent', countdown: 60 })
-
-    const wrapper = mount(PendingOAuthCreateAccountForm, {
-      props: {
-        testIdPrefix: 'linuxdo',
-        initialEmail: 'user@example.com',
-        isSubmitting: false
-      },
-      global: {
-        stubs: {
-          TurnstileWidget: {
-            template: '<button data-testid="turnstile-verify" @click="$emit(\'verify\', \'turnstile-token\')">verify</button>',
-            methods: { reset: turnstileReset }
-          }
-        }
-      }
-    })
-
-    await flushPromises()
-    await wrapper.get('[data-testid="linuxdo-create-account-password"]').setValue('secret-123')
-    await wrapper.get('[data-testid="turnstile-verify"]').trigger('click')
-    await wrapper.get('[data-testid="linuxdo-create-account-send-code"]').trigger('click')
-    await flushPromises()
-
-    // 发码消耗掉票据并 reset 组件，新票据回调前提交必须保持关闭
-    expect(turnstileReset).toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="linuxdo-create-account-submit"]').attributes('disabled')).toBeDefined()
-
-    await wrapper.get('form').trigger('submit.prevent')
-    expect(wrapper.emitted('submit')).toBeUndefined()
-
-    // 新票据回调后恢复可提交，且带上新票据
-    await wrapper.get('[data-testid="turnstile-verify"]').trigger('click')
-    await wrapper.get('[data-testid="linuxdo-create-account-submit"]').trigger('click')
-
-    expect(wrapper.emitted('submit')?.[0]?.[0]).toMatchObject({
-      turnstileToken: 'turnstile-token'
-    })
-  })
 })

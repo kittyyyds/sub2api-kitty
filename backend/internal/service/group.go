@@ -23,13 +23,16 @@ type Group struct {
 	RateMultiplier float64
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。
-	PeakRateEnabled    bool
-	PeakStart          string
-	PeakEnd            string
-	PeakRateMultiplier float64
-	IsExclusive        bool
-	Status             string
-	Hydrated           bool // indicates the group was loaded from a trusted repository source
+	PeakRateEnabled            bool
+	PeakStart                  string
+	PeakEnd                    string
+	PeakRateMultiplier         float64
+	IsExclusive                bool
+	SecurityPolicyEnabled      bool
+	SecurityPolicyMode         string
+	SecurityPolicyEmailEnabled bool
+	Status                     string
+	Hydrated                   bool // indicates the group was loaded from a trusted repository source
 	// DuplicateOperationID is internal persistence metadata used only to recover
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string
@@ -41,13 +44,16 @@ type Group struct {
 	DefaultValidityDays int
 
 	// 图片生成计费配置（antigravity 和 gemini 平台使用）
-	AllowImageGeneration         bool
-	AllowBatchImageGeneration    bool
-	ImageRateIndependent         bool
-	ImageRateMultiplier          float64
-	ImagePrice1K                 *float64
-	ImagePrice2K                 *float64
-	ImagePrice4K                 *float64
+	AllowImageGeneration      bool
+	AllowBatchImageGeneration bool
+	ImageRateIndependent      bool
+	ImageRateMultiplier       float64
+	ImagePrice1K              *float64
+	ImagePrice2K              *float64
+	ImagePrice4K              *float64
+	// ImageModelPrices is optional per-model per-image pricing.
+	// Shape: model ID -> 1K/2K/4K -> final USD/image.
+	ImageModelPrices             map[string]map[string]float64
 	BatchImageDiscountMultiplier float64
 	BatchImageHoldMultiplier     float64
 	VideoRateIndependent         bool
@@ -55,9 +61,9 @@ type Group struct {
 	VideoPrice480P               *float64
 	VideoPrice720P               *float64
 	VideoPrice1080P              *float64
-	// VideoModelPrices is optional per-model-family per-second pricing
-	// (groups.video_model_prices JSONB). Shape: family → resolution → USD/s.
-	// When set for a model, overrides VideoPrice* for that model only.
+	// VideoModelPrices is optional final per-second pricing
+	// (groups.video_model_prices JSONB). Shape: family → resolution → final USD/s.
+	// A populated model tier overrides VideoPrice* and does not receive rate multipliers.
 	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；
 	// nil 表示使用默认价 defaultWebSearchPricePerCall（官方 $10/1000 次）。
@@ -173,6 +179,9 @@ func (g *Group) HasMonthlyLimit() bool {
 // GetImagePrice 根据 image_size 返回对应的图片生成价格
 // 如果分组未配置价格，返回 nil（调用方应使用默认值）
 func (g *Group) GetImagePrice(imageSize string) *float64 {
+	if g == nil {
+		return nil
+	}
 	switch imageSize {
 	case "1K":
 		return g.ImagePrice1K
@@ -183,6 +192,30 @@ func (g *Group) GetImagePrice(imageSize string) *float64 {
 	default:
 		// 未知尺寸默认按 2K 计费
 		return g.ImagePrice2K
+	}
+}
+
+// GetImagePriceForModel prefers the model-specific price and then the flat tier price.
+func (g *Group) GetImagePriceForModel(model, imageSize string) *float64 {
+	if g == nil {
+		return nil
+	}
+	if price := LookupImageModelPrice(g.ImageModelPrices, model, imageSize); price != nil {
+		return price
+	}
+	return g.GetImagePrice(NormalizeImageBillingTierOrDefault(imageSize))
+}
+
+// ImagePriceConfig builds the complete image billing configuration.
+func (g *Group) ImagePriceConfig() *ImagePriceConfig {
+	if g == nil {
+		return nil
+	}
+	return &ImagePriceConfig{
+		Price1K:     g.ImagePrice1K,
+		Price2K:     g.ImagePrice2K,
+		Price4K:     g.ImagePrice4K,
+		ModelPrices: NormalizeImageModelPrices(g.ImageModelPrices),
 	}
 }
 
@@ -201,7 +234,7 @@ func (g *Group) GetVideoPrice(resolution string) *float64 {
 	}
 }
 
-// GetVideoPriceForModel prefers VideoModelPrices for the model family, then flat columns.
+// GetVideoPriceForModel prefers the final USD/s model price, then flat USD/s columns.
 func (g *Group) GetVideoPriceForModel(model, resolution string) *float64 {
 	if g == nil {
 		return nil

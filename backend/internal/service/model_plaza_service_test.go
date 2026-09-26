@@ -42,7 +42,11 @@ func TestListPlazaGroups_GroupCentricAggregation(t *testing.T) {
 		plazaPricedChannel(2, "chB", []int64{10}, "anthropic", "claude-opus"),
 	}
 	groups := []Group{
-		{ID: 10, Name: "g-main", Description: "desc", Platform: "anthropic", RateMultiplier: 1},
+		{
+			ID: 10, Name: "g-main", Description: "desc", Platform: "anthropic", RateMultiplier: 1,
+			ImageRateIndependent: true, ImageRateMultiplier: 0.15,
+			VideoRateIndependent: true, VideoRateMultiplier: 0.25,
+		},
 		{ID: 20, Name: "g-empty", Platform: "anthropic", RateMultiplier: 0.5},
 	}
 	svc := newPlazaService(channels, groups, nil)
@@ -51,6 +55,10 @@ func TestListPlazaGroups_GroupCentricAggregation(t *testing.T) {
 	require.Len(t, out, 1, "无模型的分组不应返回")
 	require.Equal(t, int64(10), out[0].ID)
 	require.Equal(t, "desc", out[0].Description)
+	require.True(t, out[0].ImageRateIndependent)
+	require.InDelta(t, 0.15, out[0].ImageRateMultiplier, 1e-12)
+	require.True(t, out[0].VideoRateIndependent)
+	require.InDelta(t, 0.25, out[0].VideoRateMultiplier, 1e-12)
 	require.Len(t, out[0].Models, 2)
 	// 组内模型按名称排序
 	require.Equal(t, "claude-opus", out[0].Models[0].Name)
@@ -65,6 +73,150 @@ func TestListPlazaGroups_Fable51HasNoImplicitReasoningMultiplier(t *testing.T) {
 	require.Len(t, groups, 1)
 	require.Len(t, groups[0].Models, 1)
 	require.Empty(t, groups[0].Models[0].Pricing.ReasoningEffortMultipliers)
+}
+
+func TestListPlazaGroups_UsesConfiguredGroupModelsWithoutChannels(t *testing.T) {
+	pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+		"claude-sonnet": {
+			InputCostPerToken:  3e-6,
+			OutputCostPerToken: 15e-6,
+		},
+	})
+	groups := []Group{{
+		ID: 10, Name: "configured", Platform: PlatformAnthropic, RateMultiplier: 0.7,
+		ModelAllowlist: GroupModelAllowlist{
+			Enabled: false,
+			Models:  []string{" claude-sonnet ", "Claude-Sonnet", "", "claude-opus"},
+		},
+	}}
+
+	out, err := newPlazaService(nil, groups, pricingSvc).ListGroups(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 2, "configured models are case-insensitively deduplicated")
+	byName := map[string]PlazaModel{}
+	for _, model := range out[0].Models {
+		byName[model.Name] = model
+		require.Equal(t, PlatformAnthropic, model.Platform)
+	}
+	require.Contains(t, byName, "claude-sonnet")
+	require.NotNil(t, byName["claude-sonnet"].OfficialPricing)
+	require.InDelta(t, 3e-6, *byName["claude-sonnet"].OfficialPricing.InputPrice, 1e-12)
+	require.Nil(t, byName["claude-sonnet"].Pricing)
+}
+
+func TestListPlazaGroups_CatalogFallbackOmitsImageOnlyOfficialPricing(t *testing.T) {
+	pricingSvc := newStubPricingServiceFromMap(map[string]*LiteLLMModelPricing{
+		"image-only": {
+			OutputCostPerImage: 0.04,
+			TokenPricingAbsent: true,
+		},
+	})
+	groups := []Group{{
+		ID: 11, Name: "configured", Platform: PlatformOpenAI,
+		ModelAllowlist: GroupModelAllowlist{Models: []string{"image-only"}},
+	}}
+
+	out, err := newPlazaService(nil, groups, pricingSvc).ListGroups(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 1)
+	require.Nil(t, out[0].Models[0].OfficialPricing)
+}
+
+func TestListPlazaGroups_IncludesModelsConfiguredOnlyInMediaPriceMaps(t *testing.T) {
+	groups := []Group{{
+		ID: 10, Name: "grok-media", Platform: PlatformGrok, RateMultiplier: 0.15,
+		ModelAllowlist: GroupModelAllowlist{Models: []string{"grok-imagine-image-2.0"}},
+		ImageModelPrices: map[string]map[string]float64{
+			"grok-imagine-image-2.0": {
+				ImageBillingSize1K: 0.01,
+				ImageBillingSize2K: 0.01,
+			},
+		},
+		VideoModelPrices: map[string]map[string]float64{
+			VideoPriceFamilyGrokImagineVideo15: {
+				VideoBillingResolution480P:  0.13,
+				VideoBillingResolution720P:  0.24,
+				VideoBillingResolution1080P: 0.35,
+			},
+		},
+	}}
+
+	out, err := newPlazaService(nil, groups, nil).ListGroups(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 2, "price-map models join the catalog and duplicates remain collapsed")
+	byName := make(map[string]PlazaModel, len(out[0].Models))
+	for _, model := range out[0].Models {
+		byName[model.Name] = model
+	}
+
+	image := byName["grok-imagine-image-2.0"]
+	require.NotNil(t, image.Pricing)
+	require.Equal(t, BillingModeImage, image.Pricing.BillingMode)
+	require.ElementsMatch(t, []string{ImageBillingSize1K, ImageBillingSize2K}, image.FinalImagePriceTiers)
+
+	video := byName[VideoPriceFamilyGrokImagineVideo15]
+	require.NotNil(t, video.Pricing)
+	require.Equal(t, BillingModeVideo, video.Pricing.BillingMode)
+	require.Equal(t, []string{
+		VideoBillingResolution480P,
+		VideoBillingResolution720P,
+		VideoBillingResolution1080P,
+	}, video.FinalVideoPriceTiers)
+}
+
+func TestListPlazaGroups_ConfiguredCompositeModelsUseDetectedPlatforms(t *testing.T) {
+	groups := []Group{{
+		ID: 10, Name: "composite", Platform: PlatformComposite, RateMultiplier: 1,
+		ModelAllowlist: GroupModelAllowlist{
+			Models: []string{"claude-sonnet-4", "openai/gpt-5", "OPENAI/GPT-5", "ambiguous-model"},
+		},
+	}}
+
+	out, err := newPlazaService(nil, groups, nil).ListGroups(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 2, "ambiguous and duplicate composite models are excluded")
+	platforms := map[string]string{}
+	for _, model := range out[0].Models {
+		platforms[model.Name] = model.Platform
+	}
+	require.Equal(t, PlatformAnthropic, platforms["claude-sonnet-4"])
+	require.Equal(t, PlatformOpenAI, platforms["openai/gpt-5"])
+}
+
+func TestListPlazaGroups_GroupPricingOverridesChannelPricing(t *testing.T) {
+	groupInput := 1e-6
+	channelInput := 2e-6
+	groups := []Group{{
+		ID: 10, Name: "priority", Platform: PlatformAnthropic, RateMultiplier: 1,
+		ModelAllowlist: GroupModelAllowlist{Models: []string{"claude-sonnet"}},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformAnthropic, Models: []string{"claude-*"}, BillingMode: BillingModeToken,
+			InputPrice: &groupInput,
+		}},
+	}}
+	channels := []Channel{{
+		ID: 1, Name: "channel", Status: StatusActive, GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformAnthropic, Models: []string{"claude-sonnet"}, BillingMode: BillingModeToken,
+			InputPrice: &channelInput,
+		}},
+	}}
+
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 1)
+	require.NotNil(t, out[0].Models[0].Pricing)
+	require.InDelta(t, groupInput, *out[0].Models[0].Pricing.InputPrice, 1e-12)
 }
 
 func TestListPlazaGroups_DedupFirstWinsWithPricingUpgrade(t *testing.T) {
@@ -319,6 +471,210 @@ func TestListPlazaGroups_GroupImagePriceIgnoredForNonImageModes(t *testing.T) {
 	require.Empty(t, p.Intervals)
 	require.NotNil(t, p.InputPrice)
 	require.Nil(t, p.PerRequestPrice)
+}
+
+func TestListPlazaGroups_ModelImagePricesAreFinalAndOverrideTokenPricing(t *testing.T) {
+	tokenPrice := 99.0
+	channels := []Channel{{
+		ID: 1, Name: "grok", Status: StatusActive, GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: "grok", Models: []string{"grok-imagine-image-2.0"},
+			BillingMode: BillingModeToken, InputPrice: &tokenPrice, OutputPrice: &tokenPrice,
+		}},
+	}}
+	groups := []Group{{
+		ID: 10, Name: "grok-final", Platform: PlatformGrok, RateMultiplier: 0.15,
+		ImageModelPrices: map[string]map[string]float64{
+			"grok-imagine-image-2.0": {
+				ImageBillingSize1K: 0.01,
+				ImageBillingSize2K: 0.02,
+			},
+		},
+	}}
+
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 1)
+
+	model := out[0].Models[0]
+	require.Equal(t, []string{ImageBillingSize1K, ImageBillingSize2K}, model.FinalImagePriceTiers)
+	require.NotNil(t, model.Pricing)
+	require.Equal(t, BillingModeImage, model.Pricing.BillingMode)
+	require.Len(t, model.Pricing.Intervals, 3)
+	tierPrices := map[string]float64{}
+	for _, interval := range model.Pricing.Intervals {
+		require.NotNil(t, interval.PerRequestPrice)
+		tierPrices[interval.TierLabel] = *interval.PerRequestPrice
+	}
+	require.InDelta(t, 0.01, tierPrices[ImageBillingSize1K], 1e-12)
+	require.InDelta(t, 0.02, tierPrices[ImageBillingSize2K], 1e-12)
+	require.InDelta(t, 0.08, tierPrices[ImageBillingSize4K], 1e-12, "empty model tier uses model default")
+}
+
+func TestListPlazaGroups_ModelImageMissingTierIgnoresChannelPricing(t *testing.T) {
+	channelPrice := 0.99
+	channels := []Channel{{
+		ID: 1, Name: "grok-image", Status: StatusActive, GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformGrok, Models: []string{"grok-imagine-image-2.0"},
+			BillingMode: BillingModeImage, PerRequestPrice: &channelPrice,
+			Intervals: []PricingInterval{{TierLabel: ImageBillingSize4K, PerRequestPrice: &channelPrice}},
+		}},
+	}}
+	groups := []Group{{
+		ID: 10, Name: "grok-image-final", Platform: PlatformGrok, RateMultiplier: 0.15,
+		ImageModelPrices: map[string]map[string]float64{
+			"grok-imagine-image-2.0": {ImageBillingSize1K: 0.01},
+		},
+	}}
+
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+	require.NoError(t, err)
+	model := out[0].Models[0]
+	tierPrices := map[string]float64{}
+	for _, interval := range model.Pricing.Intervals {
+		tierPrices[interval.TierLabel] = *interval.PerRequestPrice
+	}
+	require.InDelta(t, 0.01, tierPrices[ImageBillingSize1K], 1e-12)
+	require.InDelta(t, 0.08, tierPrices[ImageBillingSize2K], 1e-12,
+		"missing model tier uses the model default, not the channel card")
+	require.InDelta(t, 0.08, tierPrices[ImageBillingSize4K], 1e-12)
+
+	actual := (&BillingService{}).CalculateImageCost(
+		"grok-imagine-image-2.0", ImageBillingSize2K, 1,
+		&ImagePriceConfig{ModelPrices: groups[0].ImageModelPrices}, 9,
+	)
+	require.InDelta(t, 0.08, actual.TotalCost, 1e-12)
+}
+
+func TestListPlazaGroups_ModelVideoPerSecondPricesAreFinalAndOverrideTokenPricing(t *testing.T) {
+	tokenPrice := 99.0
+	channels := []Channel{{
+		ID: 1, Name: "grok", Status: StatusActive, GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformGrok, Models: []string{"grok-imagine-video-1.5-preview"},
+			BillingMode: BillingModeToken, InputPrice: &tokenPrice, OutputPrice: &tokenPrice,
+		}},
+	}}
+	groups := []Group{{
+		ID: 10, Name: "grok-video-final-per-second", Platform: PlatformGrok, RateMultiplier: 0.15,
+		VideoModelPrices: map[string]map[string]float64{
+			VideoPriceFamilyGrokImagineVideo15: {
+				VideoBillingResolution480P: 0.01,
+				VideoBillingResolution720P: 0.02,
+			},
+		},
+	}}
+
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 1)
+
+	model := out[0].Models[0]
+	require.Equal(t, []string{
+		VideoBillingResolution480P,
+		VideoBillingResolution720P,
+	}, model.FinalVideoPriceTiers)
+	require.NotNil(t, model.Pricing)
+	require.Equal(t, BillingModeVideo, model.Pricing.BillingMode)
+	require.Len(t, model.Pricing.Intervals, 3)
+	tierPrices := map[string]float64{}
+	for _, interval := range model.Pricing.Intervals {
+		require.NotNil(t, interval.PerRequestPrice)
+		tierPrices[interval.TierLabel] = *interval.PerRequestPrice
+	}
+	require.InDelta(t, 0.01, tierPrices[VideoBillingResolution480P], 1e-12)
+	require.InDelta(t, 0.02, tierPrices[VideoBillingResolution720P], 1e-12)
+	require.InDelta(t, 0.25, tierPrices[VideoBillingResolution1080P], 1e-12, "empty model tier uses per-second model default")
+}
+
+func TestListPlazaGroups_ModelVideoMissingTierIgnoresChannelPricing(t *testing.T) {
+	channelPrice := 0.99
+	channels := []Channel{{
+		ID: 1, Name: "grok-video", Status: StatusActive, GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{{
+			Platform: PlatformGrok, Models: []string{"grok-imagine-video-1.5-preview"},
+			BillingMode: BillingModeVideo, PerRequestPrice: &channelPrice,
+			Intervals: []PricingInterval{{TierLabel: VideoBillingResolution1080P, PerRequestPrice: &channelPrice}},
+		}},
+	}}
+	groups := []Group{{
+		ID: 10, Name: "grok-video-final", Platform: PlatformGrok, RateMultiplier: 0.15,
+		VideoModelPrices: map[string]map[string]float64{
+			VideoPriceFamilyGrokImagineVideo15: {VideoBillingResolution480P: 0.01},
+		},
+	}}
+
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+	require.NoError(t, err)
+	model := out[0].Models[0]
+	tierPrices := map[string]float64{}
+	for _, interval := range model.Pricing.Intervals {
+		tierPrices[interval.TierLabel] = *interval.PerRequestPrice
+	}
+	require.InDelta(t, 0.01, tierPrices[VideoBillingResolution480P], 1e-12)
+	require.InDelta(t, 0.14, tierPrices[VideoBillingResolution720P], 1e-12,
+		"missing model tier uses the model default, not the channel card")
+	require.InDelta(t, 0.25, tierPrices[VideoBillingResolution1080P], 1e-12)
+
+	actual := (&BillingService{}).CalculateVideoCost(
+		"grok-imagine-video-1.5-preview", VideoBillingResolution720P, 1, 1,
+		&VideoPriceConfig{ModelPrices: groups[0].VideoModelPrices}, 9,
+	)
+	require.InDelta(t, 0.14, actual.TotalCost, 1e-12)
+}
+
+func TestListPlazaGroups_CanonicalizesGrokVideo15AliasesForDisplay(t *testing.T) {
+	channels := []Channel{
+		plazaPricedChannel(1, "grok-preview", []int64{10}, PlatformGrok, "grok-imagine-video-1.5-preview"),
+		plazaPricedChannel(2, "grok-dated", []int64{10}, PlatformGrok, "grok-imagine-video-1.5-2026-05-30"),
+	}
+	groups := []Group{{
+		ID: 10, Name: "grok-video-catalog", Platform: PlatformGrok, RateMultiplier: 1,
+		ModelAllowlist: GroupModelAllowlist{
+			Enabled: true,
+			Models: []string{
+				"grok-imagine-video-1.5-preview",
+				"grok-imagine-video-1.5-2026-05-30",
+				VideoPriceFamilyGrokImagineVideo15,
+			},
+		},
+		VideoModelPrices: map[string]map[string]float64{
+			VideoPriceFamilyGrokImagineVideo15: {
+				VideoBillingResolution480P:  0.13,
+				VideoBillingResolution720P:  0.24,
+				VideoBillingResolution1080P: 0.35,
+			},
+		},
+	}}
+
+	out, err := newPlazaService(channels, groups, nil).ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Models, 1, "canonical and compatibility aliases must collapse into one catalog row")
+
+	model := out[0].Models[0]
+	require.Equal(t, VideoPriceFamilyGrokImagineVideo15, model.Name)
+	require.Equal(t, []string{
+		VideoBillingResolution480P,
+		VideoBillingResolution720P,
+		VideoBillingResolution1080P,
+	}, model.FinalVideoPriceTiers)
+	require.NotNil(t, model.Pricing)
+	require.Equal(t, BillingModeVideo, model.Pricing.BillingMode)
+	require.Len(t, model.Pricing.Intervals, 3)
+
+	want := map[string]float64{
+		VideoBillingResolution480P:  0.13,
+		VideoBillingResolution720P:  0.24,
+		VideoBillingResolution1080P: 0.35,
+	}
+	for _, interval := range model.Pricing.Intervals {
+		require.NotNil(t, interval.PerRequestPrice)
+		require.InDelta(t, want[interval.TierLabel], *interval.PerRequestPrice, 1e-12)
+	}
 }
 
 func TestListPlazaGroups_RepoErrorsPropagate(t *testing.T) {

@@ -40,6 +40,18 @@ const messages: Record<string, string> = {
   'usage.userBilled': 'User billed',
   'usage.accountBilled': 'Account billed',
   'usage.imageUnit': ' images',
+  'usage.videoUnit': ' videos',
+  'usage.videoGeneration': 'Video generation',
+  'usage.videoSeconds': 's',
+  'usage.videoCount': 'Video count',
+  'usage.videoDuration': 'Billed duration per video',
+  'usage.videoResolution': 'Resolution',
+  'usage.videoDurationUnknown': 'Duration not recorded',
+  'usage.videoResolutionUnknown': 'Resolution not recorded',
+  'usage.videoNotRecorded': 'Not recorded',
+  'usage.videoEffectiveUnitPrice': 'Receipt base unit price',
+  'usage.videoPerSecond': '/second',
+  'usage.videoPerItem': '/video',
   'usage.imageCount': 'Image count',
   'usage.imageBillingSize': 'Billing size',
   'usage.imageInputSize': 'Input size',
@@ -72,6 +84,8 @@ const messages: Record<string, string> = {
 	'usage.upstreamResponseModel': 'Upstream response',
 	'usage.modelVariant': 'Possible version variant',
 	'usage.modelMismatch': 'Different model',
+	'admin.usage.cacheHitRateTooltip': 'Cache read {cacheRead} / prompt {promptTokens} = {rate}%',
+	'admin.usage.cacheHitRateUnavailable': 'No prompt tokens',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -79,7 +93,13 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => messages[key] ?? key,
+      t: (key: string, params?: Record<string, string | number>) => {
+        let message = messages[key] ?? key
+        for (const [name, value] of Object.entries(params ?? {})) {
+          message = message.replaceAll(`{${name}}`, String(value))
+        }
+        return message
+      },
     }),
   }
 })
@@ -93,6 +113,7 @@ const DataTableStub = {
         <slot name="cell-reasoning_effort" :row="row" :value="row.reasoning_effort" />
         <slot name="cell-billing_mode" :row="row" />
         <slot name="cell-tokens" :row="row" />
+        <slot name="cell-cache_hit_rate" :row="row" />
         <slot name="cell-cost" :row="row" />
         <slot name="cell-request_id" :row="row" />
         <slot name="cell-upstream_request_id" :row="row" />
@@ -130,6 +151,42 @@ const baseImageRow = {
 }
 
 describe('admin UsageTable tooltip', () => {
+  it.each([
+    { mode: 'video', total: 3.75, expected: '$0.75000000 /second' },
+    { mode: 'per_request', total: 1.3, expected: '$1.30000000 /video' },
+  ])('renders video units and historical unit price for $mode', async ({ mode, total, expected }) => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{ ...baseImageRow, billing_mode: mode, image_count: 0, video_count: 1,
+          video_duration_seconds: 5, video_resolution: '720p', total_cost: total, actual_cost: total }],
+        columns: [],
+        showAccountBilling: false,
+      },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    expect(wrapper.get('[data-testid="video-usage-units"]').text()).toContain('1 videos')
+    expect(wrapper.get('[data-testid="video-usage-units"]').text()).toContain('5s')
+    expect(wrapper.get('[data-testid="video-usage-units"]').text()).toContain('720p')
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    await nextTick()
+    expect(wrapper.get('[data-testid="video-unit-price"]').text()).toBe(expected)
+    expect(wrapper.get('[data-testid="video-cost-details"]').text()).toContain('Video count')
+    expect(wrapper.text()).not.toContain('Per-image price')
+    expect(wrapper.text()).toContain('User billed')
+  })
+
+  it('does not invent duration, resolution or unit price for historical video rows', async () => {
+    const wrapper = mount(UsageTable, {
+      props: { data: [{ ...baseImageRow, billing_mode: 'video', image_count: 1, total_cost: 3.75 }], columns: [] },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+    expect(wrapper.get('[data-testid="video-usage-units"]').text()).toContain('Duration not recorded')
+    expect(wrapper.get('[data-testid="video-usage-units"]').text()).toContain('Resolution not recorded')
+    await wrapper.find('.group.relative').trigger('mouseenter')
+    await nextTick()
+    expect(wrapper.get('[data-testid="video-unit-price"]').text()).toBe('Not recorded')
+  })
+
   beforeEach(() => {
     appStoreMocks.cachedPublicSettings = undefined
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
@@ -631,6 +688,70 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('Per-image price')
     expect(text).toContain('not recorded')
     expect(text).not.toContain('(2K)')
+  })
+})
+
+describe('admin UsageTable cache hit rate', () => {
+  const cacheRow = {
+    ...baseImageRow,
+    request_id: 'req-cache-hit-rate',
+    billing_mode: 'token',
+    image_count: 0,
+    input_tokens: 100,
+    output_tokens: 250,
+    cache_creation_tokens: 100,
+    cache_read_tokens: 800,
+  }
+
+  const mountCacheTable = (showCacheHitRate: boolean) => mount(UsageTable, {
+    props: {
+      data: [cacheRow],
+      loading: false,
+      columns: [{ key: 'cache_hit_rate', label: 'Cache Hit Rate' }],
+      showCacheHitRate,
+    },
+    global: {
+      stubs: {
+        DataTable: DataTableStub,
+        EmptyState: true,
+        Icon: true,
+        Teleport: true,
+      },
+    },
+  })
+
+  it('shows the per-request prompt cache hit rate only when the admin flag is enabled', () => {
+    const adminWrapper = mountCacheTable(true)
+    const rate = adminWrapper.get('[data-testid="cache-hit-rate"]')
+
+    expect(rate.text()).toContain('80.0%')
+    expect(rate.attributes('title')).toBe('Cache read 800 / prompt 1,000 = 80.0%')
+
+    const customerWrapper = mountCacheTable(false)
+    expect(customerWrapper.find('[data-testid="cache-hit-rate"]').exists()).toBe(false)
+  })
+
+  it('shows an unavailable marker when a request has no prompt tokens', () => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{ ...cacheRow, input_tokens: 0, cache_creation_tokens: 0, cache_read_tokens: 0 }],
+        loading: false,
+        columns: [{ key: 'cache_hit_rate', label: 'Cache Hit Rate' }],
+        showCacheHitRate: true,
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStub,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    const rate = wrapper.get('[data-testid="cache-hit-rate"]')
+    expect(rate.text()).toBe('—')
+    expect(rate.attributes('title')).toBe('No prompt tokens')
   })
 })
 

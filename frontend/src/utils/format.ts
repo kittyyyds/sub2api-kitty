@@ -151,10 +151,12 @@ export function formatDateTime(
 
 /**
  * 格式化日期时间（精确到分钟）
+ * @param timeZone 可选 IANA 时区，例如 Asia/Shanghai
  */
 export function formatDateTimeToMinute(
   date: string | Date | null | undefined,
-  localeOverride?: string
+  localeOverride?: string,
+  timeZone?: string
 ): string {
   return formatDate(
     date,
@@ -164,7 +166,8 @@ export function formatDateTimeToMinute(
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false
+      hour12: false,
+      ...(timeZone ? { timeZone } : {})
     },
     localeOverride
   )

@@ -6,6 +6,7 @@ import (
 	"compress/flate"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -279,7 +280,11 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 	}
 	proxyInfo := "direct"
 	if proxyURL != "" {
-		proxyInfo = proxyURL
+		if parsed, parseErr := url.Parse(proxyURL); parseErr == nil {
+			proxyInfo = parsed.Redacted()
+		} else {
+			proxyInfo = "configured"
+		}
 	}
 	slog.Debug("tls_fingerprint_enabled", "account_id", accountID, "target", targetHost, "proxy", proxyInfo, "profile", profile.Name)
 
@@ -633,7 +638,7 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 	}
 
 	// 创建带 TLS 指纹的 Transport
-	slog.Debug("tls_fingerprint_creating_new_client", "account_id", accountID, "cache_key", cacheKey, "proxy", proxyKey)
+	slog.Debug("tls_fingerprint_creating_new_client", "account_id", accountID, "cache_key", cacheKey)
 	transport, err := buildUpstreamTransportWithTLSFingerprint(settings, parsedProxy, profile)
 	if err != nil {
 		s.mu.Unlock()
@@ -1207,8 +1212,9 @@ func (s *httpUpstreamService) recordOpenAIHTTP2Failure(profile service.HTTPUpstr
 	state := s.getOrCreateOpenAIHTTP2FallbackState(proxyKey)
 	activated, until := state.recordFailure(time.Now(), settings.fallbackErrorThreshold, settings.fallbackWindow, settings.fallbackTTL)
 	if activated {
+		proxyDigest := sha256.Sum256([]byte(proxyKey))
 		slog.Warn("openai_http2_proxy_fallback_activated",
-			"proxy", proxyKey,
+			"proxy_key_hash", fmt.Sprintf("%x", proxyDigest[:12]),
 			"fallback_until", until.Format(time.RFC3339))
 	}
 }
@@ -1300,7 +1306,11 @@ func (s *openAIHTTP2FallbackState) recordFailure(now time.Time, threshold int, w
 func normalizeProxyURL(raw string) (string, *url.URL, error) {
 	_, parsed, err := proxyurl.Parse(raw)
 	if err != nil {
-		return "", nil, err
+		var ferr error
+		_, parsed, ferr = proxyurl.ParseFlexible(raw, "http")
+		if ferr != nil {
+			return "", nil, err
+		}
 	}
 	if parsed == nil {
 		return directProxyKey, nil, nil

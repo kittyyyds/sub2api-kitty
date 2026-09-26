@@ -626,6 +626,7 @@ export default {
       failedToLoadApiKeys: '加载用户 API 密钥失败',
       deleteConfirm: "确定要删除用户 '{email}' 吗？此操作无法撤销。",
       roles: {
+        super_admin: '超级管理员',
         admin: '管理员',
         user: '用户'
       },
@@ -976,6 +977,7 @@ export default {
         gemini: 'Gemini',
         antigravity: 'Antigravity',
         grok: 'Grok',
+        video: '视频模型',
         kimi: 'Kimi',
         zhipu: 'Zhipu GLM',
         deepseek: 'DeepSeek',
@@ -1076,6 +1078,9 @@ export default {
       imagePricing: {
         title: '图片生成计费',
         description: '配置图片生成能力和图片基础单价，留空则使用默认价格',
+        modelOverridesTitle: '按模型设置最终图片价格',
+        modelOverridesDescription: '每个模型可分别设置 1K、2K、4K 客户美元最终单张扣费。填写 $0.01 就实扣 $0.01，不叠加分组倍率或生图独立倍率；留空才自动继承通用美元价或默认价并应用倍率。不同模型互不共用价格。',
+        fixedPriceUnit: '$/张',
         allowImageGeneration: '允许当前分组生图',
         allowBatchImageGeneration: '允许当前分组批量生图',
         independentMultiplier: '生图倍率独立',
@@ -1085,21 +1090,24 @@ export default {
         batchSectionHint: '批量生图仅影响批量任务：结算价格会叠加批量折扣倍率，提交时冻结金额按普通生图原价 × 批量冻结价格比例计算。参考图也会产生上游输入 token 消耗，建议批量生图折扣倍率设置大于 0.5。',
         batchDisabledHint: '请先开启当前分组生图，才能开启批量生图。',
         batchGeminiOnlyHint: '批量生图当前仅支持 Gemini 分组。',
-        modeHint: '默认关闭独立倍率时，图片费用 = 图片价格 × 当前分组有效倍率；开启独立倍率后，图片费用 = 图片价格 × 生图独立倍率。',
+        modeHint: '所有图片价格均按美元计费；Grok / OpenAI 按模型填写的价格是美元最终单张价，不再叠加任何倍率。',
         finalPricePreview: '最终单张价格预览',
         notConfigured: '未配置'
       },
       videoPricing: {
         title: '视频生成计费',
         description:
-          '配置 Grok 视频生成的每秒单价（USD/秒），留空则使用默认每秒价（grok-imagine-video：480p $0.05/s、720p $0.07/s；video-1.5：480p $0.08/s、720p $0.14/s、1080p $0.25/s）',
-        modelOverridesTitle: '按模型覆盖视频价格',
-        modelOverridesDescription: '已填写的单元格会覆盖该模型族的平面分辨率价格。video-1.5 的 preview 与 legacy 别名共用同一模型族；留空则回退到平面分辨率价格。',
+          '上方通用分辨率价格仍按 USD/秒计费，仅在模型单独价格留空时作为回退。留空则使用默认每秒价（grok-imagine-video：480p $0.05/s、720p $0.07/s；video-1.5：480p $0.08/s、720p $0.14/s、1080p $0.25/s）。',
+        modelOverridesTitle: '按模型设置最终每秒价格',
+        modelOverridesDescription: '每个模型可分别设置 480p、720p、1080p 客户美元最终每秒价。填写 $0.07 后每秒实扣 $0.07，不叠加分组倍率或视频独立倍率；总费用仍按视频时长和数量计算。留空才按通用/默认美元每秒价回退。video-1.5 的 preview 与 legacy 别名共用同一模型族。',
+        fixedPriceUnit: '$/秒',
         independentMultiplier: '视频倍率独立',
         videoMultiplier: '视频独立倍率',
         modeHint:
-          '视频按秒计费：费用 = 每秒价格 × 时长（1-15 秒，未指定默认 8 秒）。默认叠加当前分组有效倍率；开启独立倍率后改用视频独立倍率。',
-        finalPricePreview: '最终每秒价格预览',
+          '模型美元价格已填写：费用 = 最终每秒价 × 时长 × 视频数量，不叠加倍率；留空：美元回退价 × 时长 × 视频数量 × 有效倍率。',
+        finalPricePreview: '各模型最终每秒价格预览',
+        finalPerSecondUnit: '/ 秒（模型最终价）',
+        perSecondUnit: '/ 秒（回退，含倍率）',
         notConfigured: '未配置'
       },
       explicitPricing: {
@@ -1333,7 +1341,16 @@ export default {
         geminiImage: 'Gemini Image',
         hint: '至少选择一个模型系列'
       }
-    },
+    ,
+    securityPolicy: {
+        title: '安全策略',
+        hint: '开启后，涉及敏感话题（破解、逆向、渗透等）的请求将被拦截。默认关闭。',
+        mode: '命中后处置',
+        modeSession: '断开会话（需新建会话）',
+        modeRequest: '仅拦截当次请求',
+        email: '违规时邮件提醒用户'
+      },
+  },
 
     // Available Channels (aggregated read-only view)
 }

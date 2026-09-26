@@ -68,6 +68,23 @@ func appendUsageLogBillingModeWhereCondition(conditions []string, args []any, bi
 	return appendUsageLogBillingModeWhereConditionWithAlias(conditions, args, billingMode, "")
 }
 
+func appendUsageAuditStatusWhereCondition(conditions []string, args []any, status string, alias string) ([]string, []any) {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return conditions, args
+	}
+	column := "usage_audit"
+	if alias != "" {
+		column = alias + "." + column
+	}
+	if status == service.UsageAuditFilterMissing {
+		return append(conditions, column+" IS NULL"), args
+	}
+	conditions = append(conditions, fmt.Sprintf("%s->>'status' = $%d", column, len(args)+1))
+	args = append(args, status)
+	return conditions, args
+}
+
 func appendUsageLogBillingModeWhereConditionWithAlias(conditions []string, args []any, billingMode string, alias string) ([]string, []any) {
 	mode := strings.TrimSpace(billingMode)
 	if mode == "" {

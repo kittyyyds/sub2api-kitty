@@ -52,6 +52,20 @@ func TestValidateProviderRequest(t *testing.T) {
 			wantErr:        false,
 		},
 		{
+			name:           "valid dujiaopay provider",
+			providerKey:    payment.TypeDujiaoPay,
+			providerName:   "DujiaoPay Provider",
+			supportedTypes: payment.TypeDujiaoPay,
+			wantErr:        false,
+		},
+		{
+			name:           "valid paypal provider",
+			providerKey:    payment.TypePayPal,
+			providerName:   "PayPal Provider",
+			supportedTypes: payment.TypePayPal,
+			wantErr:        false,
+		},
+		{
 			name:           "valid alipay provider",
 			providerKey:    "alipay",
 			providerName:   "Alipay Direct",
@@ -260,6 +274,21 @@ func TestIsSensitiveProviderConfigField(t *testing.T) {
 		{payment.TypeAirwallex, "apiBase", false},
 		{payment.TypeAirwallex, "accountId", false},
 		{payment.TypeAirwallex, "currency", false},
+
+		// DujiaoPay
+		{payment.TypeDujiaoPay, "apiSecret", true},
+		{payment.TypeDujiaoPay, "webhookSecret", true},
+		{payment.TypeDujiaoPay, "keyId", false},
+		{payment.TypeDujiaoPay, "apiBase", false},
+		{payment.TypeDujiaoPay, "currency", false},
+
+		// PayPal
+		{payment.TypePayPal, "clientSecret", true},
+		{payment.TypePayPal, "ClientSecret", true},
+		{payment.TypePayPal, "clientId", false},
+		{payment.TypePayPal, "webhookId", false},
+		{payment.TypePayPal, "environment", false},
+		{payment.TypePayPal, "currency", false},
 
 		// Unknown provider: never sensitive
 		{"unknown", "secretKey", false},
@@ -550,6 +579,24 @@ func TestUpdateProviderInstanceRejectsProtectedConfigChangesWhilePendingOrders(t
 			fieldName:     "webhookSecret",
 			wantValue:     "whsec-test",
 		},
+		{
+			name:          "dujiaopay keyId",
+			providerKey:   payment.TypeDujiaoPay,
+			createConfig:  validDujiaoPayProviderConfig,
+			supportedType: []string{payment.TypeDujiaoPay},
+			updateConfig:  map[string]string{"keyId": "ak-updated"},
+			fieldName:     "keyId",
+			wantValue:     "ak-test",
+		},
+		{
+			name:          "paypal clientId",
+			providerKey:   payment.TypePayPal,
+			createConfig:  validPayPalProviderConfig,
+			supportedType: []string{payment.TypePayPal},
+			updateConfig:  map[string]string{"clientId": "paypal-client-updated"},
+			fieldName:     "clientId",
+			wantValue:     "paypal-client-test",
+		},
 	}
 
 	for _, tc := range tests {
@@ -735,6 +782,10 @@ func providerPendingOrderPaymentType(providerKey string) string {
 		return payment.TypeAlipay
 	case payment.TypeAirwallex:
 		return payment.TypeAirwallex
+	case payment.TypeDujiaoPay:
+		return payment.TypeDujiaoPay
+	case payment.TypePayPal:
+		return payment.TypePayPal
 	case payment.TypeStripe:
 		return payment.TypeStripe
 	default:
@@ -790,6 +841,31 @@ func validAirwallexProviderConfig(t *testing.T) map[string]string {
 		"apiBase":       "https://api-demo.airwallex.com/api/v1",
 		"accountId":     "acct-test",
 		"currency":      "CNY",
+	}
+}
+
+func validDujiaoPayProviderConfig(t *testing.T) map[string]string {
+	t.Helper()
+
+	return map[string]string{
+		"keyId":         "ak-test",
+		"apiSecret":     "api-secret-test",
+		"webhookSecret": "webhook-secret-test",
+		"apiBase":       "https://www.dujiaopay.com",
+		"currency":      "CNY",
+	}
+}
+
+func validPayPalProviderConfig(t *testing.T) map[string]string {
+	t.Helper()
+
+	return map[string]string{
+		"clientId":     "paypal-client-test",
+		"clientSecret": "paypal-secret-test",
+		"webhookId":    "WH-PAYPAL-TEST",
+		"environment":  "sandbox",
+		"currency":     "USD",
+		"brandName":    "Kitty API",
 	}
 }
 

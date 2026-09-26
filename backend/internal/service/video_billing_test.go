@@ -121,4 +121,62 @@ func TestVideoModelPriceMissingTierFallsBackToFlatTierPrice(t *testing.T) {
 	}, 1)
 
 	require.InDelta(t, flat720P, result.TotalCost, 1e-9)
+	require.False(t, result.FinalPriceApplied)
+}
+
+func TestVideoModelPriceIsFinalUSDPerSecondCustomerPrice(t *testing.T) {
+	t.Parallel()
+	service := &BillingService{}
+	config := &VideoPriceConfig{
+		ModelPrices: map[string]map[string]float64{
+			VideoPriceFamilyGrokImagineVideo15: {VideoBillingResolution480P: 0.07},
+		},
+	}
+
+	oneVideo := service.CalculateVideoCost(
+		"grok-imagine-video-1.5-preview",
+		VideoBillingResolution480P,
+		1,
+		8,
+		config,
+		0.15,
+	)
+	require.InDelta(t, 0.56, oneVideo.TotalCost, 1e-12)
+	require.InDelta(t, 0.56, oneVideo.ActualCost, 1e-12)
+	require.True(t, oneVideo.FinalPriceApplied)
+
+	twoVideos := service.CalculateVideoCost(
+		"grok-imagine-video-1.5",
+		VideoBillingResolution480P,
+		2,
+		5,
+		config,
+		3,
+	)
+	require.InDelta(t, 0.70, twoVideos.TotalCost, 1e-12)
+	require.InDelta(t, 0.70, twoVideos.ActualCost, 1e-12)
+	require.True(t, twoVideos.FinalPriceApplied)
+}
+
+func TestVideoModelMissingTierKeepsPerSecondFallbackSemantics(t *testing.T) {
+	t.Parallel()
+	flat720P := 0.07
+	service := &BillingService{}
+	result := service.CalculateVideoCost(
+		"grok-imagine-video",
+		VideoBillingResolution720P,
+		2,
+		3,
+		&VideoPriceConfig{
+			Price720P: &flat720P,
+			ModelPrices: map[string]map[string]float64{
+				VideoPriceFamilyGrokImagineVideo: {VideoBillingResolution480P: 0.01},
+			},
+		},
+		0.5,
+	)
+
+	require.InDelta(t, 0.42, result.TotalCost, 1e-12)
+	require.InDelta(t, 0.21, result.ActualCost, 1e-12)
+	require.False(t, result.FinalPriceApplied)
 }

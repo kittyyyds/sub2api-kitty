@@ -95,6 +95,10 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 // GET /api/v1/payment/checkout-info
 func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 	ctx := c.Request.Context()
+	subject, ok := requireAuth(c)
+	if !ok {
+		return
+	}
 
 	// Fetch limits (methods + global range)
 	limitsResp, err := h.configService.GetAvailableMethodLimits(ctx)
@@ -105,6 +109,16 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 
 	// Fetch payment config
 	cfg, err := h.configService.GetPaymentConfig(ctx)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	bonusRules, err := h.paymentService.ListRechargeBonusRules(ctx)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	bonusSummary, err := h.paymentService.GetRechargeBonusSummary(ctx, subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -154,6 +168,8 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		StripePublishableKey:          cfg.StripePublishableKey,
 		AlipayForceQRCode:             cfg.AlipayForceQRCode,
 		AlipayMobilePrecreateDeepLink: alipayMobilePrecreateDeepLink,
+		RechargeBonusRules:            bonusRules,
+		RechargeBonusSummary:          bonusSummary,
 	})
 }
 
@@ -171,6 +187,8 @@ type checkoutInfoResponse struct {
 	StripePublishableKey          string                          `json:"stripe_publishable_key"`
 	AlipayForceQRCode             bool                            `json:"alipay_force_qrcode"`
 	AlipayMobilePrecreateDeepLink bool                            `json:"alipay_mobile_precreate_deep_link"`
+	RechargeBonusRules            []service.RechargeBonusRule     `json:"recharge_bonus_rules"`
+	RechargeBonusSummary          *service.RechargeBonusSummary   `json:"recharge_bonus_summary"`
 }
 
 type checkoutPlan struct {

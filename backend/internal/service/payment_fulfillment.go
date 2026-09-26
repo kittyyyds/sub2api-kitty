@@ -30,6 +30,11 @@ var ErrOrderNotFound = errors.New("payment order not found")
 
 const paymentFulfillmentLeaseDuration = 5 * time.Minute
 
+const (
+	paymentAmountComparisonEpsilon = 1e-9
+	paymentOverpayTolerance        = 0.05
+)
+
 type paymentFulfillmentLease struct {
 	version time.Time
 }
@@ -41,19 +46,57 @@ func (s *PaymentService) HandlePaymentNotification(ctx context.Context, n *payme
 		return nil
 	}
 	// Look up order by out_trade_no (the external order ID we sent to the provider)
-	order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(n.OrderID)).Only(ctx)
-	if err != nil {
+	var lookupErr error
+	if outTradeNo := strings.TrimSpace(n.OrderID); outTradeNo != "" {
+		order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(outTradeNo)).Only(ctx)
+		if err == nil {
+			return s.confirmPayment(ctx, order.ID, n.TradeNo, n.Amount, pk, n.Metadata)
+		}
+		lookupErr = err
 		// Fallback only for true legacy "sub2_N" DB-ID payloads when the
 		// current out_trade_no lookup genuinely did not find an order.
 		if oid, ok := parseLegacyPaymentOrderID(n.OrderID, err); ok {
 			return s.confirmPayment(ctx, oid, n.TradeNo, n.Amount, pk, n.Metadata)
 		}
-		if dbent.IsNotFound(err) {
-			return fmt.Errorf("%w: out_trade_no=%s", ErrOrderNotFound, n.OrderID)
+		if !dbent.IsNotFound(err) {
+			return fmt.Errorf("lookup order failed for out_trade_no %s: %w", n.OrderID, err)
 		}
-		return fmt.Errorf("lookup order failed for out_trade_no %s: %w", n.OrderID, err)
 	}
-	return s.confirmPayment(ctx, order.ID, n.TradeNo, n.Amount, pk, n.Metadata)
+
+	// Some providers, including DujiaoPay, do not include merchant_order_id in
+	// every webhook event. The provider order ID is persisted in payment_trade_no
+	// at creation time, so use it as an exact, provider-scoped fallback.
+	if tradeNo := strings.TrimSpace(n.TradeNo); tradeNo != "" && strings.TrimSpace(pk) != "" {
+		order, err := s.findNotificationOrderByPaymentTradeNo(ctx, tradeNo, pk)
+		if err == nil {
+			return s.confirmPayment(ctx, order.ID, n.TradeNo, n.Amount, pk, n.Metadata)
+		}
+		if !dbent.IsNotFound(err) {
+			return fmt.Errorf("lookup order failed for payment_trade_no %s: %w", tradeNo, err)
+		}
+		lookupErr = err
+	}
+
+	if lookupErr == nil || dbent.IsNotFound(lookupErr) {
+		return fmt.Errorf("%w: out_trade_no=%s payment_trade_no=%s", ErrOrderNotFound, strings.TrimSpace(n.OrderID), strings.TrimSpace(n.TradeNo))
+	}
+	return lookupErr
+}
+
+func (s *PaymentService) findNotificationOrderByPaymentTradeNo(ctx context.Context, tradeNo, providerKey string) (*dbent.PaymentOrder, error) {
+	providerKey = strings.TrimSpace(providerKey)
+	return s.entClient.PaymentOrder.Query().
+		Where(
+			paymentorder.PaymentTradeNoEQ(strings.TrimSpace(tradeNo)),
+			paymentorder.Or(
+				paymentorder.ProviderKeyEQ(providerKey),
+				paymentorder.And(
+					paymentorder.ProviderKeyIsNil(),
+					paymentorder.PaymentTypeEQ(providerKey),
+				),
+			),
+		).
+		Only(ctx)
 }
 
 func parseLegacyPaymentOrderID(orderID string, lookupErr error) (int64, bool) {
@@ -109,9 +152,24 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		})
 		return fmt.Errorf("invalid paid amount from provider: %v", paid)
 	}
-	if math.Abs(paid-o.PayAmount) > paymentAmountToleranceForCurrency(PaymentOrderCurrency(o)) {
-		s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{"expected": o.PayAmount, "paid": paid, "tradeNo": tradeNo})
+	currency := PaymentOrderCurrency(o)
+	if !isPaidAmountWithinProviderTolerance(o.PayAmount, paid, currency) {
+		s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{
+			"expected":         o.PayAmount,
+			"paid":             paid,
+			"overpayTolerance": paymentOverpayToleranceForCurrency(currency),
+			"tradeNo":          tradeNo,
+		})
 		return fmt.Errorf("amount mismatch: expected %s, got %s", strconv.FormatFloat(o.PayAmount, 'f', -1, 64), strconv.FormatFloat(paid, 'f', -1, 64))
+	}
+	if overpay := paid - o.PayAmount; overpay > paymentAmountComparisonEpsilon {
+		s.writeAuditLog(ctx, o.ID, "PAYMENT_OVERPAY_ACCEPTED", pk, map[string]any{
+			"expected":         o.PayAmount,
+			"paid":             paid,
+			"overpay":          overpay,
+			"overpayTolerance": paymentOverpayToleranceForCurrency(currency),
+			"tradeNo":          tradeNo,
+		})
 	}
 	return s.toPaid(ctx, o, tradeNo, paid, pk)
 }
@@ -122,6 +180,21 @@ func paymentAmountToleranceForCurrency(currency string) float64 {
 		return amountToleranceCNY
 	}
 	return math.Pow10(-minorUnit) / 2
+}
+
+func paymentOverpayToleranceForCurrency(currency string) float64 {
+	minorUnit := payment.CurrencyMinorUnit(currency)
+	if minorUnit <= 2 {
+		return paymentOverpayTolerance
+	}
+	return 5 * math.Pow10(-minorUnit)
+}
+
+func isPaidAmountWithinProviderTolerance(expected, paid float64, currency string) bool {
+	if expected > paid+paymentAmountComparisonEpsilon {
+		return false
+	}
+	return paid-expected <= paymentOverpayToleranceForCurrency(currency)+paymentAmountComparisonEpsilon
 }
 
 func isValidProviderAmount(amount float64) bool {
@@ -376,6 +449,9 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 
 	switch action {
 	case redeemActionSkipCompleted:
+		if err := s.applyRechargeBonusForOrder(ctx, o); err != nil {
+			return err
+		}
 		if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
 			return err
 		}
@@ -392,10 +468,39 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder, l
 	if _, err := s.redeemService.redeemForPaymentFulfillment(ctx, o.UserID, o.RechargeCode); err != nil {
 		return fmt.Errorf("redeem balance: %w", err)
 	}
+	if err := s.applyRechargeBonusForOrder(ctx, o); err != nil {
+		return err
+	}
 	if err := s.applyAffiliateRebateForOrder(ctx, o); err != nil {
 		return err
 	}
 	return s.markCompleted(ctx, o, lease, "RECHARGE_SUCCESS")
+}
+
+func (s *PaymentService) applyRechargeBonusForOrder(ctx context.Context, o *dbent.PaymentOrder) error {
+	if s == nil || s.rechargeBonusRepo == nil || o == nil || o.OrderType != payment.OrderTypeBalance {
+		return nil
+	}
+	result, err := s.rechargeBonusRepo.GrantForOrder(ctx, o.ID, o.UserID, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("grant recharge bonus: %w", err)
+	}
+	if result == nil || result.BonusAmount <= 0 {
+		return nil
+	}
+	if s.billingCacheService != nil {
+		if err := s.billingCacheService.InvalidateUserBalance(ctx, o.UserID); err != nil {
+			slog.Warn("invalidate balance cache after recharge bonus failed", "user_id", o.UserID, "order_id", o.ID, "error", err)
+		}
+	}
+	if !s.hasAuditLog(ctx, o.ID, "RECHARGE_BONUS_GRANTED") {
+		s.writeAuditLog(ctx, o.ID, "RECHARGE_BONUS_GRANTED", "system", map[string]any{
+			"grantID":     result.GrantID,
+			"bonusAmount": result.BonusAmount,
+			"expiresAt":   result.ExpiresAt,
+		})
+	}
+	return nil
 }
 
 func (s *PaymentService) markCompleted(ctx context.Context, o *dbent.PaymentOrder, lease *paymentFulfillmentLease, auditAction string) error {

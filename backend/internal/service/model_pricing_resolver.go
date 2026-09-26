@@ -9,6 +9,7 @@ import (
 
 // PricingSource 定价来源标识
 const (
+	PricingSourceGlobal   = "global"
 	PricingSourceGroup    = "group"
 	PricingSourceChannel  = "channel"
 	PricingSourceLiteLLM  = "litellm"
@@ -26,10 +27,10 @@ type ResolvedPricing struct {
 	// Token 模式：区间定价列表（如有，覆盖 BasePricing 中的对应字段）
 	Intervals []PricingInterval
 
-	// 按次/图片模式：分层定价
+	// 按次/图片/视频模式：分层定价。视频模式下价格为 USD/s。
 	RequestTiers []PricingInterval
 
-	// 按次/图片模式：默认价格（未命中层级时使用）
+	// 按次/图片/视频模式：默认价格（未命中层级时使用）
 	DefaultPerRequestPrice float64
 
 	// 来源标识
@@ -45,17 +46,28 @@ type ResolvedPricing struct {
 }
 
 // ModelPricingResolver 统一模型定价解析器。
-// 解析链：Group → Channel → LiteLLM → Fallback。
+// 解析链：Global → Group → Channel → LiteLLM → Fallback。
+// Global 为全站手动定价，命中则覆盖全部分组/账号；未命中走原链路。
 type ModelPricingResolver struct {
 	channelService *ChannelService
 	billingService *BillingService
+	globalPricing  *GlobalModelPricingService
 }
 
-// NewModelPricingResolver 创建定价解析器实例
+// NewModelPricingResolver 创建定价解析器实例（无全站定价，行为与原来一致）
 func NewModelPricingResolver(channelService *ChannelService, billingService *BillingService) *ModelPricingResolver {
 	return &ModelPricingResolver{
 		channelService: channelService,
 		billingService: billingService,
+	}
+}
+
+// NewModelPricingResolverWithGlobal 创建带全站定价覆盖的解析器实例。
+func NewModelPricingResolverWithGlobal(channelService *ChannelService, billingService *BillingService, globalPricing *GlobalModelPricingService) *ModelPricingResolver {
+	return &ModelPricingResolver{
+		channelService: channelService,
+		billingService: billingService,
+		globalPricing:  globalPricing,
 	}
 }
 
@@ -67,10 +79,25 @@ type PricingInput struct {
 }
 
 // Resolve 解析模型定价。
+// 0. 全站手动定价（命中则直接返回，覆盖全部分组/账号）
 // 1. 获取基础定价（LiteLLM → Fallback）
 // 2. 如果指定了 GroupID，查找渠道定价并覆盖
 func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) *ResolvedPricing {
+	if input.Group != nil && input.Group.Platform == PlatformVideo {
+		price, err := ResolveVideoGroupPrice(input.Group, input.Model)
+		if err != nil {
+			return nil
+		}
+		return &ResolvedPricing{Mode: price.BillingMode, Source: PricingSourceGroup, DefaultPerRequestPrice: price.UnitPrice}
+	}
 	longContextPricingEnabled := input.Group == nil || input.Group.LongContextPricingEnabled
+	if r.globalPricing != nil {
+		if globalPricing := r.globalPricing.Match(ctx, input.Model); globalPricing != nil {
+			resolved := r.resolveGlobalPricing(globalPricing, input.Model)
+			resolved.longContextPricingEnabled = longContextPricingEnabled
+			return resolved
+		}
+	}
 	if groupPricing := matchGroupModelPricing(input.Group, input.Model); groupPricing != nil {
 		// Group token cards only override the first-tier / flat rates.
 		// Long-context ladders come from official presets, gated by the checkbox.
@@ -125,6 +152,61 @@ func (r *ModelPricingResolver) Resolve(ctx context.Context, input PricingInput) 
 		r.applyChannelOverrides(ctx, *input.GroupID, input.Model, resolved)
 	}
 
+	return resolved
+}
+
+// resolveGlobalPricing 解析全站覆盖定价。与渠道覆盖不同：全站条目未填写的
+// 价格项保持原值（不归零），只有管理员显式设置的价格才覆盖。“未手动设置
+// 价格的则按原来的”是全站定价的承诺语义。
+func (r *ModelPricingResolver) resolveGlobalPricing(config *ChannelModelPricing, model string) *ResolvedPricing {
+	mode := config.BillingMode
+	if mode == "" {
+		mode = BillingModeToken
+	}
+	resolved := &ResolvedPricing{Mode: mode, Source: PricingSourceGlobal, channelPricing: config}
+	if mode == BillingModePerRequest || mode == BillingModeImage || mode == BillingModeVideo {
+		r.applyRequestTierOverrides(config, resolved)
+		return resolved
+	}
+	base, _ := r.resolveBasePricing(model)
+	if base == nil {
+		base = &ModelPricing{}
+	} else {
+		cloned := *base
+		base = &cloned
+	}
+	resolved.BasePricing = base
+	if config.InputPrice != nil {
+		base.InputPricePerToken = *config.InputPrice
+	}
+	if config.OutputPrice != nil {
+		base.OutputPricePerToken = *config.OutputPrice
+	}
+	if config.CacheWritePrice != nil {
+		base.CacheCreationPricePerToken = *config.CacheWritePrice
+		base.CacheCreationPriceExplicit = true
+		base.CacheCreation5mPrice = *config.CacheWritePrice
+		if config.CacheWrite1hPrice == nil {
+			base.CacheCreation1hPrice = *config.CacheWritePrice
+		}
+	}
+	if config.CacheWrite1hPrice != nil {
+		base.CacheCreation1hPrice = *config.CacheWrite1hPrice
+		base.SupportsCacheBreakdown = true
+		resolved.SupportsCacheBreakdown = true
+	} else {
+		resolved.SupportsCacheBreakdown = base.SupportsCacheBreakdown
+	}
+	if config.CacheReadPrice != nil {
+		base.CacheReadPricePerToken = *config.CacheReadPrice
+	}
+	if config.ImageOutputPrice != nil {
+		base.ImageOutputPricePerToken = *config.ImageOutputPrice
+		base.ImageOutputPriceExplicit = true
+	}
+	if config.ImageInputPrice != nil {
+		base.ImageInputPricePerToken = *config.ImageInputPrice
+	}
 	return resolved
 }
 
@@ -275,7 +357,8 @@ func applyChannelImageInputPrice(chPricing *ChannelModelPricing, pricing *ModelP
 	}
 }
 
-// applyRequestTierOverrides 应用按次/图片模式的渠道覆盖
+// applyRequestTierOverrides 应用按次/图片/视频模式的渠道覆盖。
+// 视频模式复用 per_request_price 存储每秒单价，最终时长乘法由视频计费路径完成。
 func (r *ModelPricingResolver) applyRequestTierOverrides(chPricing *ChannelModelPricing, resolved *ResolvedPricing) {
 	resolved.RequestTiers = filterValidIntervals(chPricing.Intervals)
 	if chPricing.PerRequestPrice != nil {

@@ -60,6 +60,15 @@ const orderFactory = (status: string) => ({
 })
 
 describe('PaymentStatusPanel', () => {
+  it('offers a direct payment link when a hosted checkout popup cannot open', async () => {
+    const wrapper = mount(PaymentStatusPanel, {
+      props: { orderId: 42, payUrl: 'https://pay.example.com/session/42', expiresAt: '2099-01-01T12:30:00Z', paymentType: 'wxpay', orderType: 'balance' },
+      global: { stubs: { Icon: true } },
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-test="pay-in-current-window"]').attributes('href')).toBe('https://pay.example.com/session/42')
+    wrapper.unmount()
+  })
   beforeEach(() => {
     vi.useFakeTimers()
     pollOrderStatus.mockReset()
@@ -154,36 +163,39 @@ describe('PaymentStatusPanel', () => {
     expect(wrapper.text()).not.toContain('payment.qr.scanAlipay')
   })
 
-  it('actively verifies a stuck pending order and settles it when upstream confirms payment', async () => {
-    pollOrderStatus.mockResolvedValue(orderFactory('PENDING'))
-    verifyOrder.mockResolvedValue({
-      data: orderFactory('COMPLETED'),
-    })
+  it.each(['alipay', 'wxpay', 'dujiaopay', 'paypal'])(
+    'actively verifies a stuck %s order and settles it when upstream confirms payment',
+    async (paymentType) => {
+      pollOrderStatus.mockResolvedValue(orderFactory('PENDING'))
+      verifyOrder.mockResolvedValue({
+        data: orderFactory('COMPLETED'),
+      })
 
-    const wrapper = mount(PaymentStatusPanel, {
-      props: {
-        orderId: 42,
-        qrCode: 'https://pay.example.com/qr/42',
-        expiresAt: '2099-01-01T12:30:00Z',
-        paymentType: 'wxpay',
-        orderType: 'balance',
-      },
-      global: {
-        stubs: {
-          Icon: true,
+      const wrapper = mount(PaymentStatusPanel, {
+        props: {
+          orderId: 42,
+          qrCode: 'https://pay.example.com/qr/42',
+          expiresAt: '2099-01-01T12:30:00Z',
+          paymentType,
+          orderType: 'balance',
         },
-      },
-    })
+        global: {
+          stubs: {
+            Icon: true,
+          },
+        },
+      })
 
-    await flushPromises()
-    await vi.advanceTimersByTimeAsync(3000)
-    await flushPromises()
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(3000)
+      await flushPromises()
 
-    expect(pollOrderStatus).toHaveBeenCalledWith(42)
-    expect(verifyOrder).toHaveBeenCalledWith('sub2_20260420abcd1234')
-    expect(wrapper.text()).toContain('payment.result.success')
-    expect(wrapper.emitted('success')).toHaveLength(1)
-  })
+      expect(pollOrderStatus).toHaveBeenCalledWith(42)
+      expect(verifyOrder).toHaveBeenCalledWith('sub2_20260420abcd1234')
+      expect(wrapper.text()).toContain('payment.result.success')
+      expect(wrapper.emitted('success')).toHaveLength(1)
+    },
+  )
 
   it('actively verifies a pending mobile Alipay precreate order', async () => {
     const originalLocation = window.location

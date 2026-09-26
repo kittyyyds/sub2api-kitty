@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"log/slog"
 	"strings"
 	"sync"
@@ -485,6 +486,12 @@ func (s *TokenRefreshService) processRefresh() {
 
 // processRefreshContext executes one bounded, cursor-resumable refresh cycle.
 func (s *TokenRefreshService) processRefreshContext(parent context.Context) {
+	parent, managedDone, managedAllowed := managedinstance.Begin(parent)
+	if !managedAllowed {
+		return
+	}
+	defer managedDone()
+
 	if parent == nil {
 		parent = context.Background()
 	}

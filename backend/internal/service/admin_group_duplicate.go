@@ -67,7 +67,7 @@ func cloneGroupModelRouting(value map[string][]int64) map[string][]int64 {
 	return cloned
 }
 
-func cloneGroupVideoModelPrices(value map[string]map[string]float64) map[string]map[string]float64 {
+func cloneGroupMediaModelPrices(value map[string]map[string]float64) map[string]map[string]float64 {
 	if value == nil {
 		return nil
 	}
@@ -121,6 +121,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		ImagePrice1K:                    cloneGroupValuePointer(source.ImagePrice1K),
 		ImagePrice2K:                    cloneGroupValuePointer(source.ImagePrice2K),
 		ImagePrice4K:                    cloneGroupValuePointer(source.ImagePrice4K),
+		ImageModelPrices:                cloneGroupMediaModelPrices(source.ImageModelPrices),
 		BatchImageDiscountMultiplier:    source.BatchImageDiscountMultiplier,
 		BatchImageHoldMultiplier:        source.BatchImageHoldMultiplier,
 		VideoRateIndependent:            source.VideoRateIndependent,
@@ -128,7 +129,7 @@ func cloneGroupForDuplicate(source *Group, operationID string) *Group {
 		VideoPrice480P:                  cloneGroupValuePointer(source.VideoPrice480P),
 		VideoPrice720P:                  cloneGroupValuePointer(source.VideoPrice720P),
 		VideoPrice1080P:                 cloneGroupValuePointer(source.VideoPrice1080P),
-		VideoModelPrices:                cloneGroupVideoModelPrices(source.VideoModelPrices),
+		VideoModelPrices:                cloneGroupMediaModelPrices(source.VideoModelPrices),
 		WebSearchPricePerCall:           cloneGroupValuePointer(source.WebSearchPricePerCall),
 		SearchPricePer1k:                cloneGroupValuePointer(source.SearchPricePer1k),
 		AudioRealtimePricePerMin:        cloneGroupValuePointer(source.AudioRealtimePricePerMin),

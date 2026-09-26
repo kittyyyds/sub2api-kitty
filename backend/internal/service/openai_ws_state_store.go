@@ -148,7 +148,7 @@ func (s *defaultOpenAIWSStateStore) BindHTTPResponseOwner(ctx context.Context, g
 	if s.cache == nil {
 		return nil
 	}
-	cacheCtx, cancel := withOpenAIWSStateStoreRedisTimeout(ctx)
+	cacheCtx, cancel := withOpenAIResponseBindingWriteTimeout(ctx)
 	defer cancel()
 	if err := s.cache.SetSessionAccountID(cacheCtx, groupID, openAIHTTPResponseOwnerCacheKey(openAIHTTPResponseOwnerUserPrefix, id), userID, ttl); err != nil {
 		return err
@@ -214,7 +214,7 @@ func (s *defaultOpenAIWSStateStore) BindResponseAccount(ctx context.Context, gro
 		return nil
 	}
 	cacheKey := openAIWSResponseAccountCacheKey(id)
-	cacheCtx, cancel := withOpenAIWSStateStoreRedisTimeout(ctx)
+	cacheCtx, cancel := withOpenAIResponseBindingWriteTimeout(ctx)
 	defer cancel()
 	return s.cache.SetSessionAccountID(cacheCtx, groupID, cacheKey, accountID, ttl)
 }
@@ -656,6 +656,17 @@ func openAIWSSessionTurnStateKey(groupID int64, sessionHash string) string {
 		return ""
 	}
 	return fmt.Sprintf("%d:%s", groupID, hash)
+}
+
+// Completed response bindings must outlive downstream cancellation: the caller
+// may already have received the response ID and use it to continue elsewhere.
+// Keep tracing values, but give only these writes their own bounded lifetime.
+// Reads, deletion and the model request itself still honor caller cancellation.
+func withOpenAIResponseBindingWriteTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(context.WithoutCancel(ctx), openAIWSStateStoreRedisTimeout)
 }
 
 func withOpenAIWSStateStoreRedisTimeout(ctx context.Context) (context.Context, context.CancelFunc) {

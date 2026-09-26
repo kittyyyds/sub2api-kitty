@@ -157,6 +157,7 @@ type SystemSettings struct {
 	SiteLogo                    string
 	SiteSubtitle                string
 	APIBaseURL                  string
+	APIBaseURLDescription       string
 	ContactInfo                 string
 	DocURL                      string
 	HomeContent                 string
@@ -239,6 +240,8 @@ type SystemSettings struct {
 
 	// 分组隔离：允许未分组 Key 调度（默认 false → 403）
 	AllowUngroupedKeyScheduling bool
+	// AccountGroupPriorityEnabled 在指定分组调度时使用 account_groups.priority；关闭时使用 accounts.priority。
+	AccountGroupPriorityEnabled bool
 
 	// Backend 模式：禁用用户注册和自助服务，仅管理员可登录
 	BackendModeEnabled bool
@@ -377,6 +380,7 @@ type PublicSettings struct {
 	SiteLogo                            string
 	SiteSubtitle                        string
 	APIBaseURL                          string
+	APIBaseURLDescription               string
 	ContactInfo                         string
 	DocURL                              string
 	HomeContent                         string

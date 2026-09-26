@@ -4,11 +4,26 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func headerOverrideRedactionTestAccount(platform string, id int64, override string) *Account {
+	return &Account{
+		ID:       id,
+		Platform: platform,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			credKeyHeaderOverrideEnabled: true,
+			credKeyHeaderOverrides: map[string]any{
+				"x-relay-key": override,
+			},
+		},
+	}
+}
 
 // 夹具模型必须同时满足两个条件，否则测的就不是想测的那条规则：
 //  1. 两者价格不同——否则"更便宜才采纳"的断言退化成恒真；
@@ -585,6 +600,142 @@ func TestOpenAIGatewayServiceRecordUsage_ResponseModelSkippedForSearchSurcharged
 	want := pricierCost.ActualCost + searchCost.ActualCost
 	require.InDelta(t, want, usageRepo.lastLog.ActualCost, 1e-12)
 	require.InDelta(t, want, userRepo.lastAmount, 1e-12)
+}
+
+func TestGatewayServiceRecordUsage_RedactsTruncatedHeaderOverrideResponseModel(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	longOverride := strings.Repeat("R", maxHeaderOverrideValueLength)
+	observedPrefix := longOverride[:upstreamResponseModelMaxLength]
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID:                     "gateway_header_override_response_model",
+			Usage:                         ClaudeUsage{InputTokens: 100, OutputTokens: 50},
+			Model:                         anthropicPriceyFixtureModel,
+			UpstreamModel:                 anthropicPriceyFixtureModel,
+			UpstreamResponseModel:         observedPrefix,
+			UpstreamResponseModelConflict: true,
+			Duration:                      time.Second,
+		},
+		APIKey:  &APIKey{ID: 501, Quota: 100},
+		User:    &User{ID: 601},
+		Account: headerOverrideRedactionTestAccount(PlatformAnthropic, 701, longOverride),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.UpstreamResponseModel)
+	require.Equal(t, upstreamResponseModelRedacted, *usageRepo.lastLog.UpstreamResponseModel)
+	require.NotContains(t, *usageRepo.lastLog.UpstreamResponseModel, observedPrefix)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModelMismatch)
+	require.True(t, *usageRepo.lastLog.UpstreamModelMismatch,
+		"mismatch must be computed from the original response model before redaction")
+}
+
+func TestOpenAIGatewayServiceRecordUsage_RedactsTruncatedHeaderOverrideResponseModel(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	longOverride := strings.Repeat("R", maxHeaderOverrideValueLength)
+	observedPrefix := longOverride[:upstreamResponseModelMaxLength]
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:                     "openai_header_override_response_model",
+			Model:                         openAIPriceyFixtureModel,
+			UpstreamModel:                 openAIPriceyFixtureModel,
+			UpstreamResponseModel:         observedPrefix,
+			UpstreamResponseModelConflict: true,
+			Usage:                         OpenAIUsage{InputTokens: 20, OutputTokens: 10},
+			Duration:                      time.Second,
+		},
+		APIKey:  &APIKey{ID: 10},
+		User:    &User{ID: 20},
+		Account: headerOverrideRedactionTestAccount(PlatformOpenAI, 30, longOverride),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.UpstreamResponseModel)
+	require.Equal(t, upstreamResponseModelRedacted, *usageRepo.lastLog.UpstreamResponseModel)
+	require.NotContains(t, *usageRepo.lastLog.UpstreamResponseModel, observedPrefix)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModelMismatch)
+	require.True(t, *usageRepo.lastLog.UpstreamModelMismatch,
+		"mismatch must be computed from the original response model before redaction")
+}
+
+func TestGatewayServiceRecordUsage_RedactsTruncatedAccountCredentialResponseModel(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{})
+	longCredential := strings.Repeat("A", maxHeaderOverrideValueLength)
+	observedPrefix := longCredential[:upstreamResponseModelMaxLength]
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID:                     "gateway_account_credential_response_model",
+			Usage:                         ClaudeUsage{InputTokens: 100, OutputTokens: 50},
+			Model:                         anthropicPriceyFixtureModel,
+			UpstreamModel:                 anthropicPriceyFixtureModel,
+			UpstreamResponseModel:         observedPrefix,
+			UpstreamResponseModelConflict: true,
+			Duration:                      time.Second,
+		},
+		APIKey: &APIKey{ID: 501, Quota: 100},
+		User:   &User{ID: 601},
+		Account: &Account{
+			ID:          701,
+			Platform:    PlatformAnthropic,
+			Type:        AccountTypeAPIKey,
+			Credentials: map[string]any{"api_key": longCredential},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.UpstreamResponseModel)
+	require.Equal(t, upstreamResponseModelRedacted, *usageRepo.lastLog.UpstreamResponseModel)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModelMismatch)
+	require.True(t, *usageRepo.lastLog.UpstreamModelMismatch,
+		"mismatch must be computed from the original response model before redaction")
+}
+
+func TestOpenAIGatewayServiceRecordUsage_RedactsTruncatedAccountCredentialResponseModel(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	longCredential := strings.Repeat("O", maxHeaderOverrideValueLength)
+	observedPrefix := longCredential[:upstreamResponseModelMaxLength]
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:                     "openai_account_credential_response_model",
+			Model:                         openAIPriceyFixtureModel,
+			UpstreamModel:                 openAIPriceyFixtureModel,
+			UpstreamResponseModel:         observedPrefix,
+			UpstreamResponseModelConflict: true,
+			Usage:                         OpenAIUsage{InputTokens: 20, OutputTokens: 10},
+			Duration:                      time.Second,
+		},
+		APIKey: &APIKey{ID: 10},
+		User:   &User{ID: 20},
+		Account: &Account{
+			ID:          30,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Credentials: map[string]any{"access_token": longCredential},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.UpstreamResponseModel)
+	require.Equal(t, upstreamResponseModelRedacted, *usageRepo.lastLog.UpstreamResponseModel)
+	require.NotNil(t, usageRepo.lastLog.UpstreamModelMismatch)
+	require.True(t, *usageRepo.lastLog.UpstreamModelMismatch,
+		"mismatch must be computed from the original response model before redaction")
 }
 
 // --- 渠道配置透传 ---

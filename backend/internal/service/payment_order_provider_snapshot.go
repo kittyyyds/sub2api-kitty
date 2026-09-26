@@ -220,6 +220,50 @@ func validateProviderSnapshotMetadata(order *dbent.PaymentOrder, providerKey str
 		if actual := strings.TrimSpace(metadata["status"]); actual != "" && !strings.EqualFold(actual, "SUCCEEDED") {
 			return fmt.Errorf("airwallex status mismatch: expected SUCCEEDED, got %s", actual)
 		}
+	case payment.TypeDujiaoPay:
+		if expected := strings.TrimSpace(snapshot.MerchantID); expected != "" {
+			actual := strings.TrimSpace(metadata["key_id"])
+			if actual == "" {
+				return fmt.Errorf("dujiaopay notification missing key_id")
+			}
+			if !strings.EqualFold(expected, actual) {
+				return fmt.Errorf("dujiaopay key_id mismatch: expected %s, got %s", expected, actual)
+			}
+		}
+		if expected := strings.TrimSpace(snapshot.Currency); expected != "" {
+			actual := strings.ToUpper(strings.TrimSpace(metadata["currency"]))
+			if actual == "" {
+				return fmt.Errorf("dujiaopay notification missing currency")
+			}
+			if !strings.EqualFold(expected, actual) {
+				return fmt.Errorf("dujiaopay currency mismatch: expected %s, got %s", expected, actual)
+			}
+		}
+		if actual := strings.TrimSpace(metadata["status"]); actual != "" && !strings.EqualFold(actual, "paid") {
+			return fmt.Errorf("dujiaopay status mismatch: expected paid, got %s", actual)
+		}
+	case payment.TypePayPal:
+		if expected := strings.TrimSpace(snapshot.MerchantID); expected != "" {
+			actual := strings.TrimSpace(metadata["client_id"])
+			if actual == "" {
+				return fmt.Errorf("paypal notification missing client_id")
+			}
+			if !strings.EqualFold(expected, actual) {
+				return fmt.Errorf("paypal client_id mismatch: expected %s, got %s", expected, actual)
+			}
+		}
+		if expected := strings.TrimSpace(snapshot.Currency); expected != "" {
+			actual := strings.ToUpper(strings.TrimSpace(metadata["currency"]))
+			if actual == "" {
+				return fmt.Errorf("paypal notification missing currency")
+			}
+			if !strings.EqualFold(expected, actual) {
+				return fmt.Errorf("paypal currency mismatch: expected %s, got %s", expected, actual)
+			}
+		}
+		if actual := strings.TrimSpace(metadata["status"]); actual != "" && !strings.EqualFold(actual, "COMPLETED") {
+			return fmt.Errorf("paypal status mismatch: expected COMPLETED, got %s", actual)
+		}
 	}
 
 	return nil

@@ -140,14 +140,19 @@
         </div>
 
         <!-- Billing Mode Filter (usage only；用户排行的 user-breakdown 接口不支持该维度) -->
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[200px]">
+        <div v-if="mode === 'usage' || mode === 'audit'" class="w-full sm:w-auto sm:min-w-[200px]">
           <label class="input-label">{{ t('admin.usage.billingMode') }}</label>
           <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="emitChange" />
         </div>
 
-        <div v-if="mode === 'usage'" class="w-full sm:w-auto sm:min-w-[220px]">
+        <div v-if="mode === 'usage' || mode === 'audit'" class="w-full sm:w-auto sm:min-w-[220px]">
           <label class="input-label">{{ t('admin.usage.upstreamModelAudit') }}</label>
           <Select v-model="filters.upstream_model_mismatch" :options="upstreamModelMismatchOptions" @change="emitChange" />
+        </div>
+
+        <div v-if="mode === 'audit'" class="w-full sm:w-auto sm:min-w-[200px]">
+          <label class="input-label">{{ t('admin.usage.audit.statusFilter') }}</label>
+          <Select v-model="filters.audit_status" :options="auditStatusOptions" @change="emitChange" />
         </div>
 
         <!-- Error Phase Filter (errors only) -->
@@ -193,6 +198,16 @@
             {{ t('usage.exportExcel') }}
           </button>
         </template>
+        <template v-else-if="mode === 'audit'">
+          <button type="button" @click="$emit('exportAudit', 'csv')" :disabled="exporting" class="btn btn-secondary">
+            <Icon name="download" size="sm" />
+            {{ t('admin.usage.audit.exportCSV') }}
+          </button>
+          <button type="button" @click="$emit('exportAudit', 'json')" :disabled="exporting" class="btn btn-primary">
+            <Icon name="download" size="sm" />
+            {{ t('admin.usage.audit.exportJSON') }}
+          </button>
+        </template>
       </div>
     </div>
   </div>
@@ -203,6 +218,7 @@ import { ref, onMounted, onUnmounted, toRef, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 import type { SimpleApiKey, SimpleUser } from '@/api/admin/usage'
 
@@ -219,7 +235,7 @@ interface Props {
    * errors 模式:隐藏用量专属字段/按钮,显示错误类型+状态码(错误请求 tab 用)
    * ranking 模式:同 usage 但隐藏计费模式筛选与清理/导出按钮(用户排行 tab 用)
    */
-  mode?: 'usage' | 'errors' | 'ranking'
+  mode?: 'usage' | 'audit' | 'errors' | 'ranking'
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }
@@ -235,6 +251,7 @@ const emit = defineEmits([
   'refresh',
   'reset',
   'export',
+  'exportAudit',
   'cleanup'
 ])
 
@@ -327,6 +344,16 @@ const upstreamModelMismatchOptions = ref<SelectOption[]>([
   { value: null, label: t('admin.usage.allUpstreamModelAudit') },
   { value: true, label: t('admin.usage.upstreamModelMismatchOnly') },
   { value: false, label: t('admin.usage.upstreamModelMatchedOnly') }
+])
+
+const auditStatusOptions = computed<SelectOption[]>(() => [
+  { value: null, label: t('admin.usage.audit.allStatuses') },
+  { value: 'anomaly', label: t('admin.usage.audit.status.anomaly') },
+  { value: 'warning', label: t('admin.usage.audit.status.warning') },
+  { value: 'pass', label: t('admin.usage.audit.status.pass') },
+  { value: 'unverifiable', label: t('admin.usage.audit.status.unverifiable') },
+  { value: 'not_applicable', label: t('admin.usage.audit.status.not_applicable') },
+  { value: 'missing', label: t('admin.usage.audit.status.missing') },
 ])
 
 const emitChange = () => emit('change')

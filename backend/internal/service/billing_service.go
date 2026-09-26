@@ -201,9 +201,10 @@ type CostBreakdown struct {
 	CacheCreationCost         float64
 	CacheReadCost             float64
 	TotalCost                 float64
-	ActualCost                float64 // 应用倍率后的实际费用
-	BillingMode               string  // 计费模式（"token"/"per_request"/"image"），由 CalculateCostUnified 填充
+	ActualCost                float64 // 客户实际扣费（通常应用倍率；显式图片/视频模型价直接作为最终单位价）
+	BillingMode               string  // 计费模式（"token"/"per_request"/"image"/"video"），由 CalculateCostUnified 填充
 	LongContextBillingApplied bool
+	FinalPriceApplied         bool // true 表示模型配置值已是客户最终单位价，账单倍率应展示为 1x
 }
 
 func applyCostBreakdownMultiplier(cost *CostBreakdown, multiplier float64) {
@@ -592,14 +593,14 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerTokenPriority:     0.4e-6,
 	}
 	s.fallbackPrices["gpt-5.6-luna"] = &ModelPricing{
-		InputPricePerToken:                 0.2e-6,
-		InputPricePerTokenPriority:         0.4e-6,
-		OutputPricePerToken:                1.2e-6,
-		OutputPricePerTokenPriority:        2.4e-6,
-		CacheCreationPricePerToken:         0.25e-6,
-		CacheCreationPricePerTokenPriority: 0.5e-6,
-		CacheReadPricePerToken:             0.02e-6,
-		CacheReadPricePerTokenPriority:     0.04e-6,
+		InputPricePerToken:                 4e-07,
+		InputPricePerTokenPriority:         8e-07,
+		OutputPricePerToken:                2.4e-06,
+		OutputPricePerTokenPriority:        4.8e-06,
+		CacheCreationPricePerToken:         5e-07,
+		CacheCreationPricePerTokenPriority: 1e-06,
+		CacheReadPricePerToken:             4e-08,
+		CacheReadPricePerTokenPriority:     8e-08,
 	}
 
 	s.fallbackPrices["gpt-5.4-mini"] = &ModelPricing{
@@ -1997,15 +1998,21 @@ type ImagePriceConfig struct {
 	Price1K *float64 // 1K 尺寸价格（nil 表示使用默认值）
 	Price2K *float64 // 2K 尺寸价格（nil 表示使用默认值）
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
+	// ModelPrices is an optional model x resolution override in final USD/image.
+	// A populated model cell is the final customer price: it wins over the flat
+	// Price* columns and is not multiplied by any group/image rate.
+	ModelPrices map[string]map[string]float64
 }
 
-// VideoPriceConfig 视频生成计费配置。所有价格均为**每秒**单价（USD/s），与 xAI 官方计费口径一致。
+// VideoPriceConfig 视频生成计费配置。Price* 字段为 USD/s 回退价；
+// ModelPrices 中已填写的模型单元格是客户最终 USD/s 价，不再叠加倍率。
 type VideoPriceConfig struct {
 	Price480P  *float64 // 480p 每秒价格（nil 表示使用默认值）
 	Price720P  *float64 // 720p 每秒价格（nil 表示使用默认值）
 	Price1080P *float64 // 1080p 每秒价格（nil 表示使用默认值）
-	// ModelPrices is optional per-model-family override: family → resolution → USD/s.
-	// When set for a model, it wins over Price* flat columns for that model only.
+	// ModelPrices is an optional model-family x resolution override in final USD/s.
+	// A populated model cell is the final customer per-second rate: it wins over
+	// the flat Price* columns and is not multiplied by any group/video rate.
 	ModelPrices map[string]map[string]float64
 }
 
@@ -2019,7 +2026,7 @@ const (
 	defaultGrokImagineImage20Price1K      = 0.06 // default quality is Medium
 	defaultGrokImagineImage20Price2K      = 0.08
 
-	// 视频默认价为 xAI 官方**每秒**输出价格（USD/s），总价 = 每秒价 × 时长（秒）。
+	// xAI 的 Imagine 官方价按模型和输出分辨率计费。分组级分辨率价格仍可覆盖这些默认值。
 	defaultGrokImagineVideoPrice480P    = 0.05
 	defaultGrokImagineVideoPrice720P    = 0.07
 	defaultGrokImagineVideo15Price480P  = 0.08
@@ -2142,7 +2149,7 @@ func (s *BillingService) CalculateAudioCost(mode string, durationOrUnits float64
 // model: 请求的模型名称（用于获取 LiteLLM 默认价格）
 // imageSize: 图片尺寸 "1K", "2K", "4K"
 // imageCount: 生成的图片数量
-// groupConfig: 分组配置的价格（可能为 nil，表示使用默认值）
+// groupConfig: 分组配置的价格（可能为 nil，表示使用默认值）；按模型价格为美元最终价
 // rateMultiplier: 费率倍数
 func (s *BillingService) CalculateImageCost(model string, imageSize string, imageCount int, groupConfig *ImagePriceConfig, rateMultiplier float64) *CostBreakdown {
 	if imageCount <= 0 {
@@ -2150,101 +2157,116 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	}
 	imageSize = NormalizeImageBillingTierOrDefault(imageSize)
 
-	// 获取单价
-	unitPrice := s.getImageUnitPrice(model, imageSize, groupConfig)
+	// 获取内部 USD 单价。按模型填写的单元格是客户美元最终单张价；通用价和默认价仍叠加倍率。
+	unitPrice, isFinalModelPrice := s.getImageUnitPrice(model, imageSize, groupConfig)
 
 	// 计算总费用
 	totalCost := unitPrice * float64(imageCount)
 
-	// 应用倍率（保存时强制 > 0；负数按 0 处理避免按 1x 误扣）
-	if rateMultiplier < 0 {
-		rateMultiplier = 0
+	actualCost := totalCost
+	if !isFinalModelPrice {
+		// 保存时强制 > 0；负数按 0 处理避免按 1x 误扣。
+		if rateMultiplier < 0 {
+			rateMultiplier = 0
+		}
+		actualCost = totalCost * rateMultiplier
 	}
-	actualCost := totalCost * rateMultiplier
 
 	return &CostBreakdown{
-		TotalCost:   totalCost,
-		ActualCost:  actualCost,
-		BillingMode: string(BillingModeImage),
+		TotalCost:         totalCost,
+		ActualCost:        actualCost,
+		BillingMode:       string(BillingModeImage),
+		FinalPriceApplied: isFinalModelPrice,
 	}
 }
 
-// CalculateVideoCost 计算视频生成费用（按秒计费，与 xAI 口径一致）。
+// CalculateVideoCost 计算视频生成费用。
 // model: 请求的模型名称（用于获取默认价格）
 // resolution: 视频分辨率 "480p", "720p", "1080p"
 // videoCount: 生成的视频数量
 // durationSeconds: 单个视频时长（秒），<=0 时按上游默认时长计
-// groupConfig: 分组配置的每秒价格（可能为 nil，表示使用默认值）
+// groupConfig: 分组配置；模型单元格是美元最终每秒价，平面字段是应用倍率的 USD/秒回退价
 // rateMultiplier: 费率倍数
-func (s *BillingService) CalculateVideoCost(model string, resolution string, videoCount int, durationSeconds int, groupConfig *VideoPriceConfig, rateMultiplier float64) *CostBreakdown {
+func (s *BillingService) CalculateVideoCost(model string, resolution string, videoCount int, durationSeconds int, groupConfig *VideoPriceConfig, rateMultiplier float64, providers ...string) *CostBreakdown {
 	if videoCount <= 0 {
 		return &CostBreakdown{}
 	}
 	resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
-	durationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(durationSeconds)
-
-	perSecondPrice := s.getVideoUnitPrice(model, resolution, groupConfig)
-	totalCost := perSecondPrice * float64(durationSeconds) * float64(videoCount)
-
-	if rateMultiplier < 0 {
-		rateMultiplier = 0
+	provider := ""
+	if len(providers) > 0 {
+		provider = providers[0]
 	}
-	actualCost := totalCost * rateMultiplier
+	durationSeconds = NormalizeVideoBillingDurationForProvider(provider, durationSeconds)
+
+	perSecondPrice, isFinalModelPrice := s.getVideoUnitPrice(model, resolution, groupConfig)
+	totalCost := perSecondPrice * float64(durationSeconds) * float64(videoCount)
+	actualCost := totalCost
+	if !isFinalModelPrice {
+		if rateMultiplier < 0 {
+			rateMultiplier = 0
+		}
+		actualCost = totalCost * rateMultiplier
+	}
 
 	return &CostBreakdown{
-		TotalCost:   totalCost,
-		ActualCost:  actualCost,
-		BillingMode: string(BillingModeVideo),
+		TotalCost:         totalCost,
+		ActualCost:        actualCost,
+		BillingMode:       string(BillingModeVideo),
+		FinalPriceApplied: isFinalModelPrice,
 	}
 }
 
-// getImageUnitPrice 获取图片单价
-func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) float64 {
-	// 优先使用分组配置的价格
+// getImageUnitPrice 获取图片单价，并返回该价格是否为不叠加倍率的最终模型价。
+func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) (float64, bool) {
+	// 优先级：按模型美元最终价 > 分组通用 USD 价 > 模型默认 USD 价。
 	if groupConfig != nil {
+		if price := LookupImageModelPrice(groupConfig.ModelPrices, model, imageSize); price != nil {
+			return *price, true
+		}
 		switch imageSize {
 		case "1K":
 			if groupConfig.Price1K != nil {
-				return *groupConfig.Price1K
+				return *groupConfig.Price1K, false
 			}
 		case "2K":
 			if groupConfig.Price2K != nil {
-				return *groupConfig.Price2K
+				return *groupConfig.Price2K, false
 			}
 		case "4K":
 			if groupConfig.Price4K != nil {
-				return *groupConfig.Price4K
+				return *groupConfig.Price4K, false
 			}
 		}
 	}
 
 	// 回退到 LiteLLM 默认价格
-	return s.getDefaultImagePrice(model, imageSize)
+	return s.getDefaultImagePrice(model, imageSize), false
 }
 
-func (s *BillingService) getVideoUnitPrice(model string, resolution string, groupConfig *VideoPriceConfig) float64 {
-	// Order: (a) per-model map (b) flat group video_price_* (c) model-aware code defaults.
+// getVideoUnitPrice 获取视频每秒单价，并返回该价格是否为不叠加倍率的最终模型价。
+func (s *BillingService) getVideoUnitPrice(model string, resolution string, groupConfig *VideoPriceConfig) (float64, bool) {
+	// Order: (a) final per-model USD/s map (b) flat group USD/s columns (c) model-aware USD/s defaults.
 	if groupConfig != nil {
 		if price := LookupVideoModelPrice(groupConfig.ModelPrices, model, resolution); price != nil {
-			return *price
+			return *price, true
 		}
 		switch NormalizeVideoBillingResolutionOrDefault(resolution) {
 		case VideoBillingResolution480P:
 			if groupConfig.Price480P != nil {
-				return *groupConfig.Price480P
+				return *groupConfig.Price480P, false
 			}
 		case VideoBillingResolution720P:
 			if groupConfig.Price720P != nil {
-				return *groupConfig.Price720P
+				return *groupConfig.Price720P, false
 			}
 		case VideoBillingResolution1080P:
 			if groupConfig.Price1080P != nil {
-				return *groupConfig.Price1080P
+				return *groupConfig.Price1080P, false
 			}
 		}
 	}
 
-	return s.getDefaultVideoPrice(model, resolution)
+	return s.getDefaultVideoPrice(model, resolution), false
 }
 
 // getDefaultImagePrice 获取 LiteLLM 默认图片价格
@@ -2292,21 +2314,32 @@ func (s *BillingService) getDefaultVideoPrice(model string, resolution string) f
 }
 
 func getDefaultGrokImagineImagePrice(model string, imageSize string) (float64, bool) {
-	model = strings.ToLower(strings.TrimSpace(model))
-	switch model {
-	case "grok-imagine-image-2.0":
+	normalized := strings.ToLower(strings.TrimSpace(model))
+	if normalized == "grok-imagine-image-2.0" {
 		return getGrokImagineImageTierPrice(
 			imageSize,
 			defaultGrokImagineImage20Price1K,
 			defaultGrokImagineImage20Price2K,
 		), true
-	case "grok-imagine-image-quality":
+	}
+
+	canonical, ok := xai.CanonicalImageGenerationModel(normalized)
+	if !ok {
+		switch normalized {
+		case "grok-imagine", "grok-imagine-edit":
+			canonical = xai.ModelGrokImagineImageQuality
+		default:
+			return 0, false
+		}
+	}
+	switch canonical {
+	case xai.ModelGrokImagineImageQuality:
 		return getGrokImagineImageTierPrice(
 			imageSize,
 			defaultGrokImagineImageQualityPrice1K,
 			defaultGrokImagineImageQualityPrice2K,
 		), true
-	case "grok-imagine", "grok-imagine-image", "grok-imagine-edit":
+	case xai.ModelGrokImagineImage:
 		return getGrokImagineImageTierPrice(
 			imageSize,
 			defaultGrokImagineImagePrice1K,
@@ -2329,9 +2362,12 @@ func getGrokImagineImageTierPrice(imageSize string, price1K float64, price2K flo
 }
 
 func getDefaultGrokImagineVideoPrice(model string, resolution string) (float64, bool) {
-	model = strings.ToLower(strings.TrimSpace(model))
-	switch {
-	case strings.HasPrefix(model, "grok-imagine-video-1.5"):
+	canonical, ok := xai.CanonicalVideoGenerationModel(model)
+	if !ok {
+		return 0, false
+	}
+	switch canonical {
+	case xai.ModelGrokImagineVideo15:
 		switch NormalizeVideoBillingResolutionOrDefault(resolution) {
 		case VideoBillingResolution480P:
 			return defaultGrokImagineVideo15Price480P, true
@@ -2342,7 +2378,7 @@ func getDefaultGrokImagineVideoPrice(model string, resolution string) (float64, 
 		default:
 			return defaultGrokImagineVideo15Price480P, true
 		}
-	case strings.HasPrefix(model, "grok-imagine-video"):
+	case xai.ModelGrokImagineVideo:
 		switch NormalizeVideoBillingResolutionOrDefault(resolution) {
 		case VideoBillingResolution480P:
 			return defaultGrokImagineVideoPrice480P, true

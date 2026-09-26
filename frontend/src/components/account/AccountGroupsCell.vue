@@ -2,16 +2,27 @@
   <div v-if="groups && groups.length > 0" class="relative max-w-56">
     <!-- 分组容器：固定最大宽度，最多显示2行 -->
     <div class="flex flex-wrap gap-1 max-h-14 overflow-hidden">
-      <GroupBadge
+      <span
         v-for="group in displayGroups"
         :key="group.id"
-        :name="group.name"
-        :platform="group.platform"
-        :subscription-type="group.subscription_type"
-        :rate-multiplier="group.rate_multiplier"
-        :show-rate="false"
-        class="max-w-24"
-      />
+        class="inline-flex items-center gap-0.5"
+      >
+        <GroupBadge
+          :name="group.name"
+          :platform="group.platform"
+          :subscription-type="group.subscription_type"
+          :rate-multiplier="group.rate_multiplier"
+          :show-rate="false"
+          class="max-w-24"
+        />
+        <span
+          v-if="groupPriority(group.id) !== null"
+          class="rounded bg-primary-50 px-1 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+          :title="t('admin.accounts.groupPriorityLabel', { priority: groupPriority(group.id) })"
+        >
+          P{{ groupPriority(group.id) }}
+        </span>
+      </span>
       <!-- 更多数量徽章 -->
       <button
         v-if="hiddenCount > 0"
@@ -53,15 +64,26 @@
             </button>
           </div>
           <div class="flex flex-wrap gap-1.5 max-h-64 overflow-y-auto">
-            <GroupBadge
+            <span
               v-for="group in groups"
               :key="group.id"
-              :name="group.name"
-              :platform="group.platform"
-              :subscription-type="group.subscription_type"
-              :rate-multiplier="group.rate_multiplier"
-              :show-rate="false"
-            />
+              class="inline-flex items-center gap-0.5"
+            >
+              <GroupBadge
+                :name="group.name"
+                :platform="group.platform"
+                :subscription-type="group.subscription_type"
+                :rate-multiplier="group.rate_multiplier"
+                :show-rate="false"
+              />
+              <span
+                v-if="groupPriority(group.id) !== null"
+                class="rounded bg-primary-50 px-1 py-0.5 text-[10px] font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                :title="t('admin.accounts.groupPriorityLabel', { priority: groupPriority(group.id) })"
+              >
+                P{{ groupPriority(group.id) }}
+              </span>
+            </span>
           </div>
         </div>
       </Transition>
@@ -81,14 +103,18 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from '@/components/common/GroupBadge.vue'
-import type { Group } from '@/types'
+import type { AccountGroup, Group } from '@/types'
 
 interface Props {
   groups: Group[] | null | undefined
+  accountGroups?: AccountGroup[] | null
+  priorityEnabled?: boolean
   maxDisplay?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  accountGroups: undefined,
+  priorityEnabled: false,
   maxDisplay: 4
 })
 
@@ -97,6 +123,21 @@ const { t } = useI18n()
 const moreButtonRef = ref<HTMLElement | null>(null)
 const popoverRef = ref<HTMLElement | null>(null)
 const showPopover = ref(false)
+
+const priorityByGroupID = computed(() => {
+  const priorities = new Map<number, number>()
+  if (!props.priorityEnabled || !props.accountGroups) return priorities
+  for (const accountGroup of props.accountGroups) {
+    if (Number.isFinite(accountGroup.group_id) && Number.isFinite(accountGroup.priority)) {
+      priorities.set(accountGroup.group_id, accountGroup.priority)
+    }
+  }
+  return priorities
+})
+
+const groupPriority = (groupID: number): number | null => {
+  return priorityByGroupID.value.get(groupID) ?? null
+}
 
 // 显示的分组（最多显示 maxDisplay 个）
 const displayGroups = computed(() => {

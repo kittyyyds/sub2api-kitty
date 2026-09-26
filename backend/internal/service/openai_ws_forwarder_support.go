@@ -629,6 +629,8 @@ func (s *OpenAIGatewayService) resolveAccountByPreviousResponseIDForCapability(
 		}
 		account = latest
 	}
+	useGroupPriority := s.settingService != nil && s.settingService.IsAccountGroupPriorityEnabled(ctx)
+	ApplyAccountGroupPriority(account, groupID, useGroupPriority)
 	if requireCompact && openAICompactSupportTier(account) == 0 {
 		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
 		return 0, nil, "", nil

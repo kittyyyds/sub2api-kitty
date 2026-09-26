@@ -110,6 +110,21 @@ func IsExclusive(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldIsExclusive, v))
 }
 
+// SecurityPolicyEnabled applies equality check predicate on the "security_policy_enabled" field. It's identical to SecurityPolicyEnabledEQ.
+func SecurityPolicyEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEnabled, v))
+}
+
+// SecurityPolicyMode applies equality check predicate on the "security_policy_mode" field. It's identical to SecurityPolicyModeEQ.
+func SecurityPolicyMode(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyEmailEnabled applies equality check predicate on the "security_policy_email_enabled" field. It's identical to SecurityPolicyEmailEnabledEQ.
+func SecurityPolicyEmailEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEmailEnabled, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldStatus, v))
@@ -333,6 +348,21 @@ func MaxReasoningEffort(v string) predicate.Group {
 // MaxReasoningEffortOverLimit applies equality check predicate on the "max_reasoning_effort_over_limit" field. It's identical to MaxReasoningEffortOverLimitEQ.
 func MaxReasoningEffortOverLimit(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldMaxReasoningEffortOverLimit, v))
+}
+
+// GrokPromptEnabled applies equality check predicate on the "grok_prompt_enabled" field. It's identical to GrokPromptEnabledEQ.
+func GrokPromptEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGrokPromptEnabled, v))
+}
+
+// GrokPromptMode applies equality check predicate on the "grok_prompt_mode" field. It's identical to GrokPromptModeEQ.
+func GrokPromptMode(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGrokPromptMode, v))
+}
+
+// GrokPromptContent applies equality check predicate on the "grok_prompt_content" field. It's identical to GrokPromptContentEQ.
+func GrokPromptContent(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGrokPromptContent, v))
 }
 
 // ProfitControlEnabled applies equality check predicate on the "profit_control_enabled" field. It's identical to ProfitControlEnabledEQ.
@@ -848,6 +878,91 @@ func IsExclusiveEQ(v bool) predicate.Group {
 // IsExclusiveNEQ applies the NEQ predicate on the "is_exclusive" field.
 func IsExclusiveNEQ(v bool) predicate.Group {
 	return predicate.Group(sql.FieldNEQ(FieldIsExclusive, v))
+}
+
+// SecurityPolicyEnabledEQ applies the EQ predicate on the "security_policy_enabled" field.
+func SecurityPolicyEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEnabled, v))
+}
+
+// SecurityPolicyEnabledNEQ applies the NEQ predicate on the "security_policy_enabled" field.
+func SecurityPolicyEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSecurityPolicyEnabled, v))
+}
+
+// SecurityPolicyModeEQ applies the EQ predicate on the "security_policy_mode" field.
+func SecurityPolicyModeEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeNEQ applies the NEQ predicate on the "security_policy_mode" field.
+func SecurityPolicyModeNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeIn applies the In predicate on the "security_policy_mode" field.
+func SecurityPolicyModeIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldSecurityPolicyMode, vs...))
+}
+
+// SecurityPolicyModeNotIn applies the NotIn predicate on the "security_policy_mode" field.
+func SecurityPolicyModeNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldSecurityPolicyMode, vs...))
+}
+
+// SecurityPolicyModeGT applies the GT predicate on the "security_policy_mode" field.
+func SecurityPolicyModeGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeGTE applies the GTE predicate on the "security_policy_mode" field.
+func SecurityPolicyModeGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeLT applies the LT predicate on the "security_policy_mode" field.
+func SecurityPolicyModeLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeLTE applies the LTE predicate on the "security_policy_mode" field.
+func SecurityPolicyModeLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeContains applies the Contains predicate on the "security_policy_mode" field.
+func SecurityPolicyModeContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeHasPrefix applies the HasPrefix predicate on the "security_policy_mode" field.
+func SecurityPolicyModeHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeHasSuffix applies the HasSuffix predicate on the "security_policy_mode" field.
+func SecurityPolicyModeHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeEqualFold applies the EqualFold predicate on the "security_policy_mode" field.
+func SecurityPolicyModeEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeContainsFold applies the ContainsFold predicate on the "security_policy_mode" field.
+func SecurityPolicyModeContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyEmailEnabledEQ applies the EQ predicate on the "security_policy_email_enabled" field.
+func SecurityPolicyEmailEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEmailEnabled, v))
+}
+
+// SecurityPolicyEmailEnabledNEQ applies the NEQ predicate on the "security_policy_email_enabled" field.
+func SecurityPolicyEmailEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSecurityPolicyEmailEnabled, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.
@@ -1528,6 +1643,16 @@ func ImagePrice4kIsNil() predicate.Group {
 // ImagePrice4kNotNil applies the NotNil predicate on the "image_price_4k" field.
 func ImagePrice4kNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldImagePrice4k))
+}
+
+// ImageModelPricesIsNil applies the IsNil predicate on the "image_model_prices" field.
+func ImageModelPricesIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldImageModelPrices))
+}
+
+// ImageModelPricesNotNil applies the NotNil predicate on the "image_model_prices" field.
+func ImageModelPricesNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldImageModelPrices))
 }
 
 // BatchImageDiscountMultiplierEQ applies the EQ predicate on the "batch_image_discount_multiplier" field.
@@ -2573,6 +2698,146 @@ func MaxReasoningEffortOverLimitEqualFold(v string) predicate.Group {
 // MaxReasoningEffortOverLimitContainsFold applies the ContainsFold predicate on the "max_reasoning_effort_over_limit" field.
 func MaxReasoningEffortOverLimitContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldMaxReasoningEffortOverLimit, v))
+}
+
+// GrokPromptEnabledEQ applies the EQ predicate on the "grok_prompt_enabled" field.
+func GrokPromptEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGrokPromptEnabled, v))
+}
+
+// GrokPromptEnabledNEQ applies the NEQ predicate on the "grok_prompt_enabled" field.
+func GrokPromptEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldGrokPromptEnabled, v))
+}
+
+// GrokPromptModeEQ applies the EQ predicate on the "grok_prompt_mode" field.
+func GrokPromptModeEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeNEQ applies the NEQ predicate on the "grok_prompt_mode" field.
+func GrokPromptModeNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeIn applies the In predicate on the "grok_prompt_mode" field.
+func GrokPromptModeIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldGrokPromptMode, vs...))
+}
+
+// GrokPromptModeNotIn applies the NotIn predicate on the "grok_prompt_mode" field.
+func GrokPromptModeNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldGrokPromptMode, vs...))
+}
+
+// GrokPromptModeGT applies the GT predicate on the "grok_prompt_mode" field.
+func GrokPromptModeGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeGTE applies the GTE predicate on the "grok_prompt_mode" field.
+func GrokPromptModeGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeLT applies the LT predicate on the "grok_prompt_mode" field.
+func GrokPromptModeLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeLTE applies the LTE predicate on the "grok_prompt_mode" field.
+func GrokPromptModeLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeContains applies the Contains predicate on the "grok_prompt_mode" field.
+func GrokPromptModeContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeHasPrefix applies the HasPrefix predicate on the "grok_prompt_mode" field.
+func GrokPromptModeHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeHasSuffix applies the HasSuffix predicate on the "grok_prompt_mode" field.
+func GrokPromptModeHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeEqualFold applies the EqualFold predicate on the "grok_prompt_mode" field.
+func GrokPromptModeEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldGrokPromptMode, v))
+}
+
+// GrokPromptModeContainsFold applies the ContainsFold predicate on the "grok_prompt_mode" field.
+func GrokPromptModeContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldGrokPromptMode, v))
+}
+
+// GrokPromptContentEQ applies the EQ predicate on the "grok_prompt_content" field.
+func GrokPromptContentEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentNEQ applies the NEQ predicate on the "grok_prompt_content" field.
+func GrokPromptContentNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentIn applies the In predicate on the "grok_prompt_content" field.
+func GrokPromptContentIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldGrokPromptContent, vs...))
+}
+
+// GrokPromptContentNotIn applies the NotIn predicate on the "grok_prompt_content" field.
+func GrokPromptContentNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldGrokPromptContent, vs...))
+}
+
+// GrokPromptContentGT applies the GT predicate on the "grok_prompt_content" field.
+func GrokPromptContentGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentGTE applies the GTE predicate on the "grok_prompt_content" field.
+func GrokPromptContentGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentLT applies the LT predicate on the "grok_prompt_content" field.
+func GrokPromptContentLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentLTE applies the LTE predicate on the "grok_prompt_content" field.
+func GrokPromptContentLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentContains applies the Contains predicate on the "grok_prompt_content" field.
+func GrokPromptContentContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentHasPrefix applies the HasPrefix predicate on the "grok_prompt_content" field.
+func GrokPromptContentHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentHasSuffix applies the HasSuffix predicate on the "grok_prompt_content" field.
+func GrokPromptContentHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentEqualFold applies the EqualFold predicate on the "grok_prompt_content" field.
+func GrokPromptContentEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldGrokPromptContent, v))
+}
+
+// GrokPromptContentContainsFold applies the ContainsFold predicate on the "grok_prompt_content" field.
+func GrokPromptContentContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldGrokPromptContent, v))
 }
 
 // ProfitControlEnabledEQ applies the EQ predicate on the "profit_control_enabled" field.

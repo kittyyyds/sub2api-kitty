@@ -1,5 +1,7 @@
 export default {
     accounts: {
+      requestTimezone: {"enabled": "请求时区改写", "target": "目标时区", "hint": "默认关闭。开启后仅改写完整环境信息中已有的时区，保留客户端日期、时间与普通对话；不修改服务器时区。", "syncSearch": "同步网页搜索工具已有时区", "searchHint": "仅更新已有时区，保留国家和城市。关闭账号开关后此选项也不生效。", "loadFailed": "时区列表加载失败或当前选择不可用，请重新打开或选择有效时区。"},
+      tierRouting: {"enabled": "启用分级路由", "pool": "账号所属号池", "premium": "优选号池", "standard": "普通号池", "hint": "需同时开启全站分级路由。关闭此账号开关后不再作为优选号；优选池无可用账号时按现有规则回退。"},
       title: '账号管理',
       description: '管理 AI 平台账号和 Cookie',
       createAccount: '添加账号',
@@ -95,6 +97,8 @@ export default {
       schedulableDisabled: '调度已关闭',
       failedToToggleSchedulable: '切换调度状态失败',
       groupCountTotal: '共 {count} 个分组',
+      groupPriorityLabel: '分组优先级 P{priority}',
+      accountPriorityLabel: '账号全局优先级 {priority}',
       columns: {
         name: '名称',
         id: '账号ID',
@@ -947,6 +951,7 @@ export default {
       syncUpstreamModelsEmpty: '上游没有返回可同步的模型',
       syncUpstreamModelsFailed: '同步上游模型失败',
       syncUpstreamModelsError: '同步上游模型失败：{message}',
+      syncUpstreamPreviewSaveConnectionFirst: '此账号设置了代理、自定义请求头或 TLS 指纹。请先点击“更新”保存，再重新打开账号同步模型，以使用完整连接设置。',
       syncUpstreamModelsMetadataIncomplete: '模型 ID 已同步，但未能更新任何能力元数据。',
       syncUpstreamModelsMetadataPartial: '已更新部分模型的能力元数据；其余模型能力仍不完整。',
       clearAllModels: '清除所有模型',

@@ -1,9 +1,11 @@
 <template>
-  <div class="relative" ref="containerRef">
+  <div ref="containerRef" class="date-picker-root">
     <button
       type="button"
-      @click="toggle"
       :class="['date-picker-trigger', isOpen && 'date-picker-trigger-open']"
+      aria-haspopup="dialog"
+      :aria-expanded="isOpen"
+      @click="toggle"
     >
       <span class="date-picker-icon">
         <Icon name="calendar" size="sm" />
@@ -21,7 +23,13 @@
     </button>
 
     <Transition name="date-picker-dropdown">
-      <div v-if="isOpen" class="date-picker-dropdown">
+      <div
+        v-if="isOpen"
+        class="date-picker-dropdown"
+        :class="dropdownAlignment === 'right' && 'date-picker-dropdown-right'"
+        role="dialog"
+        :aria-label="t('dates.selectDateRange')"
+      >
         <!-- Quick presets -->
         <div class="date-picker-presets">
           <button
@@ -76,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 
@@ -103,6 +111,7 @@ const emit = defineEmits<Emits>()
 const { t, locale } = useI18n()
 
 const isOpen = ref(false)
+const dropdownAlignment = shallowRef<'left' | 'right'>('left')
 const containerRef = ref<HTMLElement | null>(null)
 const localStartDate = ref(props.startDate)
 const localEndDate = ref(props.endDate)
@@ -256,7 +265,27 @@ const onDateChange = () => {
   }
 }
 
+const updateDropdownAlignment = () => {
+  if (!containerRef.value) return
+
+  const viewportWidth = window.innerWidth
+  const gutter = 16
+  const dropdownWidth = Math.min(320, viewportWidth - gutter * 2)
+  const triggerRect = containerRef.value.getBoundingClientRect()
+  const fitsOnLeft = triggerRect.left + dropdownWidth <= viewportWidth - gutter
+  const fitsOnRight = triggerRect.right - dropdownWidth >= gutter
+
+  if (fitsOnLeft) {
+    dropdownAlignment.value = 'left'
+  } else if (fitsOnRight) {
+    dropdownAlignment.value = 'right'
+  } else {
+    dropdownAlignment.value = triggerRect.left > viewportWidth / 2 ? 'right' : 'left'
+  }
+}
+
 const toggle = () => {
+  if (!isOpen.value) updateDropdownAlignment()
   isOpen.value = !isOpen.value
 }
 
@@ -311,6 +340,7 @@ watch(
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleEscape)
+  window.addEventListener('resize', updateDropdownAlignment)
   // Initialize active preset detection
   onDateChange()
 })
@@ -318,10 +348,15 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleEscape)
+  window.removeEventListener('resize', updateDropdownAlignment)
 })
 </script>
 
 <style scoped>
+.date-picker-root {
+  @apply relative;
+}
+
 .date-picker-trigger {
   @apply flex items-center gap-2;
   @apply rounded-lg px-3 py-2 text-sm;
@@ -357,7 +392,13 @@ onUnmounted(() => {
   @apply border border-gray-200 dark:border-dark-700;
   @apply shadow-lg shadow-black/10 dark:shadow-black/30;
   @apply overflow-hidden;
-  @apply min-w-[320px];
+  width: 320px;
+  max-width: calc(100vw - 2rem);
+}
+
+.date-picker-dropdown-right {
+  left: auto;
+  right: 0;
 }
 
 .date-picker-presets {
@@ -386,6 +427,7 @@ onUnmounted(() => {
 
 .date-picker-field {
   @apply flex-1;
+  min-width: 0;
 }
 
 .date-picker-label {
@@ -398,6 +440,7 @@ onUnmounted(() => {
   @apply border border-gray-200 dark:border-dark-600;
   @apply text-gray-900 dark:text-gray-100;
   @apply focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30;
+  min-width: 0;
 }
 
 .date-picker-input::-webkit-calendar-picker-indicator {
@@ -434,5 +477,19 @@ onUnmounted(() => {
 .date-picker-dropdown-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+@media (max-width: 480px) {
+  .date-picker-custom {
+    @apply flex-col items-stretch;
+  }
+
+  .date-picker-field {
+    @apply w-full;
+  }
+
+  .date-picker-separator {
+    @apply hidden;
+  }
 }
 </style>

@@ -468,7 +468,7 @@ func (s *OpenAIGatewayService) clearOpenAIAccountModelTransientState(accountID i
 	state.recordSuccess(accountID, model)
 }
 
-func (s *OpenAIGatewayService) isOpenAIAccountModelRuntimeBlocked(account *Account, requestedModel string) bool {
+func (s *OpenAIGatewayService) isOpenAIAccountModelRuntimeBlocked(account *Account, requestedModel string, _ ...bool) bool {
 	if s == nil || account == nil {
 		return false
 	}

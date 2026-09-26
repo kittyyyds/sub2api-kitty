@@ -434,6 +434,42 @@ func TestEnhanceCSPPolicy(t *testing.T) {
 		assert.Equal(t, 1, countDirectiveValue(enhanced, "style-src", AirwallexDemoCheckoutDomain))
 		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", AirwallexDemoCheckoutDomain))
 	})
+
+	t.Run("adds_feishu_guide_domains_to_persisted_policy", func(t *testing.T) {
+		policy := "default-src 'self'; frame-src 'self'"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", FeishuWikiDomain))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", FeishuAccountsDomain))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", FeishuLoginDomain))
+	})
+
+	t.Run("does_not_duplicate_feishu_guide_domains", func(t *testing.T) {
+		policy := "default-src 'self'; frame-src https://vcn7nwjngah3.feishu.cn https://accounts.feishu.cn https://login.feishu.cn"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", FeishuWikiDomain))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", FeishuAccountsDomain))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "frame-src", FeishuLoginDomain))
+	})
+
+	t.Run("adds_browser_video_sources_to_persisted_policy", func(t *testing.T) {
+		policy := "default-src 'self'; script-src 'self' __CSP_NONCE__"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "'self'"))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "blob:"))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "https:"))
+	})
+
+	t.Run("does_not_duplicate_browser_video_sources", func(t *testing.T) {
+		policy := "default-src 'self'; media-src 'self' blob: https:"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "'self'"))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "blob:"))
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "media-src", "https:"))
+	})
 }
 
 func countDirectiveValue(policy, directive, value string) int {

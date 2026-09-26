@@ -84,7 +84,7 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
-  role: 'admin' | 'user' // User role for authorization
+  role: 'super_admin' | 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -138,6 +138,7 @@ export interface RegisterRequest {
   password: string
   verify_code?: string
   turnstile_token?: string
+  turnstile_proof?: string
   tencent_captcha_ticket?: string
   tencent_captcha_randstr?: string
   promo_code?: string
@@ -174,6 +175,7 @@ export interface AffiliateTransferResponse {
 export interface SendVerifyCodeRequest {
   email: string
   turnstile_token?: string
+  turnstile_proof?: string
   tencent_captcha_ticket?: string
   tencent_captcha_randstr?: string
   pending_auth_token?: string
@@ -183,6 +185,7 @@ export interface SendVerifyCodeRequest {
 export interface SendVerifyCodeResponse {
   message: string
   countdown: number
+  turnstile_proof?: string
 }
 
 export interface CustomMenuItem {
@@ -200,6 +203,7 @@ export interface CustomEndpoint {
   name: string
   endpoint: string
   description: string
+  recommended?: boolean
 }
 
 export interface LoginAgreementDocument {
@@ -236,6 +240,7 @@ export interface PublicSettings {
   site_logo: string
   site_subtitle: string
   api_base_url: string
+  api_base_url_description?: string
   contact_info: string
   doc_url: string
   home_content: string
@@ -543,9 +548,10 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'composite'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'video' | 'composite'
 
 export type VideoModelPrices = Record<string, Record<string, number>>
+export type ImageModelPrices = Record<string, Record<string, number>>
 
 export type SubscriptionType = 'standard' | 'subscription'
 
@@ -592,6 +598,7 @@ export interface Group {
   image_price_1k: number | null
   image_price_2k: number | null
   image_price_4k: number | null
+  image_model_prices?: ImageModelPrices
   video_rate_independent: boolean
   video_rate_multiplier: number
   video_price_480p: number | null
@@ -615,6 +622,9 @@ export interface Group {
   claude_code_only: boolean
   fallback_group_id: number | null
   fallback_group_id_on_invalid_request: number | null
+  // 专属代理 ID（用户侧 DTO 不返回；管理端经 AdminGroup 获取）
+  proxy_id?: number | null
+  proxy_name?: string
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
   // OpenAI Live 接口开关
@@ -627,12 +637,21 @@ export interface Group {
   updated_at: string
 }
 
+export interface AccountGroup {
+  account_id: number
+  group_id: number
+  priority: number
+  created_at?: string
+  group?: Group | null
+}
+
 export interface AdminGroup extends Group {
   force_openai_fast: boolean
   free_openai_fast: boolean
   // 仅允许流式请求（管理端请求策略，用户侧分组不返回）
   stream_only: boolean
   model_pricing: import('@/api/admin/channels').ChannelModelPricing[]
+
   // 分组利润控制（openai/anthropic/gemini/grok/antigravity 分组可启用；margin/buffer 为小数存储）。
   // 仅管理员可见：与 rate_multiplier 相乘即可反推上游成本上限，不得下放到 Group。
   profit_control_enabled: boolean
@@ -662,6 +681,15 @@ export interface AdminGroup extends Group {
 
   // 分组排序
   sort_order: number
+
+  // 专属代理（仅管理员可见）
+  proxy_id: number | null
+  proxy_name?: string
+
+  // 分组安全策略（仅管理员可见）
+  security_policy_enabled: boolean
+  security_policy_mode: string
+  security_policy_email_enabled: boolean
 }
 
 export interface ModelAllowlist {
@@ -737,6 +765,9 @@ export interface ApiKey {
   id: number
   user_id: number
   key: string
+  /** 脱敏展示（prefix + ********），列表/详情统一用它；完整 key 仅创建响应返回一次 */
+  key_display: string
+  key_prefix: string
   name: string
   group_id: number | null
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
@@ -817,6 +848,7 @@ export interface CreateGroupRequest {
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
+  image_model_prices?: ImageModelPrices
   video_rate_independent?: boolean
   video_rate_multiplier?: number
   video_price_480p?: number | null
@@ -839,6 +871,12 @@ export interface CreateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
+  // 专属代理 ID；nil 不设置，<=0 清除
+  proxy_id?: number | null
+  // 分组安全策略（默认关闭）
+  security_policy_enabled?: boolean
+  security_policy_mode?: string
+  security_policy_email_enabled?: boolean
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
@@ -884,6 +922,7 @@ export interface UpdateGroupRequest {
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
+  image_model_prices?: ImageModelPrices
   video_rate_independent?: boolean
   video_rate_multiplier?: number
   video_price_480p?: number | null
@@ -906,6 +945,12 @@ export interface UpdateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
+  // 专属代理 ID；nil 不修改，<=0 清除
+  proxy_id?: number | null
+  // 分组安全策略；nil 不修改
+  security_policy_enabled?: boolean
+  security_policy_mode?: string
+  security_policy_email_enabled?: boolean
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
@@ -925,9 +970,141 @@ export interface UpdateGroupRequest {
   copy_accounts_from_group_ids?: number[]
 }
 
+// ==================== Security Policy Types ====================
+
+export interface SecurityPolicyKeyword {
+  id: number
+  group_id: number | null
+  keyword: string
+  category: string
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SecurityPolicyKeywordSeed {
+  keyword: string
+  category: string
+}
+
+// ==================== Global Model Pricing Types ====================
+
+export type GlobalPricingBillingMode = 'token' | 'per_request' | 'image' | 'video'
+
+export interface GlobalModelPrice {
+  id: number
+  model_pattern: string
+  billing_mode: GlobalPricingBillingMode
+  input_price?: number | null
+  output_price?: number | null
+  cache_write_price?: number | null
+  cache_write_1h_price?: number | null
+  cache_read_price?: number | null
+  per_request_price?: number | null
+  enabled: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface GlobalModelPriceInput {
+  model_pattern: string
+  billing_mode?: GlobalPricingBillingMode | ''
+  input_price?: number | null
+  output_price?: number | null
+  cache_write_price?: number | null
+  cache_write_1h_price?: number | null
+  cache_read_price?: number | null
+  per_request_price?: number | null
+  enabled?: boolean
+}
+
+// ==================== Tiered Routing Types ====================
+
+export interface TieredRoutingSettings {
+  enabled: boolean
+  premium_user_ids: number[]
+  min_balance_for_premium: number
+}
+
+// ==================== Spend Guard Types ====================
+
+export interface SpendGuardOffender {
+  api_key_id: number
+  name: string
+  user_id: number
+  status: string
+  requests: number
+  tokens: number
+  tokens_per_min: number
+  errors: number
+  err_rate: number
+  frozen: boolean
+}
+
+export interface SpendGuardSettings {
+  enabled: boolean
+  window_minutes: number
+  tokens_per_minute: number
+  min_requests: number
+  max_error_rate: number
+  interval_seconds: number
+}
+
+export interface SpendGuardEvent {
+  at: string
+  api_key_id: number
+  name: string
+  action: string
+  reason: string
+}
+
+// ==================== Support Ticket Types ====================
+
+export interface TicketReply {
+  id: number
+  ticket_id: number
+  author: string
+  author_id: number
+  body: string
+  created_at: string
+}
+
+export interface SupportTicket {
+  id: number
+  user_id: number
+  user_email?: string
+  subject: string
+  status: string
+  created_at: string
+  updated_at: string
+  closed_at?: string | null
+  replies?: TicketReply[]
+}
+
+// ==================== Billing Export Types ====================
+
+export interface BillingStatementRow {
+  model: string
+  requests: number
+  input_tokens: number
+  output_tokens: number
+  cache_tokens: number
+  total_tokens: number
+  cost: number
+}
+
+export interface BillingStatement {
+  user_id: number
+  year: number
+  month: number
+  rows: BillingStatementRow[]
+  requests: number
+  cost: number
+}
+
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'video'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
@@ -1205,6 +1382,10 @@ export interface OpenCodeGoUsageSettings {
 }
 
 export interface Account {
+  anti_degradation?: boolean
+  protection_scope?: 'codex_v3' | 'generic_v1' | 'legacy' | 'disabled'
+  /** Concrete strategy: mode1, mode2, legacy, generic, or disabled. */
+  protection_mode?: 'mode1' | 'mode2' | 'legacy' | 'generic' | 'disabled' | string
   id: number
   name: string
   notes?: string | null
@@ -1257,6 +1438,8 @@ export interface Account {
     }
   } & Record<string, unknown>)
   proxy_id: number | null
+  proxy_pool?: number[]
+  proxy_concurrencies?: Record<string, number>
   proxy_fallback_origin_id?: number | null
   proxy_fallback_origin_name?: string | null
   concurrency: number
@@ -1767,6 +1950,44 @@ export type RedeemCodeType = 'balance' | 'concurrency' | 'subscription' | 'invit
 export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2' | 'cyber' | 'live'
 export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>
+export type UsageAuditStatus = 'pass' | 'warning' | 'anomaly' | 'unverifiable' | 'not_applicable'
+export type UsageAuditConfidence = 'high' | 'medium' | 'low'
+export type UsageAuditEvidenceSource = 'upstream_raw' | 'gateway_response' | 'normalized_only'
+
+export interface UsageAuditTokenSnapshot {
+  input_tokens?: number
+  total_input_tokens?: number
+  output_tokens?: number
+  cache_creation_tokens?: number
+  cache_read_tokens?: number
+}
+
+export interface UsageAuditTokenDelta {
+  input_tokens?: number
+  output_tokens?: number
+}
+
+export interface UsageAuditDeviation {
+  input_tokens?: number
+  output_tokens?: number
+}
+
+export interface UsageAudit {
+  version: number
+  status: UsageAuditStatus
+  confidence: UsageAuditConfidence
+  evidence_source: UsageAuditEvidenceSource
+  protocol: string
+  estimator?: string
+  upstream: UsageAuditTokenSnapshot
+  local: UsageAuditTokenSnapshot
+  delta: UsageAuditTokenDelta
+  deviation_pct: UsageAuditDeviation
+  cache_hit_rate?: number
+  reasons: string[]
+  upstream_raw_usage?: Record<string, unknown>
+  capture_truncated: boolean
+}
 
 export interface UsageLog {
   id: number
@@ -1819,6 +2040,11 @@ export interface UsageLog {
   image_output_tokens: number
   image_output_cost: number
 
+  // Missing on older API responses; do not infer unknown historical units.
+  video_count?: number
+  video_resolution?: string | null
+  video_duration_seconds?: number | null
+
   // User-Agent
   user_agent: string | null
   ip_address?: string | null
@@ -1861,6 +2087,9 @@ export interface AdminUsageLog extends UsageLog {
 
   // 最小账号信息（仅管理员接口返回）
   account?: UsageLogAccountSummary
+
+  // 管理员用量真实性审计证据
+  usage_audit?: UsageAudit | null
 }
 
 export interface UsageCleanupFilters {
@@ -2108,7 +2337,7 @@ export interface UpdateUserRequest {
   password?: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user'
+  role?: 'super_admin' | 'admin' | 'user'
   balance?: number
   concurrency?: number
   rpm_limit?: number

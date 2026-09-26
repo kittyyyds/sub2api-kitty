@@ -87,6 +87,66 @@ const accountSchedulingThresholdsCacheTTL = 60 * time.Second
 const accountSchedulingThresholdsErrorTTL = 5 * time.Second
 const accountSchedulingThresholdsDBTimeout = 5 * time.Second
 
+// cachedAccountGroupPrioritySetting caches the scheduling-priority feature flag
+// so account selection does not read the settings table on every request.
+type cachedAccountGroupPrioritySetting struct {
+	enabled   bool
+	expiresAt int64 // unix nano
+}
+
+var accountGroupPriorityCache atomic.Value // *cachedAccountGroupPrioritySetting
+var accountGroupPrioritySF singleflight.Group
+
+const accountGroupPriorityCacheTTL = 60 * time.Second
+const accountGroupPriorityErrorTTL = 5 * time.Second
+const accountGroupPriorityDBTimeout = 5 * time.Second
+
+func (s *SettingService) IsAccountGroupPriorityEnabled(ctx context.Context) bool {
+	if s == nil || s.settingRepo == nil {
+		return false
+	}
+	if cached, ok := accountGroupPriorityCache.Load().(*cachedAccountGroupPrioritySetting); ok && cached != nil && time.Now().UnixNano() < cached.expiresAt {
+		return cached.enabled
+	}
+
+	value, _, _ := accountGroupPrioritySF.Do(SettingKeyAccountGroupPriorityEnabled, func() (any, error) {
+		if cached, ok := accountGroupPriorityCache.Load().(*cachedAccountGroupPrioritySetting); ok && cached != nil && time.Now().UnixNano() < cached.expiresAt {
+			return cached.enabled, nil
+		}
+		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), accountGroupPriorityDBTimeout)
+		defer cancel()
+		raw, err := s.settingRepo.GetValue(dbCtx, SettingKeyAccountGroupPriorityEnabled)
+		if err != nil {
+			accountGroupPriorityCache.Store(&cachedAccountGroupPrioritySetting{
+				enabled:   false,
+				expiresAt: time.Now().Add(accountGroupPriorityErrorTTL).UnixNano(),
+			})
+			return false, err
+		}
+		enabled := strings.EqualFold(strings.TrimSpace(raw), "true")
+		accountGroupPriorityCache.Store(&cachedAccountGroupPrioritySetting{
+			enabled:   enabled,
+			expiresAt: time.Now().Add(accountGroupPriorityCacheTTL).UnixNano(),
+		})
+		return enabled, nil
+	})
+	if enabled, ok := value.(bool); ok {
+		return enabled
+	}
+	return false
+}
+
+func (s *SettingService) refreshAccountGroupPrioritySetting(enabled bool) {
+	if s == nil {
+		return
+	}
+	accountGroupPrioritySF.Forget(SettingKeyAccountGroupPriorityEnabled)
+	accountGroupPriorityCache.Store(&cachedAccountGroupPrioritySetting{
+		enabled:   enabled,
+		expiresAt: time.Now().Add(accountGroupPriorityCacheTTL).UnixNano(),
+	})
+}
+
 // cachedAntigravityUserAgentVersion 缓存 Antigravity UA 版本号（进程内缓存，60s TTL）
 type cachedAntigravityUserAgentVersion struct {
 	version   string

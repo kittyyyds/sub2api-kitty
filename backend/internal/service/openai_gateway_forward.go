@@ -40,6 +40,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	account = latest
 	beginUpstreamResponseModelObservation(c)
+	body = normalizeOpenAIRequestLocale(ctx, account, body, "http", time.Now())
 	ClearActualOpenAIUpstreamEndpoint(c)
 	if shouldForwardOpenAIResponsesViaChatCompletions(account, body) {
 		SetActualOpenAIUpstreamEndpoint(c, "/v1/chat/completions")

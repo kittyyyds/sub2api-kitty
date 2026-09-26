@@ -396,6 +396,40 @@ func TestAccountGetMappedModel(t *testing.T) {
 			expected:       "gemini-3.1-pro-preview-customtools",
 		},
 		{
+			name:     "grok legacy image alias resolves through official mapping",
+			platform: PlatformGrok,
+			credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"grok-imagine-image-quality": "vendor-image-quality",
+				},
+			},
+			requestedModel: "grok-imagine-edit",
+			expected:       "vendor-image-quality",
+		},
+		{
+			name:     "grok exact legacy alias mapping wins over official fallback",
+			platform: PlatformGrok,
+			credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"grok-imagine-edit":          "vendor-image-edit",
+					"grok-imagine-image-quality": "vendor-image-quality",
+				},
+			},
+			requestedModel: "grok-imagine-edit",
+			expected:       "vendor-image-edit",
+		},
+		{
+			name:     "grok dated video alias resolves through official mapping",
+			platform: PlatformGrok,
+			credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"grok-imagine-video-1.5": "vendor-video-1.5",
+				},
+			},
+			requestedModel: "grok-imagine-video-1.5-preview",
+			expected:       "vendor-video-1.5",
+		},
+		{
 			name: "no match returns original",
 			credentials: map[string]any{
 				"model_mapping": map[string]any{

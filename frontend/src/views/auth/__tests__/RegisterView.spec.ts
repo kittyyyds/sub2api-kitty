@@ -1,152 +1,195 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import RegisterView from '@/views/auth/RegisterView.vue'
 
 const {
-  getPublicSettingsMock,
+  fetchPublicSettingsMock,
   registerMock,
+  routerPushMock,
   showErrorMock,
-  pushMock,
-  verifyActionMock,
-  appStoreMock
+  showSuccessMock,
+  showWarningMock,
+  verifyActionMock
 } = vi.hoisted(() => ({
-  getPublicSettingsMock: vi.fn(),
+  fetchPublicSettingsMock: vi.fn(),
   registerMock: vi.fn(),
+  routerPushMock: vi.fn(),
   showErrorMock: vi.fn(),
-  pushMock: vi.fn(),
-  verifyActionMock: vi.fn(),
-  appStoreMock: {
-    cachedPublicSettings: null as { promo_code_enabled?: boolean } | null,
-    showError: (...args: unknown[]) => showErrorMock(...args),
-    showSuccess: vi.fn(),
-    showWarning: vi.fn()
-  }
+  showSuccessMock: vi.fn(),
+  showWarningMock: vi.fn(),
+  verifyActionMock: vi.fn()
 }))
 
-const publicSettings = {
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+  useRouter: () => ({ push: routerPushMock })
+}))
+
+vi.mock('vue-i18n', async () => {
+  const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
+  return {
+    ...actual,
+    useI18n: () => ({
+      locale: { value: 'en' },
+      t: (key: string) =>
+        key === 'auth.emailDomainRegistrationLimit'
+          ? '该邮箱域名无法注册新账户。请使用主流邮箱注册；如需使用企业邮箱，请联系客服添加域名白名单。'
+          : key
+    })
+  }
+})
+
+vi.mock('@/stores', () => ({
+  useAuthStore: () => ({ register: registerMock }),
+  useAppStore: () => ({
+    fetchPublicSettings: fetchPublicSettingsMock,
+    showError: showErrorMock,
+    showSuccess: showSuccessMock,
+    showWarning: showWarningMock
+  })
+}))
+
+vi.mock('@/api/auth', () => ({
+  isWeChatWebOAuthEnabled: () => false,
+  validateInvitationCode: vi.fn(),
+  validatePromoCode: vi.fn()
+}))
+
+const enabledSettings = {
   registration_enabled: true,
   email_verify_enabled: false,
   promo_code_enabled: false,
   invitation_code_enabled: false,
   affiliate_enabled: true,
   turnstile_enabled: true,
-  turnstile_site_key: 'site-key',
-  site_name: 'Sub2API',
-  registration_email_suffix_whitelist: [],
+  turnstile_site_key: 'registration-site-key',
+  site_name: 'Kitty',
   linuxdo_oauth_enabled: false,
   wechat_oauth_enabled: false,
   oidc_oauth_enabled: false,
+  oidc_oauth_provider_name: 'OIDC',
   github_oauth_enabled: false,
-  google_oauth_enabled: false
+  google_oauth_enabled: false,
+  registration_email_suffix_whitelist: [],
+  registration_email_domain_quota_enabled: false,
+  login_agreement_enabled: false
 }
 
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: pushMock }),
-  useRoute: () => ({ query: {} })
-}))
-
-vi.mock('vue-i18n', () => ({
-  createI18n: () => ({
-    global: {
-      t: (key: string) => key
-    }
-  }),
-  useI18n: () => ({
-    t: (key: string) =>
-      key === 'auth.emailDomainRegistrationLimit'
-        ? '该邮箱域名无法注册新账户。请使用主流邮箱注册；如需使用企业邮箱，请联系客服添加域名白名单。'
-        : key,
-    locale: { value: 'en' }
-  })
-}))
-
-vi.mock('@/stores', () => ({
-  useAuthStore: () => ({ register: (...args: unknown[]) => registerMock(...args) }),
-  useAppStore: () => appStoreMock
-}))
-
-vi.mock('@/api/auth', async () => {
-  const actual = await vi.importActual<typeof import('@/api/auth')>('@/api/auth')
-  return {
-    ...actual,
-    getPublicSettings: (...args: unknown[]) => getPublicSettingsMock(...args)
-  }
-})
-
-function mountRegister() {
+function mountView() {
   return mount(RegisterView, {
     global: {
       stubs: {
-        AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
-        Icon: true,
-        TurnstileWidget: {
-          template: '<div data-testid="turnstile-widget" />',
-          methods: { verifyAction: verifyActionMock, reset: vi.fn() }
-        },
-        LoginAgreementPrompt: true,
+        AuthLayout: { template: '<main><slot /><slot name="footer" /></main>' },
         EmailOAuthButtons: true,
+        Icon: true,
         LinuxDoOAuthSection: true,
-        WechatOAuthSection: true,
+        LoginAgreementPrompt: true,
         OidcOAuthSection: true,
-        RouterLink: true,
+        RouterLink: { template: '<a><slot /></a>' },
+        TurnstileWidget: {
+          name: 'TurnstileWidget',
+          props: ['siteKey'],
+          methods: { verifyAction: verifyActionMock, reset: vi.fn() },
+          template: '<div data-testid="turnstile-widget" />'
+        },
+        WechatOAuthSection: true,
         transition: false
       }
     }
   })
 }
 
-describe('RegisterView', () => {
+describe('RegisterView security settings bootstrap', () => {
   beforeEach(() => {
-    getPublicSettingsMock.mockReset()
+    fetchPublicSettingsMock.mockReset()
     registerMock.mockReset()
+    routerPushMock.mockReset()
     showErrorMock.mockReset()
-    pushMock.mockReset()
+    showSuccessMock.mockReset()
+    showWarningMock.mockReset()
     verifyActionMock.mockReset()
-    appStoreMock.cachedPublicSettings = null
-    sessionStorage.removeItem('register_data')
     verifyActionMock.mockResolvedValue({ token: 'ticket', randstr: 'randstr' })
-    getPublicSettingsMock.mockResolvedValue(publicSettings)
+    sessionStorage.removeItem('register_data')
+    fetchPublicSettingsMock.mockResolvedValue(enabledSettings)
     registerMock.mockResolvedValue({})
   })
 
-  it('does not flash the promo-code field before disabled settings finish loading', async () => {
-    let resolveSettings!: (settings: typeof publicSettings) => void
-    getPublicSettingsMock.mockReturnValueOnce(
-      new Promise<typeof publicSettings>((resolve) => {
-        resolveSettings = resolve
-      })
-    )
-
-    const wrapper = mountRegister()
-
-    expect(wrapper.find('#promo_code').exists()).toBe(false)
-
-    resolveSettings(publicSettings)
-    await flushPromises()
-
-    expect(wrapper.find('#promo_code').exists()).toBe(false)
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('uses injected public settings to show an enabled promo-code field on first render', () => {
-    appStoreMock.cachedPublicSettings = { promo_code_enabled: true }
-    getPublicSettingsMock.mockReturnValueOnce(new Promise(() => {}))
+  it('does not flash a disabled promo code while public settings are loading', async () => {
+    let resolveSettings!: (settings: typeof enabledSettings) => void
+    fetchPublicSettingsMock.mockReturnValueOnce(new Promise<typeof enabledSettings>(resolve => {
+      resolveSettings = resolve
+    }))
+    const wrapper = mountView()
+    expect(wrapper.find('#promo_code').exists()).toBe(false)
+    resolveSettings(enabledSettings)
+    await flushPromises()
+    expect(wrapper.find('#promo_code').exists()).toBe(false)
+    wrapper.unmount()
+  })
 
-    const wrapper = mountRegister()
-
+  it('shows an enabled promo code after the trusted settings bootstrap finishes', async () => {
+    fetchPublicSettingsMock.mockResolvedValueOnce({ ...enabledSettings, promo_code_enabled: true })
+    const wrapper = mountView()
+    await flushPromises()
     expect(wrapper.find('#promo_code').exists()).toBe(true)
+    wrapper.unmount()
+  })
+  it('keeps registration closed while a transient settings failure is retried', async () => {
+    vi.useFakeTimers()
+    fetchPublicSettingsMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(enabledSettings)
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(fetchPublicSettingsMock).toHaveBeenCalledWith(false)
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="registration-settings-loading"]').exists()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(400)
+    await flushPromises()
+
+    expect(fetchPublicSettingsMock).toHaveBeenLastCalledWith(true)
+    expect(wrapper.find('form').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="turnstile-widget"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('fails closed when registration security settings cannot be loaded', async () => {
+    vi.useFakeTimers()
+    fetchPublicSettingsMock.mockResolvedValue(null)
+
+    const wrapper = mountView()
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(400)
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(1_200)
+    await flushPromises()
+
+    expect(fetchPublicSettingsMock).toHaveBeenCalledTimes(3)
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="registration-settings-error"]').exists()).toBe(true)
+    expect(registerMock).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 
   it.each([
     ['', 'auth.confirmPasswordRequired'],
     ['different-password', 'auth.passwordsDoNotMatch']
   ])('blocks invalid confirmation %j before captcha and allows correction', async (confirmation, error) => {
-    getPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
       turnstile_enabled: false,
       tencent_captcha_enabled: true,
       tencent_captcha_app_id: 'app-id'
     })
-    const wrapper = mountRegister()
+    const wrapper = mountView()
     await flushPromises()
     await wrapper.get('#email').setValue('user@example.com')
     await wrapper.get('#password').setValue('secret-123')
@@ -158,7 +201,7 @@ describe('RegisterView', () => {
     expect(wrapper.get('#confirmPassword').classes()).toContain('input-error')
     expect(registerMock).not.toHaveBeenCalled()
     expect(verifyActionMock).not.toHaveBeenCalled()
-    expect(pushMock).not.toHaveBeenCalled()
+    expect(routerPushMock).not.toHaveBeenCalled()
     expect(sessionStorage.getItem('register_data')).toBeNull()
 
     await wrapper.get('#confirmPassword').setValue('secret-123')
@@ -176,16 +219,16 @@ describe('RegisterView', () => {
       promo_code: undefined,
       invitation_code: undefined
     })
-    expect(pushMock).toHaveBeenCalledWith('/dashboard')
+    expect(routerPushMock).toHaveBeenCalledWith('/dashboard')
   })
 
   it('requires matching confirmation before storing only the registration fields for email verification', async () => {
-    getPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
       turnstile_enabled: false,
       email_verify_enabled: true
     })
-    const wrapper = mountRegister()
+    const wrapper = mountView()
     await flushPromises()
     await wrapper.get('#email').setValue('user@example.com')
     await wrapper.get('#password').setValue('secret-123')
@@ -194,7 +237,7 @@ describe('RegisterView', () => {
     await flushPromises()
 
     expect(sessionStorage.getItem('register_data')).toBeNull()
-    expect(pushMock).not.toHaveBeenCalled()
+    expect(routerPushMock).not.toHaveBeenCalled()
 
     await wrapper.get('#confirmPassword').setValue('secret-123')
     await wrapper.get('form').trigger('submit.prevent')
@@ -204,12 +247,13 @@ describe('RegisterView', () => {
       email: 'user@example.com',
       password: 'secret-123'
     })
-    expect(pushMock).toHaveBeenCalledWith('/email-verify')
+    expect(routerPushMock).toHaveBeenCalledWith('/email-verify')
     expect(registerMock).not.toHaveBeenCalled()
   })
 
   it('keeps the optional affiliate invitation field before Turnstile', async () => {
-    const wrapper = mountRegister()
+    fetchPublicSettingsMock.mockResolvedValue(enabledSettings)
+    const wrapper = mountView()
     await flushPromises()
 
     const invitationField = wrapper.get('[data-testid="affiliate-invitation-field"]')
@@ -219,32 +263,66 @@ describe('RegisterView', () => {
     expect(invitationField.text()).toContain('common.optional')
     expect(
       invitationField.element.compareDocumentPosition(turnstile.element) &
-        Node.DOCUMENT_POSITION_FOLLOWING
+      Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('keeps registration fields editable and checks the agreement only on submit', async () => {
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
+      turnstile_enabled: false,
+      login_agreement_enabled: true,
+      login_agreement_mode: 'checkbox',
+      login_agreement_revision: 'agreement-v1',
+      login_agreement_documents: [{ id: 'terms', title: 'Terms of service' }]
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const email = wrapper.get('#email')
+    const password = wrapper.get('#password')
+    const submit = wrapper.get('button[type="submit"]')
+    expect(email.attributes('disabled')).toBeUndefined()
+    expect(password.attributes('disabled')).toBeUndefined()
+    expect(submit.attributes('disabled')).toBeUndefined()
+
+    await email.setValue('user@example.com')
+    await password.setValue('secret-123')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(showWarningMock).toHaveBeenCalledWith(
+      'legal.loginAgreementPrompt.registerRequiredWarning'
+    )
+    expect(registerMock).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 
   it('uses the mandatory invitation field without duplicating the affiliate field', async () => {
-    getPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
       invitation_code_enabled: true
     })
 
-    const wrapper = mountRegister()
+    const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.find('[data-testid="affiliate-invitation-field"]').exists()).toBe(false)
     expect(wrapper.get('#invitation_code').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it('submits a non-whitelist email domain so the backend can enforce its registration quota', async () => {
-    getPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
       turnstile_enabled: false,
       registration_email_suffix_whitelist: ['allowed.com'],
       registration_email_domain_quota_enabled: true
     })
 
-    const wrapper = mountRegister()
+    const wrapper = mountView()
     await flushPromises()
     await wrapper.get('#email').setValue('first@custom.example')
     await wrapper.get('#password').setValue('secret-123')
@@ -259,8 +337,8 @@ describe('RegisterView', () => {
   })
 
   it('shows the localized registration domain quota message returned by the backend', async () => {
-    getPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
       turnstile_enabled: false,
       registration_email_suffix_whitelist: ['allowed.com'],
       registration_email_domain_quota_enabled: true
@@ -270,7 +348,7 @@ describe('RegisterView', () => {
       message: 'raw backend message'
     })
 
-    const wrapper = mountRegister()
+    const wrapper = mountView()
     await flushPromises()
     await wrapper.get('#email').setValue('second@custom.example')
     await wrapper.get('#password').setValue('secret-123')
@@ -285,13 +363,13 @@ describe('RegisterView', () => {
 
   // 域名限量注册开关默认关闭：恢复 PR5423 之前的客户端白名单预检，非白名单域名不发起注册请求。
   it('rejects a non-whitelist email domain locally when the domain quota switch is disabled', async () => {
-    getPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
       turnstile_enabled: false,
       registration_email_suffix_whitelist: ['allowed.com']
     })
 
-    const wrapper = mountRegister()
+    const wrapper = mountView()
     await flushPromises()
     await wrapper.get('#email').setValue('first@custom.example')
     await wrapper.get('#password').setValue('secret-123')
@@ -306,13 +384,13 @@ describe('RegisterView', () => {
   })
 
   it('still submits whitelisted email domains when the domain quota switch is disabled', async () => {
-    getPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+    fetchPublicSettingsMock.mockResolvedValueOnce({
+      ...enabledSettings,
       turnstile_enabled: false,
       registration_email_suffix_whitelist: ['allowed.com']
     })
 
-    const wrapper = mountRegister()
+    const wrapper = mountView()
     await flushPromises()
     await wrapper.get('#email').setValue('user@allowed.com')
     await wrapper.get('#password').setValue('secret-123')

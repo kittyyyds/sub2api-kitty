@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"sync"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -57,7 +58,7 @@ func ProvideBatchImageWorkerRuntime(
 		StaleAfter: NewBatchImageWorkerOptionsFromConfig(cfg).StaleActiveAfter,
 		Limit:      NewBatchImageWorkerOptionsFromConfig(cfg).RecoverLimit,
 	}
-	runtime.Start()
+	managedinstance.Register("BatchImageWorker", runtime.Start, runtime.Stop)
 	return runtime
 }
 

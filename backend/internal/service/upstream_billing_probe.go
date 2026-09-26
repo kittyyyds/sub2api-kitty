@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"io"
 	"log/slog"
 	"math"
@@ -301,7 +302,7 @@ func ProvideUpstreamBillingProbeService(
 ) *UpstreamBillingProbeService {
 	svc := NewUpstreamBillingProbeService(accountRepo, accountTestService, settingService)
 	svc.SetLeaderLock(lockCache, db)
-	svc.Start()
+	managedinstance.Register("UpstreamBillingProbeService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -354,6 +355,12 @@ func (s *UpstreamBillingProbeService) runLoop() {
 
 // RunDue executes at most one bounded batch of due accounts.
 func (s *UpstreamBillingProbeService) RunDue(ctx context.Context) error {
+	ctx, managedDone, managedAllowed := managedinstance.Begin(ctx)
+	if !managedAllowed {
+		return nil
+	}
+	defer managedDone()
+
 	if s == nil || s.accountRepo == nil {
 		return nil
 	}

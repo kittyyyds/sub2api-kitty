@@ -12,6 +12,12 @@ export const grokVideoPriceFamilies = [
 export type VideoModelPrices = Record<string, Record<string, number>>
 export type VideoModelPricesForm = Record<string, Record<string, number | string | null>>
 
+// All prices are USD/s. Populated model cells are final customer rates.
+const defaultPrices: VideoModelPrices = {
+  'grok-imagine-video': { '480p': 0.05, '720p': 0.07, '1080p': 0.07 },
+  'grok-imagine-video-1.5': { '480p': 0.08, '720p': 0.14, '1080p': 0.25 }
+}
+
 function normalizeFamily(value: string): string {
   return value.trim().toLowerCase()
 }
@@ -74,4 +80,36 @@ export function videoModelPriceFamilyRows(form: VideoModelPricesForm) {
     .sort()
     .map((key) => ({ key, label: key }))
   return [...grokVideoPriceFamilies, ...extra]
+}
+
+export function getConfiguredVideoModelPrice(
+  form: VideoModelPricesForm,
+  model: string,
+  resolution: string
+): number | null {
+  return normalizePrice(
+    form[normalizeFamily(model)]?.[resolution.trim().toLowerCase()]
+  )
+}
+
+export function resolveVideoModelCustomerPrice(
+  form: VideoModelPricesForm,
+  model: string,
+  resolution: string,
+  flatPerSecondPrice: unknown,
+  multiplier: number,
+  defaultFlatPerSecondPrice?: unknown
+): number | null {
+  const family = normalizeFamily(model)
+  const tier = resolution.trim().toLowerCase()
+  const configuredPrice = getConfiguredVideoModelPrice(form, family, tier)
+  if (configuredPrice !== null) return configuredPrice
+
+  const inheritedPerSecondPrice = normalizePrice(flatPerSecondPrice)
+    ?? defaultPrices[family]?.[tier]
+    ?? normalizePrice(defaultFlatPerSecondPrice)
+  if (inheritedPerSecondPrice === null) return null
+
+  const effectiveMultiplier = Number.isFinite(multiplier) && multiplier >= 0 ? multiplier : 0
+  return inheritedPerSecondPrice * effectiveMultiplier
 }

@@ -30,6 +30,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       update: updateAccountMock,
+      getOpenAIRequestTimezones: vi.fn().mockResolvedValue({ default: 'Asia/Singapore', timezones: ['Asia/Singapore', 'America/New_York'] }),
       checkMixedChannelRisk: checkMixedChannelRiskMock
     },
     settings: {
@@ -51,7 +52,8 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key
+      t: (key: string, params?: Record<string, unknown>) => key.includes('codexTurnTicket') && params
+        ? `${key}:${JSON.stringify(params)}` : key
     })
   }
 })
@@ -72,6 +74,9 @@ const BaseDialogStub = defineComponent({
 const ModelWhitelistSelectorStub = defineComponent({
   name: 'ModelWhitelistSelector',
   props: {
+    syncCredentials: Object,
+    syncBlockedReason: String,
+    accountId: Number,
     modelValue: {
       type: Array,
       default: () => []
@@ -326,11 +331,142 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 }
 
 describe('EditAccountModal', () => {
+  it('saves timezone and tier routing together without discarding unrelated account settings', async () => {
+    const account = buildAccount()
+    account.extra = { custom_setting: 'keep', quota_daily_limit: 50, pool: 'standard', tiered_routing_enabled: false }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    const wrapper = mountModal(account)
+    await flushPromises()
+    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
+    await flushPromises()
+    const timezone = wrapper.getComponent({ name: 'OpenAIRequestTimezoneField' })
+    await timezone.get('select').setValue('America/New_York')
+    await timezone.get('[data-testid="request-timezone-search"]').setValue(true)
+    const tier = wrapper.getComponent({ name: 'AccountTierRoutingFields' })
+    tier.vm.$emit('update:enabled', true)
+    tier.vm.$emit('update:pool', 'premium')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0][1].extra).toMatchObject({
+      custom_setting: 'keep', quota_daily_limit: 50, pool: 'premium', tiered_routing_enabled: true,
+      openai_request_timezone_enabled: true, openai_request_timezone: 'America/New_York', openai_request_timezone_sync_search: true
+    })
+    expect(updateAccountMock.mock.calls[0][1].credentials.model_mapping).toEqual(account.credentials.model_mapping)
+    wrapper.unmount()
+  })
+
   beforeEach(() => {
     authIsSimpleMode.value = true
   })
 
   afterEach(() => vi.useRealTimers())
+
+
+
+
+
+
+  it('previews the entered video key and address without saving and falls back when the key is cleared', async () => {
+    const account = { ...buildAccount(), platform: 'video', credentials: { base_url: 'https://saved-video.example', grok_media_provider: 'suanli_special' } }
+    updateAccountMock.mockReset()
+    const wrapper = mountModal(account)
+    const selector = wrapper.getComponent(ModelWhitelistSelectorStub)
+    expect(selector.props('syncCredentials')).toBeUndefined()
+    expect(selector.props('accountId')).toBe(account.id)
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue(' https://new-video.example ')
+    await wrapper.get('input[type="password"]').setValue(' entered-video-key ')
+    expect(selector.props('syncCredentials')).toMatchObject({
+      platform: 'video', type: 'apikey', base_url: 'https://new-video.example', api_key: 'entered-video-key'
+    })
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    await wrapper.get('input[type="password"]').setValue(' ')
+    expect(selector.props('syncCredentials')).toBeUndefined()
+    expect(selector.props('accountId')).toBe(account.id)
+    wrapper.unmount()
+  })
+
+  it('keeps adaptive-provider editing on the saved-account path instead of using a stale hidden URL', async () => {
+    const account = {
+      ...buildAccount(), platform: 'kimi', credentials: {
+        base_url: 'https://old-kimi.example', account_mode: 'payg', api_protocol: 'adaptive',
+        api_base_urls: { chat_completions: 'https://old-kimi.example', anthropic: 'https://old-anthropic.example' }
+      }
+    }
+    const wrapper = mountModal(account)
+    await flushPromises()
+    const endpoint = wrapper.findAll('input[type="text"]').find(input => (input.element as HTMLInputElement).value === 'https://old-kimi.example')!
+    expect(endpoint).toBeDefined()
+    await endpoint.setValue(' https://new-kimi.example ')
+    await wrapper.get('input[type="password"]').setValue('fresh-key')
+    expect(wrapper.getComponent(ModelWhitelistSelectorStub).props('syncCredentials')).toBeUndefined()
+    expect(wrapper.getComponent(ModelWhitelistSelectorStub).props('accountId')).toBe(account.id)
+    wrapper.unmount()
+  })
+
+  it.each(['openai', 'anthropic'])('preserves the existing saved-account sync flow for %s editing', async (platform) => {
+    const account = { ...buildAccount(), platform }
+    const wrapper = mountModal(account)
+    await wrapper.get('input[type="password"]').setValue('fresh-key')
+    expect(wrapper.getComponent(ModelWhitelistSelectorStub).props('syncCredentials')).toBeUndefined()
+    expect(wrapper.getComponent(ModelWhitelistSelectorStub).props('accountId')).toBe(account.id)
+    wrapper.unmount()
+  })
+
+  it.each([
+    { proxy_id: 3 },
+    { credentials: { base_url: 'https://video.example', header_override_enabled: true, header_overrides: { 'X-Test': 'value' } } },
+    { extra: { enable_tls_fingerprint: true } }
+  ])('requires saving video transport settings before previewing a replacement key: %j', async (connectionSettings) => {
+    const account = { ...buildAccount(), platform: 'video', ...connectionSettings }
+    const wrapper = mountModal(account)
+    await wrapper.get('input[type="password"]').setValue('replacement-video-key')
+    const selector = wrapper.getComponent(ModelWhitelistSelectorStub)
+    expect(selector.props('syncBlockedReason')).toBe('admin.accounts.syncUpstreamPreviewSaveConnectionFirst')
+    expect(selector.props('syncCredentials')).toBeUndefined()
+    await wrapper.get('input[type="password"]').setValue('')
+    expect(selector.props('syncBlockedReason')).toBeUndefined()
+    expect(selector.props('accountId')).toBe(account.id)
+    wrapper.unmount()
+  })
+
+  it('requires an explicit video address before sending an unsaved key', async () => {
+    const wrapper = mountModal({ ...buildAccount(), platform: 'video' })
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue('')
+    await wrapper.get('input[type="password"]').setValue('fresh-video-key')
+    const selector = wrapper.getComponent(ModelWhitelistSelectorStub)
+    expect(selector.props('syncBlockedReason')).toBe('videoModule.baseUrlRequired')
+    expect(selector.props('syncCredentials')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('does not bypass a proxy selected in the video edit form before saving', async () => {
+    const wrapper = mountModal({ ...buildAccount(), platform: 'video', proxy_id: null })
+    await wrapper.get('input[type="password"]').setValue('fresh-video-key')
+    const selector = wrapper.getComponent(ModelWhitelistSelectorStub)
+    expect(selector.props('syncCredentials')).toBeDefined()
+    wrapper.getComponent({ name: 'ProxySelector' }).vm.$emit('update:modelValue', 4)
+    await flushPromises()
+    expect(selector.props('syncBlockedReason')).toBe('admin.accounts.syncUpstreamPreviewSaveConnectionFirst')
+    expect(selector.props('syncCredentials')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('loads video provider credentials and can switch to the standard provider without losing the API key', async () => {
+    const account = { ...buildAccount(), platform: 'video', type: 'apikey', credentials: { base_url: 'https://video.example.test', api_key: 'video-fixture-key', grok_media_provider: 'suanli_special' } }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="grok-media-provider"]').element.value).toBe('suanli_special')
+    await wrapper.get('[data-testid="grok-media-provider"]').setValue('')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const credentials = updateAccountMock.mock.calls[0]?.[1]?.credentials
+    expect(credentials).toMatchObject({ base_url: 'https://video.example.test', api_key: 'video-fixture-key' })
+    expect(credentials).not.toHaveProperty('grok_media_provider')
+    wrapper.unmount()
+  })
 
   it('saves and restores Excel BPS independently of existing OAuth settings', async () => {
     const account = buildAccount()

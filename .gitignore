@@ -15,6 +15,8 @@ backend/bin/
 backend/server
 backend/sub2api
 backend/main
+backend/.deploy/
+backend/backend/.deploy/
 
 # Go 测试二进制
 *.test
@@ -34,6 +36,7 @@ backend/.gocache/
 # ===================
 node_modules/
 frontend/node_modules/
+frontend/node_modules.stale-*/
 frontend/dist/
 *.local
 *.tsbuildinfo
@@ -54,6 +57,7 @@ pnpm-debug.log*
 .env.*.local
 *.env
 !.env.example
+!deploy/kitty-site.env
 docker-compose.override.yml
 
 # ===================
@@ -119,6 +123,7 @@ backend/.installed
 tests
 !deploy/tests/
 !deploy/tests/**
+deploy/tests/__pycache__/
 CLAUDE.md
 .claude
 scripts
@@ -141,6 +146,7 @@ docs/*
 !docs/COMPOSITE_GROUPS.md
 !docs/PLUGIN_DEVELOPMENT.md
 !docs/channel-monitor-v2-safe-defaults.md
+!docs/codex-credits.md
 !docs/cyber-session-blocking.md
 !docs/request-capture.md
 !docs/codex-credits.md
@@ -164,5 +170,11 @@ issues/
 .vite/
 # 本地闭源插件开发目录及构建产物不进入 Sub2API 仓库
 /plugins/
+
+# Local console preview uses synthetic users and payments; never release it.
+/preview/
+/frontend/preview/
+/frontend/verification/
+/frontend/pnpm-lock.yaml.before-deploy
 
 !docs/codex-ticket-pinning.md

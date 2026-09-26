@@ -292,6 +292,8 @@ func defaultModelsListCandidateIDs(platform string) []string {
 			ids = append(ids, model.ID)
 		}
 		return ids
+	case PlatformVideo:
+		return []string{}
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
 	case PlatformOpenCodeGo:
@@ -310,13 +312,13 @@ func defaultModelsListCandidateIDs(platform string) []string {
 func defaultAllowImageGenerationForPlatform(platform string) bool {
 	// Grok image and video generation routes share the legacy image-generation gate.
 	// Older clients send the false zero value, so Grok groups must default enabled.
-	return platform == PlatformGrok
+	return platform == PlatformGrok || platform == PlatformVideo
 }
 
 func compositeDefaultModelsListCandidateIDs() []string {
 	seen := make(map[string]struct{})
 	ids := make([]string, 0)
-	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo} {
+	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformVideo, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo} {
 		for _, id := range defaultModelsListCandidateIDs(platform) {
 			if _, ok := seen[id]; ok {
 				continue
@@ -329,6 +331,9 @@ func compositeDefaultModelsListCandidateIDs() []string {
 }
 
 func canCopyAccountsFromGroupPlatform(targetPlatform, sourcePlatform string) bool {
+	if targetPlatform == PlatformVideo || sourcePlatform == PlatformVideo {
+		return targetPlatform == sourcePlatform
+	}
 	if targetPlatform == PlatformComposite {
 		return sourcePlatform == PlatformComposite || isConcreteRequestPlatform(sourcePlatform)
 	}
@@ -505,6 +510,15 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 	}
 
+	securityPolicyMode, err := validateSecurityPolicyModeForWrite(input.SecurityPolicyMode)
+	if err != nil {
+		return nil, err
+	}
+	securityPolicyEmailEnabled := true
+	if input.SecurityPolicyEmailEnabled != nil {
+		securityPolicyEmailEnabled = *input.SecurityPolicyEmailEnabled
+	}
+
 	// MCPXMLInject：默认为 true，仅当显式传入 false 时关闭
 	mcpXMLInject := true
 	if input.MCPXMLInject != nil {
@@ -558,6 +572,9 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
 		IsExclusive:                     input.IsExclusive,
+		SecurityPolicyEnabled:           input.SecurityPolicyEnabled,
+		SecurityPolicyMode:              securityPolicyMode,
+		SecurityPolicyEmailEnabled:      securityPolicyEmailEnabled,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
 		DailyLimitUSD:                   dailyLimit,
@@ -583,6 +600,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		ImagePrice1K:                    imagePrice1K,
 		ImagePrice2K:                    imagePrice2K,
 		ImagePrice4K:                    imagePrice4K,
+		ImageModelPrices:                NormalizeImageModelPrices(input.ImageModelPrices),
 		VideoPrice480P:                  videoPrice480P,
 		VideoPrice720P:                  videoPrice720P,
 		VideoPrice1080P:                 videoPrice1080P,
@@ -770,11 +788,38 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.Platform != "" {
 		group.Platform = input.Platform
 	}
+	if previousPlatform != group.Platform && (previousPlatform == PlatformVideo || group.Platform == PlatformVideo) {
+		total, _, err := s.groupRepo.GetAccountCount(ctx, group.ID)
+		if err != nil {
+			return nil, err
+		}
+		if total > 0 {
+			return nil, infraerrors.BadRequest("VIDEO_GROUP_PLATFORM_LOCKED", "unbind accounts before changing a video group's platform")
+		}
+	}
+	if group.Platform == PlatformVideo && input.ModelPricing == nil {
+		if err := validateVideoGroupPricing(group.ModelPricing); err != nil {
+			return nil, err
+		}
+	}
 	if input.RateMultiplier != nil {
 		if *input.RateMultiplier <= 0 {
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.SecurityPolicyEnabled != nil {
+		group.SecurityPolicyEnabled = *input.SecurityPolicyEnabled
+	}
+	if input.SecurityPolicyMode != nil {
+		mode, err := validateSecurityPolicyModeForWrite(*input.SecurityPolicyMode)
+		if err != nil {
+			return nil, err
+		}
+		group.SecurityPolicyMode = mode
+	}
+	if input.SecurityPolicyEmailEnabled != nil {
+		group.SecurityPolicyEmailEnabled = *input.SecurityPolicyEmailEnabled
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
@@ -895,6 +940,10 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.ImagePrice4K != nil {
 		group.ImagePrice4K = normalizePrice(input.ImagePrice4K)
+	}
+	// nil = leave unchanged; empty map = clear per-model prices.
+	if input.ImageModelPrices != nil {
+		group.ImageModelPrices = NormalizeImageModelPrices(input.ImageModelPrices)
 	}
 	if input.VideoPrice480P != nil {
 		group.VideoPrice480P = normalizePrice(input.VideoPrice480P)
@@ -1034,6 +1083,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 		group.ReasoningEffortMappings = reasoningEffortMappings
 	}
+
 	sanitizeGroupMessagesDispatchFields(group)
 	sanitizeGroupOpenAIFast(group)
 	if group.Platform != PlatformOpenAI && group.Platform != PlatformComposite {
@@ -1137,6 +1187,11 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 }
 
 func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) ([]ChannelModelPricing, error) {
+	if platform == PlatformVideo {
+		if err := validateVideoGroupPricing(pricing); err != nil {
+			return nil, err
+		}
+	}
 	out := make([]ChannelModelPricing, len(pricing))
 	for i := range pricing {
 		out[i] = pricing[i].Clone()
@@ -1157,6 +1212,9 @@ func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) 
 		if len(out[i].Models) == 0 {
 			return nil, infraerrors.New(http.StatusBadRequest, "GROUP_MODEL_PRICING_MODELS_REQUIRED", "group model pricing entry requires at least one model")
 		}
+	}
+	if platform == PlatformVideo {
+		return out, nil
 	}
 	if err := validatePricingEntries(out); err != nil {
 		return nil, err
@@ -1377,6 +1435,9 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 	if err != nil {
 		return nil, err
 	}
+	if err := s.authorizeManagedUserResource(ctx, apiKey.UserID); err != nil {
+		return nil, err
+	}
 
 	if groupID == nil {
 		// nil 表示不修改，直接返回
@@ -1453,7 +1514,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 			// 失效认证缓存（在事务提交后执行）
 			if s.authCacheInvalidator != nil {
-				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.AuthCacheInvalidationKey())
 			}
 
 			result.APIKey = apiKey
@@ -1468,7 +1529,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 	// 失效认证缓存
 	if s.authCacheInvalidator != nil {
-		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.AuthCacheInvalidationKey())
 	}
 
 	result.APIKey = apiKey
@@ -1481,6 +1542,9 @@ func (s *adminServiceImpl) AdminResetAPIKeyRateLimitUsage(ctx context.Context, k
 	if err != nil {
 		return nil, err
 	}
+	if err := s.authorizeManagedUserResource(ctx, apiKey.UserID); err != nil {
+		return nil, err
+	}
 	apiKey.Usage5h = 0
 	apiKey.Usage1d = 0
 	apiKey.Usage7d = 0
@@ -1491,7 +1555,7 @@ func (s *adminServiceImpl) AdminResetAPIKeyRateLimitUsage(ctx context.Context, k
 		return nil, fmt.Errorf("reset api key rate limit usage: %w", err)
 	}
 	if s.authCacheInvalidator != nil {
-		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.AuthCacheInvalidationKey())
 	}
 	if s.billingCacheService != nil {
 		_ = s.billingCacheService.InvalidateAPIKeyRateLimit(ctx, apiKey.ID)
@@ -1562,4 +1626,15 @@ func (s *adminServiceImpl) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 	}
 
 	return &ReplaceUserGroupResult{MigratedKeys: migrated}, nil
+}
+
+func validateSecurityPolicyModeForWrite(mode string) (string, error) {
+	trimmed := strings.TrimSpace(mode)
+	if trimmed == "" {
+		return SecurityPolicyModeBlockSession, nil
+	}
+	if trimmed == SecurityPolicyModeBlockSession || trimmed == SecurityPolicyModeBlockRequest {
+		return trimmed, nil
+	}
+	return "", infraerrors.Newf(http.StatusBadRequest, "INVALID_SECURITY_POLICY_MODE", "security_policy_mode must be block_session or block_request, got %q", mode)
 }

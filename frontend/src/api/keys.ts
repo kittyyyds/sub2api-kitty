@@ -40,8 +40,8 @@ export async function list(
  * @param id - API key ID
  * @returns API key details
  */
-export async function getById(id: number): Promise<ApiKey> {
-  const { data } = await apiClient.get<ApiKey>(`/keys/${id}`)
+export async function getById(id: number, options?: { signal?: AbortSignal }): Promise<ApiKey> {
+  const { data } = await apiClient.get<ApiKey>(`/keys/${id}`, { signal: options?.signal })
   return data
 }
 

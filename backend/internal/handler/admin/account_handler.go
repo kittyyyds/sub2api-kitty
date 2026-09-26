@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"log"
 	"log/slog"
 	"net/http"
@@ -86,9 +87,6 @@ func (h *AccountHandler) SetCodexTicketSettings(settings *service.SettingService
 	h.codexTicketSettings = settings
 }
 
-func (h *AccountHandler) SetOpenAIGatewayService(gateway *service.OpenAIGatewayService) {
-	h.openAIGatewayService = gateway
-}
 
 func (h *AccountHandler) SetOpenCodeGoUsageService(usage *service.OpenCodeGoUsageService) {
 	h.opencodeGoUsage = usage
@@ -967,6 +965,11 @@ func ifNoneMatchMatched(ifNoneMatch, etag string) bool {
 	return false
 }
 
+// GetOpenAIRequestTimezones lists the request timezone choices for account editors.
+func (h *AccountHandler) GetOpenAIRequestTimezones(c *gin.Context) {
+	response.Success(c, gin.H{"default": service.DefaultOpenAIRequestTimezone, "timezones": service.OpenAIRequestTimezoneOptions()})
+}
+
 // GetByID handles getting an account by ID
 // GET /api/v1/admin/accounts/:id
 func (h *AccountHandler) GetByID(c *gin.Context) {
@@ -1274,7 +1277,9 @@ func (h *AccountHandler) scheduleOpenAIResponsesProbe(account *service.Account) 
 		return
 	}
 	accountID := account.ID
+	managedDone := managedinstance.Track()
 	go func() {
+		defer managedDone()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("openai_responses_probe_panic", "account_id", accountID, "recover", r)
@@ -2877,6 +2882,15 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
+	if account.IsVideo() {
+		models := make([]openai.Model, 0)
+		for requestedModel := range account.GetModelMapping() {
+			models = append(models, openai.Model{ID: requestedModel, Object: "model", Type: "model", DisplayName: requestedModel})
+		}
+		response.Success(c, models)
+		return
+	}
+
 	// Handle OpenAI accounts
 	if account.IsOpenAI() {
 		// Prefer the shared, account-keyed upstream catalog. If discovery fails,
@@ -3396,4 +3410,8 @@ func sanitizeExtraBaseRPM(extra map[string]any) {
 		v = 10000
 	}
 	extra["base_rpm"] = v
+}
+
+func (h *AccountHandler) SetOpenAIGatewayService(gateway *service.OpenAIGatewayService) {
+	h.openAIGatewayService = gateway
 }

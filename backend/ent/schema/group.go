@@ -65,6 +65,20 @@ func (Group) Fields() []ent.Field {
 			Comment("高峰时段叠加倍率，仅在 peak_rate_enabled 且处于 [peak_start, peak_end) 时乘入文本倍率"),
 		field.Bool("is_exclusive").
 			Default(false),
+		// security_policy_enabled: 分组安全策略总开关，默认关闭。
+		field.Bool("security_policy_enabled").
+			Default(false).
+			Comment("分组安全策略总开关，默认关闭"),
+		// security_policy_mode: 命中后处置，block_session 断会话（默认）/
+		// block_request 仅拦截当次请求。
+		field.String("security_policy_mode").
+			MaxLen(20).
+			Default("block_session").
+			Comment("安全策略命中后处置：block_session 断会话 / block_request 仅拦当次"),
+		// security_policy_email_enabled: 命中是否邮件提醒用户，可自由开关。
+		field.Bool("security_policy_email_enabled").
+			Default(true).
+			Comment("安全策略命中是否邮件提醒用户"),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
@@ -123,6 +137,10 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.JSON("image_model_prices", map[string]map[string]float64{}).
+			Optional().
+			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
+			Comment("按模型和分辨率覆盖图片单张价格"),
 		field.Float("batch_image_discount_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(0.5).
@@ -153,7 +171,7 @@ func (Group) Fields() []ent.Field {
 		field.JSON("video_model_prices", map[string]map[string]float64{}).
 			Optional().
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
-			Comment("按模型族和分辨率覆盖视频每秒价格"),
+			Comment("按模型族和分辨率设置客户最终每秒视频价格"),
 		field.Float("web_search_price_per_call").
 			Optional().
 			Nillable().
@@ -294,6 +312,18 @@ func (Group) Fields() []ent.Field {
 			Default([]domain.ReasoningEffortMapping{}).
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
 			Comment("OpenAI reasoning effort 自定义映射；可按模型精确名、前缀或后缀限定，先映射再应用上限"),
+
+		field.Bool("grok_prompt_enabled").
+			Default(false).
+			Comment("是否启用分组级 Grok 增强提示词"),
+		field.String("grok_prompt_mode").
+			MaxLen(16).
+			Default("prepend").
+			Comment("Grok 增强提示词合并顺序：prepend 或 append"),
+		field.String("grok_prompt_content").
+			Default("").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Comment("自定义 Grok 增强提示词；空值使用内置提示词"),
 
 		// 分组利润控制（migration 192/193）：openai/anthropic/gemini/grok/antigravity
 		// 的 token 分组可启用，composite 分组不能直接启用。

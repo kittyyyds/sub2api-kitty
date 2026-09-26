@@ -303,24 +303,14 @@ func (s *PaymentService) VerifyOrderByOutTradeNo(ctx context.Context, outTradeNo
 	return o, nil
 }
 
-// ReconcilePendingPaymentOrders actively checks recent pending Alipay and WeChat
-// orders so missed provider notifications do not wait until order expiry to fulfill.
+// ReconcilePendingPaymentOrders actively checks pending payment orders so
+// missed provider notifications do not wait until order expiry to fulfill.
 func (s *PaymentService) ReconcilePendingPaymentOrders(ctx context.Context) (int, error) {
 	now := time.Now()
 	orders, err := s.entClient.PaymentOrder.Query().
 		Where(
 			paymentorder.StatusEQ(OrderStatusPending),
 			paymentorder.ExpiresAtGT(now),
-			paymentorder.Or(
-				paymentorder.PaymentTypeEQ(payment.TypeWxpay),
-				paymentorder.PaymentTypeHasPrefix(payment.TypeWxpay+"_"),
-				paymentorder.ProviderKeyEQ(payment.TypeWxpay),
-				paymentorder.ProviderKeyHasPrefix(payment.TypeWxpay+"_"),
-				paymentorder.PaymentTypeEQ(payment.TypeAlipay),
-				paymentorder.PaymentTypeHasPrefix(payment.TypeAlipay+"_"),
-				paymentorder.ProviderKeyEQ(payment.TypeAlipay),
-				paymentorder.ProviderKeyHasPrefix(payment.TypeAlipay+"_"),
-			),
 		).
 		Order(dbent.Asc(paymentorder.FieldCreatedAt)).
 		Limit(pendingPaymentReconcileLimit).

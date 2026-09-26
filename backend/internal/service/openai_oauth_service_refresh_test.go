@@ -15,7 +15,9 @@ import (
 )
 
 type openaiOAuthClientRefreshStub struct {
-	refreshCalls int32
+	refreshCalls   int32
+	profileAccount *Account
+	proxyURL       string
 }
 
 func (s *openaiOAuthClientRefreshStub) ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI, proxyURL, clientID string) (*openai.TokenResponse, error) {

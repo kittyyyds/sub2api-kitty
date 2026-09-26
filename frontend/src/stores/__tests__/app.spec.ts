@@ -413,6 +413,7 @@ describe('useAppStore', () => {
       expect(result).toBe(true)
       expect(store.siteName).toBe('TestSite')
       expect(store.siteLogo).toBe('/logo.png')
+      expect(store.brandLogoUrl).toBe('/logo.png')
       expect(store.siteVersion).toBe('1.0.0')
       expect(store.publicSettingsLoaded).toBe(true)
     })
@@ -423,6 +424,17 @@ describe('useAppStore', () => {
 
       expect(result).toBe(false)
       expect(store.publicSettingsLoaded).toBe(false)
+    })
+
+    it('uses the bundled logo when the configured logo is empty or unsafe', () => {
+      const windowAny = window as any
+      windowAny.__APP_CONFIG__ = { site_name: 'Test', site_logo: 'javascript:alert(1)' }
+      const store = useAppStore()
+
+      store.initFromInjectedConfig()
+
+      expect(store.siteLogo).toBe('javascript:alert(1)')
+      expect(store.brandLogoUrl).toBe('/logo.svg')
     })
 
     it('clearPublicSettingsCache 清除缓存', () => {

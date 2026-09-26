@@ -1,78 +1,82 @@
 <template>
   <button
     type="button"
-    class="group text-left p-5 rounded-2xl min-h-[280px] w-full bg-white/70 backdrop-blur-xl border border-gray-200/80 shadow-card dark:bg-dark-800/60 dark:border-dark-700/70 hover:-translate-y-1 hover:shadow-card-hover dark:hover:border-primary-500/30 hover:border-gray-300 transition-all duration-300 ease-out flex flex-col"
+    class="group flex h-[168px] min-w-0 w-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm transition-[border-color,box-shadow] hover:border-gray-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:border-dark-700 dark:bg-dark-800 dark:hover:border-dark-600"
+    :aria-label="item.name"
     @click="emit('click')"
   >
-    <!-- Header: icon + name/model + status chip -->
-    <div class="flex items-start gap-3">
-      <span
-        class="w-9 h-9 rounded-xl ring-1 ring-black/5 dark:ring-white/10 grid place-items-center flex-shrink-0"
-        :class="[providerGradient(item.provider), providerTintClass]"
-      >
-        <ProviderIcon :provider="item.provider" :size="20" />
-      </span>
-      <div class="flex-1 min-w-0">
-        <div class="text-base font-semibold truncate text-gray-900 dark:text-gray-100">
-          {{ item.name }}
-        </div>
-        <div class="mt-0.5 flex items-center gap-1.5 min-w-0">
-          <span
-            class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0"
-            :class="providerBadgeClass(item.provider)"
-          >
-            {{ providerLabel(item.provider) }}
-          </span>
-          <!-- 纯配额模式主模型是占位符 "quota"，展示层替换为本地化「配额」标签 -->
-          <span class="font-mono text-xs truncate text-gray-500 dark:text-gray-400">
-            {{ formatMonitorModel(item.primary_model) }}
-          </span>
-          <span
-            v-if="item.group_name"
-            class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300 flex-shrink-0"
-          >
-            {{ item.group_name }}
-          </span>
+    <div class="flex min-w-0 items-start justify-between gap-3">
+      <div class="flex min-w-0 items-start gap-2.5">
+        <span
+          class="grid h-7 w-7 shrink-0 place-items-center rounded-md"
+          :class="[providerBackgroundClass, providerTintClass]"
+        >
+          <ProviderIcon :provider="item.provider" :size="16" />
+        </span>
+        <div class="min-w-0">
+          <div class="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {{ item.name }}
+          </div>
+          <div class="mt-0.5 min-w-0">
+            <span class="truncate font-mono text-[10px] text-gray-400">
+              {{ formatMonitorModel(item.primary_model) }}
+            </span>
+          </div>
         </div>
       </div>
+      <div class="flex shrink-0 items-center gap-1.5">
+        <span
+          v-if="rateMultiplier != null"
+          class="inline-flex items-center rounded-md px-2 py-1 font-mono text-[10px] font-medium"
+          :class="[providerBackgroundClass, providerTintClass]"
+        >
+          {{ t('monitorCommon.rateLabel') }}: {{ formatMultiplier(rateMultiplier) }}x
+        </span>
+        <span
+          class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium"
+          :class="statusChipClass"
+        >
+          <span class="h-1.5 w-1.5 rounded-full" :class="statusDotClass"></span>
+          {{ cardStatusLabel }}
+        </span>
+      </div>
+    </div>
+
+    <div class="mt-3 flex min-w-0 items-baseline justify-between gap-3">
+      <div class="flex min-w-0 items-baseline gap-5 text-[11px]">
+        <span class="whitespace-nowrap text-gray-400">
+          {{ t('monitorCommon.dialogLatency') }}
+          <span class="ml-1 font-mono text-xs text-gray-900 dark:text-gray-100">
+            {{ formatLatency(item.primary_latency_ms) }}ms
+          </span>
+        </span>
+        <span class="whitespace-nowrap text-gray-400">
+          {{ t('monitorCommon.endpointPing') }}
+          <span class="ml-1 font-mono text-xs text-gray-900 dark:text-gray-100">
+            {{ formatLatency(item.primary_ping_latency_ms) }}ms
+          </span>
+        </span>
+      </div>
       <span
-        class="px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0"
-        :class="statusBadgeClass(item.primary_status)"
+        class="origin-right shrink-0 scale-[1.5] font-mono text-sm font-semibold tabular-nums"
+        :style="availabilityStyle"
       >
-        {{ statusLabel(item.primary_status) }}
+        {{ availabilityText }}
       </span>
     </div>
 
-    <!-- Metrics -->
-    <MonitorMetricPair
-      primary-icon="bolt"
-      :primary-label="t('monitorCommon.dialogLatency')"
-      :primary-value="formatLatency(item.primary_latency_ms)"
-      primary-unit="ms"
-      secondary-icon="globe"
-      :secondary-label="t('monitorCommon.endpointPing')"
-      :secondary-value="formatLatency(item.primary_ping_latency_ms)"
-      secondary-unit="ms"
+    <MonitorQuotaView
+      v-if="quotaVisible"
+      :snapshot="item.latest_quota"
+      class="mt-2 max-h-8 overflow-hidden"
     />
 
-    <!-- 配额模式：最新用量/余额快照（服务端已按系统开关剥离，此处 flag 为纵深防御） -->
-    <MonitorQuotaView v-if="quotaVisible" :snapshot="item.latest_quota" class="mt-2" />
-
-    <!-- Divider -->
-    <div class="mt-4 border-t border-gray-100 dark:border-dark-700/60"></div>
-
-    <!-- Availability row -->
-    <MonitorAvailabilityRow
-      :window-label="availabilityLabel"
-      :value="availabilityValue"
-      :samples-label="extraModelsCountLabel"
-    />
-
-    <!-- Timeline -->
-    <MonitorTimeline
-      :buckets="item.timeline"
-      :countdown-seconds="countdownSeconds"
-    />
+    <div class="mt-auto">
+      <div class="mb-1.5 text-[9px] text-gray-400">
+        {{ t('monitorCommon.checksCount', { n: TIMELINE_LENGTH }) }}
+      </div>
+      <MonitorTimeline :buckets="item.timeline" :length="TIMELINE_LENGTH" />
+    </div>
   </button>
 </template>
 
@@ -80,18 +84,20 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { UserMonitorView } from '@/api/channelMonitor'
-import {
-  useChannelMonitorFormat,
-  providerGradient,
-} from '@/composables/useChannelMonitorFormat'
+import { useChannelMonitorFormat, hslForPct } from '@/composables/useChannelMonitorFormat'
+import { formatMultiplier } from '@/utils/formatters'
 import { isChannelMonitorQuotaVisible } from '@/utils/featureFlags'
+import {
+  STATUS_DEGRADED,
+  STATUS_FAILED,
+  STATUS_OPERATIONAL,
+} from '@/constants/channelMonitor'
 import ProviderIcon from './ProviderIcon.vue'
-import MonitorMetricPair from './MonitorMetricPair.vue'
-import MonitorAvailabilityRow from './MonitorAvailabilityRow.vue'
 import MonitorTimeline from './MonitorTimeline.vue'
 import MonitorQuotaView from '@/components/common/MonitorQuotaView.vue'
 
-// 图标配色与 utils/platformColors.ts 的平台色对齐（新 4 家）。
+const TIMELINE_LENGTH = 60
+
 const PROVIDER_TINT: Record<string, string> = {
   openai: 'text-emerald-600 dark:text-emerald-300',
   anthropic: 'text-orange-600 dark:text-orange-300',
@@ -104,11 +110,19 @@ const PROVIDER_TINT: Record<string, string> = {
   opencode_go: 'text-amber-700 dark:text-amber-300',
 }
 
+const PROVIDER_BACKGROUND: Record<string, string> = {
+  openai: 'bg-emerald-50 dark:bg-emerald-500/10',
+  anthropic: 'bg-orange-50 dark:bg-orange-500/10',
+  gemini: 'bg-sky-50 dark:bg-sky-500/10',
+  grok: 'bg-zinc-100 dark:bg-zinc-500/10',
+}
+
 const props = defineProps<{
   item: UserMonitorView
-  window: '7d' | '15d' | '30d'
   availabilityValue: number | null
-  countdownSeconds: number
+  rateMultiplier?: number | null
+  window?: '7d' | '15d' | '30d'
+  countdownSeconds?: number
 }>()
 
 const emit = defineEmits<{
@@ -117,10 +131,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const {
-  statusLabel,
-  statusBadgeClass,
-  providerLabel,
-  providerBadgeClass,
   formatLatency,
   formatMonitorModel,
 } = useChannelMonitorFormat()
@@ -129,18 +139,62 @@ const providerTintClass = computed(() =>
   PROVIDER_TINT[props.item.provider] ?? 'text-gray-500 dark:text-gray-300'
 )
 
-const quotaVisible = computed(
-  () => isChannelMonitorQuotaVisible() && !!props.item.latest_quota
+const providerBackgroundClass = computed(() =>
+  PROVIDER_BACKGROUND[props.item.provider] ?? 'bg-gray-100 dark:bg-dark-700'
 )
 
-const availabilityLabel = computed(() => {
-  const win = t(`channelStatus.windowTab.${props.window}`)
-  return `${t('monitorCommon.availabilityPrefix')} · ${win}`
+const quotaVisible = computed(
+  () => isChannelMonitorQuotaVisible() && !!props.item.latest_quota,
+)
+
+const statusChipClass = computed(() => {
+  switch (props.item.primary_status) {
+    case STATUS_OPERATIONAL:
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+    case STATUS_DEGRADED:
+      return 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'
+    case STATUS_FAILED:
+      return 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300'
+    default:
+      return 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-gray-400'
+  }
 })
 
-const extraModelsCountLabel = computed(() => {
-  const count = props.item.extra_models?.length ?? 0
-  if (count === 0) return undefined
-  return t('monitorCommon.extraModelsCount', { n: count })
+const statusDotClass = computed(() => {
+  switch (props.item.primary_status) {
+    case STATUS_OPERATIONAL:
+      return 'bg-emerald-500'
+    case STATUS_DEGRADED:
+      return 'bg-amber-500'
+    case STATUS_FAILED:
+      return 'bg-red-500'
+    default:
+      return 'bg-gray-400'
+  }
+})
+
+const cardStatusLabel = computed(() => {
+  switch (props.item.primary_status) {
+    case STATUS_OPERATIONAL:
+      return t('monitorCommon.cardStatus.operational')
+    case STATUS_DEGRADED:
+      return t('monitorCommon.cardStatus.degraded')
+    case STATUS_FAILED:
+      return t('monitorCommon.cardStatus.failed')
+    default:
+      return t('monitorCommon.cardStatus.error')
+  }
+})
+
+const availabilityText = computed(() => {
+  if (props.availabilityValue == null || Number.isNaN(props.availabilityValue)) {
+    return t('monitorCommon.latencyEmpty')
+  }
+  return `${props.availabilityValue.toFixed(0)}%`
+})
+
+const availabilityStyle = computed(() => {
+  const color = hslForPct(props.availabilityValue)
+  return { color: color ?? 'rgb(156 163 175)' }
 })
 </script>

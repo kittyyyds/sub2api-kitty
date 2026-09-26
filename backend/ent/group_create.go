@@ -176,6 +176,48 @@ func (_c *GroupCreate) SetNillableIsExclusive(v *bool) *GroupCreate {
 	return _c
 }
 
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (_c *GroupCreate) SetSecurityPolicyEnabled(v bool) *GroupCreate {
+	_c.mutation.SetSecurityPolicyEnabled(v)
+	return _c
+}
+
+// SetNillableSecurityPolicyEnabled sets the "security_policy_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSecurityPolicyEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetSecurityPolicyEnabled(*v)
+	}
+	return _c
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (_c *GroupCreate) SetSecurityPolicyMode(v string) *GroupCreate {
+	_c.mutation.SetSecurityPolicyMode(v)
+	return _c
+}
+
+// SetNillableSecurityPolicyMode sets the "security_policy_mode" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSecurityPolicyMode(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetSecurityPolicyMode(*v)
+	}
+	return _c
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (_c *GroupCreate) SetSecurityPolicyEmailEnabled(v bool) *GroupCreate {
+	_c.mutation.SetSecurityPolicyEmailEnabled(v)
+	return _c
+}
+
+// SetNillableSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSecurityPolicyEmailEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetSecurityPolicyEmailEnabled(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *GroupCreate) SetStatus(v string) *GroupCreate {
 	_c.mutation.SetStatus(v)
@@ -383,6 +425,12 @@ func (_c *GroupCreate) SetNillableImagePrice4k(v *float64) *GroupCreate {
 	if v != nil {
 		_c.SetImagePrice4k(*v)
 	}
+	return _c
+}
+
+// SetImageModelPrices sets the "image_model_prices" field.
+func (_c *GroupCreate) SetImageModelPrices(v map[string]map[string]float64) *GroupCreate {
+	_c.mutation.SetImageModelPrices(v)
 	return _c
 }
 
@@ -878,6 +926,48 @@ func (_c *GroupCreate) SetReasoningEffortMappings(v []domain.ReasoningEffortMapp
 	return _c
 }
 
+// SetGrokPromptEnabled sets the "grok_prompt_enabled" field.
+func (_c *GroupCreate) SetGrokPromptEnabled(v bool) *GroupCreate {
+	_c.mutation.SetGrokPromptEnabled(v)
+	return _c
+}
+
+// SetNillableGrokPromptEnabled sets the "grok_prompt_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableGrokPromptEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetGrokPromptEnabled(*v)
+	}
+	return _c
+}
+
+// SetGrokPromptMode sets the "grok_prompt_mode" field.
+func (_c *GroupCreate) SetGrokPromptMode(v string) *GroupCreate {
+	_c.mutation.SetGrokPromptMode(v)
+	return _c
+}
+
+// SetNillableGrokPromptMode sets the "grok_prompt_mode" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableGrokPromptMode(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetGrokPromptMode(*v)
+	}
+	return _c
+}
+
+// SetGrokPromptContent sets the "grok_prompt_content" field.
+func (_c *GroupCreate) SetGrokPromptContent(v string) *GroupCreate {
+	_c.mutation.SetGrokPromptContent(v)
+	return _c
+}
+
+// SetNillableGrokPromptContent sets the "grok_prompt_content" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableGrokPromptContent(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetGrokPromptContent(*v)
+	}
+	return _c
+}
+
 // SetProfitControlEnabled sets the "profit_control_enabled" field.
 func (_c *GroupCreate) SetProfitControlEnabled(v bool) *GroupCreate {
 	_c.mutation.SetProfitControlEnabled(v)
@@ -1085,6 +1175,18 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultIsExclusive
 		_c.mutation.SetIsExclusive(v)
 	}
+	if _, ok := _c.mutation.SecurityPolicyEnabled(); !ok {
+		v := group.DefaultSecurityPolicyEnabled
+		_c.mutation.SetSecurityPolicyEnabled(v)
+	}
+	if _, ok := _c.mutation.SecurityPolicyMode(); !ok {
+		v := group.DefaultSecurityPolicyMode
+		_c.mutation.SetSecurityPolicyMode(v)
+	}
+	if _, ok := _c.mutation.SecurityPolicyEmailEnabled(); !ok {
+		v := group.DefaultSecurityPolicyEmailEnabled
+		_c.mutation.SetSecurityPolicyEmailEnabled(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := group.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -1217,6 +1319,18 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultReasoningEffortMappings
 		_c.mutation.SetReasoningEffortMappings(v)
 	}
+	if _, ok := _c.mutation.GrokPromptEnabled(); !ok {
+		v := group.DefaultGrokPromptEnabled
+		_c.mutation.SetGrokPromptEnabled(v)
+	}
+	if _, ok := _c.mutation.GrokPromptMode(); !ok {
+		v := group.DefaultGrokPromptMode
+		_c.mutation.SetGrokPromptMode(v)
+	}
+	if _, ok := _c.mutation.GrokPromptContent(); !ok {
+		v := group.DefaultGrokPromptContent
+		_c.mutation.SetGrokPromptContent(v)
+	}
 	if _, ok := _c.mutation.ProfitControlEnabled(); !ok {
 		v := group.DefaultProfitControlEnabled
 		_c.mutation.SetProfitControlEnabled(v)
@@ -1275,6 +1389,20 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.IsExclusive(); !ok {
 		return &ValidationError{Name: "is_exclusive", err: errors.New(`ent: missing required field "Group.is_exclusive"`)}
+	}
+	if _, ok := _c.mutation.SecurityPolicyEnabled(); !ok {
+		return &ValidationError{Name: "security_policy_enabled", err: errors.New(`ent: missing required field "Group.security_policy_enabled"`)}
+	}
+	if _, ok := _c.mutation.SecurityPolicyMode(); !ok {
+		return &ValidationError{Name: "security_policy_mode", err: errors.New(`ent: missing required field "Group.security_policy_mode"`)}
+	}
+	if v, ok := _c.mutation.SecurityPolicyMode(); ok {
+		if err := group.SecurityPolicyModeValidator(v); err != nil {
+			return &ValidationError{Name: "security_policy_mode", err: fmt.Errorf(`ent: validator failed for field "Group.security_policy_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SecurityPolicyEmailEnabled(); !ok {
+		return &ValidationError{Name: "security_policy_email_enabled", err: errors.New(`ent: missing required field "Group.security_policy_email_enabled"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Group.status"`)}
@@ -1430,6 +1558,20 @@ func (_c *GroupCreate) check() error {
 	if _, ok := _c.mutation.ReasoningEffortMappings(); !ok {
 		return &ValidationError{Name: "reasoning_effort_mappings", err: errors.New(`ent: missing required field "Group.reasoning_effort_mappings"`)}
 	}
+	if _, ok := _c.mutation.GrokPromptEnabled(); !ok {
+		return &ValidationError{Name: "grok_prompt_enabled", err: errors.New(`ent: missing required field "Group.grok_prompt_enabled"`)}
+	}
+	if _, ok := _c.mutation.GrokPromptMode(); !ok {
+		return &ValidationError{Name: "grok_prompt_mode", err: errors.New(`ent: missing required field "Group.grok_prompt_mode"`)}
+	}
+	if v, ok := _c.mutation.GrokPromptMode(); ok {
+		if err := group.GrokPromptModeValidator(v); err != nil {
+			return &ValidationError{Name: "grok_prompt_mode", err: fmt.Errorf(`ent: validator failed for field "Group.grok_prompt_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.GrokPromptContent(); !ok {
+		return &ValidationError{Name: "grok_prompt_content", err: errors.New(`ent: missing required field "Group.grok_prompt_content"`)}
+	}
 	if _, ok := _c.mutation.ProfitControlEnabled(); !ok {
 		return &ValidationError{Name: "profit_control_enabled", err: errors.New(`ent: missing required field "Group.profit_control_enabled"`)}
 	}
@@ -1510,6 +1652,18 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
 		_node.IsExclusive = value
 	}
+	if value, ok := _c.mutation.SecurityPolicyEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEnabled, field.TypeBool, value)
+		_node.SecurityPolicyEnabled = value
+	}
+	if value, ok := _c.mutation.SecurityPolicyMode(); ok {
+		_spec.SetField(group.FieldSecurityPolicyMode, field.TypeString, value)
+		_node.SecurityPolicyMode = value
+	}
+	if value, ok := _c.mutation.SecurityPolicyEmailEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEmailEnabled, field.TypeBool, value)
+		_node.SecurityPolicyEmailEnabled = value
+	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 		_node.Status = value
@@ -1569,6 +1723,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ImagePrice4k(); ok {
 		_spec.SetField(group.FieldImagePrice4k, field.TypeFloat64, value)
 		_node.ImagePrice4k = &value
+	}
+	if value, ok := _c.mutation.ImageModelPrices(); ok {
+		_spec.SetField(group.FieldImageModelPrices, field.TypeJSON, value)
+		_node.ImageModelPrices = value
 	}
 	if value, ok := _c.mutation.BatchImageDiscountMultiplier(); ok {
 		_spec.SetField(group.FieldBatchImageDiscountMultiplier, field.TypeFloat64, value)
@@ -1721,6 +1879,18 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ReasoningEffortMappings(); ok {
 		_spec.SetField(group.FieldReasoningEffortMappings, field.TypeJSON, value)
 		_node.ReasoningEffortMappings = value
+	}
+	if value, ok := _c.mutation.GrokPromptEnabled(); ok {
+		_spec.SetField(group.FieldGrokPromptEnabled, field.TypeBool, value)
+		_node.GrokPromptEnabled = value
+	}
+	if value, ok := _c.mutation.GrokPromptMode(); ok {
+		_spec.SetField(group.FieldGrokPromptMode, field.TypeString, value)
+		_node.GrokPromptMode = value
+	}
+	if value, ok := _c.mutation.GrokPromptContent(); ok {
+		_spec.SetField(group.FieldGrokPromptContent, field.TypeString, value)
+		_node.GrokPromptContent = value
 	}
 	if value, ok := _c.mutation.ProfitControlEnabled(); ok {
 		_spec.SetField(group.FieldProfitControlEnabled, field.TypeBool, value)
@@ -2034,6 +2204,42 @@ func (u *GroupUpsert) UpdateIsExclusive() *GroupUpsert {
 	return u
 }
 
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (u *GroupUpsert) SetSecurityPolicyEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldSecurityPolicyEnabled, v)
+	return u
+}
+
+// UpdateSecurityPolicyEnabled sets the "security_policy_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSecurityPolicyEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldSecurityPolicyEnabled)
+	return u
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (u *GroupUpsert) SetSecurityPolicyMode(v string) *GroupUpsert {
+	u.Set(group.FieldSecurityPolicyMode, v)
+	return u
+}
+
+// UpdateSecurityPolicyMode sets the "security_policy_mode" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSecurityPolicyMode() *GroupUpsert {
+	u.SetExcluded(group.FieldSecurityPolicyMode)
+	return u
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (u *GroupUpsert) SetSecurityPolicyEmailEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldSecurityPolicyEmailEnabled, v)
+	return u
+}
+
+// UpdateSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSecurityPolicyEmailEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldSecurityPolicyEmailEnabled)
+	return u
+}
+
 // SetStatus sets the "status" field.
 func (u *GroupUpsert) SetStatus(v string) *GroupUpsert {
 	u.Set(group.FieldStatus, v)
@@ -2283,6 +2489,24 @@ func (u *GroupUpsert) AddImagePrice4k(v float64) *GroupUpsert {
 // ClearImagePrice4k clears the value of the "image_price_4k" field.
 func (u *GroupUpsert) ClearImagePrice4k() *GroupUpsert {
 	u.SetNull(group.FieldImagePrice4k)
+	return u
+}
+
+// SetImageModelPrices sets the "image_model_prices" field.
+func (u *GroupUpsert) SetImageModelPrices(v map[string]map[string]float64) *GroupUpsert {
+	u.Set(group.FieldImageModelPrices, v)
+	return u
+}
+
+// UpdateImageModelPrices sets the "image_model_prices" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateImageModelPrices() *GroupUpsert {
+	u.SetExcluded(group.FieldImageModelPrices)
+	return u
+}
+
+// ClearImageModelPrices clears the value of the "image_model_prices" field.
+func (u *GroupUpsert) ClearImageModelPrices() *GroupUpsert {
+	u.SetNull(group.FieldImageModelPrices)
 	return u
 }
 
@@ -2910,6 +3134,42 @@ func (u *GroupUpsert) UpdateReasoningEffortMappings() *GroupUpsert {
 	return u
 }
 
+// SetGrokPromptEnabled sets the "grok_prompt_enabled" field.
+func (u *GroupUpsert) SetGrokPromptEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldGrokPromptEnabled, v)
+	return u
+}
+
+// UpdateGrokPromptEnabled sets the "grok_prompt_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateGrokPromptEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldGrokPromptEnabled)
+	return u
+}
+
+// SetGrokPromptMode sets the "grok_prompt_mode" field.
+func (u *GroupUpsert) SetGrokPromptMode(v string) *GroupUpsert {
+	u.Set(group.FieldGrokPromptMode, v)
+	return u
+}
+
+// UpdateGrokPromptMode sets the "grok_prompt_mode" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateGrokPromptMode() *GroupUpsert {
+	u.SetExcluded(group.FieldGrokPromptMode)
+	return u
+}
+
+// SetGrokPromptContent sets the "grok_prompt_content" field.
+func (u *GroupUpsert) SetGrokPromptContent(v string) *GroupUpsert {
+	u.Set(group.FieldGrokPromptContent, v)
+	return u
+}
+
+// UpdateGrokPromptContent sets the "grok_prompt_content" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateGrokPromptContent() *GroupUpsert {
+	u.SetExcluded(group.FieldGrokPromptContent)
+	return u
+}
+
 // SetProfitControlEnabled sets the "profit_control_enabled" field.
 func (u *GroupUpsert) SetProfitControlEnabled(v bool) *GroupUpsert {
 	u.Set(group.FieldProfitControlEnabled, v)
@@ -3171,6 +3431,48 @@ func (u *GroupUpsertOne) SetIsExclusive(v bool) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateIsExclusive() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateIsExclusive()
+	})
+}
+
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (u *GroupUpsertOne) SetSecurityPolicyEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEnabled sets the "security_policy_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSecurityPolicyEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEnabled()
+	})
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (u *GroupUpsertOne) SetSecurityPolicyMode(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyMode(v)
+	})
+}
+
+// UpdateSecurityPolicyMode sets the "security_policy_mode" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSecurityPolicyMode() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyMode()
+	})
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (u *GroupUpsertOne) SetSecurityPolicyEmailEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEmailEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSecurityPolicyEmailEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEmailEnabled()
 	})
 }
 
@@ -3465,6 +3767,27 @@ func (u *GroupUpsertOne) UpdateImagePrice4k() *GroupUpsertOne {
 func (u *GroupUpsertOne) ClearImagePrice4k() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearImagePrice4k()
+	})
+}
+
+// SetImageModelPrices sets the "image_model_prices" field.
+func (u *GroupUpsertOne) SetImageModelPrices(v map[string]map[string]float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetImageModelPrices(v)
+	})
+}
+
+// UpdateImageModelPrices sets the "image_model_prices" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateImageModelPrices() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateImageModelPrices()
+	})
+}
+
+// ClearImageModelPrices clears the value of the "image_model_prices" field.
+func (u *GroupUpsertOne) ClearImageModelPrices() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearImageModelPrices()
 	})
 }
 
@@ -4196,6 +4519,48 @@ func (u *GroupUpsertOne) UpdateReasoningEffortMappings() *GroupUpsertOne {
 	})
 }
 
+// SetGrokPromptEnabled sets the "grok_prompt_enabled" field.
+func (u *GroupUpsertOne) SetGrokPromptEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGrokPromptEnabled(v)
+	})
+}
+
+// UpdateGrokPromptEnabled sets the "grok_prompt_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateGrokPromptEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGrokPromptEnabled()
+	})
+}
+
+// SetGrokPromptMode sets the "grok_prompt_mode" field.
+func (u *GroupUpsertOne) SetGrokPromptMode(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGrokPromptMode(v)
+	})
+}
+
+// UpdateGrokPromptMode sets the "grok_prompt_mode" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateGrokPromptMode() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGrokPromptMode()
+	})
+}
+
+// SetGrokPromptContent sets the "grok_prompt_content" field.
+func (u *GroupUpsertOne) SetGrokPromptContent(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGrokPromptContent(v)
+	})
+}
+
+// UpdateGrokPromptContent sets the "grok_prompt_content" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateGrokPromptContent() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGrokPromptContent()
+	})
+}
+
 // SetProfitControlEnabled sets the "profit_control_enabled" field.
 func (u *GroupUpsertOne) SetProfitControlEnabled(v bool) *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
@@ -4634,6 +4999,48 @@ func (u *GroupUpsertBulk) UpdateIsExclusive() *GroupUpsertBulk {
 	})
 }
 
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (u *GroupUpsertBulk) SetSecurityPolicyEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEnabled sets the "security_policy_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSecurityPolicyEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEnabled()
+	})
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (u *GroupUpsertBulk) SetSecurityPolicyMode(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyMode(v)
+	})
+}
+
+// UpdateSecurityPolicyMode sets the "security_policy_mode" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSecurityPolicyMode() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyMode()
+	})
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (u *GroupUpsertBulk) SetSecurityPolicyEmailEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEmailEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSecurityPolicyEmailEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEmailEnabled()
+	})
+}
+
 // SetStatus sets the "status" field.
 func (u *GroupUpsertBulk) SetStatus(v string) *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
@@ -4925,6 +5332,27 @@ func (u *GroupUpsertBulk) UpdateImagePrice4k() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearImagePrice4k() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearImagePrice4k()
+	})
+}
+
+// SetImageModelPrices sets the "image_model_prices" field.
+func (u *GroupUpsertBulk) SetImageModelPrices(v map[string]map[string]float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetImageModelPrices(v)
+	})
+}
+
+// UpdateImageModelPrices sets the "image_model_prices" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateImageModelPrices() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateImageModelPrices()
+	})
+}
+
+// ClearImageModelPrices clears the value of the "image_model_prices" field.
+func (u *GroupUpsertBulk) ClearImageModelPrices() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearImageModelPrices()
 	})
 }
 
@@ -5653,6 +6081,48 @@ func (u *GroupUpsertBulk) SetReasoningEffortMappings(v []domain.ReasoningEffortM
 func (u *GroupUpsertBulk) UpdateReasoningEffortMappings() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateReasoningEffortMappings()
+	})
+}
+
+// SetGrokPromptEnabled sets the "grok_prompt_enabled" field.
+func (u *GroupUpsertBulk) SetGrokPromptEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGrokPromptEnabled(v)
+	})
+}
+
+// UpdateGrokPromptEnabled sets the "grok_prompt_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateGrokPromptEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGrokPromptEnabled()
+	})
+}
+
+// SetGrokPromptMode sets the "grok_prompt_mode" field.
+func (u *GroupUpsertBulk) SetGrokPromptMode(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGrokPromptMode(v)
+	})
+}
+
+// UpdateGrokPromptMode sets the "grok_prompt_mode" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateGrokPromptMode() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGrokPromptMode()
+	})
+}
+
+// SetGrokPromptContent sets the "grok_prompt_content" field.
+func (u *GroupUpsertBulk) SetGrokPromptContent(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetGrokPromptContent(v)
+	})
+}
+
+// UpdateGrokPromptContent sets the "grok_prompt_content" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateGrokPromptContent() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateGrokPromptContent()
 	})
 }
 

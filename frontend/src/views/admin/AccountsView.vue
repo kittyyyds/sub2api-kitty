@@ -304,7 +304,12 @@
             />
           </template>
           <template #cell-groups="{ row }">
-            <AccountGroupsCell :groups="accountGroupsForRow(row)" :max-display="4" />
+            <AccountGroupsCell
+              :groups="accountGroupsForRow(row)"
+              :account-groups="accountGroupMembershipsForRow(row)"
+              :priority-enabled="accountGroupPriorityEnabled"
+              :max-display="4"
+            />
           </template>
           <template #header-usage="{ column }">
             <div class="flex items-center">
@@ -378,8 +383,13 @@
               @probe="handleProbeUpstreamBilling(row)"
             />
           </template>
-          <template #cell-priority="{ value }">
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ value }}</span>
+          <template #cell-priority="{ row }">
+            <span
+              class="text-sm text-gray-700 dark:text-gray-300"
+              :title="accountPriorityDisplay(row).title"
+            >
+              {{ accountPriorityDisplay(row).text }}
+            </span>
           </template>
           <template #header-scheduler_score="{ column }">
             <div class="flex items-center">
@@ -542,11 +552,22 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
+const accountGroupPriorityEnabled = ref(false)
 const groupsByID = computed(() => new Map(groups.value.map(group => [group.id, group])))
 const accountGroupsForRow = (account: Pick<AccountListItem, 'group_ids'>): AdminGroup[] => {
   const groupIDs = account.group_ids ?? []
   if (groupIDs.length === 0) return []
   return groupIDs.map(id => groupsByID.value.get(id)).filter((group): group is AdminGroup => Boolean(group))
+}
+const accountGroupMembershipsForRow = (account: AccountListItem) => {
+  if (Array.isArray(account.account_groups) && account.account_groups.length > 0) {
+    return account.account_groups
+  }
+  return (account.scheduler_scores ?? []).flatMap((score) => (
+    score.group_id != null && score.group_priority != null
+      ? [{ account_id: account.id, group_id: score.group_id, priority: score.group_priority, created_at: '' }]
+      : []
+  ))
 }
 const accountTableRef = ref<HTMLElement | null>(null)
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null)
@@ -1096,6 +1117,55 @@ const {
   }
 })
 
+type AccountPriorityDisplay = { text: string; title: string }
+
+const accountPriorityDisplay = (account: AccountListItem): AccountPriorityDisplay => {
+  const globalPriority = account.priority
+  const globalDisplay = {
+    text: String(globalPriority),
+    title: t('admin.accounts.accountPriorityLabel', { priority: globalPriority })
+  }
+
+  if (!accountGroupPriorityEnabled.value) {
+    return globalDisplay
+  }
+
+  const memberships = accountGroupMembershipsForRow(account).filter((membership) =>
+    Number.isFinite(membership.group_id) && Number.isFinite(membership.priority)
+  )
+  if (memberships.length === 0) return globalDisplay
+
+  const selectedGroup = String(params.group || '').trim()
+  if (selectedGroup && selectedGroup !== 'ungrouped') {
+    const selectedGroupID = Number(selectedGroup)
+    if (Number.isFinite(selectedGroupID)) {
+      const membership = memberships.find((item) => item.group_id === selectedGroupID)
+      if (membership) {
+        return {
+          text: `P${membership.priority}`,
+          title: t('admin.accounts.groupPriorityLabel', { priority: membership.priority })
+        }
+      }
+    }
+    return globalDisplay
+  }
+
+  const priorities = memberships.map((membership) => membership.priority)
+  if (priorities.length === 1) {
+    return {
+      text: `P${priorities[0]}`,
+      title: t('admin.accounts.groupPriorityLabel', { priority: priorities[0] })
+    }
+  }
+
+  return {
+    text: priorities.map((priority) => `P${priority}`).join(' / '),
+    title: priorities
+      .map((priority) => t('admin.accounts.groupPriorityLabel', { priority }))
+      .join(', ')
+  }
+}
+
 const {
   selectedSet,
   selectedIds: selIds,
@@ -1482,9 +1552,24 @@ const refreshAccountsIncrementally = async () => {
 }
 
 const handleManualRefresh = async () => {
-  await Promise.all([load(), loadUpstreamBillingProbeGlobalState()])
+  await Promise.all([
+    load(),
+    loadUpstreamBillingProbeGlobalState(),
+    loadAccountGroupPrioritySetting()
+  ])
   // Force usage cells to refetch /usage on explicit user refresh.
   usageManualRefreshToken.value += 1
+}
+
+const loadAccountGroupPrioritySetting = async () => {
+  try {
+    const settings = await adminAPI.settings.getSettings()
+    accountGroupPriorityEnabled.value = settings.account_group_priority_enabled === true
+  } catch (error) {
+    // Keep the compatibility default: the account-wide priority remains authoritative.
+    accountGroupPriorityEnabled.value = false
+    console.error('Failed to load account group priority setting:', error)
+  }
 }
 
 const loadUpstreamBillingProbeGlobalState = async () => {
@@ -2545,9 +2630,10 @@ onMounted(async () => {
 
   load()
   loadUpstreamBillingProbeGlobalState()
-  const [proxiesResult, groupsResult] = await Promise.allSettled([
+  const [proxiesResult, groupsResult, accountGroupPriorityResult] = await Promise.allSettled([
     adminAPI.proxies.getAll(),
-    adminAPI.groups.getAll()
+    adminAPI.groups.getAll(),
+    loadAccountGroupPrioritySetting()
   ])
   if (proxiesResult.status === 'fulfilled') {
     proxies.value = proxiesResult.value
@@ -2558,6 +2644,9 @@ onMounted(async () => {
     groups.value = groupsResult.value
   } else {
     console.error('Failed to load groups:', groupsResult.reason)
+  }
+  if (accountGroupPriorityResult.status === 'rejected') {
+    console.error('Failed to load account group priority setting:', accountGroupPriorityResult.reason)
   }
   window.addEventListener('scroll', handleScroll, true)
   window.addEventListener('resize', handleViewportResize)

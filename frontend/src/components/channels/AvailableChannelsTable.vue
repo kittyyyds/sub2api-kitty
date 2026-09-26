@@ -162,6 +162,8 @@
                 :no-pricing-label="noPricingLabel"
                 :show-platform="false"
                 :platform-hint="section.platform"
+                :pricing-groups="section.groups"
+                :user-group-rates="userGroupRates"
               />
               <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
                 {{ noModelsLabel }}
@@ -305,6 +307,8 @@
                     :no-pricing-label="noPricingLabel"
                     :show-platform="false"
                     :platform-hint="section.platform"
+                    :pricing-groups="section.groups"
+                    :user-group-rates="userGroupRates"
                   />
                   <span v-if="section.supported_models.length === 0" class="text-xs text-gray-400">
                     {{ noModelsLabel }}

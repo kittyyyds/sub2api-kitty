@@ -101,6 +101,9 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
+		SetSecurityPolicyEnabled(groupIn.SecurityPolicyEnabled).
+		SetSecurityPolicyMode(service.NormalizeSecurityPolicyMode(groupIn.SecurityPolicyMode)).
+		SetSecurityPolicyEmailEnabled(groupIn.SecurityPolicyEmailEnabled).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetNillableDailyLimitUsd(groupIn.DailyLimitUSD).
@@ -113,6 +116,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetNillableImagePrice1k(groupIn.ImagePrice1K).
 		SetNillableImagePrice2k(groupIn.ImagePrice2K).
 		SetNillableImagePrice4k(groupIn.ImagePrice4K).
+		SetImageModelPrices(service.NormalizeImageModelPrices(groupIn.ImageModelPrices)).
 		SetBatchImageDiscountMultiplier(groupIn.BatchImageDiscountMultiplier).
 		SetBatchImageHoldMultiplier(groupIn.BatchImageHoldMultiplier).
 		SetVideoRateIndependent(groupIn.VideoRateIndependent).
@@ -290,6 +294,9 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetIsExclusive(groupIn.IsExclusive).
+		SetSecurityPolicyEnabled(groupIn.SecurityPolicyEnabled).
+		SetSecurityPolicyMode(service.NormalizeSecurityPolicyMode(groupIn.SecurityPolicyMode)).
+		SetSecurityPolicyEmailEnabled(groupIn.SecurityPolicyEmailEnabled).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetNillableDailyLimitUsd(groupIn.DailyLimitUSD).
@@ -302,6 +309,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetNillableImagePrice1k(groupIn.ImagePrice1K).
 		SetNillableImagePrice2k(groupIn.ImagePrice2K).
 		SetNillableImagePrice4k(groupIn.ImagePrice4K).
+		SetImageModelPrices(service.NormalizeImageModelPrices(groupIn.ImageModelPrices)).
 		SetBatchImageDiscountMultiplier(groupIn.BatchImageDiscountMultiplier).
 		SetBatchImageHoldMultiplier(groupIn.BatchImageHoldMultiplier).
 		SetVideoRateIndependent(groupIn.VideoRateIndependent).
@@ -1091,6 +1099,9 @@ func (r *groupRepository) BindAccountsToGroup(ctx context.Context, groupID int64
 		exec = tx.Client()
 	}
 	if err := lockLiveGroups(ctx, exec, []int64{groupID}); err != nil {
+		return err
+	}
+	if err := validateVideoGroupBindingPlatforms(ctx, exec, accountIDs, []int64{groupID}); err != nil {
 		return err
 	}
 

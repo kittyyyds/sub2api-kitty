@@ -567,14 +567,14 @@ func TestCancelOrderStillClosesUnpaidUpstreamOrder(t *testing.T) {
 	require.Equal(t, OrderStatusCancelled, reloaded.Status)
 }
 
-func TestReconcilePendingPaymentOrdersBackfillsPaidOrder(t *testing.T) {
+func TestReconcilePendingPaymentOrdersBackfillsPaidAlipayOrder(t *testing.T) {
 	ctx := context.Background()
 	client := newPaymentOrderLifecycleTestClient(t)
 
 	user, err := client.User.Create().
-		SetEmail("wxpay-reconcile@example.com").
+		SetEmail("alipay-reconcile@example.com").
 		SetPasswordHash("hash").
-		SetUsername("wxpay-reconcile-user").
+		SetUsername("alipay-reconcile-user").
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -585,9 +585,9 @@ func TestReconcilePendingPaymentOrdersBackfillsPaidOrder(t *testing.T) {
 		SetAmount(50).
 		SetPayAmount(50).
 		SetFeeRate(0).
-		SetRechargeCode("WXPAY-RECONCILE").
-		SetOutTradeNo("sub2_wxpay_reconcile").
-		SetPaymentType(payment.TypeWxpay).
+		SetRechargeCode("ALIPAY-RECONCILE").
+		SetOutTradeNo("sub2_alipay_reconcile").
+		SetPaymentType(payment.TypeAlipay).
 		SetPaymentTradeNo("").
 		SetOrderType(payment.OrderTypeBalance).
 		SetStatus(OrderStatusPending).
@@ -635,13 +635,13 @@ func TestReconcilePendingPaymentOrdersBackfillsPaidOrder(t *testing.T) {
 	)
 	registry := payment.NewRegistry()
 	provider := &paymentOrderLifecycleQueryProvider{
-		key: payment.TypeWxpay,
+		key: payment.TypeAlipay,
 		resp: &payment.QueryOrderResponse{
-			TradeNo: "wxpay-upstream-trade-123",
+			TradeNo: "alipay-upstream-trade-123",
 			Status:  payment.ProviderStatusPaid,
 			Amount:  50,
 			Metadata: map[string]string{
-				"trade_state": "SUCCESS",
+				"trade_status": "TRADE_SUCCESS",
 			},
 		},
 	}
@@ -664,7 +664,7 @@ func TestReconcilePendingPaymentOrdersBackfillsPaidOrder(t *testing.T) {
 	reloaded, err := client.PaymentOrder.Get(ctx, order.ID)
 	require.NoError(t, err)
 	require.Equal(t, OrderStatusCompleted, reloaded.Status)
-	require.Equal(t, "wxpay-upstream-trade-123", reloaded.PaymentTradeNo)
+	require.Equal(t, "alipay-upstream-trade-123", reloaded.PaymentTradeNo)
 	require.Equal(t, 50.0, userRepo.getByIDUser.Balance)
 	require.Len(t, redeemRepo.useCalls, 1)
 }

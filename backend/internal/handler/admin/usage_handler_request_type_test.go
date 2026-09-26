@@ -18,6 +18,7 @@ type adminUsageRepoCapture struct {
 	listParams   pagination.PaginationParams
 	listFilters  usagestats.UsageLogFilters
 	statsFilters usagestats.UsageLogFilters
+	auditFilters usagestats.UsageLogFilters
 }
 
 func (s *adminUsageRepoCapture) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters usagestats.UsageLogFilters) ([]service.UsageLog, *pagination.PaginationResult, error) {
@@ -36,6 +37,11 @@ func (s *adminUsageRepoCapture) GetStatsWithFilters(ctx context.Context, filters
 	return &usagestats.UsageStats{}, nil
 }
 
+func (s *adminUsageRepoCapture) GetUsageAuditStats(ctx context.Context, filters usagestats.UsageLogFilters) (*service.UsageAuditStats, error) {
+	s.auditFilters = filters
+	return &service.UsageAuditStats{}, nil
+}
+
 func newAdminUsageRequestTypeTestRouter(repo *adminUsageRepoCapture) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	usageSvc := service.NewUsageService(repo, nil, nil, nil)
@@ -43,7 +49,47 @@ func newAdminUsageRequestTypeTestRouter(repo *adminUsageRepoCapture) *gin.Engine
 	router := gin.New()
 	router.GET("/admin/usage", handler.List)
 	router.GET("/admin/usage/stats", handler.Stats)
+	router.GET("/admin/usage/audit/stats", handler.AuditStats)
 	return router
+}
+
+func TestAdminUsageListUsageAuditStatus(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	router := newAdminUsageRequestTypeTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage?audit_status=anomaly", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, string(service.UsageAuditStatusAnomaly), repo.listFilters.UsageAuditStatus)
+}
+
+func TestAdminUsageListRejectsInvalidUsageAuditStatus(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	router := newAdminUsageRequestTypeTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage?audit_status=maybe", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAdminUsageAuditStatsForwardsFilters(t *testing.T) {
+	repo := &adminUsageRepoCapture{}
+	router := newAdminUsageRequestTypeTestRouter(repo)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/usage/audit/stats?account_id=7&model=gpt-5.4&audit_status=warning&start_date=2026-08-01&end_date=2026-08-02&timezone=UTC", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, int64(7), repo.auditFilters.AccountID)
+	require.Equal(t, "gpt-5.4", repo.auditFilters.Model)
+	require.Equal(t, string(service.UsageAuditStatusWarning), repo.auditFilters.UsageAuditStatus)
+	require.NotNil(t, repo.auditFilters.StartTime)
+	require.NotNil(t, repo.auditFilters.EndTime)
 }
 
 func TestAdminUsageListRequestTypePriority(t *testing.T) {

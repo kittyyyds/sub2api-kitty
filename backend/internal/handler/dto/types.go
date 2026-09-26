@@ -54,6 +54,7 @@ type AdminUser struct {
 }
 
 type APIKey struct {
+	KeyDisplay  string     `json:"key_display,omitempty"`
 	ID          int64      `json:"id"`
 	UserID      int64      `json:"user_id"`
 	Key         string     `json:"key"`
@@ -91,13 +92,16 @@ type APIKey struct {
 }
 
 type Group struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Platform       string  `json:"platform"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
-	Status         string  `json:"status"`
+	SecurityPolicyEnabled      bool    `json:"security_policy_enabled"`
+	SecurityPolicyMode         string  `json:"security_policy_mode"`
+	SecurityPolicyEmailEnabled bool    `json:"security_policy_email_enabled"`
+	ID                         int64   `json:"id"`
+	Name                       string  `json:"name"`
+	Description                string  `json:"description"`
+	Platform                   string  `json:"platform"`
+	RateMultiplier             float64 `json:"rate_multiplier"`
+	IsExclusive                bool    `json:"is_exclusive"`
+	Status                     string  `json:"status"`
 
 	SubscriptionType          string   `json:"subscription_type"`
 	DailyLimitUSD             *float64 `json:"daily_limit_usd"`
@@ -122,10 +126,12 @@ type Group struct {
 	ImagePrice1K       *float64 `json:"image_price_1k"`
 	ImagePrice2K       *float64 `json:"image_price_2k"`
 	ImagePrice4K       *float64 `json:"image_price_4k"`
-	VideoPrice480P     *float64 `json:"video_price_480p"`
-	VideoPrice720P     *float64 `json:"video_price_720p"`
-	VideoPrice1080P    *float64 `json:"video_price_1080p"`
-	// VideoModelPrices 可选按模型族×分辨率覆盖视频每秒单价 (USD/s)。
+	// ImageModelPrices 可选按模型×分辨率覆盖客户最终图片单张价格 (CNY/image)。
+	ImageModelPrices map[string]map[string]float64 `json:"image_model_prices,omitempty"`
+	VideoPrice480P   *float64                      `json:"video_price_480p"`
+	VideoPrice720P   *float64                      `json:"video_price_720p"`
+	VideoPrice1080P  *float64                      `json:"video_price_1080p"`
+	// VideoModelPrices 可选按模型族×分辨率设置客户最终每秒价格 (CNY/s)。
 	VideoModelPrices map[string]map[string]float64 `json:"video_model_prices,omitempty"`
 	// Codex alpha/search 网页搜索单次价格（USD/次）；null 表示使用默认价 0.01
 	WebSearchPricePerCall        *float64 `json:"web_search_price_per_call"`
@@ -157,9 +163,8 @@ type Group struct {
 	MaxReasoningEffortOverLimit string `json:"max_reasoning_effort_over_limit"`
 	// ReasoningEffortMappings Anthropic/OpenAI 推理强度映射，可按模型精确名、前缀或后缀限定。
 	ReasoningEffortMappings []domain.ReasoningEffortMapping `json:"reasoning_effort_mappings"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt               time.Time                       `json:"created_at"`
+	UpdatedAt               time.Time                       `json:"updated_at"`
 }
 
 // AdminGroup 是管理员接口使用的 group DTO（包含敏感/内部字段）。
@@ -172,6 +177,7 @@ type AdminGroup struct {
 	FreeOpenAIFast bool `json:"free_openai_fast"`
 	// StreamOnly 是管理端请求策略（只接受流式的对话生成请求），用户侧分组 DTO 无需暴露。
 	StreamOnly bool `json:"stream_only"`
+
 
 	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数存储）。
 	// 仅管理员可见：这三个字段与同响应中的 rate_multiplier 相乘即可反推出
@@ -655,6 +661,11 @@ type UsageLog struct {
 	ImageSizeBreakdown map[string]int `json:"image_size_breakdown"`
 	MediaType          *string        `json:"media_type"`
 
+	// 视频计量字段，用户与管理员账单共用。
+	VideoCount           int     `json:"video_count"`
+	VideoResolution      *string `json:"video_resolution"`
+	VideoDurationSeconds *int    `json:"video_duration_seconds"`
+
 	// User-Agent
 	UserAgent *string `json:"user_agent"`
 	// IPAddress is visible to the owner of the usage record.
@@ -711,6 +722,9 @@ type AdminUsageLog struct {
 
 	// Account 最小账号信息（避免泄露敏感字段）
 	Account *AccountSummary `json:"account,omitempty"`
+
+	// UsageAudit is admin-only compact usage evidence and comparison metadata.
+	UsageAudit *service.UsageAudit `json:"usage_audit,omitempty"`
 }
 
 type UsageCleanupFilters struct {
@@ -825,4 +839,21 @@ type PromoCodeUsage struct {
 	UsedAt      time.Time `json:"used_at"`
 
 	User *User `json:"user,omitempty"`
+}
+
+// SecurityPolicyKeyword 是安全策略自定义词的管理端 DTO。
+type SecurityPolicyKeyword struct {
+	ID        int64     `json:"id"`
+	GroupID   *int64    `json:"group_id"`
+	Keyword   string    `json:"keyword"`
+	Category  string    `json:"category"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// SecurityPolicyKeywordSeed 是内置 seed 词的管理端 DTO（只读）。
+type SecurityPolicyKeywordSeed struct {
+	Keyword  string `json:"keyword"`
+	Category string `json:"category"`
 }

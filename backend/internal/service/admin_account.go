@@ -28,7 +28,20 @@ func (s *adminServiceImpl) ListAccounts(ctx context.Context, page, pageSize int,
 		}
 	}
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize, SortBy: sortBy, SortOrder: sortOrder}
-	accounts, result, err := s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+	var (
+		accounts []Account
+		result   *pagination.PaginationResult
+		err      error
+	)
+	if groupID > 0 && strings.EqualFold(strings.TrimSpace(sortBy), "priority") && s.settingService != nil && s.settingService.IsAccountGroupPriorityEnabled(ctx) {
+		if repo, ok := s.accountRepo.(AccountGroupPriorityListRepository); ok {
+			accounts, result, err = repo.ListWithFiltersUsingGroupPriority(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+		} else {
+			accounts, result, err = s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+		}
+	} else {
+		accounts, result, err = s.accountRepo.ListWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -135,6 +148,9 @@ var duplicateAccountDiscardedExtraKeys = map[string]struct{}{
 	"drive_storage_usage":                    {},
 	"drive_tier_updated_at":                  {},
 	// Codex fingerprint convergence uses a per-account random seed, never copied from another account.
+	"fingerprint_v2_seed":                  {},
+	"client_installation_id":               {},
+	"client_identity_compatibility":        {},
 	codexFingerprintSeedExtraKey:           {},
 	"codex_primary_used_percent":           {},
 	"codex_primary_reset_after_seconds":    {},
@@ -321,6 +337,14 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 	if err != nil {
 		return nil, fmt.Errorf("normalize duplicate account extra: %w", err)
 	}
+	accountExtra, err = normalizeGrokMediaCompatibilityExtra(input.Platform, accountExtra)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ValidateUpstreamRequestIDHeaderExtra(accountExtra); err != nil {
+		return nil, fmt.Errorf("validate duplicate account extra: %w", err)
+	}
 	if err := NormalizeHeaderOverrideCredentials(input.Credentials); err != nil {
 		return nil, err
 	}
@@ -411,7 +435,95 @@ func normalizeOpenAILongContextBillingUpdateExtra(account *Account, input *Updat
 
 // Grok media eligibility helpers live in account_grok_media_eligibility.go.
 
+func ValidateGrokMediaCompatibilityExtra(platform string, extra map[string]any) error {
+	if platform != PlatformGrok || extra == nil {
+		return nil
+	}
+	raw, exists := extra[GrokMediaCompatibilityExtraKey]
+	if !exists || raw == nil {
+		return nil
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return infraerrors.BadRequest(
+			"GROK_MEDIA_COMPATIBILITY_INVALID",
+			"grok_media_compatibility must be a string or null",
+		)
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "official", "xai", GrokMediaCompatibilityOpenAI, "openai-compatible":
+		return nil
+	default:
+		return infraerrors.BadRequest(
+			"GROK_MEDIA_COMPATIBILITY_INVALID",
+			"grok_media_compatibility must be official or openai_compatible",
+		)
+	}
+}
+
+func normalizeGrokMediaCompatibilityExtra(platform string, extra map[string]any) (map[string]any, error) {
+	if platform != PlatformGrok {
+		return extra, nil
+	}
+	if err := ValidateGrokMediaCompatibilityExtra(platform, extra); err != nil {
+		return nil, err
+	}
+	normalized := maps.Clone(extra)
+	if normalized == nil {
+		return nil, nil
+	}
+	raw, exists := normalized[GrokMediaCompatibilityExtraKey]
+	if !exists || raw == nil {
+		delete(normalized, GrokMediaCompatibilityExtraKey)
+		return normalized, nil
+	}
+	value := strings.ToLower(strings.TrimSpace(raw.(string)))
+	if value == "" || value == "official" || value == "xai" {
+		delete(normalized, GrokMediaCompatibilityExtraKey)
+	} else {
+		normalized[GrokMediaCompatibilityExtraKey] = GrokMediaCompatibilityOpenAI
+	}
+	return normalized, nil
+}
+
+func normalizeGrokMediaCompatibilityUpdateExtra(account *Account, input *UpdateAccountInput, normalized map[string]any) (map[string]any, error) {
+	if account == nil || account.Platform != PlatformGrok {
+		return normalized, nil
+	}
+	if err := ValidateGrokMediaCompatibilityExtra(account.Platform, input.Extra); err != nil {
+		return nil, err
+	}
+	normalized = maps.Clone(normalized)
+	if normalized == nil {
+		normalized = make(map[string]any)
+	}
+	raw, provided := input.Extra[GrokMediaCompatibilityExtraKey]
+	if !provided {
+		if current, ok := account.Extra[GrokMediaCompatibilityExtraKey]; ok {
+			normalized[GrokMediaCompatibilityExtraKey] = current
+		}
+		return normalized, nil
+	}
+	if raw == nil {
+		delete(normalized, GrokMediaCompatibilityExtraKey)
+		return normalized, nil
+	}
+	value := strings.ToLower(strings.TrimSpace(raw.(string)))
+	if value == "" || value == "official" || value == "xai" {
+		delete(normalized, GrokMediaCompatibilityExtraKey)
+	} else {
+		normalized[GrokMediaCompatibilityExtraKey] = GrokMediaCompatibilityOpenAI
+	}
+	return normalized, nil
+}
+
 func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]any) (*Account, error) {
+	if err := ValidateOpenAIRequestTimezoneExtra(input.Platform, accountExtra); err != nil {
+		return nil, err
+	}
+	if err := ValidateVideoAccount(input.Platform, input.Type, input.Credentials); err != nil {
+		return nil, err
+	}
 	accountExtra = MergeOpenAICodexTicketExtra(accountExtra, nil)
 	// Probe/session state is system-managed. New accounts always start with automatic refresh disabled.
 	delete(accountExtra, UpstreamBillingProbeEnabledExtraKey)
@@ -496,6 +608,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+
 	if err := ValidateUpstreamRequestIDHeaderExtra(accountExtra); err != nil {
 		return nil, err
 	}
@@ -537,18 +650,15 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
-	if err := s.accountRepo.Create(ctx, account); err != nil {
+	if err := validateVideoAccountGroupPlatforms(ctx, s.groupRepo, account.Platform, groupIDs); err != nil {
 		return nil, err
 	}
-
-	// 绑定分组
-	if len(groupIDs) > 0 {
-		if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
-			return nil, err
-		}
+	if err := createAccountAndBindGroups(ctx, s.accountRepo, account, groupIDs); err != nil {
+		return nil, err
 	}
 
 	// OAuth 账号：创建后异步设置隐私。
@@ -587,9 +697,18 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if err != nil {
 		return nil, err
 	}
+
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
+		input.Extra = preserveOpenAIRequestTimezoneExtra(account, input.Extra)
+		if err := ValidateOpenAIRequestTimezoneExtra(account.Platform, input.Extra); err != nil {
+			return nil, err
+		}
 		normalizedExtra, err = normalizeOpenAILongContextBillingUpdateExtra(account, input)
+		if err != nil {
+			return nil, err
+		}
+		normalizedExtra, err = normalizeGrokMediaCompatibilityUpdateExtra(account, input, normalizedExtra)
 		if err != nil {
 			return nil, err
 		}
@@ -666,6 +785,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		// Strip SSO/password residue that must never sit next to OAuth tokens.
 		account.Credentials = SanitizeStoredCredentials(account.Platform, account.Credentials)
 	}
+	if err := ValidateVideoAccount(account.Platform, account.Type, account.Credentials); err != nil {
+		return nil, err
+	}
 	// Extra 使用 map：需要区分“未提供(nil)”与“显式清空({})”。
 	// 关闭配额限制时前端会删除 quota_* 键并提交 extra:{}，此时也必须落库。
 	requestedProbeEnabledUpdate := input.ProbeEnabled
@@ -714,6 +836,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		normalizedExtra = MergeOpenAICodexTicketExtra(normalizedExtra, account.Extra)
 		normalizedExtra = prepareCodexFingerprintExtraForUpdate(account, normalizedExtra)
+
 		account.Extra = normalizedExtra
 		if account.Platform == PlatformAntigravity && wasOveragesEnabled && !account.IsOveragesEnabled() {
 			delete(account.Extra, "antigravity_credits_overages") // 清理旧版 overages 运行态
@@ -776,6 +899,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		account.Proxy = nil // 清除关联对象，防止 GORM Save 时根据 Proxy.ID 覆盖 ProxyID
 	}
+
 	if !reflect.DeepEqual(previousProbeIdentity, upstreamBillingProbeIdentity(account)) && account.Extra != nil {
 		delete(account.Extra, UpstreamBillingProbeExtraKey)
 		if !isUpstreamBillingProbeAccount(account) {
@@ -864,6 +988,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		if err := s.ValidateAccountGroupBindings(ctx, *input.GroupIDs); err != nil {
 			return nil, err
 		}
+		if err := validateVideoAccountGroupPlatforms(ctx, s.groupRepo, account.Platform, *input.GroupIDs); err != nil {
+			return nil, err
+		}
 
 		// 检查混合渠道风险（除非用户已确认）
 		if !input.SkipMixedChannelCheck {
@@ -945,6 +1072,18 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
+	for key := range updates {
+		if isOpenAIRequestTimezoneKey(key) {
+			account, err := s.accountRepo.GetByID(ctx, id)
+			if err != nil {
+				return err
+			}
+			if err := ValidateOpenAIRequestTimezoneExtra(account.Platform, updates); err != nil {
+				return err
+			}
+			break
+		}
+	}
 	updates = MergeOpenAICodexTicketExtra(updates, nil)
 	updates = sanitizedCodexFingerprintExtraUpdates(updates)
 	updates = stripOpenAIAutoResetCreditManagedExtra(updates, true)
@@ -956,6 +1095,10 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 	delete(updates, OllamaCloudUsageSnapshotExtraKey)
 	delete(updates, OpenCodeGoUsageAutoRefreshExtraKey)
 	delete(updates, OpenCodeGoUsageSnapshotExtraKey)
+
+	if err := ValidateUpstreamRequestIDHeaderExtra(updates); err != nil {
+		return err
+	}
 	if _, exists := updates[openAILongContextBillingEnabledKey]; exists {
 		account, err := s.accountRepo.GetByID(ctx, id)
 		if err != nil {
@@ -974,6 +1117,7 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 // BulkUpdateAccounts updates multiple accounts in one request.
 // It merges credentials/extra keys instead of overwriting the whole object.
 func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error) {
+
 	// Managed probe/session state may only enter through dedicated typed endpoints.
 	input.Extra = MergeOpenAICodexTicketExtra(input.Extra, nil)
 	input.Extra = sanitizedCodexFingerprintExtraUpdates(input.Extra)
@@ -986,6 +1130,10 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	delete(input.Extra, OllamaCloudUsageSnapshotExtraKey)
 	delete(input.Extra, OpenCodeGoUsageAutoRefreshExtraKey)
 	delete(input.Extra, OpenCodeGoUsageSnapshotExtraKey)
+
+	if err := ValidateUpstreamRequestIDHeaderExtra(input.Extra); err != nil {
+		return nil, err
+	}
 
 	if len(input.AccountIDs) == 0 && input.Filters != nil {
 		accountIDs, err := s.resolveBulkUpdateTargetIDs(ctx, input.Filters)
@@ -1018,19 +1166,41 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	}
 
 	needMixedChannelCheck := input.GroupIDs != nil && !input.SkipMixedChannelCheck
+	_, hasLongContextBillingUpdate := input.Extra[openAILongContextBillingEnabledKey]
+	_, hasGrokMediaCompatibilityUpdate := input.Extra[GrokMediaCompatibilityExtraKey]
+	hasRequestTimezoneUpdate := false
+	for key := range input.Extra {
+		if isOpenAIRequestTimezoneKey(key) {
+			hasRequestTimezoneUpdate = true
+			break
+		}
+	}
 
 	// 预取所有目标账号，供凭据守卫/代理守卫/混合渠道检查共用，避免多次 DB 查询。
 	var cachedTargets []*Account
-	if len(input.Credentials) > 0 || input.ProxyID != nil || needMixedChannelCheck || openAISettings.any() || input.ProbeEnabled != nil || input.RateMultiplier != nil {
+	if len(input.Credentials) > 0 || input.ProxyID != nil || input.GroupIDs != nil || needMixedChannelCheck || openAISettings.any() || input.ProbeEnabled != nil || input.RateMultiplier != nil || hasLongContextBillingUpdate || hasGrokMediaCompatibilityUpdate || hasRequestTimezoneUpdate {
 		loaded, err := s.accountRepo.GetByIDs(ctx, input.AccountIDs)
 		if err != nil {
 			return nil, err
 		}
 		cachedTargets = loaded
 	}
+
 	targetsByID := make(map[int64]*Account, len(cachedTargets))
 	for _, account := range cachedTargets {
 		if account != nil {
+			if input.GroupIDs != nil {
+				if err := validateVideoAccountGroupPlatforms(ctx, s.groupRepo, account.Platform, *input.GroupIDs); err != nil {
+					return nil, err
+				}
+			}
+			credentials := account.Credentials
+			if len(input.Credentials) > 0 {
+				credentials = MergePreservingSensitiveCreds(credentials, input.Credentials)
+			}
+			if err := ValidateVideoAccount(account.Platform, account.Type, credentials); err != nil {
+				return nil, err
+			}
 			targetsByID[account.ID] = account
 		}
 	}
@@ -1052,6 +1222,54 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			}
 		}
 	}
+	if hasRequestTimezoneUpdate {
+		for _, id := range input.AccountIDs {
+			account := targetsByID[id]
+			if account == nil {
+				return nil, ErrAccountNotFound
+			}
+			if err := ValidateOpenAIRequestTimezoneExtra(account.Platform, input.Extra); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if hasLongContextBillingUpdate {
+		for _, account := range cachedTargets {
+			if account == nil || account.Platform != PlatformOpenAI {
+				continue
+			}
+			if err := ValidateOpenAILongContextBillingExtra(account.Platform, input.Extra); err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
+	if hasGrokMediaCompatibilityUpdate {
+		targetsByID := make(map[int64]*Account, len(cachedTargets))
+		for _, account := range cachedTargets {
+			if account != nil {
+				targetsByID[account.ID] = account
+			}
+		}
+		for _, accountID := range input.AccountIDs {
+			account, ok := targetsByID[accountID]
+			if !ok || account == nil {
+				return nil, ErrAccountNotFound
+			}
+			if account.Platform != PlatformGrok {
+				return nil, infraerrors.BadRequest(
+					"GROK_MEDIA_COMPATIBILITY_INVALID_TARGET",
+					"grok_media_compatibility can only be bulk-updated for Grok accounts",
+				)
+			}
+		}
+		normalizedExtra, err := normalizeGrokMediaCompatibilityExtra(PlatformGrok, input.Extra)
+		if err != nil {
+			return nil, err
+		}
+		input.Extra = normalizedExtra
+	}
+
 	// 影子账号绝不持有凭据:批量更新携带凭据时,目标中不得含影子(外审 G5,与单账号
 	// UpdateAccount 守卫对齐)。覆盖显式 IDs 与 filter 解析出的 IDs(此处 AccountIDs 已解析完成)。
 	if len(input.Credentials) > 0 {
@@ -1366,6 +1584,18 @@ func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Ac
 
 func (s *adminServiceImpl) SetAccountError(ctx context.Context, id int64, errorMsg string) error {
 	return s.accountRepo.SetError(ctx, id, errorMsg)
+}
+
+// BackfillAccountCredentialsEncryption 加密一批历史明文账号凭据（幂等）。
+// 仓储层无该能力（如测试替身）时返回 0，不报错。
+func (s *adminServiceImpl) BackfillAccountCredentialsEncryption(ctx context.Context, limit int) (int64, error) {
+	repo, ok := s.accountRepo.(interface {
+		BackfillCredentialsEncryption(context.Context, int) (int64, error)
+	})
+	if !ok || repo == nil {
+		return 0, nil
+	}
+	return repo.BackfillCredentialsEncryption(ctx, limit)
 }
 
 func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error) {

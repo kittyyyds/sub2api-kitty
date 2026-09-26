@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/migrations"
 
@@ -136,6 +137,9 @@ func InitEnt(cfg *config.Config) (*ent.Client, *sql.DB, error) {
 	migrationCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	if err := initializeDatabaseWithRetry(migrationCtx, func(ctx context.Context) error {
+		if managedinstance.Enabled() {
+			return validateManagedMigrations(ctx, drv.DB(), migrations.FS)
+		}
 		return applyMigrationsFS(ctx, drv.DB(), migrations.FS)
 	}); err != nil {
 		_ = drv.Close() // 迁移失败时关闭驱动，避免资源泄露
@@ -157,11 +161,13 @@ func InitEnt(cfg *config.Config) (*ent.Client, *sql.DB, error) {
 		return nil, nil, fmt.Errorf("validate config after secret bootstrap: %w", err)
 	}
 
-	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer seedCancel()
-	if err := ensureSimpleModeStartup(seedCtx, client, cfg); err != nil {
-		_ = client.Close()
-		return nil, nil, err
+	if !managedinstance.Enabled() {
+		seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer seedCancel()
+		if err := ensureSimpleModeStartup(seedCtx, client, cfg); err != nil {
+			_ = client.Close()
+			return nil, nil, err
+		}
 	}
 
 	return client, drv.DB(), nil

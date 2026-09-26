@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -130,6 +131,13 @@ func (w *BatchImageWorker) Run(ctx context.Context) {
 }
 
 func (w *BatchImageWorker) RunOnce(ctx context.Context) error {
+	ctx, managedDone, managedAllowed := managedinstance.Begin(ctx)
+	if !managedAllowed {
+		sleepOrDone(ctx, 100*time.Millisecond)
+		return nil
+	}
+	defer managedDone()
+
 	if w == nil || w.queue == nil || w.processor == nil {
 		return nil
 	}

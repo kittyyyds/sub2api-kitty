@@ -169,6 +169,34 @@ describe('validateIntervals', () => {
       expect(validateIntervals(intervals, 'image', t)).toContain('maxGreaterThanMin')
     })
   })
+
+  describe('video mode', () => {
+    it('accepts resolution tiers even though their token ranges overlap', () => {
+      const intervals: IntervalFormEntry[] = [
+        makeInterval({ tier_label: '480p', per_request_price: 0.05 }),
+        makeInterval({ tier_label: '720p', per_request_price: 0.08 }),
+        makeInterval({ tier_label: '1080p', per_request_price: 0.12 }),
+      ]
+
+      expect(validateIntervals(intervals, 'video', t)).toBeNull()
+    })
+
+    it('rejects a negative per-second price', () => {
+      const intervals: IntervalFormEntry[] = [
+        makeInterval({ tier_label: '720p', per_request_price: -0.01 }),
+      ]
+
+      expect(validateIntervals(intervals, 'video', t)).toContain('negativePrice')
+    })
+
+    it('rejects an empty resolution tier', () => {
+      const intervals: IntervalFormEntry[] = [
+        makeInterval({ tier_label: '1080p' }),
+      ]
+
+      expect(validateIntervals(intervals, 'video', t)).toContain('missingPrice')
+    })
+  })
 })
 
 describe('time pricing', () => {

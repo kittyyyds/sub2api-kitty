@@ -63,6 +63,15 @@ const (
 	DefaultImagineVideo15LegacyModel = "grok-imagine-video-1.5-preview"
 )
 
+// Kitty compatibility names keep existing application-center and billing
+// integrations stable while the upstream catalog uses the DefaultImagine names.
+const (
+	ModelGrokImagineImage        = DefaultImagineImageFastModel
+	ModelGrokImagineImageQuality = DefaultImagineImageQualityModel
+	ModelGrokImagineVideo        = DefaultImagineVideoModel
+	ModelGrokImagineVideo15      = DefaultImagineVideo15Model
+)
+
 // ModelMappingOptions controls optional expansions of the default mapping.
 // Cross-client wildcards (gpt-*/claude-*) default ON via settings
 // grok_cross_client_model_map_enabled so Codex/Claude clients keep working
@@ -177,12 +186,17 @@ func ModelMappingWithOptions(opts ModelMappingOptions) map[string]string {
 	// image-quality model rather than a separate grok-imagine-edit model.
 	mapping["grok-imagine-edit"] = DefaultImagineImageQualityModel
 	mapping["grok-imagine-image"] = DefaultImagineImageFastModel
+	mapping["grok-imagine-image-2026-03-02"] = DefaultImagineImageFastModel
 	mapping["grok-imagine-image-quality"] = DefaultImagineImageQualityModel
+	mapping["grok-imagine-image-quality-20260403"] = DefaultImagineImageQualityModel
+	mapping["grok-imagine-image-quality-latest"] = DefaultImagineImageQualityModel
+	mapping["grok-imagine-image-pro"] = DefaultImagineImageQualityModel
 	// Keep official IDs as identity so client-requested model strings are not
 	// rewritten on the wire (pricing still canonicalizes 1.5* via CanonicalImagineVideoModel).
 	mapping["grok-imagine-video"] = DefaultImagineVideoModel
 	mapping["grok-imagine-video-1.5"] = DefaultImagineVideo15Model
 	mapping["grok-imagine-video-1.5-preview"] = DefaultImagineVideo15Model
+	mapping["grok-imagine-video-1.5-2026-05-30"] = DefaultImagineVideo15LegacyModel
 	// Informal alias only:
 	mapping["grok-video-1.5"] = DefaultImagineVideo15Model
 
@@ -330,4 +344,58 @@ func CanonicalImagineVideoModel(model string) string {
 	default:
 		return m
 	}
+}
+
+// CanonicalImageGenerationModel preserves Kitty's accepted xAI image aliases.
+func CanonicalImageGenerationModel(model string) (string, bool) {
+	switch strings.ToLower(StripGrokProviderPrefix(model)) {
+	case ModelGrokImagineImage, "grok-imagine-image-2026-03-02":
+		return ModelGrokImagineImage, true
+	case ModelGrokImagineImageQuality,
+		"grok-imagine-image-quality-20260403",
+		"grok-imagine-image-quality-latest",
+		"grok-imagine-image-pro":
+		return ModelGrokImagineImageQuality, true
+	default:
+		return "", false
+	}
+}
+
+// CanonicalVideoGenerationModel keeps Kitty Apps on the legacy 1.5 ID used by
+// the configured upstream while upstream billing shares one 1.5 price family.
+func CanonicalVideoGenerationModel(model string) (string, bool) {
+	switch strings.ToLower(StripGrokProviderPrefix(model)) {
+	case ModelGrokImagineVideo:
+		return ModelGrokImagineVideo, true
+	case ModelGrokImagineVideo15,
+		DefaultImagineVideo15LegacyModel,
+		"grok-imagine-video-1.5-2026-05-30",
+		"grok-video-1.5":
+		return ModelGrokImagineVideo15, true
+	default:
+		return "", false
+	}
+}
+
+// IsMediaCompatibilityAlias filters accepted historical and wire-level aliases
+// from model discovery while retaining Kitty's customer-facing canonical IDs.
+func IsMediaCompatibilityAlias(model string) bool {
+	normalized := strings.ToLower(StripGrokProviderPrefix(model))
+	switch normalized {
+	case ModelGrokImagineImage,
+		ModelGrokImagineImageQuality,
+		ModelGrokImagineVideo,
+		ModelGrokImagineVideo15:
+		return false
+	}
+	if normalized == "grok-imagine" || normalized == "grok-imagine-edit" {
+		return true
+	}
+	if canonical, ok := CanonicalImageGenerationModel(normalized); ok {
+		return canonical != normalized
+	}
+	if canonical, ok := CanonicalVideoGenerationModel(normalized); ok {
+		return canonical != normalized
+	}
+	return false
 }

@@ -30,7 +30,7 @@ type keyBillingInfoResponse struct {
 	ObservedAt              time.Time `json:"observed_at"`
 }
 
-// KeyBillingInfo returns the token billing multiplier effective for the authenticated API key.
+// KeyBillingInfo returns the billing multiplier effective for the authenticated API key's platform.
 // GET /v1/sub2api/billing
 func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
@@ -64,7 +64,7 @@ func (h *GatewayHandler) KeyBillingInfo(c *gin.Context) {
 func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.APIKey) (float64, bool) {
 	groupRate := apiKey.Group.RateMultiplier
 	switch apiKey.Group.Platform {
-	case service.PlatformOpenAI, service.PlatformGrok:
+	case service.PlatformOpenAI, service.PlatformGrok, service.PlatformVideo:
 		if h.openAIGatewayService == nil {
 			return 0, false
 		}
@@ -79,6 +79,21 @@ func (h *GatewayHandler) resolveKeyBillingRate(c *gin.Context, apiKey *service.A
 
 func buildKeyBillingInfo(apiKey *service.APIKey, resolvedRate float64, now time.Time) keyBillingInfoResponse {
 	groupRate := apiKey.Group.RateMultiplier
+	if apiKey.Group.Platform == service.PlatformVideo {
+		var videoUserRate *float64
+		if apiKey.Group.VideoRateIndependent {
+			groupRate = apiKey.Group.VideoRateMultiplier
+			resolvedRate = groupRate
+		} else if resolvedRate != groupRate {
+			videoUserRate = &resolvedRate
+		}
+		return keyBillingInfoResponse{
+			Object: "sub2api.key_billing", SchemaVersion: keyBillingInfoSchemaVersion,
+			BillingScope: "video", GroupRateMultiplier: groupRate,
+			UserRateMultiplier: videoUserRate, ResolvedRateMultiplier: resolvedRate,
+			EffectiveRateMultiplier: resolvedRate, ObservedAt: now.UTC(),
+		}
+	}
 	var userRate *float64
 	if resolvedRate != groupRate {
 		userRate = &resolvedRate

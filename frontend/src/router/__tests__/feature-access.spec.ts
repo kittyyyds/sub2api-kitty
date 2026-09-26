@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RouteRecordRaw } from 'vue-router'
 
 type NavigationGuard = (
   to: Record<string, any>,
@@ -8,6 +9,7 @@ type NavigationGuard = (
 
 const routerHarness = vi.hoisted(() => ({
   guard: null as NavigationGuard | null,
+  routes: [] as RouteRecordRaw[],
 }))
 
 const authStore = vi.hoisted(() => ({
@@ -25,6 +27,7 @@ const appStore = vi.hoisted(() => ({
   cachedPublicSettings: null as null | {
     payment_enabled?: boolean
     risk_control_enabled?: boolean
+    channel_monitor_enabled?: boolean
     subscription_enabled?: boolean
     custom_menu_items?: []
   },
@@ -33,13 +36,16 @@ const appStore = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   createWebHistory: vi.fn(() => ({})),
-  createRouter: vi.fn(() => ({
-    beforeEach: vi.fn((guard: NavigationGuard) => {
-      routerHarness.guard = guard
-    }),
-    afterEach: vi.fn(),
-    onError: vi.fn(),
-  })),
+  createRouter: vi.fn((options: { routes: RouteRecordRaw[] }) => {
+    routerHarness.routes = options.routes
+    return {
+      beforeEach: vi.fn((guard: NavigationGuard) => {
+        routerHarness.guard = guard
+      }),
+      afterEach: vi.fn(),
+      onError: vi.fn(),
+    }
+  }),
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -106,6 +112,15 @@ function runGuard(meta: Record<string, unknown>, path: string) {
   return { navigation, next }
 }
 
+function runRegisteredGuard(path: string) {
+  const route = routerHarness.routes.find((entry) => (
+    entry.path === path || entry.alias === path ||
+    (Array.isArray(entry.alias) && entry.alias.includes(path))
+  ))
+  if (!route) throw new Error(`Route is not registered: ${path}`)
+  return runGuard(route.meta ?? {}, path)
+}
+
 describe('feature route guard', () => {
   beforeAll(async () => {
     await import('@/router')
@@ -142,10 +157,9 @@ describe('feature route guard', () => {
 
   it.each([
     ['payment', { requiresPayment: true }, '/purchase'],
-    ['risk control', { requiresRiskControl: true }, '/admin/risk-control'],
+    ['channel monitor', { requiresChannelMonitor: true }, '/monitor'],
     ['subscription', { requiresSubscription: true }, '/subscriptions'],
   ])('does not treat a failed %s settings load as explicitly disabled', async (_name, meta, path) => {
-    authStore.isAdmin = meta.requiresRiskControl === true
     appStore.fetchPublicSettings.mockResolvedValue(null)
 
     const { navigation, next } = runGuard(meta, path)
@@ -156,17 +170,22 @@ describe('feature route guard', () => {
     expect(next).toHaveBeenCalledWith()
   })
 
+  it('redirects away from the channel monitor when settings explicitly disable it', async () => {
+    appStore.cachedPublicSettings = { channel_monitor_enabled: false }
+    appStore.publicSettingsLoaded = true
+
+    const { navigation, next } = runGuard({ requiresChannelMonitor: true }, '/monitor')
+    await navigation
+
+    expect(appStore.fetchPublicSettings).not.toHaveBeenCalled()
+    expect(next).toHaveBeenCalledOnce()
+    expect(next).toHaveBeenCalledWith('/dashboard')
+  })
+
   it.each([
     ['payment', { requiresPayment: true }, { payment_enabled: false }, '/dashboard'],
-    [
-      'risk control',
-      { requiresRiskControl: true },
-      { risk_control_enabled: false },
-      '/admin/settings',
-    ],
     ['subscription', { requiresSubscription: true }, { subscription_enabled: false }, '/dashboard'],
   ])('redirects when loaded settings explicitly disable %s', async (_name, meta, settings, target) => {
-    authStore.isAdmin = meta.requiresRiskControl === true
     appStore.cachedPublicSettings = settings
     appStore.publicSettingsLoaded = true
 
@@ -177,10 +196,51 @@ describe('feature route guard', () => {
     expect(next).toHaveBeenCalledOnce()
     expect(next).toHaveBeenCalledWith(target)
   })
+
+  describe.each([
+    '/admin/risk-control',
+    '/admin/prompt-audit',
+    '/admin/security-policy',
+  ])('Security Audit configuration route %s', (path) => {
+    it.each([false, true])('allows administrators when risk control is %s', async (enabled) => {
+      authStore.isAdmin = true
+      appStore.publicSettingsLoaded = true
+      appStore.cachedPublicSettings = { risk_control_enabled: enabled }
+
+      const { navigation, next } = runRegisteredGuard(path)
+      await navigation
+
+      expect(next).toHaveBeenCalledOnce()
+      expect(next).toHaveBeenCalledWith()
+      expect(appStore.cachedPublicSettings.risk_control_enabled).toBe(enabled)
+    })
+
+    it('rejects authenticated users without administrator access', async () => {
+      appStore.publicSettingsLoaded = true
+      appStore.cachedPublicSettings = { risk_control_enabled: false }
+
+      const { navigation, next } = runRegisteredGuard(path)
+      await navigation
+
+      expect(next).toHaveBeenCalledOnce()
+      expect(next).toHaveBeenCalledWith('/dashboard')
+    })
+
+    it('requires login before configuration can be viewed', async () => {
+      authStore.isAuthenticated = false
+
+      const { navigation, next } = runRegisteredGuard(path)
+      await navigation
+
+      expect(next).toHaveBeenCalledOnce()
+      expect(next).toHaveBeenCalledWith({ path: '/login', query: { redirect: path } })
+    })
+  })
 })
 
 describe('subscription route guard (opt-out flag)', () => {
   beforeEach(() => {
+    authStore.isAuthenticated = true
     authStore.isAdmin = false
     authStore.isSimpleMode = false
     appStore.publicSettingsLoaded = true

@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,7 +99,7 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIK
 func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {
 	m, err := r.activeQuery().
 		Where(apikey.IDEQ(id)).
-		Select(apikey.FieldKey, apikey.FieldUserID).
+		Select(apikey.FieldKey, apikey.FieldKeyHash, apikey.FieldUserID).
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -105,12 +107,12 @@ func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (stri
 		}
 		return "", 0, err
 	}
-	return m.Key, m.UserID, nil
+	return (&service.APIKey{Key: m.Key, KeyHash: m.KeyHash}).AuthCacheInvalidationKey(), m.UserID, nil
 }
 
 func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apikey.Or(apikey.KeyEQ(key), apikey.KeyHashEQ(legacyAPIKeyDigest(key)))).
 		WithUser(func(q *dbent.UserQuery) {
 			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
 				gq.Select(group.FieldID)
@@ -129,9 +131,11 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 
 func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apikey.Or(apikey.KeyEQ(key), apikey.KeyHashEQ(legacyAPIKeyDigest(key)))).
 		Select(
 			apikey.FieldID,
+			apikey.FieldKeyHash,
+			apikey.FieldKeyPrefix,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
 			apikey.FieldName,
@@ -175,6 +179,9 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldName,
 				group.FieldPlatform,
 				group.FieldIsExclusive,
+				group.FieldSecurityPolicyEnabled,
+				group.FieldSecurityPolicyMode,
+				group.FieldSecurityPolicyEmailEnabled,
 				group.FieldStatus,
 				group.FieldSubscriptionType,
 				group.FieldRateMultiplier,
@@ -188,6 +195,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldImagePrice1k,
 				group.FieldImagePrice2k,
 				group.FieldImagePrice4k,
+				group.FieldImageModelPrices,
 				group.FieldVideoRateIndependent,
 				group.FieldVideoRateMultiplier,
 				group.FieldVideoPrice480p,
@@ -244,6 +252,9 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 }
 
 func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fields service.APIKeyUpdateFields) error {
+	if needsManagedResourceGuard(ctx) {
+		return withManagedResourceWrite(ctx, r.client, "api_keys", key.ID, 0, func(next context.Context) error { return r.Update(next, key, fields) })
+	}
 	// 空掩码代表调用方不改任何列，直接返回，避免产生一次无意义的整行写。
 	if fields.IsEmpty() {
 		return nil
@@ -616,7 +627,7 @@ func (r *apiKeyRepository) CountByUserID(ctx context.Context, userID int64) (int
 }
 
 func (r *apiKeyRepository) ExistsByKey(ctx context.Context, key string) (bool, error) {
-	count, err := r.activeQuery().Where(apikey.KeyEQ(key)).Count(ctx)
+	count, err := r.activeQuery().Where(apikey.Or(apikey.KeyEQ(key), apikey.KeyHashEQ(legacyAPIKeyDigest(key)))).Count(ctx)
 	return count > 0, err
 }
 
@@ -734,23 +745,25 @@ func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (i
 }
 
 func (r *apiKeyRepository) ListKeysByUserID(ctx context.Context, userID int64) ([]string, error) {
-	keys, err := r.activeQuery().
-		Where(apikey.UserIDEQ(userID)).
-		Select(apikey.FieldKey).
-		Strings(ctx)
+	rows, err := r.activeQuery().Where(apikey.UserIDEQ(userID)).Select(apikey.FieldKey, apikey.FieldKeyHash).All(ctx)
 	if err != nil {
 		return nil, err
+	}
+	keys := make([]string, 0, len(rows))
+	for _, row := range rows {
+		keys = append(keys, (&service.APIKey{Key: row.Key, KeyHash: row.KeyHash}).AuthCacheInvalidationKey())
 	}
 	return keys, nil
 }
 
 func (r *apiKeyRepository) ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error) {
-	keys, err := r.activeQuery().
-		Where(apikey.GroupIDEQ(groupID)).
-		Select(apikey.FieldKey).
-		Strings(ctx)
+	rows, err := r.activeQuery().Where(apikey.GroupIDEQ(groupID)).Select(apikey.FieldKey, apikey.FieldKeyHash).All(ctx)
 	if err != nil {
 		return nil, err
+	}
+	keys := make([]string, 0, len(rows))
+	for _, row := range rows {
+		keys = append(keys, (&service.APIKey{Key: row.Key, KeyHash: row.KeyHash}).AuthCacheInvalidationKey())
 	}
 	return keys, nil
 }
@@ -783,7 +796,7 @@ func (r *apiKeyRepository) IncrementQuotaUsedAndGetState(ctx context.Context, id
 			END,
 			updated_at = NOW()
 		WHERE id = $3 AND deleted_at IS NULL
-		RETURNING quota_used, quota, key, status
+		RETURNING quota_used, quota, COALESCE(NULLIF(key, ''), 'legacy-sha256:' || key_hash, ''), status
 	`
 
 	state := &service.APIKeyQuotaUsageState{}
@@ -877,6 +890,8 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		ID:            m.ID,
 		UserID:        m.UserID,
 		Key:           m.Key,
+		KeyHash:       m.KeyHash,
+		KeyPrefix:     m.KeyPrefix,
 		Name:          m.Name,
 		Status:        m.Status,
 		IPWhitelist:   m.IPWhitelist,
@@ -972,6 +987,9 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
 		IsExclusive:                     g.IsExclusive,
+		SecurityPolicyEnabled:           g.SecurityPolicyEnabled,
+		SecurityPolicyMode:              g.SecurityPolicyMode,
+		SecurityPolicyEmailEnabled:      g.SecurityPolicyEmailEnabled,
 		Status:                          g.Status,
 		Hydrated:                        true,
 		DuplicateOperationID:            derefString(g.DuplicateOperationID),
@@ -986,6 +1004,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		ImagePrice1K:                    g.ImagePrice1k,
 		ImagePrice2K:                    g.ImagePrice2k,
 		ImagePrice4K:                    g.ImagePrice4k,
+		ImageModelPrices:                service.NormalizeImageModelPrices(g.ImageModelPrices),
 		BatchImageDiscountMultiplier:    g.BatchImageDiscountMultiplier,
 		BatchImageHoldMultiplier:        g.BatchImageHoldMultiplier,
 		VideoRateIndependent:            g.VideoRateIndependent,
@@ -1042,4 +1061,9 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func legacyAPIKeyDigest(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
 }

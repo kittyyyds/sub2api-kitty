@@ -604,6 +604,10 @@ func configuredChannelMonitorV2GroupIDs(filter service.ChannelMonitorV2Filter, c
 	return groups
 }
 
+// channelMonitorV2ScopedGroupIDs intersects the operator's configured scope,
+// the authenticated viewer's scope, and the request picker. The bool result
+// distinguishes an intentionally empty restricted scope from "all groups"
+// (an empty configured list for administrators).
 func channelMonitorV2ScopedGroupIDs(filter service.ChannelMonitorV2Filter, cfg service.ChannelMonitorV2Config) ([]int64, bool) {
 	groups := append([]int64(nil), cfg.GroupIDs...)
 	if filter.RestrictGroups {

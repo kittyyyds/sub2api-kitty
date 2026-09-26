@@ -1,13 +1,15 @@
 <template>
-  <div>
-    <!-- 铃铛按钮 -->
+  <div class="announcement-bell">
+    <!-- 公告入口 -->
     <button
       @click="openModal"
-      class="relative flex h-9 w-9 items-center justify-center rounded-lg text-gray-600 transition-all hover:bg-gray-100 hover:scale-105 dark:text-gray-400 dark:hover:bg-dark-800"
-      :class="{ 'text-blue-600 dark:text-blue-400': unreadCount > 0 }"
+      class="announcement-header-button"
+      :class="{ 'announcement-header-button--unread': unreadCount > 0 }"
       :aria-label="t('announcements.title')"
+      :title="t('announcements.title')"
     >
-      <Icon name="bell" size="md" />
+      <Icon name="bell" size="sm" />
+      <span class="announcement-header-button__label">{{ t('announcements.title') }}</span>
       <!-- 未读红点 -->
       <span
         v-if="unreadCount > 0"
@@ -422,6 +424,45 @@ watch(
 </script>
 
 <style scoped>
+.announcement-bell {
+  position: relative;
+}
+
+.announcement-header-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--customer-copper, #c66a18);
+  border-left-width: 3px;
+  border-radius: 6px;
+  color: var(--customer-copper, #9c641f);
+  background: var(--customer-copper-soft, rgba(198, 106, 24, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(255, 173, 104, 0.12), 0 0 16px rgba(255, 173, 104, 0.12);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.announcement-header-button:hover,
+.announcement-header-button:focus-visible,
+.announcement-header-button--unread {
+  border-color: var(--customer-cyan, #0a7f90);
+  color: var(--customer-cyan, #0a7f90);
+  background: var(--customer-cyan-soft, rgba(10, 127, 144, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(108, 230, 241, 0.1), 0 0 18px rgba(10, 127, 144, 0.14);
+}
+
+.announcement-header-button:focus-visible {
+  outline: 2px solid rgba(10, 127, 144, 0.4);
+  outline-offset: 2px;
+}
+
 /* Modal Animations */
 .modal-fade-enter-active {
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);

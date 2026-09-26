@@ -6,12 +6,14 @@ import CustomPageView from '../CustomPageView.vue'
 const { appStore } = vi.hoisted(() => ({
   appStore: {
     publicSettingsLoaded: true,
-    cachedPublicSettings: { custom_menu_items: [{ id: 'docs', url: 'https://example.com/docs' }] },
+    cachedPublicSettings: { custom_menu_items: [{ id: 'external-guide', url: 'https://example.com/docs' }] },
   },
 }))
 
 vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<div><slot /></div>' } }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'docs' } }) }))
+// Kitty reserves "docs" for its native Feishu guide; exercise the generic embed
+// controls with a custom menu ID so native feature routing stays intact.
+vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'external-guide' } }) }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: { value: 'en' } }) }))
 vi.mock('@/stores', () => ({ useAppStore: () => appStore }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: false, user: { id: 7 }, token: 'test-token' }) }))
@@ -66,7 +68,7 @@ function click(button: HTMLElement, detail = 1) {
 
 describe('custom page open button', () => {
   beforeEach(() => {
-    appStore.cachedPublicSettings.custom_menu_items = [{ id: 'docs', url: 'https://example.com/docs' }]
+    appStore.cachedPublicSettings.custom_menu_items = [{ id: 'external-guide', url: 'https://example.com/docs' }]
     vi.stubGlobal('ResizeObserver', class {
       constructor(callback: () => void) { notifyResize = callback }
       observe() {}
@@ -157,7 +159,7 @@ describe('custom page open button', () => {
   })
 
   it('keeps Markdown pages separate from the embedded-page controls', async () => {
-    appStore.cachedPublicSettings.custom_menu_items = [{ id: 'docs', url: 'md:guide' }]
+    appStore.cachedPublicSettings.custom_menu_items = [{ id: 'external-guide', url: 'md:guide' }]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '# Guide' }))
     const wrapper = mountPage()
     await flushPromises()

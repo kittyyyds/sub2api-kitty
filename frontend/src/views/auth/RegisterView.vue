@@ -1,19 +1,38 @@
 <template>
-  <AuthLayout>
+  <AuthLayout mode="register">
     <div class="space-y-6">
-      <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ t('auth.createAccount') }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{ t('auth.signUpToStart', { siteName }) }}
+      <div
+        v-if="settingsLoading"
+        data-testid="registration-settings-loading"
+        class="flex min-h-36 items-center justify-center gap-2 text-sm text-gray-500 dark:text-dark-400"
+        role="status"
+      >
+        <span class="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"></span>
+        <span>{{ t('auth.registrationSettingsLoading') }}</span>
+      </div>
+
+      <div
+        v-else-if="settingsLoadFailed"
+        data-testid="registration-settings-error"
+        class="rounded-lg border border-red-200 bg-red-50 p-4 text-center dark:border-red-800/50 dark:bg-red-900/20"
+        role="alert"
+      >
+        <p class="text-sm text-red-700 dark:text-red-300">
+          {{ t('auth.registrationSettingsLoadFailed') }}
         </p>
+        <button
+          type="button"
+          class="mt-3 font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400"
+          data-testid="registration-settings-retry"
+          @click="loadRegistrationSettings"
+        >
+          {{ t('common.retry') }}
+        </button>
       </div>
 
       <!-- Registration Disabled Message -->
       <div
-        v-if="!registrationEnabled && settingsLoaded"
+        v-else-if="!registrationEnabled"
         class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
       >
         <div class="flex items-start gap-3">
@@ -27,7 +46,7 @@
       </div>
 
       <!-- Registration Form -->
-      <form v-else @submit.prevent="handleRegister" class="space-y-5">
+      <form v-else-if="settingsLoaded" @submit.prevent="handleRegister" class="space-y-5">
         <!-- Email Input -->
         <div>
           <label for="email" class="input-label">
@@ -42,7 +61,6 @@
               v-model="formData.email"
               type="email"
               required
-              autofocus
               autocomplete="email"
               :disabled="registrationActionDisabled"
               class="input pl-11"
@@ -368,7 +386,7 @@
 import { computed, ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
+import AuthLayout from '@/components/auth/HeyRouteAuthLayout.vue'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
 import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
@@ -379,7 +397,6 @@ import TurnstileWidget from '@/components/CaptchaChallenge.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import {
   buildOAuthLoginStartURL,
-  getPublicSettings,
   isWeChatWebOAuthEnabled,
   startOAuthLogin,
   type OAuthLoginStart,
@@ -398,7 +415,7 @@ import {
   loadAffiliateReferralCode,
   resolveAffiliateReferralCode
 } from '@/utils/oauthAffiliate'
-import type { LoginAgreementDocument } from '@/types'
+import type { LoginAgreementDocument, PublicSettings } from '@/types'
 
 const { t, locale } = useI18n()
 const LOGIN_AGREEMENT_STORAGE_KEY = 'sub2api_login_agreement_consent'
@@ -414,13 +431,15 @@ const appStore = useAppStore()
 
 const isLoading = ref<boolean>(false)
 const settingsLoaded = ref<boolean>(false)
+const settingsLoading = ref<boolean>(true)
+const settingsLoadFailed = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
 const showConfirmPassword = ref<boolean>(false)
 const confirmPassword = ref('')
 
 // Public settings
-const registrationEnabled = ref<boolean>(true)
+const registrationEnabled = ref<boolean>(false)
 const emailVerifyEnabled = ref<boolean>(false)
 // Public settings are injected into the app store before Vue mounts. Use that
 // value for the first render so a disabled promo-code field never flashes
@@ -440,7 +459,7 @@ const aliyunCaptchaEnabled = ref<boolean>(false)
 const aliyunCaptchaSceneId = ref<string>('')
 const aliyunCaptchaPrefix = ref<string>('')
 const aliyunCaptchaRegion = ref<string>('cn')
-const siteName = ref<string>('Sub2API')
+const siteName = ref<string>('Kitty奇妙屋')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const wechatOAuthEnabled = ref<boolean>(false)
 const oidcOAuthEnabled = ref<boolean>(false)
@@ -497,6 +516,9 @@ const invitationValidation = reactive({
   message: ''
 })
 let invitationValidateTimeout: ReturnType<typeof setTimeout> | null = null
+let settingsLoadGeneration = 0
+
+const REGISTRATION_SETTINGS_RETRY_DELAYS_MS = [0, 400, 1_200] as const
 
 const formData = reactive({
   email: '',
@@ -539,7 +561,7 @@ const agreementGateActive = computed(
 )
 
 const registrationActionDisabled = computed(
-  () => isLoading.value || !settingsLoaded.value || agreementGateActive.value
+  () => isLoading.value || !settingsLoaded.value
 )
 
 watch(validationToastMessage, (value, previousValue) => {
@@ -558,56 +580,84 @@ function syncAffiliateReferralCode(): string {
 
 // ==================== Lifecycle ====================
 
-onMounted(async () => {
+onMounted(() => {
   syncAffiliateReferralCode()
-
-  try {
-    const settings = await getPublicSettings()
-    registrationEnabled.value = settings.registration_enabled
-    emailVerifyEnabled.value = settings.email_verify_enabled
-    promoCodeEnabled.value = settings.promo_code_enabled
-    invitationCodeEnabled.value = settings.invitation_code_enabled
-    affiliateEnabled.value = settings.affiliate_enabled
-    turnstileEnabled.value = settings.turnstile_enabled
-    turnstileSiteKey.value = settings.turnstile_site_key || ''
-    tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
-    tencentCaptchaAppId.value = settings.tencent_captcha_app_id || ''
-    tencentCaptchaRegion.value = settings.tencent_captcha_region || 'cn'
-    aliyunCaptchaEnabled.value = settings.aliyun_captcha_enabled === true
-    aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
-    aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
-    aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
-    siteName.value = settings.site_name || 'Sub2API'
-    linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
-    wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
-    oidcOAuthEnabled.value = settings.oidc_oauth_enabled
-    oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
-    githubOAuthEnabled.value = settings.github_oauth_enabled
-    googleOAuthEnabled.value = settings.google_oauth_enabled
-    registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
-      settings.registration_email_suffix_whitelist || []
-    )
-    emailDomainQuotaEnabled.value = settings.registration_email_domain_quota_enabled === true
-    applyLoginAgreementSettings(settings)
-
-    // Read promo code from URL parameter only if promo code is enabled
-    if (promoCodeEnabled.value) {
-      const promoParam = route.query.promo as string
-      if (promoParam) {
-        formData.promo_code = promoParam
-        // Validate the promo code from URL
-        await validatePromoCodeDebounced(promoParam)
-      }
-    }
-    syncAffiliateReferralCode()
-  } catch (error) {
-    console.error('Failed to load public settings:', error)
-    loginAgreementEnabled.value = false
-    agreementAccepted.value = true
-  } finally {
-    settingsLoaded.value = true
-  }
+  void loadRegistrationSettings()
 })
+
+async function applyRegistrationSettings(settings: PublicSettings): Promise<void> {
+  registrationEnabled.value = settings.registration_enabled
+  emailVerifyEnabled.value = settings.email_verify_enabled
+  promoCodeEnabled.value = settings.promo_code_enabled
+  invitationCodeEnabled.value = settings.invitation_code_enabled
+  affiliateEnabled.value = settings.affiliate_enabled
+  turnstileEnabled.value = settings.turnstile_enabled
+  turnstileSiteKey.value = settings.turnstile_site_key || ''
+  tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
+  tencentCaptchaAppId.value = settings.tencent_captcha_app_id || ''
+  tencentCaptchaRegion.value = settings.tencent_captcha_region || 'cn'
+  aliyunCaptchaEnabled.value = settings.aliyun_captcha_enabled === true
+  aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
+  aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
+  aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+  siteName.value = settings.site_name || 'Kitty奇妙屋'
+  linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
+  wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
+  oidcOAuthEnabled.value = settings.oidc_oauth_enabled
+  oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
+  githubOAuthEnabled.value = settings.github_oauth_enabled
+  googleOAuthEnabled.value = settings.google_oauth_enabled
+  registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
+    settings.registration_email_suffix_whitelist || []
+  )
+  emailDomainQuotaEnabled.value = settings.registration_email_domain_quota_enabled === true
+  applyLoginAgreementSettings(settings)
+
+  if (promoCodeEnabled.value) {
+    const promoParam = route.query.promo as string
+    if (promoParam) {
+      formData.promo_code = promoParam
+      await validatePromoCodeDebounced(promoParam)
+    }
+  }
+  syncAffiliateReferralCode()
+}
+
+async function loadRegistrationSettings(): Promise<void> {
+  const generation = ++settingsLoadGeneration
+  settingsLoaded.value = false
+  settingsLoading.value = true
+  settingsLoadFailed.value = false
+
+  for (let attempt = 0; attempt < REGISTRATION_SETTINGS_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delay = REGISTRATION_SETTINGS_RETRY_DELAYS_MS[attempt]
+    if (delay > 0) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, delay))
+    }
+    if (generation !== settingsLoadGeneration) return
+
+    try {
+      // The first attempt consumes the settings injected into index.html. Forced
+      // attempts are only used when that bootstrap data is unavailable.
+      const settings = await appStore.fetchPublicSettings(attempt > 0)
+      if (!settings || generation !== settingsLoadGeneration) continue
+
+      await applyRegistrationSettings(settings)
+      if (generation !== settingsLoadGeneration) return
+
+      settingsLoaded.value = true
+      settingsLoading.value = false
+      return
+    } catch (error) {
+      console.error('Failed to load registration settings:', error)
+    }
+  }
+
+  if (generation === settingsLoadGeneration) {
+    settingsLoading.value = false
+    settingsLoadFailed.value = true
+  }
+}
 
 watch(
   () => [route.query.aff, route.query.aff_code],
@@ -617,6 +667,7 @@ watch(
 )
 
 onUnmounted(() => {
+  settingsLoadGeneration += 1
   if (promoValidateTimeout) {
     clearTimeout(promoValidateTimeout)
   }
@@ -646,8 +697,7 @@ function applyLoginAgreementSettings(settings: {
     `${loginAgreementUpdatedAt.value}:${documents.map((doc) => `${doc.id}:${doc.title}`).join('|')}`
 
   agreementAccepted.value = !loginAgreementEnabled.value || hasAcceptedLoginAgreement(loginAgreementRevision.value)
-  showAgreementModal.value =
-    loginAgreementEnabled.value && !agreementAccepted.value && loginAgreementMode.value !== 'checkbox'
+  showAgreementModal.value = false
 }
 
 function hasAcceptedLoginAgreement(revision: string): boolean {
@@ -685,6 +735,16 @@ function rejectLoginAgreement(): void {
   agreementAccepted.value = false
   showAgreementModal.value = false
   appStore.showWarning(t('legal.loginAgreementPrompt.registerRejectedWarning'))
+}
+
+function requireRegistrationAgreement(): boolean {
+  if (!agreementGateActive.value) return true
+
+  appStore.showWarning(t('legal.loginAgreementPrompt.registerRequiredWarning'))
+  if (loginAgreementMode.value !== 'checkbox') {
+    showAgreementModal.value = true
+  }
+  return false
 }
 
 // ==================== Promo Code Validation ====================
@@ -864,6 +924,7 @@ async function acquireActionProof(): Promise<boolean> {
 
 async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
   if (registrationActionDisabled.value) return
+  if (!requireRegistrationAgreement()) return
 
   if (!actionCaptchaEnabled.value) {
     window.location.href = buildOAuthLoginStartURL(request)
@@ -932,13 +993,7 @@ function validateForm(): boolean {
 
   let isValid = true
 
-  if (agreementGateActive.value) {
-    appStore.showWarning(t('legal.loginAgreementPrompt.registerRequiredWarning'))
-    if (loginAgreementMode.value !== 'checkbox') {
-      showAgreementModal.value = true
-    }
-    return false
-  }
+  if (!requireRegistrationAgreement()) return false
 
   // Email validation
   if (!formData.email.trim()) {

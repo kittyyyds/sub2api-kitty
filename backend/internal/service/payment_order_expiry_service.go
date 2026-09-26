@@ -103,7 +103,7 @@ func (s *PaymentOrderExpiryService) runOnce() {
 	if err != nil {
 		slog.Warn("[PaymentOrderExpiry] failed to reconcile pending payment orders", "error", err)
 	} else if recovered > 0 {
-		slog.Info("[PaymentOrderExpiry] reconciled paid orders", "count", recovered)
+		slog.Info("[PaymentOrderExpiry] reconciled paid payment orders", "count", recovered)
 	}
 
 	expireCtx, cancel := context.WithTimeout(context.Background(), expiryCheckTimeout)

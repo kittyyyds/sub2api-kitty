@@ -195,6 +195,48 @@ func (_u *GroupUpdate) SetNillableIsExclusive(v *bool) *GroupUpdate {
 	return _u
 }
 
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (_u *GroupUpdate) SetSecurityPolicyEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetSecurityPolicyEnabled(v)
+	return _u
+}
+
+// SetNillableSecurityPolicyEnabled sets the "security_policy_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableSecurityPolicyEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetSecurityPolicyEnabled(*v)
+	}
+	return _u
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (_u *GroupUpdate) SetSecurityPolicyMode(v string) *GroupUpdate {
+	_u.mutation.SetSecurityPolicyMode(v)
+	return _u
+}
+
+// SetNillableSecurityPolicyMode sets the "security_policy_mode" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableSecurityPolicyMode(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetSecurityPolicyMode(*v)
+	}
+	return _u
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (_u *GroupUpdate) SetSecurityPolicyEmailEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetSecurityPolicyEmailEnabled(v)
+	return _u
+}
+
+// SetNillableSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableSecurityPolicyEmailEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetSecurityPolicyEmailEnabled(*v)
+	}
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *GroupUpdate) SetStatus(v string) *GroupUpdate {
 	_u.mutation.SetStatus(v)
@@ -480,6 +522,18 @@ func (_u *GroupUpdate) AddImagePrice4k(v float64) *GroupUpdate {
 // ClearImagePrice4k clears the value of the "image_price_4k" field.
 func (_u *GroupUpdate) ClearImagePrice4k() *GroupUpdate {
 	_u.mutation.ClearImagePrice4k()
+	return _u
+}
+
+// SetImageModelPrices sets the "image_model_prices" field.
+func (_u *GroupUpdate) SetImageModelPrices(v map[string]map[string]float64) *GroupUpdate {
+	_u.mutation.SetImageModelPrices(v)
+	return _u
+}
+
+// ClearImageModelPrices clears the value of the "image_model_prices" field.
+func (_u *GroupUpdate) ClearImageModelPrices() *GroupUpdate {
+	_u.mutation.ClearImageModelPrices()
 	return _u
 }
 
@@ -1176,6 +1230,48 @@ func (_u *GroupUpdate) AppendReasoningEffortMappings(v []domain.ReasoningEffortM
 	return _u
 }
 
+// SetGrokPromptEnabled sets the "grok_prompt_enabled" field.
+func (_u *GroupUpdate) SetGrokPromptEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetGrokPromptEnabled(v)
+	return _u
+}
+
+// SetNillableGrokPromptEnabled sets the "grok_prompt_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableGrokPromptEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetGrokPromptEnabled(*v)
+	}
+	return _u
+}
+
+// SetGrokPromptMode sets the "grok_prompt_mode" field.
+func (_u *GroupUpdate) SetGrokPromptMode(v string) *GroupUpdate {
+	_u.mutation.SetGrokPromptMode(v)
+	return _u
+}
+
+// SetNillableGrokPromptMode sets the "grok_prompt_mode" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableGrokPromptMode(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetGrokPromptMode(*v)
+	}
+	return _u
+}
+
+// SetGrokPromptContent sets the "grok_prompt_content" field.
+func (_u *GroupUpdate) SetGrokPromptContent(v string) *GroupUpdate {
+	_u.mutation.SetGrokPromptContent(v)
+	return _u
+}
+
+// SetNillableGrokPromptContent sets the "grok_prompt_content" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableGrokPromptContent(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetGrokPromptContent(*v)
+	}
+	return _u
+}
+
 // SetProfitControlEnabled sets the "profit_control_enabled" field.
 func (_u *GroupUpdate) SetProfitControlEnabled(v bool) *GroupUpdate {
 	_u.mutation.SetProfitControlEnabled(v)
@@ -1512,6 +1608,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "peak_end", err: fmt.Errorf(`ent: validator failed for field "Group.peak_end": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.SecurityPolicyMode(); ok {
+		if err := group.SecurityPolicyModeValidator(v); err != nil {
+			return &ValidationError{Name: "security_policy_mode", err: fmt.Errorf(`ent: validator failed for field "Group.security_policy_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := group.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
@@ -1560,6 +1661,11 @@ func (_u *GroupUpdate) check() error {
 	if v, ok := _u.mutation.MaxReasoningEffortOverLimit(); ok {
 		if err := group.MaxReasoningEffortOverLimitValidator(v); err != nil {
 			return &ValidationError{Name: "max_reasoning_effort_over_limit", err: fmt.Errorf(`ent: validator failed for field "Group.max_reasoning_effort_over_limit": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.GrokPromptMode(); ok {
+		if err := group.GrokPromptModeValidator(v); err != nil {
+			return &ValidationError{Name: "grok_prompt_mode", err: fmt.Errorf(`ent: validator failed for field "Group.grok_prompt_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -1618,6 +1724,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SecurityPolicyEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SecurityPolicyMode(); ok {
+		_spec.SetField(group.FieldSecurityPolicyMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SecurityPolicyEmailEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEmailEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
@@ -1705,6 +1820,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ImagePrice4kCleared() {
 		_spec.ClearField(group.FieldImagePrice4k, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.ImageModelPrices(); ok {
+		_spec.SetField(group.FieldImageModelPrices, field.TypeJSON, value)
+	}
+	if _u.mutation.ImageModelPricesCleared() {
+		_spec.ClearField(group.FieldImageModelPrices, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.BatchImageDiscountMultiplier(); ok {
 		_spec.SetField(group.FieldBatchImageDiscountMultiplier, field.TypeFloat64, value)
@@ -1918,6 +2039,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, group.FieldReasoningEffortMappings, value)
 		})
+	}
+	if value, ok := _u.mutation.GrokPromptEnabled(); ok {
+		_spec.SetField(group.FieldGrokPromptEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.GrokPromptMode(); ok {
+		_spec.SetField(group.FieldGrokPromptMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GrokPromptContent(); ok {
+		_spec.SetField(group.FieldGrokPromptContent, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ProfitControlEnabled(); ok {
 		_spec.SetField(group.FieldProfitControlEnabled, field.TypeBool, value)
@@ -2406,6 +2536,48 @@ func (_u *GroupUpdateOne) SetNillableIsExclusive(v *bool) *GroupUpdateOne {
 	return _u
 }
 
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (_u *GroupUpdateOne) SetSecurityPolicyEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetSecurityPolicyEnabled(v)
+	return _u
+}
+
+// SetNillableSecurityPolicyEnabled sets the "security_policy_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableSecurityPolicyEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetSecurityPolicyEnabled(*v)
+	}
+	return _u
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (_u *GroupUpdateOne) SetSecurityPolicyMode(v string) *GroupUpdateOne {
+	_u.mutation.SetSecurityPolicyMode(v)
+	return _u
+}
+
+// SetNillableSecurityPolicyMode sets the "security_policy_mode" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableSecurityPolicyMode(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetSecurityPolicyMode(*v)
+	}
+	return _u
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (_u *GroupUpdateOne) SetSecurityPolicyEmailEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetSecurityPolicyEmailEnabled(v)
+	return _u
+}
+
+// SetNillableSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableSecurityPolicyEmailEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetSecurityPolicyEmailEnabled(*v)
+	}
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *GroupUpdateOne) SetStatus(v string) *GroupUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -2691,6 +2863,18 @@ func (_u *GroupUpdateOne) AddImagePrice4k(v float64) *GroupUpdateOne {
 // ClearImagePrice4k clears the value of the "image_price_4k" field.
 func (_u *GroupUpdateOne) ClearImagePrice4k() *GroupUpdateOne {
 	_u.mutation.ClearImagePrice4k()
+	return _u
+}
+
+// SetImageModelPrices sets the "image_model_prices" field.
+func (_u *GroupUpdateOne) SetImageModelPrices(v map[string]map[string]float64) *GroupUpdateOne {
+	_u.mutation.SetImageModelPrices(v)
+	return _u
+}
+
+// ClearImageModelPrices clears the value of the "image_model_prices" field.
+func (_u *GroupUpdateOne) ClearImageModelPrices() *GroupUpdateOne {
+	_u.mutation.ClearImageModelPrices()
 	return _u
 }
 
@@ -3387,6 +3571,48 @@ func (_u *GroupUpdateOne) AppendReasoningEffortMappings(v []domain.ReasoningEffo
 	return _u
 }
 
+// SetGrokPromptEnabled sets the "grok_prompt_enabled" field.
+func (_u *GroupUpdateOne) SetGrokPromptEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetGrokPromptEnabled(v)
+	return _u
+}
+
+// SetNillableGrokPromptEnabled sets the "grok_prompt_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableGrokPromptEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetGrokPromptEnabled(*v)
+	}
+	return _u
+}
+
+// SetGrokPromptMode sets the "grok_prompt_mode" field.
+func (_u *GroupUpdateOne) SetGrokPromptMode(v string) *GroupUpdateOne {
+	_u.mutation.SetGrokPromptMode(v)
+	return _u
+}
+
+// SetNillableGrokPromptMode sets the "grok_prompt_mode" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableGrokPromptMode(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetGrokPromptMode(*v)
+	}
+	return _u
+}
+
+// SetGrokPromptContent sets the "grok_prompt_content" field.
+func (_u *GroupUpdateOne) SetGrokPromptContent(v string) *GroupUpdateOne {
+	_u.mutation.SetGrokPromptContent(v)
+	return _u
+}
+
+// SetNillableGrokPromptContent sets the "grok_prompt_content" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableGrokPromptContent(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetGrokPromptContent(*v)
+	}
+	return _u
+}
+
 // SetProfitControlEnabled sets the "profit_control_enabled" field.
 func (_u *GroupUpdateOne) SetProfitControlEnabled(v bool) *GroupUpdateOne {
 	_u.mutation.SetProfitControlEnabled(v)
@@ -3736,6 +3962,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "peak_end", err: fmt.Errorf(`ent: validator failed for field "Group.peak_end": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.SecurityPolicyMode(); ok {
+		if err := group.SecurityPolicyModeValidator(v); err != nil {
+			return &ValidationError{Name: "security_policy_mode", err: fmt.Errorf(`ent: validator failed for field "Group.security_policy_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := group.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
@@ -3784,6 +4015,11 @@ func (_u *GroupUpdateOne) check() error {
 	if v, ok := _u.mutation.MaxReasoningEffortOverLimit(); ok {
 		if err := group.MaxReasoningEffortOverLimitValidator(v); err != nil {
 			return &ValidationError{Name: "max_reasoning_effort_over_limit", err: fmt.Errorf(`ent: validator failed for field "Group.max_reasoning_effort_over_limit": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.GrokPromptMode(); ok {
+		if err := group.GrokPromptModeValidator(v); err != nil {
+			return &ValidationError{Name: "grok_prompt_mode", err: fmt.Errorf(`ent: validator failed for field "Group.grok_prompt_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -3859,6 +4095,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SecurityPolicyEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SecurityPolicyMode(); ok {
+		_spec.SetField(group.FieldSecurityPolicyMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SecurityPolicyEmailEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEmailEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
@@ -3946,6 +4191,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.ImagePrice4kCleared() {
 		_spec.ClearField(group.FieldImagePrice4k, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.ImageModelPrices(); ok {
+		_spec.SetField(group.FieldImageModelPrices, field.TypeJSON, value)
+	}
+	if _u.mutation.ImageModelPricesCleared() {
+		_spec.ClearField(group.FieldImageModelPrices, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.BatchImageDiscountMultiplier(); ok {
 		_spec.SetField(group.FieldBatchImageDiscountMultiplier, field.TypeFloat64, value)
@@ -4159,6 +4410,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 		_spec.AddModifier(func(u *sql.UpdateBuilder) {
 			sqljson.Append(u, group.FieldReasoningEffortMappings, value)
 		})
+	}
+	if value, ok := _u.mutation.GrokPromptEnabled(); ok {
+		_spec.SetField(group.FieldGrokPromptEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.GrokPromptMode(); ok {
+		_spec.SetField(group.FieldGrokPromptMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GrokPromptContent(); ok {
+		_spec.SetField(group.FieldGrokPromptContent, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ProfitControlEnabled(); ok {
 		_spec.SetField(group.FieldProfitControlEnabled, field.TypeBool, value)

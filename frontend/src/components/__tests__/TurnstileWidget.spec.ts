@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { ref } from 'vue'
 import TurnstileWidget from '../TurnstileWidget.vue'
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key })
+  useI18n: () => ({ locale: ref('en'), t: (key: string) => key })
 }))
 
 const scriptSelector = 'script[src*="challenges.cloudflare.com/turnstile"]'
@@ -28,12 +29,12 @@ describe('TurnstileWidget', () => {
   it('shows a loading placeholder until the SDK initializes the widget', async () => {
     wrapper = mount(TurnstileWidget, { props: { siteKey: 'site-key' } })
 
-    expect(wrapper.get('[role="status"]').text()).toBe('auth.captchaLoading')
+    expect(wrapper.get('[role="status"]').text()).toBe('common.loading')
     expect(document.querySelector(scriptSelector)).not.toBeNull()
     const container = wrapper.get('.turnstile-container').element
 
     const render = installSDK()
-    window.onTurnstileLoad?.()
+    document.querySelector(scriptSelector)?.dispatchEvent(new Event('load'))
     await flushPromises()
 
     expect(render).toHaveBeenCalledWith(container, expect.objectContaining({ sitekey: 'site-key' }))
@@ -54,15 +55,15 @@ describe('TurnstileWidget', () => {
     expect(wrapper.emitted('verify')).toEqual([['verified-token']])
   })
 
-  it('ends loading and reports a script load failure', async () => {
+  it('keeps loading while a failed script is scheduled for retry', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     wrapper = mount(TurnstileWidget, { props: { siteKey: 'site-key' } })
 
     document.querySelector(scriptSelector)!.dispatchEvent(new Event('error'))
     await flushPromises()
 
-    expect(wrapper.find('[role="status"]').exists()).toBe(false)
-    expect(wrapper.emitted('error')).toEqual([[]])
+    expect(wrapper.get('[role="status"]').text()).toBe('common.loading')
+    expect(wrapper.emitted('error')).toBeUndefined()
   })
 
   it('does not show a placeholder or load the SDK without a site key', async () => {

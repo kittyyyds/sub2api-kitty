@@ -1,19 +1,46 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-4xl space-y-6">
-      <div v-if="loading" class="flex items-center justify-center py-20">
-        <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
+    <div class="checkout-page">
+      <div
+        v-if="!loading && tabs.length > 1 && paymentPhase === 'select' && !selectedPlan"
+        class="checkout-tabs"
+        role="tablist"
+        :aria-label="t('payment.title')"
+      >
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === tab.key"
+          :class="{ active: activeTab === tab.key }"
+          @click="activeTab = tab.key"
+        >
+          <Icon :name="tab.key === 'recharge' ? 'creditCard' : 'gift'" size="sm" />
+          <span>{{ tab.label }}</span>
+        </button>
       </div>
-      <template v-else>
-        <!-- Tab Switcher (hide during payment and subscription confirm) -->
-        <div v-if="tabs.length > 1 && paymentPhase === 'select' && !selectedPlan" class="flex space-x-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-800">
-          <button v-for="tab in tabs" :key="tab.key"
-            class="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-all"
-            :class="activeTab === tab.key ? 'bg-white text-gray-900 shadow dark:bg-dark-700 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
-            @click="activeTab = tab.key">{{ tab.label }}</button>
+      <div class="checkout-body" :class="{ 'is-package-selection': !cashierOpen && activeTab === 'recharge' && paymentPhase === 'select' }">
+      <header v-show="cashierOpen || activeTab !== 'recharge' || paymentPhase !== 'select'" class="checkout-heading">
+        <div class="checkout-heading__mark" aria-hidden="true">
+          <Icon name="creditCard" size="lg" :stroke-width="1.8" />
         </div>
-        <!-- Payment in progress (shared by recharge and subscription) -->
-        <template v-if="paymentPhase === 'paying'">
+        <div class="min-w-0 flex-1">
+          <h1>{{ t('payment.cashierTitle') }}</h1>
+          <p class="checkout-heading__copy">{{ t('payment.checkoutSubtitle') }}</p>
+        </div>
+        <div class="checkout-protection">
+          <Icon name="shield" size="sm" :stroke-width="2" />
+          <span>{{ t('payment.protectedPayment') }}</span>
+        </div>
+      </header>
+
+      <div v-if="loading" class="checkout-loading" role="status" :aria-label="t('common.loading')">
+        <div class="checkout-spinner" />
+      </div>
+
+      <template v-else>
+        <section v-if="paymentPhase === 'paying'" class="checkout-payment-stage">
           <PaymentStatusPanel
             :order-id="paymentState.orderId"
             :amount="paymentState.amount"
@@ -30,229 +57,387 @@
             @success="onPaymentSuccess"
             @settled="onPaymentSettled"
           />
-        </template>
-        <!-- Tab content (select phase) -->
+        </section>
+
         <template v-else>
-          <!-- Neither top-up nor subscriptions available (balance recharge disabled via API while subscriptions are off) -->
-          <div v-if="tabs.length === 0" class="card py-16 text-center">
-            <p class="text-gray-500 dark:text-gray-400">{{ t('payment.billingUnavailable') }}</p>
+          <div v-if="tabs.length === 0" class="checkout-empty">
+            <p>{{ t('payment.billingUnavailable') }}</p>
           </div>
-          <!-- Top-up Tab -->
           <template v-else-if="activeTab === 'recharge'">
-            <!-- Recharge Account Card -->
-            <div class="card p-5">
-              <p class="text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.rechargeAccount') }}</p>
-              <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">{{ user?.username || '' }}</p>
-              <p class="mt-0.5 text-sm font-medium text-green-600 dark:text-green-400">{{ t('payment.currentBalance') }}: {{ user?.balance?.toFixed(2) || '0.00' }}</p>
+            <div v-if="enabledMethods.length === 0" class="checkout-empty">
+              <Icon name="creditCard" size="xl" />
+              <p>{{ t('payment.notAvailable') }}</p>
             </div>
-            <div v-if="enabledMethods.length === 0" class="card py-16 text-center">
-              <p class="text-gray-500 dark:text-gray-400">{{ t('payment.notAvailable') }}</p>
-            </div>
+
             <template v-else>
-            <div class="card p-6">
-              <AmountInput
-                v-model="amount"
-                :amounts="[10, 20, 50, 100, 200, 500, 1000, 2000, 5000]"
-                :min="globalMinAmount"
-                :max="globalMaxAmount"
-              />
-              <p v-if="amountError" class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ amountError }}</p>
-            </div>
-            <div v-if="enabledMethods.length >= 1" class="card p-6">
-              <PaymentMethodSelector
-                :methods="methodOptions"
-                :selected="selectedMethod"
-                @select="selectedMethod = $event"
-              />
-            </div>
-            <div v-if="validAmount > 0" class="card p-6">
-              <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                  <span class="text-gray-500 dark:text-gray-400">{{ t('payment.paymentAmount') }}</span>
-                  <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(validAmount) }}</span>
-                </div>
-                <div v-if="feeRate > 0" class="flex justify-between">
-                  <span class="text-gray-500 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
-                  <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(feeAmount) }}</span>
-                </div>
-                <div v-if="feeRate > 0" class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
-                  <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
-                  <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ formatSelectedPaymentAmount(totalAmount) }}</span>
-                </div>
-                <div v-if="balanceRechargeMultiplier !== 1" class="flex justify-between" :class="{ 'border-t border-gray-200 pt-2 dark:border-dark-600': feeRate <= 0 }">
-                  <span class="text-gray-500 dark:text-gray-400">{{ t('payment.creditedBalance') }}</span>
-                  <span class="text-gray-900 dark:text-white">${{ creditedAmount.toFixed(2) }}</span>
-                </div>
-                <p v-if="balanceRechargeMultiplier !== 1" class="border-t border-gray-200 pt-2 text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
-                  {{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}
-                </p>
+              <RechargePackages v-show="!cashierOpen" :amounts="rechargeAmounts" :bonus-rules="checkout.recharge_bonus_rules"
+                :recharge-multiplier="balanceRechargeMultiplier" :min="globalMinAmount" :max="globalMaxAmount" :currency="selectedCurrency"
+                :balance="balancePreviewReady ? user?.balance ?? 0 : null" @select="selectRechargePackage" />
+              <button v-if="cashierOpen" type="button" class="checkout-back-packages" @click="backToPackages"><Icon name="arrowLeft" size="sm" />{{ t('payment.packages.back') }}</button>
+            <div v-show="cashierOpen" class="checkout-shell">
+              <div class="checkout-flow">
+                <section class="checkout-selected-package" aria-labelledby="checkout-amount-title">
+                  <span>{{ t('payment.packages.selected') }}</span>
+                  <h2 id="checkout-amount-title" tabindex="-1">{{ formatSelectedPaymentAmount(validAmount) }}</h2>
+                  <p>{{ t('payment.creditedBalance') }} <strong>${{ creditedAmount.toFixed(2) }}</strong></p>
+                  <p v-if="balanceRechargeMultiplier !== 1">{{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}</p>
+                  <p v-if="activeBonusRule" class="checkout-selected-bonus">{{ t(activeBonusRule.validity_days === 0 ? 'payment.permanentTierBonus' : 'payment.tierBonus', { amount: activeBonusRule.bonus_amount.toFixed(2), days: activeBonusRule.validity_days }) }}</p>
+                </section>
+
+                <section class="checkout-section" aria-labelledby="checkout-method-title">
+                  <div class="checkout-section__heading">
+                    <span class="checkout-step checkout-step--mint">1</span>
+                    <div>
+                      <h2 id="checkout-method-title">{{ t('payment.selectMethod') }}</h2>
+                      <p>{{ t('payment.selectMethodHint') }}</p>
+                    </div>
+                  </div>
+                  <PaymentMethodSelector
+                    detailed
+                    :methods="methodOptions"
+                    :selected="selectedMethod"
+                    @select="selectedMethod = $event"
+                  />
+                  <p v-if="amountError" class="checkout-message checkout-message--warning" role="alert">{{ amountError }}</p>
+                </section>
               </div>
+
+              <aside class="checkout-sidebar">
+                <section class="checkout-summary" aria-labelledby="checkout-summary-title">
+                <div class="checkout-summary__total">
+                  <p id="checkout-summary-title">{{ t('payment.actualPay') }}</p>
+                  <strong>{{ formatSelectedPaymentAmount(totalAmount) }}</strong>
+                </div>
+
+                <dl class="checkout-breakdown">
+                  <div>
+                    <dt>{{ t('payment.paymentAmount') }}</dt>
+                    <dd>{{ formatSelectedPaymentAmount(validAmount) }}</dd>
+                  </div>
+                  <div v-if="feeRate > 0">
+                    <dt>{{ t('payment.fee') }} ({{ feeRate }}%)</dt>
+                    <dd>{{ formatSelectedPaymentAmount(feeAmount) }}</dd>
+                  </div>
+                  <div>
+                    <dt>{{ t('payment.baseCredit') }}</dt>
+                    <dd data-testid="base-credit">${{ baseCreditAmount.toFixed(2) }}</dd>
+                  </div>
+                  <div v-if="activeBonusRule" class="checkout-breakdown__accent">
+                    <dt>{{ t('payment.rechargeBonus') }} / {{ activeBonusRule.validity_days === 0 ? t('payment.neverExpires') : activeBonusRule.validity_days + ' ' + t('payment.days') }}</dt>
+                    <dd data-testid="new-bonus">+${{ activeBonusRule.bonus_amount.toFixed(2) }}</dd>
+                  </div>
+                  <div class="checkout-breakdown__accent">
+                    <dt>{{ t('payment.creditedBalance') }}</dt>
+                    <dd data-testid="total-credit">${{ creditedAmount.toFixed(2) }}</dd>
+                  </div>
+                </dl>
+
+                <button
+                  type="button"
+                  :class="['btn checkout-submit', paymentButtonClass]"
+                  :disabled="!canSubmit || submitting"
+                  @click="handleSubmitRecharge"
+                >
+                  <span v-if="submitting" class="checkout-submit__content">
+                    <span class="checkout-submit__spinner" />
+                    {{ t('common.processing') }}
+                  </span>
+                  <span v-else class="checkout-submit__content">
+                    {{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(totalAmount) }}
+                    <Icon name="arrowRight" size="sm" :stroke-width="2" />
+                  </span>
+                </button>
+
+                <div class="checkout-summary__security">
+                  <Icon name="lock" size="xs" :stroke-width="2" />
+                  <span>{{ t('payment.paymentSecurityHint') }}</span>
+                </div>
+                </section>
+
+                <section class="checkout-account" aria-labelledby="checkout-account-title">
+                  <div class="checkout-account__heading">
+                    <span class="checkout-summary__avatar" aria-hidden="true"><Icon name="user" size="sm" /></span>
+                    <div class="min-w-0">
+                      <h2 id="checkout-account-title">{{ t('payment.rechargeAccount') }}</h2>
+                      <p>{{ user?.username || '-' }}</p>
+                    </div>
+                  </div>
+                  <dl class="checkout-balances">
+                    <div>
+                      <dt>{{ t('payment.currentBalance') }}</dt>
+                      <dd data-testid="current-balance">{{ balancePreviewReady ? '$' + (user?.balance ?? 0).toFixed(2) : '-' }}</dd>
+                    </div>
+                    <div>
+                      <dt>{{ t('payment.projectedBalance') }}</dt>
+                      <dd data-testid="projected-balance">{{ balancePreviewReady && canSubmit ? '$' + projectedBalance.toFixed(2) : '-' }}</dd>
+                    </div>
+                  </dl>
+                  <p v-if="checkout.recharge_bonus_summary.available_amount > 0" class="checkout-account__note">
+                    {{ t('payment.includedBonusBalance', { amount: checkout.recharge_bonus_summary.available_amount.toFixed(2) }) }}
+                  </p>
+                  <p v-if="checkout.recharge_bonus_summary.next_expires_at" class="checkout-account__note">
+                    {{ t('payment.nextBonusExpiry', { time: formatBonusExpiry(checkout.recharge_bonus_summary.next_expires_at) }) }}
+                  </p>
+                  <p class="checkout-account__note checkout-account__note--muted">{{ t(balancePreviewReady ? 'payment.balanceEstimateNotice' : 'payment.balanceUnavailable') }}</p>
+                </section>
+                <CheckoutSupport />
+              </aside>
             </div>
-            <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmit || submitting" @click="handleSubmitRecharge">
-              <span v-if="submitting" class="flex items-center justify-center gap-2">
-                <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                {{ t('common.processing') }}
-              </span>
-              <span v-else>{{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(totalAmount) }}</span>
-            </button>
             </template>
           </template>
-          <!-- Subscribe Tab -->
+
           <template v-else-if="activeTab === 'subscription'">
-            <!-- Subscription confirm (inline, replaces plan list) -->
-            <template v-if="selectedPlan">
-              <div class="card p-5">
-                <!-- Header: platform badge + plan name -->
-                <div class="mb-3 flex flex-wrap items-center gap-2">
-                  <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', planBadgeClass]">
-                    {{ platformLabel(selectedPlan.group_platform || '') }}
+            <div v-if="selectedPlan" class="checkout-shell">
+              <div class="checkout-flow">
+                <section class="checkout-section" aria-labelledby="subscription-plan-title">
+                  <div class="checkout-section__heading">
+                    <span class="checkout-step">1</span>
+                    <div>
+                      <h2 id="subscription-plan-title">{{ t('payment.confirmSubscription') }}</h2>
+                      <p>{{ selectedPlan.name }}</p>
+                    </div>
+                  </div>
+
+                  <div class="checkout-plan">
+                    <div class="checkout-plan__topline">
+                      <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', planBadgeClass]">
+                        {{ platformLabel(selectedPlan.group_platform || '') }}
+                      </span>
+                      <span class="checkout-plan__validity">{{ planValiditySuffix }}</span>
+                    </div>
+                    <div class="checkout-plan__price">
+                      <strong :class="planTextClass">{{ formatSelectedSubscriptionPaymentAmount(selectedPlan.price) }}</strong>
+                      <span v-if="selectedPlan.original_price">
+                        {{ formatSelectedSubscriptionPaymentAmount(selectedPlan.original_price) }}
+                      </span>
+                    </div>
+                    <p v-if="selectedPlan.description" class="checkout-plan__description">{{ selectedPlan.description }}</p>
+                    <dl class="checkout-plan__metrics">
+                      <div>
+                        <dt>{{ t('payment.planCard.rate') }}</dt>
+                        <dd :class="planTextClass">×{{ selectedPlan.rate_multiplier ?? 1 }}</dd>
+                      </div>
+                      <div v-if="planHasPeakRate(selectedPlan)">
+                        <dt>{{ t('payment.planCard.peakRate') }}</dt>
+                        <dd>{{ planPeakRateLabel(selectedPlan) }}</dd>
+                      </div>
+                      <div v-if="selectedPlan.daily_limit_usd != null">
+                        <dt>{{ t('payment.planCard.dailyLimit') }}</dt>
+                        <dd>${{ selectedPlan.daily_limit_usd }}</dd>
+                      </div>
+                      <div v-if="selectedPlan.weekly_limit_usd != null">
+                        <dt>{{ t('payment.planCard.weeklyLimit') }}</dt>
+                        <dd>${{ selectedPlan.weekly_limit_usd }}</dd>
+                      </div>
+                      <div v-if="selectedPlan.monthly_limit_usd != null">
+                        <dt>{{ t('payment.planCard.monthlyLimit') }}</dt>
+                        <dd>${{ selectedPlan.monthly_limit_usd }}</dd>
+                      </div>
+                      <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null && selectedPlan.monthly_limit_usd == null">
+                        <dt>{{ t('payment.planCard.quota') }}</dt>
+                        <dd>{{ t('payment.planCard.unlimited') }}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                </section>
+
+                <section class="checkout-section" aria-labelledby="subscription-method-title">
+                  <div class="checkout-section__heading">
+                    <span class="checkout-step checkout-step--mint">2</span>
+                    <div>
+                      <h2 id="subscription-method-title">{{ t('payment.selectMethod') }}</h2>
+                      <p>{{ t('payment.selectMethodHint') }}</p>
+                    </div>
+                  </div>
+                  <PaymentMethodSelector
+                    :methods="subMethodOptions"
+                    detailed
+                    :selected="selectedMethod"
+                    @select="selectedMethod = $event"
+                  />
+                </section>
+              </div>
+
+              <aside class="checkout-sidebar">
+                <section class="checkout-summary" aria-labelledby="subscription-summary-title">
+                <div class="checkout-summary__account">
+                  <span class="checkout-summary__avatar" aria-hidden="true">
+                    <Icon name="gift" size="sm" />
                   </span>
-                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ selectedPlan.name }}</h3>
+                  <div class="min-w-0 flex-1">
+                    <p>{{ t('payment.tabSubscribe') }}</p>
+                    <strong class="truncate">{{ selectedPlan.name }}</strong>
+                  </div>
                 </div>
-                <!-- Price -->
-                <div class="flex items-baseline gap-2">
-                  <span v-if="selectedPlan.original_price" class="text-sm text-gray-400 line-through dark:text-gray-500">
-                    {{ formatSelectedSubscriptionPaymentAmount(selectedPlan.original_price) }}
-                  </span>
-                  <span :class="['text-3xl font-bold', planTextClass]">{{ formatSelectedSubscriptionPaymentAmount(selectedPlan.price) }}</span>
-                  <span class="text-sm text-gray-500 dark:text-gray-400">/ {{ planValiditySuffix }}</span>
+
+                <div class="checkout-summary__total">
+                  <p id="subscription-summary-title">{{ t('payment.actualPay') }}</p>
+                  <strong>{{ formatSelectedPaymentAmount(subTotalAmount) }}</strong>
                 </div>
-                <!-- Description -->
-                <p v-if="selectedPlan.description" class="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                  {{ selectedPlan.description }}
-                </p>
-                <!-- Rate + Limits grid -->
-                <div class="mt-3 grid grid-cols-2 gap-3">
+                <dl class="checkout-breakdown">
                   <div>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.rate') }}</span>
-                    <div class="flex items-baseline">
-                      <span :class="['text-lg font-bold', planTextClass]">×{{ selectedPlan.rate_multiplier ?? 1 }}</span>
-                    </div>
+                    <dt>{{ t('payment.amountLabel') }}</dt>
+                    <dd>{{ formatSelectedPaymentAmount(subPaymentAmount) }}</dd>
                   </div>
-                  <div v-if="planHasPeakRate(selectedPlan)">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.peakRate') }}</span>
-                    <div class="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                      {{ planPeakRateLabel(selectedPlan) }}
-                    </div>
+                  <div v-if="feeRate > 0">
+                    <dt>{{ t('payment.fee') }} ({{ feeRate }}%)</dt>
+                    <dd>{{ formatSelectedPaymentAmount(subFeeAmount) }}</dd>
                   </div>
-                  <div v-if="selectedPlan.daily_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.dailyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.daily_limit_usd }}</div>
-                  </div>
-                  <div v-if="selectedPlan.weekly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.weeklyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.weekly_limit_usd }}</div>
-                  </div>
-                  <div v-if="selectedPlan.monthly_limit_usd != null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.monthlyLimit') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">${{ selectedPlan.monthly_limit_usd }}</div>
-                  </div>
-                  <div v-if="selectedPlan.daily_limit_usd == null && selectedPlan.weekly_limit_usd == null && selectedPlan.monthly_limit_usd == null">
-                    <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.quota') }}</span>
-                    <div class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ t('payment.planCard.unlimited') }}</div>
-                  </div>
+                </dl>
+
+                <button
+                  type="button"
+                  :class="['btn checkout-submit', paymentButtonClass]"
+                  :disabled="!canSubmitSubscription || submitting"
+                  @click="confirmSubscribe"
+                >
+                  <span v-if="submitting" class="checkout-submit__content">
+                    <span class="checkout-submit__spinner" />
+                    {{ t('common.processing') }}
+                  </span>
+                  <span v-else class="checkout-submit__content">
+                    {{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(subTotalAmount) }}
+                    <Icon name="arrowRight" size="sm" :stroke-width="2" />
+                  </span>
+                </button>
+                <button type="button" class="btn btn-secondary checkout-cancel" @click="selectedPlan = null">
+                  {{ t('common.cancel') }}
+                </button>
+                <div class="checkout-summary__security">
+                  <Icon name="lock" size="xs" :stroke-width="2" />
+                  <span>{{ t('payment.paymentSecurityHint') }}</span>
                 </div>
-              </div>
-              <div v-if="enabledMethods.length >= 1" class="card p-6">
-                <PaymentMethodSelector
-                  :methods="subMethodOptions"
-                  :selected="selectedMethod"
-                  @select="selectedMethod = $event"
-                />
-              </div>
-              <div v-if="feeRate > 0 && selectedPlan.price > 0" class="card p-6">
-                <div class="space-y-2 text-sm">
-                  <div class="flex justify-between">
-                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.amountLabel') }}</span>
-                    <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(subPaymentAmount) }}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-gray-500 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
-                    <span class="text-gray-900 dark:text-white">{{ formatSelectedPaymentAmount(subFeeAmount) }}</span>
-                  </div>
-                  <div class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
-                    <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
-                    <span class="text-lg font-bold text-primary-600 dark:text-primary-400">{{ formatSelectedPaymentAmount(subTotalAmount) }}</span>
-                  </div>
-                </div>
-              </div>
-              <button :class="['btn w-full py-3 text-base font-medium', paymentButtonClass]" :disabled="!canSubmitSubscription || submitting" @click="confirmSubscribe">
-                <span v-if="submitting" class="flex items-center justify-center gap-2">
-                  <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                  {{ t('common.processing') }}
-                </span>
-                <span v-else>{{ t('payment.createOrder') }} {{ formatSelectedPaymentAmount(subTotalAmount) }}</span>
-              </button>
-              <button class="btn btn-secondary w-full" @click="selectedPlan = null">{{ t('common.cancel') }}</button>
-            </template>
-            <!-- Plan list -->
-            <template v-else>
-              <div v-if="checkout.plans.length === 0" class="card py-16 text-center">
-                <Icon name="gift" size="xl" class="mx-auto mb-3 text-gray-300 dark:text-dark-600" />
-                <p class="text-gray-500 dark:text-gray-400">{{ t('payment.noPlans') }}</p>
+                </section>
+                <CheckoutSupport />
+              </aside>
+            </div>
+
+            <div v-else class="checkout-catalog">
+              <div v-if="checkout.plans.length === 0" class="checkout-empty">
+                <Icon name="gift" size="xl" />
+                <p>{{ t('payment.noPlans') }}</p>
               </div>
               <div v-else :class="planGridClass">
-                <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
+                <SubscriptionPlanCard
+                  v-for="plan in checkout.plans"
+                  :key="plan.id"
+                  :plan="plan"
+                  :active-subscriptions="activeSubscriptions"
+                  @select="selectPlan"
+                />
               </div>
-              <!-- Active subscriptions (compact, below plan list) -->
-              <div v-if="activeSubscriptions.length > 0">
-                <p class="mb-2 text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.activeSubscription') }}</p>
-                <div class="space-y-2">
-                  <div v-for="sub in activeSubscriptions" :key="sub.id"
-                    class="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2 dark:border-dark-700 dark:bg-dark-800">
-                    <div :class="['h-6 w-1 shrink-0 rounded-full', platformAccentBarClass(sub.group?.platform || '')]" />
+
+              <section v-if="activeSubscriptions.length > 0" class="checkout-subscriptions" aria-labelledby="active-subscriptions-title">
+                <h2 id="active-subscriptions-title">{{ t('payment.activeSubscription') }}</h2>
+                <div class="checkout-subscriptions__list">
+                  <div v-for="sub in activeSubscriptions" :key="sub.id" class="checkout-subscription-row">
+                    <div :class="['h-7 w-1 shrink-0 rounded-full', platformAccentBarClass(sub.group?.platform || '')]" />
                     <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-1.5">
-                        <span class="truncate text-xs font-semibold text-gray-900 dark:text-white">{{ sub.group?.name || t('payment.groupFallback', { id: sub.group_id }) }}</span>
-                        <span :class="['shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium', platformBadgeLightClass(sub.group?.platform || '')]">{{ platformLabel(sub.group?.platform || '') }}</span>
+                      <div class="flex min-w-0 items-center gap-2">
+                        <strong class="truncate">{{ sub.group?.name || t('payment.groupFallback', { id: sub.group_id }) }}</strong>
+                        <span :class="['shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', platformBadgeLightClass(sub.group?.platform || '')]">
+                          {{ platformLabel(sub.group?.platform || '') }}
+                        </span>
                       </div>
-                      <div class="flex flex-wrap gap-x-3 text-[11px] text-gray-400 dark:text-gray-500">
+                      <p>
                         <span>{{ t('payment.planCard.rate') }}: ×{{ sub.group?.rate_multiplier ?? 1 }}</span>
                         <span v-if="subscriptionHasPeakRate(sub)">{{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(sub) }}</span>
-                        <span v-if="sub.group?.daily_limit_usd == null && sub.group?.weekly_limit_usd == null && sub.group?.monthly_limit_usd == null">{{ t('payment.planCard.quota') }}: {{ t('payment.planCard.unlimited') }}</span>
                         <span v-if="sub.expires_at">{{ t('userSubscriptions.daysRemaining', { days: getDaysRemaining(sub.expires_at) }) }}</span>
                         <span v-else>{{ t('userSubscriptions.noExpiration') }}</span>
-                      </div>
+                      </p>
                     </div>
                     <span class="badge badge-success shrink-0 text-[10px]">{{ t('userSubscriptions.status.active') }}</span>
                   </div>
                 </div>
-              </div>
-            </template>
+              </section>
+            </div>
           </template>
+
+          <section
+            v-if="(checkout.help_text || checkout.help_image_url) && !selectedPlan"
+            class="checkout-help"
+            aria-labelledby="checkout-help-title"
+          >
+            <div>
+              <p id="checkout-help-title">{{ t('payment.needHelp') }}</p>
+              <div v-if="checkout.help_text" class="checkout-help__text markdown-body overflow-x-auto break-words" v-html="renderedHelpText"></div>
+            </div>
+            <button
+              v-if="checkout.help_image_url"
+              type="button"
+              class="checkout-help__preview"
+              @click="openPreviewImage(checkout.help_image_url)"
+            >
+              <img :src="checkout.help_image_url" :alt="t('payment.helpImageAlt')" />
+              <span>{{ t('payment.viewHelpImage') }}</span>
+            </button>
+          </section>
         </template>
-        <div v-if="(checkout.help_text || checkout.help_image_url) && paymentPhase === 'select' && !selectedPlan" class="card p-4">
-          <div class="flex flex-col items-center gap-3">
-            <img v-if="checkout.help_image_url" :src="checkout.help_image_url" alt=""
-              class="h-40 max-w-full cursor-pointer rounded-lg object-contain transition-opacity hover:opacity-80"
-              @click="previewImage = checkout.help_image_url" />
-            <div v-if="checkout.help_text" class="markdown-body w-full overflow-x-auto break-words" v-html="renderedHelpText"></div>
-          </div>
-        </div>
       </template>
+      </div>
     </div>
-    <!-- Renewal Plan Selection Modal -->
+
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="showRenewalModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeRenewalModal">
-          <div class="relative flex max-h-full w-full max-w-lg flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
-            <!-- Close button -->
-            <button class="absolute right-4 top-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-200" @click="closeRenewalModal">
-              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <div
+          v-if="showRenewalModal"
+          class="checkout-modal-backdrop"
+          @click.self="closeRenewalModal"
+        >
+          <div
+            ref="renewalModalRef"
+            class="checkout-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="renewal-modal-title"
+            tabindex="-1"
+            @keydown.esc="closeRenewalModal"
+          >
+            <button
+              type="button"
+              class="checkout-modal__close"
+              :aria-label="t('common.close')"
+              @click="closeRenewalModal"
+            >
+              <Icon name="x" size="sm" :stroke-width="2" />
             </button>
-            <h3 class="mb-4 shrink-0 text-lg font-semibold text-gray-900 dark:text-white">{{ t('payment.selectPlan') }}</h3>
-            <div class="min-h-0 space-y-4 overflow-y-auto">
-              <SubscriptionPlanCard v-for="plan in renewalPlans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlanFromModal" />
+            <h2 id="renewal-modal-title">{{ t('payment.selectPlan') }}</h2>
+            <div class="checkout-modal__plans">
+              <SubscriptionPlanCard
+                v-for="plan in renewalPlans"
+                :key="plan.id"
+                :plan="plan"
+                :active-subscriptions="activeSubscriptions"
+                @select="selectPlanFromModal"
+              />
             </div>
           </div>
         </div>
       </Transition>
     </Teleport>
-    <!-- Image Preview Overlay -->
+
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="previewImage" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm" @click="previewImage = ''">
-          <img :src="previewImage" alt="" class="max-h-[85vh] max-w-[90vw] rounded-xl object-contain shadow-2xl" />
+        <div v-if="previewImage" class="checkout-modal-backdrop checkout-modal-backdrop--image" @click.self="closePreviewImage">
+          <div
+            ref="imageModalRef"
+            class="checkout-image-modal"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="t('payment.helpImageAlt')"
+            tabindex="-1"
+            @keydown.esc="closePreviewImage"
+          >
+            <button
+              type="button"
+              class="checkout-modal__close checkout-image-modal__close"
+              :aria-label="t('common.close')"
+              @click="closePreviewImage"
+            >
+              <Icon name="x" size="sm" :stroke-width="2" />
+            </button>
+            <img :src="previewImage" :alt="t('payment.helpImageAlt')" />
+          </div>
         </div>
       </Transition>
     </Teleport>
@@ -260,7 +445,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -277,7 +462,8 @@ import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import AmountInput from '@/components/payment/AmountInput.vue'
+import RechargePackages from '@/components/payment/RechargePackages.vue'
+import CheckoutSupport from '@/components/payment/CheckoutSupport.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
 import {
@@ -309,6 +495,7 @@ const authStore = useAuthStore()
 const paymentStore = usePaymentStore()
 const subscriptionStore = useSubscriptionStore()
 const appStore = useAppStore()
+const balancePreviewReady = ref(false)
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
@@ -332,9 +519,41 @@ const errorMessage = ref('')
 const errorHintMessage = ref('')
 const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
+const cashierOpen = ref(false)
+async function selectRechargePackage(value: number) {
+  if (!rechargeAmounts.includes(value)) return
+  amount.value = value
+  cashierOpen.value = true
+  await router.push({ path: route.path, query: { ...route.query, checkout: '1', amount: String(value) } })
+  await nextTick()
+  const heading = document.getElementById('checkout-amount-title')
+  document.querySelector('.checkout-page')?.scrollIntoView({ block: 'start', behavior: 'auto' })
+  heading?.focus({ preventScroll: true })
+}
+async function backToPackages() {
+  cashierOpen.value = false
+  const query = { ...route.query }
+  delete query.checkout
+  delete query.amount
+  await router.push({ path: route.path, query })
+  await nextTick()
+  document.querySelector<HTMLButtonElement>(`[data-package-amount="${amount.value}"] button`)?.focus()
+}
+function syncCheckoutRoute() {
+  if (hasWechatResumeQuery(route.query)) return
+  const value = Number(route.query.amount)
+  cashierOpen.value = route.query.checkout === '1' && rechargeAmounts.includes(value)
+  if (cashierOpen.value) amount.value = value
+}
+watch(() => [route.query.checkout, route.query.amount], syncCheckoutRoute)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
+const renewalModalRef = ref<HTMLElement | null>(null)
+const imageModalRef = ref<HTMLElement | null>(null)
+
+let renewalReturnFocus: HTMLElement | null = null
+let imageReturnFocus: HTMLElement | null = null
 
 const paymentPhase = ref<'select' | 'paying'>('select')
 
@@ -511,6 +730,7 @@ function onPaymentSettled() {
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
   plans: [], balance_disabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
+  recharge_bonus_rules: [], recharge_bonus_summary: { available_amount: 0, active_grants: 0 },
 })
 
 const renderedHelpText = computed(() => DOMPurify.sanitize(
@@ -544,12 +764,23 @@ const balanceRechargeMultiplier = computed(() => {
   const multiplier = checkout.value.balance_recharge_multiplier
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
 })
+const activeBonusRule = computed(() => checkout.value.recharge_bonus_rules.find(rule => Math.abs(rule.recharge_amount - validAmount.value) < 0.00000001) || null)
+const rechargeAmounts = [5, 10, 30, 50, 100, 500, 1000, 5000]
+
 // 订阅 CNY 换算汇率（1 USD = X CNY）。0 = 未配置，订阅保持 price 直付（与后端 opt-in 条件严格镜像）。
 const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
   return Number.isFinite(rate) && rate > 0 ? rate : 0
 })
-const creditedAmount = computed(() => Math.round((validAmount.value * balanceRechargeMultiplier.value) * 100) / 100)
+const baseCreditAmount = computed(() => Math.round(validAmount.value * balanceRechargeMultiplier.value * 100) / 100)
+const creditedAmount = computed(() => Math.round((baseCreditAmount.value + (activeBonusRule.value?.bonus_amount || 0)) * 100) / 100)
+// Existing bonus grants are already included in users.balance.
+const projectedBalance = computed(() => (user.value?.balance ?? 0) + creditedAmount.value)
+
+function formatBonusExpiry(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
 const planGridClass = computed(() => {
@@ -734,6 +965,7 @@ const paymentButtonClass = computed(() => {
   if (isBuiltInWxpayMethod(m)) return 'btn-wxpay'
   if (m === 'stripe') return 'btn-stripe'
   if (m === 'airwallex') return 'btn-airwallex'
+  if (m === 'paypal') return 'btn-paypal'
   return 'btn-primary'
 })
 
@@ -747,6 +979,19 @@ const renewGroupId = ref<number | null>(null)
 const renewalPlans = computed(() => {
   if (renewGroupId.value == null) return []
   return checkout.value.plans.filter(p => p.group_id === renewGroupId.value)
+})
+
+watch(showRenewalModal, async (isOpen) => {
+  if (!isOpen) return
+  renewalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  await nextTick()
+  renewalModalRef.value?.focus()
+})
+
+watch(previewImage, async (imageUrl) => {
+  if (!imageUrl) return
+  await nextTick()
+  imageModalRef.value?.focus()
 })
 
 const planValiditySuffix = computed(() => {
@@ -774,9 +1019,26 @@ function selectPlanFromModal(plan: SubscriptionPlan) {
   errorMessage.value = ''
 }
 
-function closeRenewalModal() {
+async function closeRenewalModal() {
   showRenewalModal.value = false
   renewGroupId.value = null
+  await nextTick()
+  renewalReturnFocus?.focus()
+  renewalReturnFocus = null
+}
+
+function openPreviewImage(imageUrl: string) {
+  const normalizedUrl = imageUrl.trim()
+  if (!normalizedUrl) return
+  imageReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  previewImage.value = normalizedUrl
+}
+
+async function closePreviewImage() {
+  previewImage.value = ''
+  await nextTick()
+  imageReturnFocus?.focus()
+  imageReturnFocus = null
 }
 
 async function handleSubmitRecharge() {
@@ -1125,6 +1387,13 @@ onMounted(async () => {
   try {
     const res = await paymentAPI.getCheckoutInfo()
     checkout.value = res.data
+    // Checkout expires old grants; refresh balance afterwards to avoid counting expired credit.
+    try {
+      await authStore.refreshUser()
+      balancePreviewReady.value = true
+    } catch {
+      balancePreviewReady.value = false
+    }
     if (enabledMethods.value.length) {
       const order: readonly string[] = METHOD_ORDER
       const sorted = [...enabledMethods.value].sort((a, b) => {
@@ -1133,6 +1402,9 @@ onMounted(async () => {
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
       })
       selectedMethod.value = sorted[0]
+      amount.value = rechargeAmounts.find(value => sorted.some(method =>
+        visibleMethods.value[method].available && amountFitsMethod(value, method)
+      )) ?? null
     }
     if (typeof window !== 'undefined') {
       if (hasWechatResumeQuery(route.query)) {
@@ -1159,6 +1431,7 @@ onMounted(async () => {
         removeRecoverySnapshot()
       }
     }
+    syncCheckoutRoute()
     await resumeWechatPaymentFromQuery()
     // balance_disabled → the tabs watcher above moves activeTab to the subscription tab (when enabled).
     // Handle renewal navigation: ?tab=subscription&group=123 (ignored when subscriptions are disabled)
@@ -1183,3 +1456,1023 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.checkout-body.is-package-selection { padding: 0; border: 0; background: transparent; }
+.checkout-back-packages { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; margin-bottom: 16px; color: var(--kc-accent-strong,#9c3f00); font-size: 14px; }
+.checkout-selected-package { padding: 24px; border: 1px solid var(--kc-line,#e2e7e4); border-radius: 16px; background: var(--kc-panel-muted,#f7f8f5); }
+.checkout-selected-package > span { font-size: 13px; color: var(--kc-muted,#68736e); }
+.checkout-selected-package h2 { margin: 10px 0; font-size: 38px; line-height: 1.3; font-weight: 700; color: var(--kc-ink,#182b29); }
+.checkout-selected-package p { font-size: 14px; line-height: 1.8; color: var(--kc-muted,#68736e); }
+.checkout-selected-package strong { color: var(--kc-accent-strong,#9c3f00); }
+.checkout-selected-package .checkout-selected-bonus { margin-top: 8px; color: var(--kc-warm, #a36118); }
+
+.checkout-page {
+  scroll-margin-top: calc(var(--kc-header-height, 72px) + 24px);
+  --checkout-ink: var(--kc-ink, #19201e);
+  --checkout-muted: var(--kc-muted, #66706c);
+  --checkout-line: var(--kc-line, rgba(38, 52, 47, 0.13));
+  --checkout-line-strong: var(--kc-line-strong, rgba(38, 52, 47, 0.22));
+  --checkout-surface: var(--kc-panel, #ffffff);
+  --checkout-surface-soft: var(--kc-panel-muted, #f4f6f5);
+  --checkout-coral: var(--kc-action, #e96f62);
+  --checkout-coral-soft: var(--kc-accent-soft, #fff0ec);
+  --checkout-mint: var(--kc-accent-strong, #23847d);
+  --checkout-mint-soft: var(--kc-accent-soft, #e8f5f1);
+  --checkout-blue: var(--kc-action, #3977bd);
+  --checkout-settlement: var(--kc-panel-muted, #f6faf9);
+  --checkout-shadow: var(--kc-shadow, 0 18px 50px rgba(67, 72, 66, 0.08));
+  width: min(100%, 1240px);
+  min-width: 0;
+  margin: 0 auto;
+  color: var(--checkout-ink);
+  font-weight: 400;
+}
+
+.checkout-body {
+  padding: 28px;
+  border-top: 3px solid var(--checkout-coral);
+  background: var(--checkout-surface);
+}
+
+.dark .checkout-page {
+  --checkout-ink: var(--kc-ink, #f5f8f5);
+  --checkout-muted: var(--kc-muted, #b7c2bd);
+  --checkout-line: var(--kc-line, rgba(231, 239, 235, 0.14));
+  --checkout-line-strong: var(--kc-line-strong, rgba(231, 239, 235, 0.25));
+  --checkout-surface: var(--kc-panel, #202a2d);
+  --checkout-surface-soft: var(--kc-panel-muted, #283337);
+  --checkout-settlement: var(--kc-panel-muted, #243331);
+  --checkout-coral: var(--kc-action, #ff8d7e);
+  --checkout-coral-soft: var(--kc-accent-soft, rgba(149, 66, 58, 0.24));
+  --checkout-mint: var(--kc-accent-strong, #65c8bd);
+  --checkout-mint-soft: var(--kc-accent-soft, rgba(36, 128, 119, 0.22));
+  --checkout-blue: var(--kc-action, #7bb3ef);
+  --checkout-shadow: var(--kc-shadow, 0 18px 50px rgba(0, 8, 10, 0.23));
+}
+
+.checkout-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 0 24px;
+  border-bottom: 1px solid var(--checkout-line);
+}
+
+.checkout-heading__mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  place-items: center;
+  border: 1px solid var(--checkout-coral);
+  border-radius: 8px;
+  color: var(--kc-on-action, #ffffff);
+  background: var(--checkout-coral);
+  box-shadow: var(--kc-shadow, 0 4px 10px rgba(233, 111, 98, 0.22));
+}
+
+.checkout-heading__eyebrow {
+  margin: 0 0 3px;
+  color: var(--checkout-coral);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.checkout-heading h1 {
+  margin: 0;
+  color: var(--checkout-ink);
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.checkout-heading__copy {
+  margin: 5px 0 0;
+  color: var(--checkout-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.checkout-protection {
+  display: inline-flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--kc-line-strong, rgba(35, 132, 125, 0.2));
+  border-radius: 8px;
+  color: var(--checkout-mint);
+  background: var(--checkout-mint-soft);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.checkout-loading {
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+}
+
+.checkout-spinner,
+.checkout-submit__spinner {
+  display: inline-block;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: checkout-spin 0.75s linear infinite;
+}
+
+.checkout-spinner {
+  width: 32px;
+  height: 32px;
+  color: var(--checkout-coral);
+}
+
+.checkout-tabs {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 0 20px;
+  padding: 4px;
+  border: 1px solid var(--checkout-line);
+  border-radius: 8px;
+  background: var(--checkout-surface-soft);
+}
+
+.checkout-tabs button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--checkout-muted);
+  font-size: 14px;
+  font-weight: 650;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.checkout-tabs button:hover {
+  color: var(--checkout-ink);
+}
+
+.checkout-tabs button.active {
+  border-color: var(--checkout-line);
+  color: var(--checkout-mint);
+  background: var(--checkout-surface);
+  box-shadow: var(--kc-shadow, 0 4px 14px rgba(52, 59, 55, 0.08));
+}
+
+.checkout-tabs button:focus-visible,
+.checkout-help__preview:focus-visible,
+.checkout-modal__close:focus-visible {
+  outline: 2px solid var(--checkout-mint);
+  outline-offset: 2px;
+}
+
+.checkout-shell {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 330px);
+  gap: 28px;
+  align-items: start;
+  margin-top: 26px;
+}
+
+.checkout-flow {
+  display: grid;
+  min-width: 0;
+  gap: 22px;
+}
+
+.checkout-empty,
+.checkout-subscriptions,
+.checkout-help {
+  border: 1px solid var(--checkout-line);
+  border-radius: 8px;
+  background: var(--checkout-surface);
+  box-shadow: var(--checkout-shadow);
+}
+
+.checkout-section {
+  min-width: 0;
+  padding: 0 0 22px;
+  border-bottom: 1px solid var(--checkout-line);
+}
+
+.checkout-section__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.checkout-section__heading > div {
+  min-width: 0;
+}
+
+.checkout-limit {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--checkout-mint);
+  background: var(--checkout-mint-soft);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.checkout-section__heading h2 {
+  margin: 0;
+  color: var(--checkout-ink);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.checkout-section__heading p {
+  margin: 3px 0 0;
+  color: var(--checkout-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.checkout-step {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--kc-on-action, #ffffff);
+  background: var(--checkout-coral);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.checkout-step--mint {
+  color: var(--kc-on-action, #ffffff);
+  background: var(--checkout-mint);
+}
+
+.checkout-message,
+.checkout-offer,
+.checkout-summary__notice {
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.checkout-message {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+}
+
+.checkout-message--warning {
+  border: 1px solid var(--kc-line-strong, rgba(202, 128, 41, 0.25));
+  color: var(--kc-warm, #99601e);
+  background: rgba(255, 244, 222, 0.9);
+}
+
+.dark .checkout-message--warning {
+  color: var(--kc-warm, #ffd294);
+  background: rgba(133, 82, 28, 0.22);
+}
+
+.checkout-offer {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--kc-line-strong, rgba(35, 132, 125, 0.18));
+  color: var(--checkout-mint);
+  background: var(--checkout-mint-soft);
+}
+
+.checkout-offer p {
+  margin: 0;
+}
+
+.checkout-summary {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--checkout-line);
+  border-radius: 8px;
+  background: var(--checkout-surface);
+  box-shadow: var(--kc-shadow, 0 5px 16px rgba(38, 52, 47, 0.07));
+  color: var(--checkout-ink);
+}
+
+.checkout-sidebar {
+  display: grid;
+  min-width: 0;
+  gap: 20px;
+  padding: 0 0 20px;
+  background: var(--checkout-settlement);
+}
+
+.checkout-account {
+  min-width: 0;
+  padding: 0 20px;
+}
+
+.checkout-account__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkout-account__heading h2 {
+  margin: 0;
+  color: var(--checkout-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.checkout-account__heading p {
+  margin: 3px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.checkout-balances {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 18px 0 14px;
+  border-top: 1px solid var(--checkout-line);
+  border-bottom: 1px solid var(--checkout-line);
+}
+
+.checkout-balances > div {
+  padding: 12px 0;
+  min-width: 0;
+}
+
+.checkout-balances > div:last-child {
+  padding-left: 14px;
+  border-left: 1px solid var(--checkout-line);
+}
+
+.checkout-balances dt {
+  color: var(--checkout-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.checkout-balances dd {
+  margin: 6px 0 0;
+  font-size: 21px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-balances > div:last-child dd {
+  color: var(--checkout-mint);
+}
+
+.checkout-account__note {
+  margin: 8px 0 0;
+  color: var(--checkout-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.checkout-account__note--muted {
+  font-size: 10px;
+}
+
+.checkout-summary__account {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--checkout-line);
+}
+
+.checkout-summary__avatar {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--checkout-mint);
+  background: var(--checkout-mint-soft);
+}
+
+.checkout-summary__account p,
+.checkout-summary__balance span {
+  margin: 0;
+  color: var(--checkout-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.checkout-summary__account strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkout-summary__balance {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.checkout-summary__balance strong {
+  color: var(--kc-accent-strong, #8ed8ce);
+  font-size: 13px;
+}
+
+.checkout-summary__total {
+  padding: 0 0 22px;
+  text-align: left;
+}
+
+.checkout-summary__total p {
+  margin: 0 0 10px;
+  color: var(--checkout-muted);
+  font-size: 12px;
+}
+
+.checkout-summary__total strong {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--checkout-coral);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.checkout-breakdown {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 16px 0;
+  border-top: 1px dashed var(--checkout-line-strong);
+}
+
+.checkout-breakdown div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.checkout-breakdown dt {
+  color: var(--checkout-muted);
+  font-size: 12px;
+}
+
+.checkout-breakdown dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--checkout-ink);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: right;
+}
+
+.checkout-breakdown > div:last-child {
+  padding-top: 10px;
+  border-top: 1px solid var(--checkout-line);
+}
+
+.checkout-breakdown > div:last-child dd {
+  font-size: 15px;
+}
+
+.checkout-breakdown__accent dd {
+  color: var(--checkout-mint);
+}
+
+.checkout-summary__notice {
+  margin: 12px 0 0;
+  padding: 9px 10px;
+  color: var(--checkout-muted);
+  background: var(--checkout-surface-soft);
+}
+
+.checkout-submit {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.checkout-page .checkout-submit {
+  color: var(--kc-on-action, #ffffff);
+  background: var(--kc-action, var(--checkout-blue));
+  border-color: var(--kc-action, var(--checkout-blue));
+  box-shadow: var(--kc-shadow, none);
+}
+
+.checkout-page .checkout-submit:hover:not(:disabled) {
+  background: var(--kc-action-hover, var(--checkout-blue));
+  border-color: var(--kc-action-hover, var(--checkout-blue));
+}
+
+.checkout-submit__content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.checkout-submit__spinner {
+  width: 15px;
+  height: 15px;
+}
+
+.checkout-cancel {
+  width: 100%;
+  margin-top: 9px;
+}
+
+.checkout-summary__security {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--checkout-muted);
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.checkout-plan {
+  min-width: 0;
+}
+
+.checkout-plan__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--checkout-line);
+}
+
+.checkout-plan__validity {
+  color: var(--checkout-muted);
+  font-size: 12px;
+}
+
+.checkout-plan__price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 9px;
+  padding-top: 18px;
+}
+
+.checkout-plan__price strong {
+  font-size: 29px;
+  line-height: 1.15;
+}
+
+.checkout-plan__price span {
+  color: var(--checkout-muted);
+  font-size: 13px;
+  text-decoration: line-through;
+}
+
+.checkout-plan__description {
+  margin: 10px 0 0;
+  color: var(--checkout-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.checkout-plan__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 18px 0 0;
+  border: 1px solid var(--checkout-line);
+  border-radius: 7px;
+  background: var(--checkout-line);
+}
+
+.checkout-plan__metrics div {
+  min-width: 0;
+  padding: 11px;
+  background: var(--checkout-surface-soft);
+}
+
+.checkout-plan__metrics dt {
+  color: var(--checkout-muted);
+  font-size: 10px;
+}
+
+.checkout-plan__metrics dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--checkout-ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.checkout-catalog {
+  display: grid;
+  gap: 20px;
+  margin-top: 22px;
+}
+
+.checkout-empty {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding: 28px;
+  color: var(--checkout-muted);
+  text-align: center;
+}
+
+.checkout-empty p {
+  margin: 0;
+}
+
+.checkout-subscriptions {
+  padding: 22px;
+}
+
+.checkout-subscriptions h2 {
+  margin: 0 0 14px;
+  color: var(--checkout-ink);
+  font-size: 15px;
+  font-weight: 720;
+}
+
+.checkout-subscriptions__list {
+  display: grid;
+  gap: 8px;
+}
+
+.checkout-subscription-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--checkout-line);
+  border-radius: 7px;
+  background: var(--checkout-surface-soft);
+}
+
+.checkout-subscription-row strong {
+  color: var(--checkout-ink);
+  font-size: 13px;
+}
+
+.checkout-subscription-row p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin: 4px 0 0;
+  color: var(--checkout-muted);
+  font-size: 11px;
+}
+
+.checkout-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 20px;
+  padding: 16px 18px;
+  box-shadow: none;
+}
+
+.checkout-help p {
+  margin: 0 0 3px;
+  color: var(--checkout-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.checkout-help > div {
+  min-width: 0;
+}
+
+.checkout-help__text {
+  color: var(--checkout-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.checkout-help span {
+  color: var(--checkout-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.checkout-help__preview {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  padding: 5px;
+  padding-right: 10px;
+  border: 1px solid var(--checkout-line);
+  border-radius: 7px;
+  background: var(--checkout-surface-soft);
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.checkout-help__preview:hover {
+  border-color: var(--checkout-line-strong);
+  transform: translateY(-1px);
+}
+
+.checkout-help__preview img {
+  width: 42px;
+  height: 42px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.checkout-payment-stage {
+  width: min(100%, 620px);
+  margin: 24px auto 0;
+}
+
+.checkout-modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  overflow-y: auto;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 17, 16, 0.66);
+  backdrop-filter: blur(8px);
+}
+
+.checkout-modal,
+.checkout-image-modal {
+  position: relative;
+  width: min(100%, 760px);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  border: 1px solid var(--kc-line-strong, rgba(255, 255, 255, 0.24));
+  border-radius: 8px;
+  color: var(--kc-ink, #19201e);
+  background: var(--kc-panel, #f8f8f4);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.3);
+}
+
+.checkout-modal {
+  padding: 24px;
+}
+
+.checkout-modal h2 {
+  margin: 0 42px 18px 0;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.checkout-modal__plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.checkout-modal__close {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--kc-line-strong, rgba(38, 52, 47, 0.14));
+  border-radius: 7px;
+  color: var(--kc-muted, #4d5753);
+  background: var(--kc-panel-muted, rgba(255, 255, 255, 0.82));
+}
+
+.checkout-image-modal {
+  display: grid;
+  width: min(100%, 820px);
+  place-items: center;
+  padding: 16px;
+}
+
+.checkout-image-modal img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 72px);
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.checkout-image-modal__close {
+  color: var(--kc-ink, #19201e);
+}
+
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.modal-enter-active .checkout-modal,
+.modal-enter-active .checkout-image-modal,
+.modal-leave-active .checkout-modal,
+.modal-leave-active .checkout-image-modal {
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .checkout-modal,
+.modal-enter-from .checkout-image-modal,
+.modal-leave-to .checkout-modal,
+.modal-leave-to .checkout-image-modal {
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+}
+
+@keyframes checkout-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1180px) {
+  .checkout-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .checkout-sidebar {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .checkout-body {
+    padding: 20px 12px;
+  }
+
+  .checkout-section__heading {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .checkout-section__heading > div {
+    flex: 1;
+  }
+
+  .checkout-limit {
+    grid-column: 2;
+    justify-self: start;
+    margin: 0;
+  }
+
+  .checkout-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-bottom: 20px;
+  }
+
+  .checkout-heading__mark {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+
+  .checkout-heading h1 {
+    font-size: 23px;
+  }
+
+  .checkout-protection {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .checkout-tabs {
+    width: 100%;
+    margin: 0 0 16px;
+  }
+
+  .checkout-tabs button {
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+
+  .checkout-shell,
+  .checkout-catalog,
+  .checkout-empty {
+    margin-top: 16px;
+  }
+
+  .checkout-subscriptions {
+    padding: 17px;
+  }
+
+  .checkout-section__heading {
+    margin-bottom: 16px;
+  }
+
+  .checkout-summary__account {
+    align-items: flex-start;
+  }
+
+  .checkout-summary__total strong {
+    font-size: 36px;
+  }
+
+  .checkout-plan__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .checkout-subscription-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .checkout-help {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .checkout-help__preview {
+    width: 100%;
+  }
+
+  .checkout-modal-backdrop {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .checkout-modal,
+  .checkout-image-modal {
+    max-height: calc(100vh - 20px);
+  }
+
+  .checkout-modal {
+    padding: 18px;
+  }
+
+  .checkout-modal__plans {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkout-tabs button,
+  .checkout-help__preview,
+  .modal-enter-active,
+  .modal-leave-active,
+  .modal-enter-active .checkout-modal,
+  .modal-enter-active .checkout-image-modal,
+  .modal-leave-active .checkout-modal,
+  .modal-leave-active .checkout-image-modal {
+    transition: none;
+  }
+
+  .checkout-spinner,
+  .checkout-submit__spinner {
+    animation-duration: 1.5s;
+  }
+}
+</style>

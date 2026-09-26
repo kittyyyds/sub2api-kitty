@@ -13,9 +13,9 @@
     <MonitorCardGrid
       :items="items"
       :window="currentWindow"
-      :countdown-seconds="countdown"
       :loading="loading"
       :detail-cache="detailCache"
+      :rate-by-group-name="rateByGroupName"
       @card-click="openDetail"
     />
 
@@ -39,6 +39,7 @@ import {
   type UserMonitorView,
   type UserMonitorDetail,
 } from '@/api/channelMonitor'
+import { getAvailable, getUserGroupRates } from '@/api/groups'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import MonitorHero, {
   type MonitorWindow,
@@ -57,6 +58,7 @@ const items = ref<UserMonitorView[]>([])
 const loading = ref(false)
 const currentWindow = ref<MonitorWindow>('7d')
 const detailCache = reactive<Record<number, UserMonitorDetail>>({})
+const rateByGroupName = ref<Record<string, number>>({})
 const showDetail = ref(false)
 const detailTarget = ref<UserMonitorView | null>(null)
 
@@ -70,7 +72,10 @@ const autoRefresh = useAutoRefresh({
   onRefresh: () => reload(true),
   shouldPause: () => document.hidden || loading.value,
 })
-const countdown = autoRefresh.countdown
+
+function normalizeGroupName(name: string): string {
+  return name.trim().toLocaleLowerCase()
+}
 
 // ── Computed ──
 const overallStatus = computed<OverallStatus>(() => {
@@ -110,11 +115,25 @@ async function reload(silent = false) {
 }
 
 async function manualReload() {
-  await reload(false)
+  await Promise.all([reload(false), loadRateMultipliers()])
   // After base reload, refresh any cached detail records so non-7d availability
   // values stay in sync without forcing the user to switch tabs again.
   if (currentWindow.value !== '7d') {
     await Promise.all(items.value.map(it => loadDetail(it.id, true)))
+  }
+}
+
+async function loadRateMultipliers() {
+  try {
+    const [groups, userRates] = await Promise.all([getAvailable(), getUserGroupRates()])
+    rateByGroupName.value = Object.fromEntries(
+      groups.map(group => [
+        normalizeGroupName(group.name),
+        userRates[group.id] ?? group.rate_multiplier,
+      ]),
+    )
+  } catch (err) {
+    console.warn('[channel-status] failed to load group rates', err)
   }
 }
 
@@ -162,6 +181,7 @@ watch(
 
 onMounted(() => {
   void reload(false)
+  void loadRateMultipliers()
   if (appStore.cachedPublicSettings?.channel_monitor_enabled !== false) {
     autoRefresh.setEnabled(autoRefresh.enabled.value)
   }

@@ -4,7 +4,7 @@ import { defineComponent, ref } from 'vue'
 
 import UsageView from '../UsageView.vue'
 
-const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listErrorLogs, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
+const { list, exportList, getStats, getAuditStats, exportAudit, getSnapshotV2, getById, getModelStats, listErrorLogs, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
   vi.stubGlobal('localStorage', {
     getItem: vi.fn(() => null),
     setItem: vi.fn(),
@@ -15,6 +15,8 @@ const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listE
     list: vi.fn(),
 		exportList: vi.fn(),
     getStats: vi.fn(),
+    getAuditStats: vi.fn(),
+    exportAudit: vi.fn(),
     getSnapshotV2: vi.fn(),
     getById: vi.fn(),
     getModelStats: vi.fn(),
@@ -33,6 +35,7 @@ const messages: Record<string, string> = {
   'admin.dashboard.hour': 'Hour',
   'admin.usage.failedToLoadUser': 'Failed to load user',
 	'admin.usage.requestId': 'Request ID',
+	'admin.usage.cacheHitRate': 'Cache Hit Rate',
 	'admin.usage.upstreamRequestId': 'Upstream ID',
 	'usage.requestedModel': 'Requested model',
 	'usage.sentUpstreamModel': 'Sent upstream model',
@@ -67,7 +70,9 @@ vi.mock('@/api/admin', () => ({
 
 vi.mock('@/api/admin/usage', () => ({
   adminUsageAPI: {
-		list: exportList,
+	list: exportList,
+    getAuditStats,
+    exportAudit,
   },
 }))
 
@@ -135,7 +140,7 @@ const UsageFiltersStub = defineComponent({
   template: '<div><span data-test="user-filter-label">{{ userKeyword }}</span><slot name="after-reset" /></div>',
 })
 const UsageTableStub = {
-  props: ['columns'],
+  props: ['columns', 'showCacheHitRate'],
   emits: ['userClick'],
   template: '<div data-test="usage-table"><button class="user-click" @click="$emit(\'userClick\', 2)">user</button></div>',
 }
@@ -198,6 +203,16 @@ describe('admin UsageView route filters', () => {
   afterEach(() => {
     Object.keys(routeQuery).forEach((key) => delete routeQuery[key])
     vi.useRealTimers()
+  })
+
+  it('opens an old video receipt with owner, key and settlement date range', async () => {
+    Object.assign(routeQuery, { user_id: '42', api_key_id: '166', start_date: '2026-01-03', end_date: '2026-01-06' })
+    const wrapper = mountRouteFilteredUsageView()
+    await flushPromises()
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: 42, api_key_id: 166, start_date: '2026-01-03', end_date: '2026-01-06',
+    }), expect.anything())
+    wrapper.unmount()
   })
 
   it('shows the routed user while applying user_id to usage requests', async () => {
@@ -461,7 +476,7 @@ describe('admin UsageView distribution metric toggles', () => {
   })
 })
 
-describe('admin UsageView request ID column visibility', () => {
+describe('admin UsageView column visibility', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(localStorage.getItem).mockReset().mockReturnValue(null)
@@ -479,7 +494,7 @@ describe('admin UsageView request ID column visibility', () => {
     vi.useRealTimers()
   })
 
-  it('keeps request ID hidden by default and allows enabling it from column settings', async () => {
+  it('shows the admin-only cache hit rate by default and allows toggling columns', async () => {
     const wrapper = mount(UsageView, {
       global: {
         stubs: {
@@ -506,13 +521,23 @@ describe('admin UsageView request ID column visibility', () => {
     await wrapper.vm.$nextTick()
 
     const usageTable = wrapper.findComponent(UsageTableStub)
+    expect(usageTable.props('showCacheHitRate')).toBe(true)
+    expect(usageTable.props('columns')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'cache_hit_rate', label: 'Cache Hit Rate' })]),
+    )
     expect(usageTable.props('columns')).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ key: 'request_id' })]),
     )
 
     await wrapper.get('button[title="admin.users.columnSettings"]').trigger('click')
+    const cacheHitRateToggle = wrapper.findAll('button').find((button) => button.text() === 'Cache Hit Rate')
     const requestIdToggle = wrapper.findAll('button').find((button) => button.text() === 'Request ID')
+    expect(cacheHitRateToggle).toBeDefined()
     expect(requestIdToggle).toBeDefined()
+    await cacheHitRateToggle!.trigger('click')
+    expect(usageTable.props('columns')).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'cache_hit_rate' })]),
+    )
     await requestIdToggle!.trigger('click')
 
     expect(usageTable.props('columns')).toEqual(
@@ -667,9 +692,9 @@ describe('admin UsageView errors tab filter forwarding', () => {
     vm.filters.group_id = 3
     await flushPromises()
 
-    // 切换到「错误请求」标签（第二个 tab 按钮）触发 loadAdminErrors
+    // 切换到「错误请求」标签（第三个 tab 按钮）触发 loadAdminErrors
     const tabs = wrapper.findAll('[data-testid="usage-detail-tab"]')
-    await tabs[1].trigger('click')
+    await tabs[2].trigger('click')
     await flushPromises()
 
     expect(listErrorLogs).toHaveBeenCalledWith(expect.objectContaining({
@@ -688,6 +713,11 @@ describe('admin UsageView ranking tab', () => {
     getStats.mockReset()
     getSnapshotV2.mockReset()
     getModelStats.mockReset()
+    getAuditStats.mockReset().mockResolvedValue({
+      total_records: 0, audited_records: 0, coverage_pct: 0,
+      counts: { pass: 0, warning: 0, anomaly: 0, unverifiable: 0, not_applicable: 0, unknown: 0, missing: 0 },
+      by_platform: [], by_account: [], by_model: [],
+    })
 
     list.mockResolvedValue({ items: [], total: 0, pages: 0 })
     getStats.mockResolvedValue({
@@ -720,8 +750,8 @@ describe('admin UsageView ranking tab', () => {
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(false)
 
     const tabs = wrapper.findAll('[data-testid="usage-detail-tab"]')
-    expect(tabs).toHaveLength(3)
-    await tabs[2].trigger('click')
+    expect(tabs).toHaveLength(4)
+    await tabs[3].trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-test="ranking"]').exists()).toBe(true)
 
@@ -733,6 +763,83 @@ describe('admin UsageView ranking tab', () => {
     expect((wrapper.vm as any).activeTab).toBe('usage')
     expect((wrapper.vm as any).filters.user_id).toBe(5)
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ user_id: 5 }), expect.anything())
+  })
+})
+
+describe('admin UsageView authenticity audit tab', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    list.mockReset().mockResolvedValue({ items: [], total: 0, pages: 0 })
+    exportList.mockReset().mockResolvedValue({
+      items: [{ id: 1, request_id: 'audit-1', model: 'gpt-5.6' }],
+      total: 1,
+      pages: 1,
+    })
+    getStats.mockReset().mockResolvedValue({
+      total_requests: 0, total_input_tokens: 0, total_output_tokens: 0,
+      total_cache_tokens: 0, total_tokens: 0, total_cost: 0, total_actual_cost: 0, average_duration_ms: 0,
+    })
+    getSnapshotV2.mockReset().mockResolvedValue({ trend: [], models: [], groups: [] })
+    getModelStats.mockReset().mockResolvedValue({ models: [] })
+    getAuditStats.mockReset().mockResolvedValue({
+      total_records: 3,
+      audited_records: 2,
+      coverage_pct: 66.7,
+      counts: { pass: 1, warning: 0, anomaly: 1, unverifiable: 0, not_applicable: 0, unknown: 0, missing: 1 },
+      by_platform: [], by_account: [], by_model: [],
+    })
+    exportAudit.mockReset().mockResolvedValue(new Blob(['audit']))
+    saveAs.mockClear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('loads the audit list and statistics only when the audit tab is opened', async () => {
+    const wrapper = mount(UsageView, {
+      global: { stubs: {
+        AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+        UsageTable: true, UsageAuditPanel: true, UsageExportProgress: true, UsageCleanupDialog: true,
+        UserBalanceHistoryModal: true, Pagination: true, Select: true,
+        DateRangePicker: true, Icon: true, TokenUsageTrend: true,
+        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
+        UserTokenRanking: true, OpsErrorLogTable: true, OpsErrorDetailModal: true,
+      } },
+    })
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+
+    expect(getAuditStats).not.toHaveBeenCalled()
+    const tabs = wrapper.findAll('[data-testid="usage-detail-tab"]')
+    await tabs[1].trigger('click')
+    await flushPromises()
+
+    expect(getAuditStats).toHaveBeenCalledWith(expect.objectContaining({ exact_total: true }))
+    expect(exportList).toHaveBeenCalledWith(expect.objectContaining({ exact_total: true, page: 1 }), expect.anything())
+    expect((wrapper.vm as any).activeTab).toBe('audit')
+  })
+
+  it('passes audit filters to the dedicated export endpoint', async () => {
+    const wrapper = mount(UsageView, {
+      global: { stubs: {
+        AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+        UsageTable: true, UsageAuditPanel: true, UsageExportProgress: true, UsageCleanupDialog: true,
+        UserBalanceHistoryModal: true, Pagination: true, Select: true,
+        DateRangePicker: true, Icon: true, TokenUsageTrend: true,
+        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
+        UserTokenRanking: true, OpsErrorLogTable: true, OpsErrorDetailModal: true,
+      } },
+    })
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+
+    ;(wrapper.vm as any).filters.audit_status = 'anomaly'
+    ;(wrapper.vm as any).activeTab = 'audit'
+    await (wrapper.vm as any).exportAudit('csv')
+
+    expect(exportAudit).toHaveBeenCalledWith(expect.objectContaining({ audit_status: 'anomaly' }), 'csv')
+    expect(saveAs).toHaveBeenCalledWith(expect.any(Blob), expect.stringMatching(/usage-audit_.*\.csv$/))
   })
 })
 
@@ -751,8 +858,8 @@ describe('admin UsageView model audit export', () => {
 				request_type: 'sync',
 				input_tokens: 1,
 				output_tokens: 1,
-				cache_read_tokens: 0,
-				cache_creation_tokens: 0,
+				cache_read_tokens: 80,
+				cache_creation_tokens: 10,
 				duration_ms: 10,
 			}],
 			total: 1,
@@ -797,6 +904,9 @@ describe('admin UsageView model audit export', () => {
 		])
 		const row = sheetAddAoa.mock.calls[0][1][0]
 		expect(row.slice(4, 8)).toEqual(['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4', 'Yes'])
+		const cacheHitRateIndex = headers.indexOf('Cache Hit Rate')
+		expect(cacheHitRateIndex).toBeGreaterThan(-1)
+		expect(row[cacheHitRateIndex]).toBe('87.9%')
 		expect(saveAs).toHaveBeenCalledTimes(1)
 	})
 })

@@ -186,6 +186,33 @@ func TestBuildPaymentOrderProviderSnapshot_IncludesProviderCurrency(t *testing.T
 	}, CreateOrderRequest{})
 	require.Equal(t, "USD", airwallexSnapshot["currency"])
 	require.Equal(t, "acct-78", airwallexSnapshot["merchant_id"])
+
+	dujiaoPaySnapshot := buildPaymentOrderProviderSnapshot(&payment.InstanceSelection{
+		InstanceID:  "79",
+		ProviderKey: payment.TypeDujiaoPay,
+		Config: map[string]string{
+			"currency":  "cny",
+			"keyId":     "ak_project_79",
+			"apiSecret": "secret",
+		},
+	}, CreateOrderRequest{})
+	require.Equal(t, "CNY", dujiaoPaySnapshot["currency"])
+	require.Equal(t, "ak_project_79", dujiaoPaySnapshot["merchant_id"])
+	require.NotContains(t, dujiaoPaySnapshot, "apiSecret")
+
+	payPalSnapshot := buildPaymentOrderProviderSnapshot(&payment.InstanceSelection{
+		InstanceID:  "80",
+		ProviderKey: payment.TypePayPal,
+		Config: map[string]string{
+			"clientId":     "paypal-client-80",
+			"clientSecret": "secret",
+			"currency":     "usd",
+			"environment":  "sandbox",
+		},
+	}, CreateOrderRequest{})
+	require.Equal(t, "USD", payPalSnapshot["currency"])
+	require.Equal(t, "paypal-client-80", payPalSnapshot["merchant_id"])
+	require.NotContains(t, payPalSnapshot, "clientSecret")
 }
 
 func valueOrEmpty(v *string) string {

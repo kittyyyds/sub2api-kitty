@@ -49,6 +49,10 @@ export interface PlazaModel {
   /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
   pricing: UserSupportedModelPricing | null
   official_pricing: PlazaOfficialPricing | null
+  /** Image tiers whose configured USD price is already the final customer charge. */
+  final_image_price_tiers?: string[]
+  /** Video tiers whose configured USD price is the final customer per-second rate. */
+  final_video_price_tiers?: string[]
   /** 仅多档模型返回。 */
   long_context_basis?: PlazaLongContextBasis
   /** 仅配置了分时倍率的模型返回。 */
@@ -63,6 +67,12 @@ export interface ModelPlazaGroup {
   /** 'standard' | 'subscription' */
   subscription_type: string
   rate_multiplier: number
+  /** 图片模型是否使用独立倍率。 */
+  image_rate_independent: boolean
+  image_rate_multiplier: number
+  /** 视频模型是否使用独立倍率。 */
+  video_rate_independent: boolean
+  video_rate_multiplier: number
   /** 登录且管理员为该用户配了专属倍率时返回；生效倍率 = user_rate ?? rate_multiplier。 */
   user_rate_multiplier?: number
   peak_rate_enabled: boolean
@@ -71,8 +81,6 @@ export interface ModelPlazaGroup {
   peak_rate_multiplier: number
   is_exclusive: boolean
   /** 生图独立倍率：true 时图片计费模型的实付倍率取 image_rate_multiplier，不取分组/专属倍率。 */
-  image_rate_independent: boolean
-  image_rate_multiplier: number
   /** 分组是否启用长上下文阶梯计费；false 时实付列只展示最低档，官方阶梯仅供参考。 */
   long_context_pricing_enabled: boolean
   models: PlazaModel[]

@@ -125,7 +125,6 @@ func TestOpenAIImagesJSONKeepalive_KeepsOAuthNonStreamResponseValid(t *testing.T
 
 	reader, writer := io.Pipe()
 	go func() {
-		time.Sleep(20 * time.Millisecond)
 		_, _ = io.WriteString(writer,
 			"data: {\"type\":\"response.completed\",\"response\":{\"created_at\":1710000000,\"output\":[{\"type\":\"image_generation_call\",\"result\":\"aW1hZ2U=\",\"output_format\":\"png\"}]}}\n\n"+
 				"data: [DONE]\n\n",
@@ -134,6 +133,9 @@ func TestOpenAIImagesJSONKeepalive_KeepsOAuthNonStreamResponseValid(t *testing.T
 	}()
 
 	stop := StartOpenAIImagesJSONKeepalive(c, 5*time.Millisecond)
+	// Wait for the heartbeat itself rather than relying on timer scheduling
+	// under a busy full-suite run. The pipe keeps upstream completion pending.
+	waitForOpenAIImagesJSONKeepalive(t, c)
 	resp := &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},

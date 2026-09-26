@@ -130,7 +130,11 @@ func buildTransport(opts Options) (*http.Transport, error) {
 
 	_, parsed, err := proxyurl.Parse(opts.ProxyURL)
 	if err != nil {
-		return nil, err
+		var parseErr error
+		_, parsed, parseErr = proxyurl.ParseFlexible(opts.ProxyURL, "http")
+		if parseErr != nil {
+			return nil, err
+		}
 	}
 	if parsed == nil {
 		return transport, nil

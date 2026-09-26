@@ -240,6 +240,9 @@ func (r *accountRepository) CreateWithAccountGroups(ctx context.Context, account
 	if err := createAccountRecord(ctx, txClient, account); err != nil {
 		return err
 	}
+	if err := validateVideoGroupBindingPlatforms(ctx, txClient, []int64{account.ID}, groupIDs); err != nil {
+		return err
+	}
 	if len(groups) > 0 {
 		builders := make([]*dbent.AccountGroupCreate, 0, len(groups))
 		for i := range groups {
@@ -1127,6 +1130,14 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 }
 
 func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
+	return r.listWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode, false)
+}
+
+func (r *accountRepository) ListWithFiltersUsingGroupPriority(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
+	return r.listWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode, true)
+}
+
+func (r *accountRepository) listWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string, useGroupPriority bool) ([]service.Account, *pagination.PaginationResult, error) {
 	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
 	// Clone before Count so interceptor-appended predicates (SoftDeleteMixin's
 	// deleted_at IS NULL) don't accumulate on the shared builder and pollute the
@@ -1140,7 +1151,7 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 	accountsQuery := q.
 		Offset(params.Offset()).
 		Limit(params.Limit())
-	for _, order := range accountListOrder(params) {
+	for _, order := range accountListOrder(params, groupID, useGroupPriority) {
 		accountsQuery = accountsQuery.Order(order)
 	}
 
@@ -1199,7 +1210,7 @@ func (r *accountRepository) ListOpsAccountsForStats(ctx context.Context, platfor
 	return r.accountsToService(ctx, accounts)
 }
 
-func accountListOrder(params pagination.PaginationParams) []func(*entsql.Selector) {
+func accountListOrder(params pagination.PaginationParams, groupID int64, useGroupPriority bool) []func(*entsql.Selector) {
 	sortBy := strings.ToLower(strings.TrimSpace(params.SortBy))
 	sortOrder := params.NormalizedSortOrder(pagination.SortOrderAsc)
 	if sortBy == "upstream_billing_rate" {
@@ -1232,6 +1243,16 @@ func accountListOrder(params pagination.PaginationParams) []func(*entsql.Selecto
 		field = dbaccount.FieldSchedulable
 		defaultOrder = false
 	case "priority":
+		if useGroupPriority && groupID > 0 {
+			direction := "ASC"
+			if sortOrder == pagination.SortOrderDesc {
+				direction = "DESC"
+			}
+			return []func(*entsql.Selector){func(s *entsql.Selector) {
+				groupPriority := "(SELECT ag.priority FROM " + dbaccountgroup.Table + " AS ag WHERE ag.account_id = " + s.C(dbaccount.FieldID) + " AND ag.group_id = " + strconv.FormatInt(groupID, 10) + ")"
+				s.OrderExpr(entsql.Expr(groupPriority + " " + direction + ", " + s.C(dbaccount.FieldID) + " " + direction))
+			}}
+		}
 		field = dbaccount.FieldPriority
 		defaultOrder = false
 	case "rate_multiplier":
@@ -1975,6 +1996,9 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 		txClient = r.client
 	}
 	if err := lockLiveGroups(ctx, txClient, groupIDs); err != nil {
+		return err
+	}
+	if err := validateVideoGroupBindingPlatforms(ctx, txClient, []int64{accountID}, groupIDs); err != nil {
 		return err
 	}
 

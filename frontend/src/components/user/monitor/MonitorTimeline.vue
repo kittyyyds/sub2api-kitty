@@ -1,34 +1,24 @@
 <template>
-  <div class="mt-4 pt-3 border-t border-gray-100 dark:border-dark-700/60">
-    <div
-      class="flex justify-between text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2"
-    >
-      <span>{{ t('monitorCommon.history60pts', { n: length }) }}</span>
-      <span class="tabular-nums">{{ t('monitorCommon.nextUpdateIn', { n: countdownSeconds }) }}</span>
-    </div>
-
+  <div data-monitor-timeline class="min-w-0 overflow-hidden">
     <div
       v-if="maintenance"
-      class="flex h-5 w-full items-center justify-center rounded border border-dashed border-gray-300 dark:border-dark-600 text-[10px] uppercase tracking-widest text-gray-400"
+      class="flex h-5 w-full items-center justify-center rounded border border-dashed border-gray-300 text-[10px] uppercase tracking-widest text-gray-400 dark:border-dark-600"
     >
       {{ t('monitorCommon.maintenancePaused') }}
     </div>
-    <div v-else class="flex items-end gap-[2px] h-5 w-full">
+    <div
+      v-else
+      class="grid h-5 w-full min-w-0 items-end gap-px overflow-hidden"
+      :style="timelineStyle"
+    >
       <div
         v-for="(bar, idx) in displayBars"
         :key="idx"
-        class="flex-1 min-w-0 rounded-sm"
+        class="min-w-0 w-full rounded-[1px]"
         :class="bar.colorClass"
         :style="{ height: bar.heightPct + '%' }"
         :title="bar.title"
       ></div>
-    </div>
-
-    <div
-      class="mt-1 flex justify-between text-[9px] uppercase tracking-widest text-gray-400"
-    >
-      <span>{{ t('monitorCommon.past') }}</span>
-      <span>{{ t('monitorCommon.now') }}</span>
     </div>
   </div>
 </template>
@@ -41,7 +31,6 @@ import { useChannelMonitorFormat } from '@/composables/useChannelMonitorFormat'
 
 const props = withDefaults(defineProps<{
   buckets?: MonitorTimelinePoint[]
-  countdownSeconds: number
   length?: number
   maintenance?: boolean
 }>(), {
@@ -71,7 +60,7 @@ const STATUS_HEIGHT: Record<string, number> = {
 
 const STATUS_COLOR: Record<string, string> = {
   operational: 'bg-emerald-500',
-  degraded: 'bg-amber-500',
+  degraded: 'bg-amber-400',
   failed: 'bg-red-500',
   error: 'bg-red-500',
   empty: 'bg-gray-300 dark:bg-dark-600',
@@ -112,4 +101,8 @@ const displayBars = computed<Bar[]>(() => {
 
   return bars
 })
+
+const timelineStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${Math.max(displayBars.value.length, 1)}, minmax(0, 1fr))`,
+}))
 </script>

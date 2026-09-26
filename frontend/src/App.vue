@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import HeyRouteAuthBackdrop from '@/components/auth/HeyRouteAuthBackdrop.vue'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
@@ -20,6 +21,7 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
 const adminSettingsStore = useAdminSettingsStore()
+const showAuthBackdrop = computed(() => route.path === '/login' || route.path === '/register')
 
 function updateDocumentTitle() {
   const customMenuItems = [
@@ -31,14 +33,9 @@ function updateDocumentTitle() {
   })
 }
 
-// Watch for site settings changes and update favicon/title
 watch(
   () => appStore.siteLogo,
-  (newLogo) => {
-    if (newLogo) {
-      updateFavicon(newLogo)
-    }
-  },
+  updateFavicon,
   { immediate: true }
 )
 
@@ -162,6 +159,9 @@ onMounted(async () => {
 </script>
 
 <template>
+  <KeepAlive>
+    <HeyRouteAuthBackdrop v-if="showAuthBackdrop" />
+  </KeepAlive>
   <NavigationProgress />
   <RouterView />
   <Toast />

@@ -1,87 +1,15 @@
-<template>
-  <section
-    class="overflow-hidden rounded-2xl border bg-white shadow-card dark:bg-dark-800/50"
-    :class="[platformBorderStrongClass(group.platform)]"
-  >
-    <!-- 分组头部:名称/平台/倍率徽章/专属/订阅徽章 + 描述 -->
-    <header class="border-b border-gray-100 px-5 py-4 dark:border-dark-700/60">
-      <div class="flex flex-wrap items-center gap-2">
-        <GroupBadge
-          :name="group.name"
-          :platform="group.platform as GroupPlatform"
-          :subscription-type="(group.subscription_type || 'standard') as SubscriptionType"
-          :rate-multiplier="group.rate_multiplier"
-          :user-rate-multiplier="group.user_rate_multiplier ?? null"
-          :peak-rate-enabled="group.peak_rate_enabled"
-          :peak-start="group.peak_start"
-          :peak-end="group.peak_end"
-          :peak-rate-multiplier="group.peak_rate_multiplier"
-          always-show-rate
-        />
-        <span
-          v-if="group.is_exclusive"
-          class="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-600 dark:bg-purple-900/20 dark:text-purple-400"
-        >
-          <Icon name="shield" size="xs" class="h-3 w-3" />
-          {{ t('modelPlaza.badges.exclusive') }}
-        </span>
-        <span
-          v-if="group.subscription_type === 'subscription'"
-          class="inline-flex items-center rounded-md bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-600 dark:bg-violet-900/20 dark:text-violet-400"
-        >
-          {{ t('modelPlaza.badges.subscription') }}
-        </span>
-      </div>
-      <p v-if="group.description" class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-        {{ group.description }}
-      </p>
-      <p
-        v-if="peakNote"
-        class="mt-1.5 inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
-      >
-        <Icon name="clock" size="xs" class="h-3 w-3" />
-        {{ peakNote }}
-      </p>
-      <p
-        v-if="longContextNote"
-        class="mt-1.5 flex items-center gap-1 text-xs text-gray-500 dark:text-dark-400"
-      >
-        <Icon name="infoCircle" size="xs" class="h-3 w-3" />
-        {{ longContextNote }}
-      </p>
-    </header>
-
-    <!-- 模型价格表:整行(含 hover 底色/分区底色)顶到卡片边缘,左右留白由表格首列/末列的 padding 提供 -->
-    <div>
-      <PlazaModelPricingTable
-        v-if="group.models.length > 0"
-        :models="group.models"
-        :platform="group.platform"
-        :rate-multiplier="group.rate_multiplier"
-        :user-rate-multiplier="group.user_rate_multiplier ?? null"
-        :image-rate-independent="group.image_rate_independent"
-        :image-rate-multiplier="group.image_rate_multiplier"
-        :peak-window="peakWindow"
-        :peak-rate-multiplier="group.peak_rate_multiplier"
-      />
-      <p v-else class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
-        {{ t('modelPlaza.detail.noModels') }}
-      </p>
-    </div>
-  </section>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Icon from '@/components/icons/Icon.vue'
-import GroupBadge from '@/components/common/GroupBadge.vue'
-import PlazaModelPricingTable from './PlazaModelPricingTable.vue'
+
 import type { ModelPlazaGroup } from '@/api/modelPlaza'
-import type { GroupPlatform, SubscriptionType } from '@/types'
-import { platformBorderStrongClass } from '@/utils/platformColors'
-import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
+import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
+import type { GroupPlatform } from '@/types'
+import { formatPeakRateWindow, hasPeakRate, serverTimezoneLabel } from '@/utils/peak-rate'
+
+import PlazaModelPricingTable from './PlazaModelPricingTable.vue'
 
 const props = defineProps<{
   group: ModelPlazaGroup
@@ -90,9 +18,20 @@ const props = defineProps<{
 const { t } = useI18n()
 const appStore = useAppStore()
 
-/** 高峰窗口描述(含倍率与服务器时区标注);分组未启用高峰为空串。 */
+const textRate = computed(() => props.group.user_rate_multiplier ?? props.group.rate_multiplier)
+const usesPersonalTextRate = computed(() => (
+  props.group.platform !== 'video' && props.group.user_rate_multiplier != null
+  && Math.abs(props.group.user_rate_multiplier - props.group.rate_multiplier) > Number.EPSILON
+))
+const imageRate = computed(() => (
+  props.group.image_rate_independent ? props.group.image_rate_multiplier : textRate.value
+))
+const videoRate = computed(() => (
+  props.group.video_rate_independent ? props.group.video_rate_multiplier : textRate.value
+))
+
 const peakWindow = computed(() => {
-  if (!hasPeakRate(props.group)) return ''
+  if (props.group.platform === 'video' || !hasPeakRate(props.group)) return ''
   return formatPeakRateWindow(
     props.group,
     serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset)
@@ -107,15 +46,227 @@ const peakNote = computed(() => {
   })
 })
 
-/**
- * 分组关闭了长上下文阶梯、但组内有模型官方带阶梯时提示:实付列只展示基础档,
- * 官方阶梯仅供参考。字段缺失(旧后端)不提示。
- */
 const longContextNote = computed(() => {
   if (props.group.long_context_pricing_enabled !== false) return ''
   const hasOfficialLadder = props.group.models.some(
-    (m) => (m.official_pricing?.intervals?.length ?? 0) > 1
+    (model) => (model.official_pricing?.intervals?.length ?? 0) > 1
   )
   return hasOfficialLadder ? t('modelPlaza.detail.longContextDisabledNote') : ''
 })
+
+function rateLabel(value: number): string {
+  return `${Number(value.toFixed(3))}x`
+}
 </script>
+
+<template>
+  <section class="pricing-group">
+    <header class="pricing-group-header">
+      <div class="group-copy">
+        <div class="group-title-row">
+          <PlatformIcon :platform="group.platform as GroupPlatform" size="sm" />
+          <h2>{{ group.name }}</h2>
+          <span class="visibility-badge">
+            <Icon :name="group.is_exclusive ? 'shield' : 'globe'" size="xs" />
+            {{ group.is_exclusive ? t('modelPlaza.badges.exclusive') : t('modelPlaza.badges.public') }}
+          </span>
+          <span v-if="group.subscription_type === 'subscription'" class="subscription-badge">
+            {{ t('modelPlaza.badges.subscription') }}
+          </span>
+        </div>
+        <p>{{ group.description || t('modelPlaza.detail.defaultDescription') }}</p>
+      </div>
+
+      <div v-if="group.platform !== 'video'" class="rate-list" :aria-label="t('modelPlaza.detail.effectiveRate')">
+        <span>
+          {{ t(usesPersonalTextRate ? 'modelPlaza.detail.personalTextRate' : 'modelPlaza.detail.textRate') }}
+          <strong>{{ rateLabel(textRate) }}</strong>
+        </span>
+        <span v-if="imageRate !== textRate">
+          {{ t('modelPlaza.detail.imageRate') }}
+          <strong>{{ rateLabel(imageRate) }}</strong>
+        </span>
+        <span v-if="videoRate !== textRate">
+          {{ t('modelPlaza.detail.videoRate') }}
+          <strong>{{ rateLabel(videoRate) }}</strong>
+        </span>
+      </div>
+      <div v-else class="rate-list">{{ t('videoModule.finalPrice') }}</div>
+    </header>
+
+    <p v-if="usesPersonalTextRate" class="personal-rate-note">
+      <Icon name="infoCircle" size="xs" />
+      {{ t('modelPlaza.detail.personalRateNote', {
+        personalRate: rateLabel(textRate),
+        groupRate: rateLabel(group.rate_multiplier)
+      }) }}
+    </p>
+
+    <p v-if="peakNote" class="peak-note">
+      <Icon name="clock" size="xs" />
+      {{ peakNote }}
+    </p>
+
+    <p v-if="longContextNote" class="personal-rate-note">
+      <Icon name="infoCircle" size="xs" />
+      {{ longContextNote }}
+    </p>
+
+    <PlazaModelPricingTable
+      v-if="group.models.length > 0"
+      :models="group.models"
+      :platform="group.platform"
+      :rate-multiplier="group.rate_multiplier"
+      :user-rate-multiplier="group.user_rate_multiplier ?? null"
+      :image-rate-independent="group.image_rate_independent"
+      :image-rate-multiplier="group.image_rate_multiplier"
+      :video-rate-independent="group.video_rate_independent"
+      :video-rate-multiplier="group.video_rate_multiplier"
+      :peak-window="peakWindow"
+      :peak-rate-multiplier="group.peak_rate_multiplier"
+    />
+    <p v-else class="no-models">
+      {{ t('modelPlaza.detail.noModels') }}
+    </p>
+  </section>
+</template>
+
+<style scoped>
+.pricing-group {
+  background: var(--plaza-surface);
+}
+
+.pricing-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--plaza-line-soft);
+  background: var(--plaza-surface-muted);
+}
+
+.group-copy {
+  min-width: 0;
+}
+
+.group-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.group-title-row h2 {
+  margin: 0;
+  color: var(--plaza-text-strong);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.group-copy > p {
+  max-width: 680px;
+  margin: 7px 0 0;
+  color: var(--plaza-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.visibility-badge,
+.subscription-badge {
+  display: inline-flex;
+  min-height: 21px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--plaza-line);
+  border-radius: 4px;
+  padding: 0 6px;
+  background: var(--plaza-surface);
+  color: var(--plaza-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.subscription-badge {
+  color: var(--plaza-subscription);
+}
+
+.rate-list {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.rate-list span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--plaza-accent) 30%, var(--plaza-line));
+  border-radius: 5px;
+  padding: 0 8px;
+  color: var(--plaza-muted);
+  background: var(--plaza-surface);
+  font-size: 9px;
+}
+
+.rate-list strong {
+  color: var(--plaza-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+}
+
+.peak-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 22px;
+  border-bottom: 1px solid var(--plaza-peak-border);
+  background: var(--plaza-peak-bg);
+  color: var(--plaza-peak-text);
+  font-size: 10px;
+}
+
+.personal-rate-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--plaza-accent) 30%, var(--plaza-line));
+  background: var(--plaza-accent-soft);
+  color: var(--plaza-accent);
+  font-size: 10px;
+}
+
+.no-models {
+  margin: 0;
+  padding: 48px 20px;
+  color: var(--plaza-muted);
+  text-align: center;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .pricing-group-header {
+    display: block;
+    padding-inline: 14px;
+  }
+
+  .rate-list {
+    justify-content: flex-start;
+    margin-top: 12px;
+  }
+
+  .peak-note {
+    padding-inline: 14px;
+  }
+
+  .personal-rate-note {
+    padding-inline: 14px;
+  }
+}
+</style>

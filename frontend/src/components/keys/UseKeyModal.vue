@@ -21,6 +21,11 @@
         </div>
       </div>
 
+      <div v-else-if="platform === 'video'" class="space-y-3" data-testid="video-key-instructions">
+        <p class="text-sm text-gray-600 dark:text-gray-300">{{ t('videoModule.keyHint') }}</p>
+        <RouterLink to="/apps" class="btn btn-primary" @click="emit('close')">{{ t('videoModule.openStudio') }}</RouterLink>
+        <p class="text-xs text-gray-500">POST /v1/videos/generations · GET /v1/videos/{id} · GET /v1/videos/{id}/content</p>
+      </div>
       <!-- Platform-specific content -->
       <template v-else>
         <!-- Description -->
@@ -1244,6 +1249,7 @@ function generateRoutedCodexFiles(
   const preferredModel = preferredModels[platform] || ''
   const model = selectCodexCatalogModel(preferredModel)
   const labels: Record<GroupPlatform, string> = {
+    video: 'Video',
     anthropic: 'Anthropic',
     openai: 'OpenAI',
     gemini: 'Gemini',

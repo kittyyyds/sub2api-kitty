@@ -87,16 +87,28 @@ func (s *FrontendServer) InvalidateCache() {
 func (s *FrontendServer) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
+		cleanPath := strings.TrimPrefix(path, "/")
+		if cleanPath == "" {
+			cleanPath = "index.html"
+		}
+
+		// The public homepage uses /images/heyroute/ for embedded assets. Serve
+		// an existing GET/HEAD asset before the broader /images/ API bypass so
+		// it cannot be mistaken for an OpenAI-compatible image endpoint.
+		if isHeyRouteStaticAssetRequest(c.Request.Method, cleanPath) && s.fileExists(cleanPath) {
+			if s.tryServeOverride(c, cleanPath) {
+				return
+			}
+			applyStaticAssetCacheHeaders(c.Writer.Header(), cleanPath)
+			s.fileServer.ServeHTTP(c.Writer, c.Request)
+			c.Abort()
+			return
+		}
 
 		// Skip API routes
 		if shouldBypassEmbeddedFrontend(path) {
 			c.Next()
 			return
-		}
-
-		cleanPath := strings.TrimPrefix(path, "/")
-		if cleanPath == "" {
-			cleanPath = "index.html"
 		}
 
 		// For index.html or SPA routes, serve with injected settings
@@ -124,6 +136,11 @@ func (s *FrontendServer) fileExists(path string) bool {
 	}
 	_ = file.Close()
 	return true
+}
+
+func isHeyRouteStaticAssetRequest(method, cleanPath string) bool {
+	return (method == http.MethodGet || method == http.MethodHead) &&
+		strings.HasPrefix(cleanPath, "images/heyroute/")
 }
 
 // tryServeOverride checks if a local override file exists and serves it.
@@ -231,7 +248,12 @@ func injectSiteFavicon(html, settingsJSON []byte) []byte {
 		return html
 	}
 
-	linkStart := bytes.Index(html, []byte(`<link rel="icon"`))
+	result := replaceSiteIconLink(html, "icon", logoURL)
+	return replaceSiteIconLink(result, "apple-touch-icon", logoURL)
+}
+
+func replaceSiteIconLink(html []byte, rel, logoURL string) []byte {
+	linkStart := bytes.Index(html, []byte(`<link rel="`+rel+`"`))
 	if linkStart == -1 {
 		return html
 	}
@@ -240,7 +262,7 @@ func injectSiteFavicon(html, settingsJSON []byte) []byte {
 		return html
 	}
 	linkEnd := linkStart + linkEndOffset + 1
-	replacement := []byte(`<link rel="icon" href="` + htmlpkg.EscapeString(logoURL) + `" />`)
+	replacement := []byte(`<link rel="` + rel + `" href="` + htmlpkg.EscapeString(logoURL) + `" />`)
 
 	var buf bytes.Buffer
 	buf.Write(html[:linkStart])
@@ -310,15 +332,27 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
+		cleanPath := strings.TrimPrefix(path, "/")
+		if cleanPath == "" {
+			cleanPath = "index.html"
+		}
+
+		if isHeyRouteStaticAssetRequest(c.Request.Method, cleanPath) {
+			if file, err := distFS.Open(cleanPath); err == nil {
+				_ = file.Close()
+				if tryServeOverrideFile(c, overrideDir, cleanPath) {
+					return
+				}
+				applyStaticAssetCacheHeaders(c.Writer.Header(), cleanPath)
+				fileServer.ServeHTTP(c.Writer, c.Request)
+				c.Abort()
+				return
+			}
+		}
 
 		if shouldBypassEmbeddedFrontend(path) {
 			c.Next()
 			return
-		}
-
-		cleanPath := strings.TrimPrefix(path, "/")
-		if cleanPath == "" {
-			cleanPath = "index.html"
 		}
 
 		if file, err := distFS.Open(cleanPath); err == nil {
@@ -355,6 +389,8 @@ func tryServeOverrideFile(c *gin.Context, overrideDir, cleanPath string) bool {
 func shouldBypassEmbeddedFrontend(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	return strings.HasPrefix(trimmed, "/api/") ||
+		strings.HasPrefix(trimmed, "/media/video-references/") ||
+		strings.HasPrefix(trimmed, "/canvas-api/") ||
 		strings.HasPrefix(trimmed, "/v1/") ||
 		strings.HasPrefix(trimmed, "/v1beta/") ||
 		strings.HasPrefix(trimmed, "/backend-api/") ||
@@ -365,6 +401,12 @@ func shouldBypassEmbeddedFrontend(path string) bool {
 		trimmed == "/responses" ||
 		strings.HasPrefix(trimmed, "/responses/") ||
 		trimmed == "/alpha/search" ||
+		trimmed == "/tts" ||
+		trimmed == "/stt" ||
+		trimmed == "/custom-voices" ||
+		strings.HasPrefix(trimmed, "/custom-voices/") ||
+		trimmed == "/realtime" ||
+		trimmed == "/web_search" ||
 		strings.HasPrefix(trimmed, "/images/") ||
 		strings.HasPrefix(trimmed, "/videos/")
 }

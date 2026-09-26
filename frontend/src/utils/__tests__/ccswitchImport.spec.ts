@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   GROK_CC_SWITCH_MODEL,
   OPENAI_CC_SWITCH_CODEX_MODEL,
-  buildCcSwitchImportDeeplink
+  buildCcSwitchImportDeeplink,
+  resolveCcSwitchUsageBaseUrl
 } from '@/utils/ccswitchImport'
 import type { GroupPlatform } from '@/types'
 
@@ -40,8 +41,33 @@ describe('ccswitchImport utils', () => {
     expect(params.get('app')).toBe('codex')
     expect(params.get('endpoint')).toBe(`${baseInput.baseUrl}/v1`)
     expect(params.get('model')).toBe(OPENAI_CC_SWITCH_CODEX_MODEL)
+    expect(params.get('usageBaseUrl')).toBe(baseInput.baseUrl)
     expect(atob(params.get('usageScript') || '')).toBe(baseInput.usageScript)
   })
+
+  it('keeps the provider endpoint on /v1 while querying usage from the API origin', () => {
+    const apiBaseUrl = 'https://api.example.com/v1/'
+    const params = paramsFromDeeplink(
+      buildCcSwitchImportDeeplink({
+        ...baseInput,
+        baseUrl: apiBaseUrl,
+        platform: 'openai',
+        clientType: 'claude'
+      })
+    )
+
+    expect(params.get('endpoint')).toBe('https://api.example.com/v1')
+    expect(params.get('usageBaseUrl')).toBe('https://api.example.com')
+  })
+
+  it.each([
+    ['https://api.example.com/v1', 'https://api.example.com'],
+    ['https://api.example.com/api/v1/', 'https://api.example.com/api'],
+    ['https://api.example.com', 'https://api.example.com']
+  ])('resolves the CC Switch usage base for %s', (baseUrl, expected) => {
+    expect(resolveCcSwitchUsageBaseUrl(baseUrl)).toBe(expected)
+  })
+
 
   it.each([
     'https://api.example.com',

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,14 +13,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type channelMonitorV2GroupAuthorizerStub struct {
+type stubChannelMonitorGroupAuthorizer struct {
 	groups []service.Group
 	err    error
-	calls  []int64
+	calls  int
+	userID int64
 }
 
-func (s *channelMonitorV2GroupAuthorizerStub) GetAvailableGroups(_ context.Context, userID int64) ([]service.Group, error) {
-	s.calls = append(s.calls, userID)
+func (s *stubChannelMonitorGroupAuthorizer) GetAvailableGroups(_ context.Context, userID int64) ([]service.Group, error) {
+	s.calls++
+	s.userID = userID
 	return s.groups, s.err
 }
 
@@ -47,41 +50,91 @@ func TestChannelMonitorV2MatrixHandlerRejectsInvalidGroupBy(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, recorder.Code)
 }
 
-func TestChannelMonitorV2ScopeFilterUsesAvailableGroupsForOrdinaryUser(t *testing.T) {
+func TestChannelMonitorV2ScopeKeepsAdminGlobalWhenAuthorizationDependencyMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
-	c.Request = httptest.NewRequest(http.MethodGet, "/channel-monitor-v2/snapshot", nil)
+	c.Set(string(middleware.ContextKeyUserRole), service.RoleAdmin)
+	filter := service.ChannelMonitorV2Filter{GroupIDs: []int64{99}}
+	authorizer := &stubChannelMonitorGroupAuthorizer{groups: []service.Group{{ID: 2}}}
+	h := newChannelMonitorV2Handler(nil, authorizer)
+	require.True(t, h.scopeFilter(c, &filter, true))
+	require.Equal(t, []int64{99}, filter.GroupIDs)
+	require.False(t, filter.RestrictGroups)
+	require.Zero(t, authorizer.calls)
+}
+
+func TestChannelMonitorV2ScopeFailsClosedForOrdinaryViewerWithoutAuthorizationDependency(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Set(string(middleware.ContextKeyUserRole), "user")
+	filter := service.ChannelMonitorV2Filter{}
+	h := NewChannelMonitorV2Handler(nil, nil)
+	require.False(t, h.scopeFilter(c, &filter, false))
+	require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	require.False(t, filter.RestrictGroups)
+}
+
+func TestChannelMonitorV2ScopeAppliesServerDerivedGroupsForOrdinaryViewer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/channel-monitor-v2/matrix", nil)
 	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
-	authorizer := &channelMonitorV2GroupAuthorizerStub{groups: []service.Group{{ID: 3}, {ID: 7}}}
-	h := &ChannelMonitorV2Handler{apiKeyService: authorizer}
-	filter := service.ChannelMonitorV2Filter{GroupIDs: []int64{7, 9}}
+	authorizer := &stubChannelMonitorGroupAuthorizer{groups: []service.Group{{ID: 2}, {ID: 4}}}
+	filter := service.ChannelMonitorV2Filter{GroupIDs: []int64{4}}
+	h := newChannelMonitorV2Handler(nil, authorizer)
 
 	require.True(t, h.scopeFilter(c, &filter, false))
 	require.True(t, filter.RestrictGroups)
-	require.Equal(t, []int64{3, 7}, filter.AllowedGroupIDs)
-	require.Equal(t, []int64{42}, authorizer.calls)
+	require.Equal(t, []int64{2, 4}, filter.AllowedGroupIDs)
+	require.Equal(t, 1, authorizer.calls)
+	require.Equal(t, int64(42), authorizer.userID)
 }
 
-func TestChannelMonitorV2ScopeFilterPreservesEmptyOrdinaryUserScope(t *testing.T) {
+func TestChannelMonitorV2ScopeAllowsExplicitlyEmptyOrdinaryViewerScope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
-	c.Request = httptest.NewRequest(http.MethodGet, "/channel-monitor-v2/snapshot", nil)
-	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
-	h := &ChannelMonitorV2Handler{apiKeyService: &channelMonitorV2GroupAuthorizerStub{}}
+	c.Request = httptest.NewRequest(http.MethodGet, "/channel-monitor-v2/matrix", nil)
+	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 43})
+	authorizer := &stubChannelMonitorGroupAuthorizer{}
 	filter := service.ChannelMonitorV2Filter{}
+	h := newChannelMonitorV2Handler(nil, authorizer)
 
 	require.True(t, h.scopeFilter(c, &filter, false))
 	require.True(t, filter.RestrictGroups)
 	require.Empty(t, filter.AllowedGroupIDs)
 }
 
-func TestChannelMonitorV2ScopeFilterLeavesAdminUnrestricted(t *testing.T) {
-	authorizer := &channelMonitorV2GroupAuthorizerStub{}
-	h := &ChannelMonitorV2Handler{apiKeyService: authorizer}
-	filter := service.ChannelMonitorV2Filter{GroupIDs: []int64{9}}
+func TestChannelMonitorV2ScopeFailsClosedWithoutAuthenticatedSubject(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/channel-monitor-v2/matrix", nil)
+	authorizer := &stubChannelMonitorGroupAuthorizer{groups: []service.Group{{ID: 2}}}
+	filter := service.ChannelMonitorV2Filter{}
+	h := newChannelMonitorV2Handler(nil, authorizer)
 
-	require.True(t, h.scopeFilter(nil, &filter, true))
+	require.False(t, h.scopeFilter(c, &filter, false))
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+	require.Zero(t, authorizer.calls)
 	require.False(t, filter.RestrictGroups)
-	require.Nil(t, filter.AllowedGroupIDs)
-	require.Empty(t, authorizer.calls)
+}
+
+func TestChannelMonitorV2ScopeFailsClosedWhenAuthorizationLookupFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/channel-monitor-v2/matrix", nil)
+	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 44})
+	authorizer := &stubChannelMonitorGroupAuthorizer{err: errors.New("authorization unavailable")}
+	filter := service.ChannelMonitorV2Filter{}
+	h := newChannelMonitorV2Handler(nil, authorizer)
+
+	require.False(t, h.scopeFilter(c, &filter, false))
+	require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	require.Equal(t, 1, authorizer.calls)
+	require.False(t, filter.RestrictGroups)
 }

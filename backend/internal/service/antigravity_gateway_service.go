@@ -409,7 +409,6 @@ func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account 
 		requestedModel: modelID,
 		handleError:    testConnectionHandleError,
 	}
-
 	result, err := s.antigravityRetryLoop(p)
 	if err != nil {
 		// AccountSwitchError → 测试时不切换账号，返回友好提示

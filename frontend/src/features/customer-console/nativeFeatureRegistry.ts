@@ -1,0 +1,69 @@
+import { defineAsyncComponent, type Component } from 'vue'
+
+export const NATIVE_CUSTOM_FEATURES = [
+  {
+    id: 'reset-radar',
+    path: '/custom/reset-radar',
+    labelKey: 'nav.resetRadar',
+    fallbackLabel: 'GPT智力测评',
+    descriptionKey: 'native.featureDescription.radar',
+    headerDescription: '实时 GPT 模型智力、成本与速度排行',
+    icon: 'brain'
+  },
+  {
+    id: 'billing-rules',
+    path: '/custom/billing-rules',
+    labelKey: 'nav.billingRules',
+    fallbackLabel: '计费规则',
+    descriptionKey: 'native.featureDescription.billing',
+    headerDescription: 'Token、缓存与倍率估算',
+    icon: 'calculator'
+  },
+  {
+    id: 'docs',
+    path: '/custom/docs',
+    labelKey: 'nav.gettingStarted',
+    fallbackLabel: '新手必看',
+    descriptionKey: 'native.featureDescription.docs',
+    headerDescription: '使用说明与接入文档',
+    icon: 'book'
+  }
+] as const
+
+export type NativeCustomFeatureId = (typeof NATIVE_CUSTOM_FEATURES)[number]['id']
+
+const NATIVE_CUSTOM_FEATURE_IDS = new Set<string>(
+  NATIVE_CUSTOM_FEATURES.map(({ id }) => id)
+)
+const MIGRATED_CUSTOM_FEATURE_IDS = new Set(['image-generator'])
+
+const nativeFeatureComponents: Record<NativeCustomFeatureId, Component> = {
+  'reset-radar': defineAsyncComponent(
+    () => import('@/views/user/native/ResetRadarPanel.vue')
+  ),
+  'billing-rules': defineAsyncComponent(
+    () => import('@/views/user/native/BillingRulesPanel.vue')
+  ),
+  docs: defineAsyncComponent(
+    () => import('@/views/user/native/FeishuGuidePanel.vue')
+  )
+}
+
+export function isNativeCustomFeatureId(value: unknown): value is NativeCustomFeatureId {
+  return typeof value === 'string' && NATIVE_CUSTOM_FEATURE_IDS.has(value)
+}
+
+export function isReservedCustomerFeatureId(value: unknown): boolean {
+  return isNativeCustomFeatureId(value)
+    || (typeof value === 'string' && MIGRATED_CUSTOM_FEATURE_IDS.has(value))
+}
+
+export function getNativeFeatureComponent(value: unknown): Component | null {
+  return isNativeCustomFeatureId(value) ? nativeFeatureComponents[value] : null
+}
+
+export function getNativeFeature(value: unknown) {
+  return isNativeCustomFeatureId(value)
+    ? NATIVE_CUSTOM_FEATURES.find(({ id }) => id === value) ?? null
+    : null
+}

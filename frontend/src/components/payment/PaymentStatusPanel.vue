@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-4">
+  <div class="payment-status space-y-4">
     <!-- ═══ Terminal States: show result, user clicks to return ═══ -->
 
     <!-- Success -->
@@ -128,8 +128,8 @@
                 <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</span>
               </div>
             </div>
-            <div :class="['relative rounded-lg border-2 p-4', qrBorderClass]">
-              <canvas ref="qrCanvas" class="mx-auto"></canvas>
+            <div :class="['payment-status__qr-frame relative rounded-lg border-2 p-4', qrBorderClass]">
+              <canvas ref="qrCanvas" class="payment-status__qr-canvas mx-auto"></canvas>
               <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <span :class="['rounded-full p-2 shadow ring-2 ring-white', qrLogoBgClass]">
                   <img :src="qrLogoIcon" alt="" class="h-5 w-5 brightness-0 invert" />
@@ -170,8 +170,8 @@
       <div class="card p-6">
         <div class="flex flex-col items-center space-y-4">
           <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ scanTitle }}</p>
-          <div :class="['relative rounded-lg border-2 p-4', qrBorderClass]">
-            <canvas ref="qrCanvas" class="mx-auto"></canvas>
+          <div :class="['payment-status__qr-frame relative rounded-lg border-2 p-4', qrBorderClass]">
+            <canvas ref="qrCanvas" class="payment-status__qr-canvas mx-auto"></canvas>
             <!-- Brand logo overlay -->
             <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span :class="['rounded-full p-2 shadow ring-2 ring-white', qrLogoBgClass]">
@@ -204,6 +204,9 @@
           <button v-if="payUrl" class="btn btn-secondary text-sm" @click="reopenPopup">
             {{ t('payment.qr.openPayWindow') }}
           </button>
+          <a v-if="payUrl" :href="payUrl" class="text-sm text-primary-600 underline dark:text-primary-400" data-test="pay-in-current-window">
+            {{ t('payment.qr.openInCurrentWindow') }}
+          </a>
         </div>
       </div>
       <div class="card p-4 text-center">
@@ -361,8 +364,12 @@ function setOutcome(next: PaymentOutcome) {
 async function renderQR() {
   await nextTick()
   if (!showQRCode.value || !qrCanvas.value || !qrUrl.value) return
+  const cardWidth = qrCanvas.value.closest<HTMLElement>('.card')?.clientWidth ?? 0
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth
+  const availableWidth = cardWidth > 0 ? cardWidth - 84 : viewportWidth - 120
+  const qrSize = Math.min(220, Math.max(144, Math.floor(availableWidth)))
   await QRCode.toCanvas(qrCanvas.value, qrUrl.value, {
-    width: 220, margin: 2,
+    width: qrSize, margin: 2,
     errorCorrectionLevel: 'M',
   })
 }
@@ -393,7 +400,6 @@ function saveQRCode() {
 }
 
 async function tryRecoverPendingOrder(order: PaymentOrder): Promise<PaymentOrder> {
-  if (!isWxpay.value && !isAlipay.value) return order
   const outTradeNo = String(order.out_trade_no || '').trim()
   if (!outTradeNo) return order
   const normalizedStatus = String(order.status || '').trim().toUpperCase()
@@ -502,3 +508,45 @@ onMounted(() => {
 })
 onUnmounted(() => cleanup())
 </script>
+
+<style scoped>
+.payment-status {
+  width: 100%;
+  min-width: 0;
+}
+
+.payment-status > :deep(.card) {
+  overflow: hidden;
+  border-color: rgba(38, 52, 47, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 252, 0.94);
+  box-shadow: 0 18px 50px rgba(67, 72, 66, 0.08);
+}
+
+:global(.dark) .payment-status > :deep(.card) {
+  border-color: rgba(231, 239, 235, 0.14);
+  background: rgba(31, 42, 48, 0.96);
+  box-shadow: 0 18px 50px rgba(0, 8, 10, 0.23);
+}
+
+.payment-status__qr-frame {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.payment-status__qr-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 420px) {
+  .payment-status > :deep(.card) {
+    padding: 17px;
+  }
+
+  .payment-status__qr-frame {
+    padding: 12px;
+  }
+}
+</style>

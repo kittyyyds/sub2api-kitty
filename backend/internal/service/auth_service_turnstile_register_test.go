@@ -34,6 +34,9 @@ func newAuthServiceForRegisterTurnstileTest(settings map[string]string, verifier
 		Server: config.ServerConfig{
 			Mode: "release",
 		},
+		JWT: config.JWTConfig{
+			Secret: "registration-proof-test-secret",
+		},
 		Turnstile: config.TurnstileConfig{
 			Required: true,
 		},
@@ -59,7 +62,7 @@ func newAuthServiceForRegisterTurnstileTest(settings map[string]string, verifier
 	)
 }
 
-func TestAuthService_VerifyTurnstileForRegister_SkipWhenEmailVerifyCodeProvided(t *testing.T) {
+func TestAuthService_RegistrationTurnstileProof_CoversEmailFlow(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
 	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled:  "true",
@@ -68,12 +71,31 @@ func TestAuthService_VerifyTurnstileForRegister_SkipWhenEmailVerifyCodeProvided(
 		SettingKeyRegistrationEnabled: "true",
 	}, verifier)
 
-	err := service.VerifyTurnstileForRegister(context.Background(), "", "127.0.0.1", "123456")
+	proof, err := service.VerifyTurnstileForRegistrationEmail(
+		context.Background(),
+		"turnstile-token",
+		"",
+		"User@Example.com ",
+		"127.0.0.1",
+	)
 	require.NoError(t, err)
-	require.Equal(t, 0, verifier.called)
+	require.NotEmpty(t, proof)
+	require.Equal(t, 1, verifier.called)
+	require.Equal(t, "turnstile-token", verifier.lastToken)
+
+	err = service.VerifyTurnstileForRegister(
+		context.Background(),
+		"",
+		proof,
+		"user@example.com",
+		"127.0.0.1",
+		"123456",
+	)
+	require.NoError(t, err)
+	require.Equal(t, 1, verifier.called)
 }
 
-func TestAuthService_VerifyTurnstileForRegister_RequireWhenVerifyCodeMissing(t *testing.T) {
+func TestAuthService_RegistrationTurnstileProof_AllowsResendWithoutNewToken(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
 	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled: "true",
@@ -81,11 +103,53 @@ func TestAuthService_VerifyTurnstileForRegister_RequireWhenVerifyCodeMissing(t *
 		SettingKeyTurnstileSecretKey: "secret",
 	}, verifier)
 
-	err := service.VerifyTurnstileForRegister(context.Background(), "", "127.0.0.1", "")
+	proof, err := service.VerifyTurnstileForRegistrationEmail(
+		context.Background(), "turnstile-token", "", "user@example.com", "127.0.0.1",
+	)
+	require.NoError(t, err)
+
+	resendProof, err := service.VerifyTurnstileForRegistrationEmail(
+		context.Background(), "", proof, "user@example.com", "127.0.0.1",
+	)
+	require.NoError(t, err)
+	require.Equal(t, proof, resendProof)
+	require.Equal(t, 1, verifier.called)
+}
+
+func TestAuthService_VerifyTurnstileForRegister_RejectsProofForDifferentEmail(t *testing.T) {
+	verifier := &turnstileVerifierSpy{}
+	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
+		SettingKeyEmailVerifyEnabled: "true",
+		SettingKeyTurnstileEnabled:   "true",
+		SettingKeyTurnstileSecretKey: "secret",
+	}, verifier)
+
+	proof, err := service.VerifyTurnstileForRegistrationEmail(
+		context.Background(), "turnstile-token", "", "user@example.com", "127.0.0.1",
+	)
+	require.NoError(t, err)
+
+	err = service.VerifyTurnstileForRegister(
+		context.Background(), "", proof, "other@example.com", "127.0.0.1", "123456",
+	)
 	require.ErrorIs(t, err, ErrTurnstileVerificationFailed)
 }
 
-func TestAuthService_VerifyTurnstileForRegister_NoSkipWhenEmailVerifyDisabled(t *testing.T) {
+func TestAuthService_VerifyTurnstileForRegister_RequiresTokenWithoutProof(t *testing.T) {
+	verifier := &turnstileVerifierSpy{}
+	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
+		SettingKeyEmailVerifyEnabled: "true",
+		SettingKeyTurnstileEnabled:   "true",
+		SettingKeyTurnstileSecretKey: "secret",
+	}, verifier)
+
+	err := service.VerifyTurnstileForRegister(
+		context.Background(), "", "", "user@example.com", "127.0.0.1", "123456",
+	)
+	require.ErrorIs(t, err, ErrTurnstileVerificationFailed)
+}
+
+func TestAuthService_VerifyTurnstileForRegister_UsesTokenWhenEmailVerifyDisabled(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
 	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled: "false",
@@ -93,7 +157,9 @@ func TestAuthService_VerifyTurnstileForRegister_NoSkipWhenEmailVerifyDisabled(t 
 		SettingKeyTurnstileSecretKey: "secret",
 	}, verifier)
 
-	err := service.VerifyTurnstileForRegister(context.Background(), "turnstile-token", "127.0.0.1", "123456")
+	err := service.VerifyTurnstileForRegister(
+		context.Background(), "turnstile-token", "ignored-proof", "user@example.com", "127.0.0.1", "123456",
+	)
 	require.NoError(t, err)
 	require.Equal(t, 1, verifier.called)
 	require.Equal(t, "turnstile-token", verifier.lastToken)

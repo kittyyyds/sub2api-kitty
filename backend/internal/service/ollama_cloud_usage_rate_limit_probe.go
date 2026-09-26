@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"time"
 )
 
@@ -149,7 +150,11 @@ func (s *OllamaCloudUsageService) probeLoop() {
 				return
 			}
 			ctx, cancel := context.WithTimeout(s.parentCtx, ollamaCloudUsageProbeTimeout)
-			s.runOllamaCloudUsageProbe(ctx, req.accountID, req.onExhausted)
+			jobCtx, managedDone, managedAllowed := managedinstance.Begin(ctx)
+			if managedAllowed {
+				s.runOllamaCloudUsageProbe(jobCtx, req.accountID, req.onExhausted)
+			}
+			managedDone()
 			cancel()
 		}
 	}

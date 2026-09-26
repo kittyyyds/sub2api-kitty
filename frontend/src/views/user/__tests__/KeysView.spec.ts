@@ -47,10 +47,12 @@ const messages: Record<string, string> = {
   'keys.group': 'Group',
   'keys.id': 'ID',
   'keys.currentConcurrency': 'Current Concurrency',
+  'keys.clickToChangeGroup': 'Click to change group',
   'keys.lastUsedAt': 'Last Used',
   'keys.lastUsedIP': 'Last Used IP',
   'keys.rateLimitColumn': 'Rate Limit',
   'keys.searchPlaceholder': 'Search name or key...',
+  'keys.selectGroup': 'Select Group',
   'keys.status.active': 'Active',
   'keys.status.expired': 'Expired',
   'keys.status.inactive': 'Inactive',
@@ -173,6 +175,9 @@ const DataTableStub = {
           <slot name="cell-id" :value="row.id" :row="row" />
         </div>
         <slot name="cell-name" :value="row.name" :row="row" />
+        <div data-test="group">
+          <slot name="cell-group" :value="row.group" :row="row" />
+        </div>
         <slot name="cell-actions" :row="row" />
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
@@ -219,6 +224,12 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
+const GroupBadgeStub = {
+  name: 'GroupBadge',
+  props: ['name'],
+  template: '<span data-test="group-badge">{{ name }}</span>',
+}
+
 const mountView = async () => {
   const wrapper = mount(KeysView, {
     global: {
@@ -240,7 +251,8 @@ const mountView = async () => {
         UseKeyModal: true,
         BulkEditKeysModal: true,
         EndpointPopover: true,
-        GroupBadge: true,
+        ApiKeyGroupPicker: true,
+        GroupBadge: GroupBadgeStub,
         GroupOptionItem: true,
         Teleport: true,
       },
@@ -351,6 +363,21 @@ describe('user KeysView column settings', () => {
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_at')
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_ip')
     expect(visibleColumnKeys(wrapper)).not.toContain('id')
+  })
+
+  it('keeps filters and actions in one wrapping toolbar above the endpoint strips', async () => {
+    const wrapper = await mountView()
+    const layout = wrapper.get('[data-test="keys-filter-layout"]')
+    const toolbar = wrapper.get('[data-test="keys-toolbar"]')
+    const filterRow = wrapper.get('[data-test="keys-filter-row"]')
+    const actions = wrapper.get('[data-test="keys-toolbar-actions"]')
+    const endpointRow = wrapper.get('[data-test="keys-endpoint-row"]')
+
+    expect(Array.from(toolbar.element.children)).toEqual([filterRow.element, actions.element])
+    expect(Array.from(layout.element.children)).toEqual([toolbar.element, endpointRow.element])
+    expect(toolbar.classes()).toContain('flex-wrap')
+    expect(actions.find('[data-tour="keys-create-btn"]').exists()).toBe(true)
+    wrapper.unmount()
   })
 
   it('opens bulk editing with only selected visible keys', async () => {
@@ -502,6 +529,54 @@ describe('user KeysView column settings', () => {
     expect(wrapper.get('[data-test="current-concurrency"]').text()).toBe('3')
   })
 
+  it('lets a long group control shrink and wrap inside the mobile key card', async () => {
+    listKeys.mockResolvedValueOnce({
+      items: [
+        {
+          ...createApiKey(),
+          group_id: 42,
+          group: {
+            id: 42,
+            name: 'Codex - Pro+Puls混合池 - 稳定',
+            platform: 'openai',
+            subscription_type: 'standard',
+            rate_multiplier: 0.14,
+            peak_rate_enabled: false,
+          },
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+      pages: 1,
+    })
+
+    const wrapper = await mountView()
+    const trigger = wrapper.get('[data-test="api-key-group-trigger"]')
+    const badge = wrapper.get('[data-test="group-badge"]')
+
+    expect(trigger.classes()).toEqual(
+      expect.arrayContaining([
+        'min-w-0',
+        'max-w-full',
+        'flex-wrap',
+        'md:max-w-none',
+        'md:flex-nowrap',
+      ])
+    )
+    expect(badge.classes()).toEqual(
+      expect.arrayContaining([
+        'min-w-0',
+        'max-w-full',
+        'flex-wrap',
+        'md:max-w-none',
+        'md:flex-nowrap',
+      ])
+    )
+    expect(trigger.text()).toContain('Codex - Pro+Puls混合池 - 稳定')
+    expect(trigger.text()).toContain('Select Group')
+  })
+
   it('marks current concurrency as sortable', async () => {
     const wrapper = await mountView()
 
@@ -548,7 +623,7 @@ describe('user KeysView column settings', () => {
   })
 
   describe('create provider selection', () => {
-    const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go']
+    const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go', 'video']
     const availableGroups = platforms.map((platform, index) => ({
       id: index + 1,
       // Deliberately ambiguous names: classification must follow the platform.
@@ -558,8 +633,8 @@ describe('user KeysView column settings', () => {
       subscription_type: 'standard',
     }))
     const groupSelect = (wrapper: VueWrapper) => wrapper.findComponent('[data-tour="key-form-group"]')
-    const optionIds = (wrapper: VueWrapper) => groupSelect(wrapper).props('options').map((option: { value: number }) => option.value)
-    const chooseProvider = (wrapper: VueWrapper, value: string) => wrapper.get(`input[name="key-provider"][value="${value}"]`).setValue()
+    const optionIds = (wrapper: VueWrapper) => groupSelect(wrapper).props('groups').map((group: { id: number }) => group.id)
+    const chooseProvider = (wrapper: VueWrapper, value: string) => value === 'other' ? wrapper.get('[data-testid="key-provider-compatible"]').trigger('click') : wrapper.get(`input[name="key-provider"][value="${value}"]`).setValue()
     const openCreate = async () => {
       const wrapper = await mountView()
       await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
@@ -572,15 +647,23 @@ describe('user KeysView column settings', () => {
 
     it('classifies all configured platforms and retains the complete table filter', async () => {
       const wrapper = await openCreate()
-      expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(4)
+      expect(groupSelect(wrapper).props('showPlatformTabs')).toBe(false)
+      expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(6)
       expect(optionIds(wrapper)).toEqual([1])
       await chooseProvider(wrapper, 'openai')
       expect(optionIds(wrapper)).toEqual([2])
       await chooseProvider(wrapper, 'domestic')
       expect(optionIds(wrapper)).toEqual([3, 4, 5, 6])
+      await chooseProvider(wrapper, 'gemini')
+      expect(optionIds(wrapper)).toEqual([7])
+      await chooseProvider(wrapper, 'grok')
+      expect(optionIds(wrapper)).toEqual([8])
+      await chooseProvider(wrapper, 'video')
+      expect(optionIds(wrapper)).toEqual([12])
       await chooseProvider(wrapper, 'other')
-      expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11])
-      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(13)
+      expect(optionIds(wrapper)).toEqual([9, 10, 11])
+      expect(groupSelect(wrapper).props('showPlatformTabs')).toBe(false)
+      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(14)
     })
 
     it('clears the previous group on provider change and submits only the newly selected group', async () => {
@@ -638,7 +721,8 @@ describe('user KeysView column settings', () => {
       await wrapper.get('[data-test="close-dialog"]').trigger('click')
       await getButtonByText(wrapper, 'common.edit').trigger('click')
       expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
-      expect(optionIds(wrapper)).toHaveLength(11)
+      expect(optionIds(wrapper)).toHaveLength(12)
+      expect(groupSelect(wrapper).props('showPlatformTabs')).toBe(true)
     })
   })
 })

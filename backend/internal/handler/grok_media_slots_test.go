@@ -120,11 +120,12 @@ func (s *grokMediaSlotsCache) assertReleased(t *testing.T) {
 
 type grokMediaSlotBindings struct {
 	testutil.StubGatewayCache
-	owner   int64
-	writes  int
-	key     string
-	billed  map[string]bool
-	pending map[string][]byte
+	owners      map[string]int64
+	ttls        map[string]time.Duration
+	writes      int
+	ownerWrites int
+	billed      map[string]bool
+	pending     map[string][]byte
 }
 
 func (s *grokMediaSlotBindings) SetGrokVideoPendingBilling(_ context.Context, key string, body []byte, _ time.Duration) error {
@@ -139,22 +140,35 @@ func (s *grokMediaSlotBindings) GetGrokVideoPendingBilling(_ context.Context, ke
 }
 
 func (s *grokMediaSlotBindings) GetSessionAccountID(_ context.Context, groupID int64, key string) (int64, error) {
-	if groupID != 24 || key != s.key {
+	owner, ok := s.owners[key]
+	if groupID != 24 || !ok {
 		return 0, service.ErrStickySessionNotFound
 	}
-	return s.owner, nil
+	return owner, nil
 }
-func (s *grokMediaSlotBindings) SetSessionAccountID(_ context.Context, _ int64, key string, owner int64, _ time.Duration) error {
-	s.key, s.owner = key, owner
+func (s *grokMediaSlotBindings) SetSessionAccountID(_ context.Context, _ int64, key string, owner int64, ttl time.Duration) error {
+	s.owners[key], s.ttls[key] = owner, ttl
 	s.writes++
+	if strings.Contains(key, "grok-video-owner:") {
+		s.ownerWrites++
+	}
 	return nil
 }
-func (s *grokMediaSlotBindings) RefreshSessionTTL(context.Context, int64, string, time.Duration) error {
+func (s *grokMediaSlotBindings) RefreshSessionTTL(_ context.Context, _ int64, key string, ttl time.Duration) error {
+	s.ttls[key] = ttl
 	s.writes++
+	if strings.Contains(key, "grok-video-owner:") {
+		s.ownerWrites++
+	}
 	return nil
 }
-func (s *grokMediaSlotBindings) DeleteSessionAccountID(context.Context, int64, string) error {
+func (s *grokMediaSlotBindings) DeleteSessionAccountID(_ context.Context, _ int64, key string) error {
+	delete(s.owners, key)
+	delete(s.ttls, key)
 	s.writes++
+	if strings.Contains(key, "grok-video-owner:") {
+		s.ownerWrites++
+	}
 	return nil
 }
 
@@ -219,7 +233,7 @@ func newGrokMediaSlotHandler(t *testing.T, oauth, mismatch bool, platforms ...st
 	}
 	slots := &grokMediaSlotsCache{accounts: map[string]int64{}, users: map[string]int64{}}
 	concurrency := service.NewConcurrencyService(slots)
-	bindings := &grokMediaSlotBindings{owner: 1}
+	bindings := &grokMediaSlotBindings{owners: map[string]int64{}, ttls: map[string]time.Duration{}}
 	upstream := &grokMediaSlotUpstream{call: func(*http.Request, int64) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}},
 			Body: io.NopCloser(strings.NewReader(`{"request_id":"task","status":"pending"}`))}, nil
@@ -238,6 +252,7 @@ func newGrokMediaSlotHandler(t *testing.T, oauth, mismatch bool, platforms ...st
 	groupID := int64(24)
 	require.NoError(t, gateway.BindGrokMediaVideoRequestAccount(context.Background(), &groupID, "task", 10, 20, 1))
 	bindings.writes = 0
+	bindings.ownerWrites = 0
 	billing := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
 	t.Cleanup(billing.Stop)
 	handler := NewOpenAIGatewayHandler(gateway, concurrency, billing, service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg), nil, nil, nil, nil, cfg)
@@ -311,7 +326,18 @@ func TestGrokMediaLookupSlotLifecycle(t *testing.T) {
 					require.Equal(t, http.StatusTooManyRequests, w.Code)
 				}
 			}
-			require.Zero(t, bindings.writes, "lookups must preserve owner and TTL")
+			// Kitty keeps permanent ownership separate from the expiring route.
+			// Lookups may refresh the route, but never mutate the owner or its TTL.
+			require.Zero(t, bindings.ownerWrites, "lookups must preserve durable owner and TTL")
+			ownerBindings := 0
+			for key, owner := range bindings.owners {
+				if strings.Contains(key, "grok-video-owner:") {
+					ownerBindings++
+					require.Equal(t, int64(1), owner)
+					require.Zero(t, bindings.ttls[key])
+				}
+			}
+			require.Equal(t, 1, ownerBindings)
 			if scenario == "mismatch acquired" {
 				require.Equal(t, 20, slots.released)
 			}

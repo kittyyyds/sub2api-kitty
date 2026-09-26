@@ -93,4 +93,40 @@ describe('DateRangePicker', () => {
       }
     ])
   })
+
+  it('aligns the dropdown to the right when left alignment would leave the viewport', async () => {
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      left: 1100,
+      right: 1200,
+      top: 0,
+      bottom: 40,
+      width: 100,
+      height: 40,
+      x: 1100,
+      y: 0,
+      toJSON: () => ({})
+    })
+    const originalWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
+
+    const wrapper = mount(DateRangePicker, {
+      props: {
+        startDate: '2026-07-01',
+        endDate: '2026-07-22'
+      },
+      global: {
+        stubs: {
+          Icon: true
+        }
+      }
+    })
+
+    await wrapper.find('.date-picker-trigger').trigger('click')
+
+    expect(wrapper.get('.date-picker-dropdown').classes()).toContain('date-picker-dropdown-right')
+
+    wrapper.unmount()
+    rectSpy.mockRestore()
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth })
+  })
 })

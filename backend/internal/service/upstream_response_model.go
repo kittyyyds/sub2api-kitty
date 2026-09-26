@@ -2,6 +2,7 @@ package service
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -10,6 +11,8 @@ import (
 const (
 	upstreamResponseModelObserverContextKey = "upstream_response_model_observer"
 	upstreamResponseModelMaxLength          = 200
+	upstreamResponseModelRedacted           = "[redacted]"
+	upstreamResponseModelSecretPrefixMin    = 16
 )
 
 // upstreamResponseModelObserver tracks one forwarding attempt (or one WS turn).
@@ -66,6 +69,69 @@ func normalizeObservedUpstreamResponseModel(model string) string {
 		model = string(runes[:upstreamResponseModelMaxLength])
 	}
 	return model
+}
+
+// redactUpstreamResponseModelSecrets returns the value that is safe to persist
+// or log. Billing and mismatch checks must continue to use the original
+// response model before calling this helper.
+//
+// The observer bounds model declarations to 200 runes. Include the identically
+// bounded form of each secret so a long value echoed as response.model cannot
+// leak its first 200 runes after observation truncation.
+func redactUpstreamResponseModelSecrets(account *Account, responseModel string) string {
+	responseModel = strings.TrimSpace(responseModel)
+	if responseModel == "" || account == nil {
+		return responseModel
+	}
+	for _, key := range SensitiveCredentialKeys {
+		if upstreamResponseModelContainsCredential(responseModel, account.GetCredential(key)) {
+			return upstreamResponseModelRedacted
+		}
+	}
+	for _, value := range account.GetHeaderOverrides() {
+		if upstreamResponseModelContainsCredential(responseModel, value) {
+			return upstreamResponseModelRedacted
+		}
+	}
+	return responseModel
+}
+
+func upstreamResponseModelContainsCredential(responseModel, credential string) bool {
+	credential = strings.TrimSpace(credential)
+	if credential == "" {
+		return false
+	}
+	if strings.Contains(responseModel, credential) {
+		return true
+	}
+	bounded := normalizeObservedUpstreamResponseModel(credential)
+	if bounded != credential && strings.Contains(responseModel, bounded) {
+		return true
+	}
+	if strings.HasPrefix(strings.ToLower(credential), "bearer ") {
+		token := strings.TrimSpace(credential[len("bearer "):])
+		return token != "" && upstreamResponseModelContainsCredential(responseModel, token)
+	}
+
+	// If an upstream prefixes an echoed long credential (for example
+	// "relay:"+secret), the observer's 200-rune bound leaves only a suffix that
+	// matches the beginning of the secret. Redact any meaningful such prefix;
+	// shorter coincidences are ignored to preserve useful model names.
+	modelRunes := []rune(responseModel)
+	credentialRunes := []rune(credential)
+	if len(credentialRunes) <= len(modelRunes) {
+		return false
+	}
+	for start := 0; start+upstreamResponseModelSecretPrefixMin <= len(modelRunes); start++ {
+		fragment := modelRunes[start:]
+		if len(fragment) > len(credentialRunes) {
+			continue
+		}
+		if string(fragment) == string(credentialRunes[:len(fragment)]) {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *upstreamResponseModelObserver) ObserveOpenAI(payload []byte, eventType string) {
@@ -285,12 +351,57 @@ func upstreamModelsMatchForAudit(sentModel, responseModel string) bool {
 	if strings.EqualFold(sentModel, responseModel) {
 		return true
 	}
+	if openAIModelSnapshotMatches(sentModel, responseModel) {
+		return true
+	}
 
 	// xAI reports the runtime build ID for these supported public aliases.
 	// Canonicalize only for mismatch auditing; keep the raw response model for
 	// observability and for the separate response-model billing safeguards.
 	sentGrokModel := canonicalGrokBuildRuntimeModel(sentModel)
 	return sentGrokModel != "" && sentGrokModel == canonicalGrokBuildRuntimeModel(responseModel)
+}
+
+func openAIModelSnapshotMatches(sentModel, responseModel string) bool {
+	sentModel = strings.ToLower(strings.TrimSpace(sentModel))
+	responseModel = strings.ToLower(strings.TrimSpace(responseModel))
+	aliases := []string{sentModel}
+	if base, ok := strings.CutSuffix(sentModel, "-latest"); ok {
+		aliases = append(aliases, base)
+	}
+	for _, alias := range aliases {
+		if !isOpenAIModelFamily(alias) {
+			continue
+		}
+		if responseModel == alias || isOpenAIModelSnapshotSuffix(strings.TrimPrefix(responseModel, alias+"-"), strings.HasPrefix(responseModel, alias+"-")) {
+			return true
+		}
+	}
+	return false
+}
+
+func isOpenAIModelFamily(model string) bool {
+	return strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "codex-") ||
+		strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4")
+}
+
+func isOpenAIModelSnapshotSuffix(suffix string, hasPrefix bool) bool {
+	if !hasPrefix {
+		return false
+	}
+	if len(suffix) == len("2006-01-02") {
+		_, err := time.Parse("2006-01-02", suffix)
+		return err == nil
+	}
+	if len(suffix) == len("20060102") {
+		_, err := time.Parse("20060102", suffix)
+		return err == nil
+	}
+	if len(suffix) == len("0102") {
+		_, err := time.Parse("0102", suffix)
+		return err == nil
+	}
+	return false
 }
 
 func canonicalGrokBuildRuntimeModel(model string) string {

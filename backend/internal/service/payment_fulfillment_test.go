@@ -678,12 +678,65 @@ func TestValidateProviderNotificationMetadataRejectsStripeCurrencyMismatch(t *te
 	assert.ErrorContains(t, err, "stripe currency mismatch")
 }
 
+func TestValidateProviderNotificationMetadataRejectsPayPalSnapshotMismatch(t *testing.T) {
+	t.Parallel()
+
+	order := &dbent.PaymentOrder{
+		PaymentType: payment.TypePayPal,
+		ProviderSnapshot: map[string]any{
+			"schema_version": 2,
+			"merchant_id":    "paypal-client-expected",
+			"currency":       "USD",
+		},
+	}
+
+	err := validateProviderNotificationMetadata(order, payment.TypePayPal, map[string]string{
+		"client_id": "paypal-client-other",
+		"currency":  "USD",
+		"status":    "COMPLETED",
+	})
+	assert.ErrorContains(t, err, "paypal client_id mismatch")
+
+	err = validateProviderNotificationMetadata(order, payment.TypePayPal, map[string]string{
+		"client_id": "paypal-client-expected",
+		"currency":  "EUR",
+		"status":    "COMPLETED",
+	})
+	assert.ErrorContains(t, err, "paypal currency mismatch")
+
+	err = validateProviderNotificationMetadata(order, payment.TypePayPal, map[string]string{
+		"client_id": "paypal-client-expected",
+		"currency":  "USD",
+		"status":    "PENDING",
+	})
+	assert.ErrorContains(t, err, "paypal status mismatch")
+}
+
 func TestPaymentAmountToleranceForThreeDecimalCurrency(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, amountToleranceCNY, paymentAmountToleranceForCurrency("CNY"))
 	assert.Equal(t, amountToleranceCNY, paymentAmountToleranceForCurrency("JPY"))
 	assert.InDelta(t, 0.0005, paymentAmountToleranceForCurrency("KWD"), 1e-12)
+}
+
+func TestPaymentOverpayToleranceForCurrency(t *testing.T) {
+	t.Parallel()
+
+	assert.InDelta(t, 0.05, paymentOverpayToleranceForCurrency("CNY"), 1e-12)
+	assert.InDelta(t, 0.05, paymentOverpayToleranceForCurrency("JPY"), 1e-12)
+	assert.InDelta(t, 0.005, paymentOverpayToleranceForCurrency("KWD"), 1e-12)
+}
+
+func TestIsPaidAmountWithinProviderTolerance(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, isPaidAmountWithinProviderTolerance(10, 10, "CNY"))
+	assert.True(t, isPaidAmountWithinProviderTolerance(10, 10.05, "CNY"))
+	assert.False(t, isPaidAmountWithinProviderTolerance(10, 10.050001, "CNY"))
+	assert.False(t, isPaidAmountWithinProviderTolerance(10, 9.99, "CNY"))
+	assert.True(t, isPaidAmountWithinProviderTolerance(10, 10.005, "KWD"))
+	assert.False(t, isPaidAmountWithinProviderTolerance(10, 10.005001, "KWD"))
 }
 
 func TestRetryFulfillmentRejectsFreshRechargingLease(t *testing.T) {

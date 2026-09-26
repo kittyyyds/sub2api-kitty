@@ -122,6 +122,9 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		t := k.Window7dStart.Add(service.RateLimitWindow7d)
 		out.Reset7dAt = &t
 	}
+	if k.Key == "" && k.KeyHash != "" {
+		out.KeyDisplay = k.KeyPrefix + "********"
+	}
 	return out
 }
 
@@ -186,6 +189,9 @@ func groupFromServiceBase(g *service.Group) Group {
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
 		IsExclusive:                     g.IsExclusive,
+		SecurityPolicyEnabled:           g.SecurityPolicyEnabled,
+		SecurityPolicyMode:              g.SecurityPolicyMode,
+		SecurityPolicyEmailEnabled:      g.SecurityPolicyEmailEnabled,
 		Status:                          g.Status,
 		SubscriptionType:                g.SubscriptionType,
 		DailyLimitUSD:                   g.DailyLimitUSD,
@@ -207,6 +213,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		ImagePrice1K:                    g.ImagePrice1K,
 		ImagePrice2K:                    g.ImagePrice2K,
 		ImagePrice4K:                    g.ImagePrice4K,
+		ImageModelPrices:                g.ImageModelPrices,
 		VideoPrice480P:                  g.VideoPrice480P,
 		VideoPrice720P:                  g.VideoPrice720P,
 		VideoPrice1080P:                 g.VideoPrice1080P,
@@ -428,7 +435,12 @@ func redactAccountManagedExtra(extra map[string]any) map[string]any {
 			key == service.OpenCodeGoUsageAutoRefreshExtraKey,
 			key == service.OpenCodeGoUsageSnapshotExtraKey:
 			continue
-		case service.IsOpenAICodexTicketPrivateExtraKey(key):
+		case key == "codex_fingerprint_seed",
+			key == "anti_degrade", key == "client_identity_compatibility",
+			key == "fingerprint_v2_seed", key == "client_installation_id":
+			// Retired identity snapshots retain private seeds and stay redacted.
+			continue
+		case service.IsRetiredAccountSecretKey(key) || service.IsOpenAICodexTicketPrivateExtraKey(key):
 			continue
 		default:
 			redacted[key] = value
@@ -739,6 +751,9 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		ImageSizeSource:           l.ImageSizeSource,
 		ImageSizeBreakdown:        l.ImageSizeBreakdown,
 		MediaType:                 l.MediaType,
+		VideoCount:                l.VideoCount,
+		VideoResolution:           l.VideoResolution,
+		VideoDurationSeconds:      l.VideoDurationSeconds,
 		UserAgent:                 l.UserAgent,
 		IPAddress:                 l.IPAddress,
 		SessionID:                 l.SessionID,
@@ -784,6 +799,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 		AccountStatsCost:        l.AccountStatsCost,
 		IPAddress:               l.IPAddress,
 		Account:                 AccountSummaryFromService(l.Account),
+		UsageAudit:              l.UsageAudit,
 	}
 }
 
@@ -969,3 +985,38 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 		User:        UserFromServiceShallow(u.User),
 	}
 }
+
+// SecurityPolicyKeywordFromService converts a service keyword to admin DTO.
+func SecurityPolicyKeywordFromService(w *service.SecurityPolicyKeyword) *SecurityPolicyKeyword {
+	if w == nil {
+		return nil
+	}
+	return &SecurityPolicyKeyword{
+		ID:        w.ID,
+		GroupID:   w.GroupID,
+		Keyword:   w.Keyword,
+		Category:  w.Category,
+		Enabled:   w.Enabled,
+		CreatedAt: w.CreatedAt,
+		UpdatedAt: w.UpdatedAt,
+	}
+}
+
+// SecurityPolicyKeywordsFromService converts a service keyword list to admin DTOs.
+func SecurityPolicyKeywordsFromService(words []service.SecurityPolicyKeyword) []SecurityPolicyKeyword {
+	out := make([]SecurityPolicyKeyword, 0, len(words))
+	for i := range words {
+		if dto := SecurityPolicyKeywordFromService(&words[i]); dto != nil {
+			out = append(out, *dto)
+		}
+	}
+	return out
+}
+
+// SecurityPolicyKeywordSeedFromService converts a builtin seed to admin DTO.
+func SecurityPolicyKeywordSeedFromService(seed service.SecurityPolicyKeywordSeed) SecurityPolicyKeywordSeed {
+	return SecurityPolicyKeywordSeed{Keyword: seed.Keyword, Category: seed.Category}
+}
+
+// ProxyWithAccountCountFromServiceAdmin converts a service ProxyWithAccountCount to AdminProxyWithAccountCount DTO.
+// It includes the password field - user-facing endpoints must not use this.

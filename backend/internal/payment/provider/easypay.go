@@ -22,15 +22,17 @@ import (
 
 // EasyPay constants.
 const (
-	easypayCodeSuccess     = 1
-	easypayStatusPaid      = 1
-	easypayHTTPTimeout     = 10 * time.Second
-	maxEasypayResponseSize = 1 << 20 // 1MB
-	maxEasypayErrorSummary = 512
-	tradeStatusSuccess     = "TRADE_SUCCESS"
-	signTypeMD5            = "MD5"
-	paymentModePopup       = "popup"
-	deviceMobile           = "mobile"
+	easypayCodeSuccess      = 1
+	easypayStatusPaid       = 1
+	easypayHTTPTimeout      = 10 * time.Second
+	easypayQueryMaxAttempts = 3
+	easypayQueryRetryDelay  = 200 * time.Millisecond
+	maxEasypayResponseSize  = 1 << 20 // 1MB
+	maxEasypayErrorSummary  = 512
+	tradeStatusSuccess      = "TRADE_SUCCESS"
+	signTypeMD5             = "MD5"
+	paymentModePopup        = "popup"
+	deviceMobile            = "mobile"
 )
 
 // EasyPay implements payment.Provider for the EasyPay aggregation platform.
@@ -305,7 +307,7 @@ func (e *EasyPay) QueryOrder(ctx context.Context, tradeNo string) (*payment.Quer
 		"act": "order", "pid": e.config["pid"],
 		"key": e.config["pkey"], "out_trade_no": tradeNo,
 	}
-	body, err := e.post(ctx, e.apiBase()+"/api.php", params)
+	body, err := e.queryOrder(ctx, e.apiBase()+"/api.php", params)
 	if err != nil {
 		return nil, fmt.Errorf("easypay query: %w", err)
 	}
@@ -366,6 +368,36 @@ func (e *EasyPay) QueryOrder(ctx context.Context, tradeNo string) (*payment.Quer
 		Amount:   amount,
 		Metadata: e.MerchantIdentityMetadata(),
 	}, nil
+}
+
+func (e *EasyPay) queryOrder(ctx context.Context, endpoint string, params map[string]string) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt < easypayQueryMaxAttempts; attempt++ {
+		body, status, err := e.getRaw(ctx, endpoint, params)
+		if err == nil && status >= http.StatusOK && status < http.StatusMultipleChoices {
+			return body, nil
+		}
+		if err == nil {
+			err = fmt.Errorf("HTTP %d", status)
+		}
+		lastErr = err
+		if attempt+1 >= easypayQueryMaxAttempts || !isRetryableEasyPayQuery(status, err) {
+			break
+		}
+
+		timer := time.NewTimer(easypayQueryRetryDelay * time.Duration(1<<attempt))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, lastErr
+}
+
+func isRetryableEasyPayQuery(status int, err error) bool {
+	return err != nil && (status == 0 || status == http.StatusTooManyRequests || status >= http.StatusInternalServerError)
 }
 
 func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[string]string) (*payment.PaymentNotification, error) {
@@ -561,13 +593,34 @@ func (e *EasyPay) postRaw(ctx context.Context, endpoint string, params map[strin
 		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return e.doRaw(req)
+}
+
+func (e *EasyPay) getRaw(ctx context.Context, endpoint string, params map[string]string) ([]byte, int, error) {
+	requestURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, 0, err
+	}
+	query := requestURL.Query()
+	for k, v := range params {
+		query.Set(k, v)
+	}
+	requestURL.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	return e.doRaw(req)
+}
+
+func (e *EasyPay) doRaw(req *http.Request) ([]byte, int, error) {
 	client := e.httpClient
 	if client == nil {
 		client = &http.Client{Timeout: easypayHTTPTimeout}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, sanitizeEasyPayTransportError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxEasypayResponseSize))
@@ -575,6 +628,13 @@ func (e *EasyPay) postRaw(ctx context.Context, endpoint string, params map[strin
 		return nil, resp.StatusCode, err
 	}
 	return body, resp.StatusCode, nil
+}
+
+func sanitizeEasyPayTransportError(err error) error {
+	if requestErr, ok := err.(*url.Error); ok {
+		return fmt.Errorf("%s request failed: %v", requestErr.Op, requestErr.Err)
+	}
+	return err
 }
 
 func easyPaySign(params map[string]string, pkey string) string {

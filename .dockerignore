@@ -30,6 +30,11 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+backend/.deploy/
+backend/backend/.deploy/
+backend/.cache/
+backend/bin/
+frontend/node_modules.stale-*/
 
 # Node modules (will be installed in container)
 frontend/node_modules/
@@ -83,3 +88,7 @@ deploy/redis_data/
 .claude/
 issues/
 CLAUDE.md
+
+# Local-only console preview and synthetic payment server.
+/preview/
+/frontend/preview/

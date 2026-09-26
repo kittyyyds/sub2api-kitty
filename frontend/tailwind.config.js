@@ -5,19 +5,20 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 主色调 - Teal/Cyan 青色系
+        // Console tokens also reach hover, focus, alpha variants and Teleport
+        // controls. Public pages retain the existing teal fallback palette.
         primary: {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2dd4bf',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
-          950: '#042f2e'
+          50: 'rgb(var(--kc-primary-50, 240 253 250) / <alpha-value>)',
+          100: 'rgb(var(--kc-primary-100, 204 251 241) / <alpha-value>)',
+          200: 'rgb(var(--kc-primary-200, 153 246 228) / <alpha-value>)',
+          300: 'rgb(var(--kc-primary-300, 94 234 212) / <alpha-value>)',
+          400: 'rgb(var(--kc-primary-400, 45 212 191) / <alpha-value>)',
+          500: 'rgb(var(--kc-primary-500, 20 184 166) / <alpha-value>)',
+          600: 'rgb(var(--kc-primary-600, 13 148 136) / <alpha-value>)',
+          700: 'rgb(var(--kc-primary-700, 15 118 110) / <alpha-value>)',
+          800: 'rgb(var(--kc-primary-800, 17 94 89) / <alpha-value>)',
+          900: 'rgb(var(--kc-primary-900, 19 78 74) / <alpha-value>)',
+          950: 'rgb(var(--kc-primary-950, 4 47 46) / <alpha-value>)'
         },
         // 辅助色 - 深蓝灰
         accent: {

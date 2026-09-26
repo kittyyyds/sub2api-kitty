@@ -80,6 +80,19 @@ type UsageLogRepository interface {
 	GetDailyStatsAggregated(ctx context.Context, userID int64, startTime, endTime time.Time) ([]map[string]any, error)
 }
 
+// GrokMediaVideoOwnerAccountRepository is an optional narrow capability used
+// to recover durable ownership for video requests created before Redis owner
+// bindings were persisted without expiry. Keeping it separate avoids forcing
+// every UsageLogRepository test double to implement an unrelated lookup.
+type GrokMediaVideoOwnerAccountRepository interface {
+	FindGrokMediaVideoOwnerAccountID(
+		ctx context.Context,
+		requestID string,
+		userID, apiKeyID int64,
+		groupID *int64,
+	) (int64, error)
+}
+
 type accountWindowStatsBatchReader interface {
 	GetAccountWindowStatsBatch(ctx context.Context, accountIDs []int64, startTime time.Time) (map[int64]*usagestats.AccountStats, error)
 }
@@ -885,6 +898,9 @@ func (s *AccountUsageService) probeOpenAICodexSnapshot(ctx context.Context, acco
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
+	}
+	if err := ValidateConfiguredAccountProxy(account, proxyURL); err != nil {
+		return nil, err
 	}
 	client, err := httppool.GetClient(httppool.Options{
 		ProxyURL:              proxyURL,

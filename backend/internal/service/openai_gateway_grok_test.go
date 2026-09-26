@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -1055,7 +1056,15 @@ func TestParseGrokMediaVideoRequestResolution(t *testing.T) {
 	info := ParseGrokMediaRequest("application/json", []byte(`{"model":"grok-imagine-video","prompt":"waves","resolution":"720p"}`))
 
 	require.Equal(t, "grok-imagine-video", info.Model)
+	require.Equal(t, "720p", info.RequestedResolution)
 	require.Equal(t, "720p", info.Resolution)
+}
+
+func TestParseGrokMediaImageRequestPreservesOutputSettings(t *testing.T) {
+	info := ParseGrokMediaRequest("application/json", []byte(`{"model":"grok-imagine-edit","resolution":"2k","aspect_ratio":"16:9"}`))
+
+	require.Equal(t, "2k", info.RequestedResolution)
+	require.Equal(t, "16:9", info.AspectRatio)
 }
 
 func TestParseGrokMediaRequestAcceptsOfficialImageURLFields(t *testing.T) {
@@ -1067,11 +1076,10 @@ func TestParseGrokMediaRequestAcceptsOfficialImageURLFields(t *testing.T) {
 
 	info := ParseGrokMediaRequest("application/json", body)
 
-	require.Equal(t, []string{
-		"https://example.com/source.png",
-		"https://example.com/reference.png",
-	}, info.InputImageURLs)
+	require.Equal(t, []string{"https://example.com/source.png"}, info.InputImageURLs)
+	require.Equal(t, []string{"https://example.com/reference.png"}, info.ReferenceImageURLs)
 	require.True(t, info.HasInputImage())
+	require.True(t, info.HasSourceImage())
 }
 
 func TestNormalizeGrokMediaForwardBodyCanonicalizesImageURLAlias(t *testing.T) {
@@ -1165,6 +1173,48 @@ func TestPrepareGrokImageEditRejectsMoreThanThreeSources(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, out)
 	require.Contains(t, err.Error(), "maximum of 3 source images")
+}
+
+func TestNormalizeGrokMediaRequestForEndpoint(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint GrokMediaEndpoint
+		info     GrokMediaRequestInfo
+		want     string
+		wantErr  string
+	}{
+		{name: "image generation alias", endpoint: GrokMediaEndpointImagesGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine"}, want: "grok-imagine-image-quality"},
+		{name: "legacy image edit alias", endpoint: GrokMediaEndpointImagesEdits, info: GrokMediaRequestInfo{Model: "grok-imagine-edit"}, want: "grok-imagine-image-quality"},
+		{name: "image quality passthrough", endpoint: GrokMediaEndpointImagesGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-image-quality"}, want: "grok-imagine-image-quality"},
+		{name: "image quality official alias", endpoint: GrokMediaEndpointImagesEdits, info: GrokMediaRequestInfo{Model: "grok-imagine-image-pro"}, want: "grok-imagine-image-quality"},
+		{name: "image base passthrough", endpoint: GrokMediaEndpointImagesEdits, info: GrokMediaRequestInfo{Model: "grok-imagine-image"}, want: "grok-imagine-image"},
+		{name: "custom image model preserved", endpoint: GrokMediaEndpointImagesEdits, info: GrokMediaRequestInfo{Model: "grok-imagine-image-hd"}, want: "grok-imagine-image-hd"},
+		{name: "video text-to-video passthrough", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video"}, want: "grok-imagine-video"},
+		{name: "video 1.5 text-to-video passthrough", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video-1.5"}, want: "grok-imagine-video-1.5"},
+		{name: "video image-to-video passthrough", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video", InputImageURLs: []string{"https://example.com/source.png"}}, want: "grok-imagine-video"},
+		{name: "video 1.5 image-to-video passthrough", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video-1.5", InputImageURLs: []string{"https://example.com/source.png"}}, want: "grok-imagine-video-1.5"},
+		{name: "video 1.5 official alias", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video-1.5-preview"}, want: "grok-imagine-video-1.5"},
+		{name: "custom video model preserved", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "vendor-video-latest"}, want: "vendor-video-latest"},
+		{name: "video 1.5 reference mode rejected", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video-1.5", ReferenceImageURLs: []string{"https://example.com/reference.png"}}, wantErr: "reference-to-video"},
+		{name: "video 1.5 image-to-video accepts 1080p", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video-1.5", RequestedResolution: "1080p", InputImageURLs: []string{"https://example.com/source.png"}}, want: "grok-imagine-video-1.5"},
+		{name: "video 1.5 text-to-video accepts 1080p", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video-1.5", RequestedResolution: "1080p"}, want: "grok-imagine-video-1.5"},
+		{name: "legacy video rejects 1080p", endpoint: GrokMediaEndpointVideosGenerations, info: GrokMediaRequestInfo{Model: "grok-imagine-video", RequestedResolution: "1080p", InputImageURLs: []string{"https://example.com/source.png"}}, wantErr: "requires grok-imagine-video-1.5"},
+		{name: "video edit accepts legacy model", endpoint: GrokMediaEndpointVideosEdits, info: GrokMediaRequestInfo{Model: "grok-imagine-video"}, want: "grok-imagine-video"},
+		{name: "video edit rejects 1.5", endpoint: GrokMediaEndpointVideosEdits, info: GrokMediaRequestInfo{Model: "grok-imagine-video-1.5"}, wantErr: "require"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeGrokMediaRequestForEndpoint(tt.endpoint, tt.info)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				require.Empty(t, got)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestNormalizeGrokMediaModelForEndpoint(t *testing.T) {
@@ -1267,7 +1317,18 @@ func TestForwardGrokMediaAppliesAccountModelMappingAfterEndpointNormalization(t 
 			responseBody:     `{"data":[{"url":"https://images.test/mapped.png"}]}`,
 		},
 		{
-			name:             "video generation maps text-only fallback model",
+			name:             "video generation preserves and maps 1.5 text-to-video",
+			endpoint:         GrokMediaEndpointVideosGenerations,
+			path:             "/v1/videos/generations",
+			body:             `{"model":"grok-imagine-video-1.5","prompt":"waves"}`,
+			modelMapping:     map[string]any{"grok-imagine-video-1.5": "vendor-video-1.5"},
+			wantRequestModel: "grok-imagine-video-1.5",
+			wantUpstream:     "vendor-video-1.5",
+			wantBody:         `{"model":"vendor-video-1.5","prompt":"waves"}`,
+			responseBody:     `{"request_id":"video-request-mapped"}`,
+		},
+		{
+			name:             "video 1.5 ignores unrelated legacy mapping",
 			endpoint:         GrokMediaEndpointVideosGenerations,
 			path:             "/v1/videos/generations",
 			body:             `{"model":"grok-imagine-video-1.5","prompt":"waves"}`,
@@ -1275,7 +1336,7 @@ func TestForwardGrokMediaAppliesAccountModelMappingAfterEndpointNormalization(t 
 			wantRequestModel: "grok-imagine-video-1.5",
 			wantUpstream:     "grok-imagine-video-1.5",
 			wantBody:         `{"model":"grok-imagine-video-1.5","prompt":"waves"}`,
-			responseBody:     `{"request_id":"video-request-mapped"}`,
+			responseBody:     `{"request_id":"video-request-unrelated-map"}`,
 		},
 		{
 			name:             "image-to-video preserves then maps the requested model",
@@ -1287,6 +1348,17 @@ func TestForwardGrokMediaAppliesAccountModelMappingAfterEndpointNormalization(t 
 			wantUpstream:     "vendor-image-video",
 			wantBody:         `{"model":"vendor-image-video","prompt":"animate","image":{"url":"https://example.com/input.png"}}`,
 			responseBody:     `{"request_id":"image-video-request-mapped"}`,
+		},
+		{
+			name:             "custom client alias maps before official validation",
+			endpoint:         GrokMediaEndpointVideosGenerations,
+			path:             "/v1/videos/generations",
+			body:             `{"model":"customer-video","prompt":"waves"}`,
+			modelMapping:     map[string]any{"customer-video": "grok-imagine-video-1.5"},
+			wantRequestModel: "customer-video",
+			wantUpstream:     "grok-imagine-video-1.5",
+			wantBody:         `{"model":"grok-imagine-video-1.5","prompt":"waves"}`,
+			responseBody:     `{"request_id":"video-request-custom-alias"}`,
 		},
 		{
 			name:             "mapping and image sanitization compose",
@@ -1433,6 +1505,9 @@ func TestForwardGrokMediaImagesEditMultipartConvertsToJSON(t *testing.T) {
 	writer := multipart.NewWriter(&buf)
 	require.NoError(t, writer.WriteField("model", "grok-imagine-edit"))
 	require.NoError(t, writer.WriteField("prompt", "edit this private image"))
+	require.NoError(t, writer.WriteField("size", "2K"))
+	require.NoError(t, writer.WriteField("resolution", "2k"))
+	require.NoError(t, writer.WriteField("aspect_ratio", "16:9"))
 	partHeader := textproto.MIMEHeader{}
 	partHeader.Set("Content-Disposition", `form-data; name="image"; filename="input.png"`)
 	partHeader.Set("Content-Type", "image/png")
@@ -1475,9 +1550,12 @@ func TestForwardGrokMediaImagesEditMultipartConvertsToJSON(t *testing.T) {
 	require.True(t, json.Valid(upstream.lastBody))
 	require.Equal(t, "vendor-image-edit", gjson.GetBytes(upstream.lastBody, "model").String())
 	require.Equal(t, "edit this private image", gjson.GetBytes(upstream.lastBody, "prompt").String())
+	require.Equal(t, "2k", gjson.GetBytes(upstream.lastBody, "resolution").String())
+	require.Equal(t, "16:9", gjson.GetBytes(upstream.lastBody, "aspect_ratio").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "size").Exists())
 	require.True(t, strings.HasPrefix(gjson.GetBytes(upstream.lastBody, "image.url").String(), "data:image/png;base64,"))
 	require.False(t, gjson.GetBytes(upstream.lastBody, "image.image_url").Exists())
-	require.Equal(t, "grok-imagine-edit", result.BillingModel)
+	require.Equal(t, "grok-imagine-image-quality", result.BillingModel)
 	require.Equal(t, "vendor-image-edit", result.UpstreamModel)
 }
 
@@ -1807,7 +1885,12 @@ func TestGrokMediaVideoRequestBindingIsScopedToUserAndAPIKey(t *testing.T) {
 	c.Request.Header.Set("session_id", "shared-client-session")
 	groupID := int64(7)
 	cache := &stubGatewayCache{}
-	svc := &OpenAIGatewayService{cache: cache}
+	svc := &OpenAIGatewayService{
+		cache: cache,
+		cfg: &config.Config{Gateway: config.GatewayConfig{OpenAIWS: config.GatewayOpenAIWSConfig{
+			StickySessionTTLSeconds: 3600,
+		}}},
+	}
 	const userID int64 = 41
 	const apiKeyID int64 = 51
 	require.NotEmpty(t, svc.GenerateExplicitSessionHash(c, nil))
@@ -1816,10 +1899,21 @@ func TestGrokMediaVideoRequestBindingIsScopedToUserAndAPIKey(t *testing.T) {
 	hash := GrokMediaVideoRequestSessionHash("video-request-123", userID, apiKeyID)
 	require.NotEmpty(t, hash)
 	require.NoError(t, svc.BindGrokMediaVideoRequestAccount(ctx, &groupID, "video-request-123", userID, apiKeyID, 63))
+	routingKey := svc.openAISessionCacheKey(hash)
+	ownerKey := svc.openAISessionCacheKey(grokMediaVideoRequestOwnerBindingHash("video-request-123", userID, apiKeyID))
+	require.Equal(t, int64(63), cache.sessionBindings[ownerKey])
+	require.Zero(t, cache.sessionTTLs[ownerKey], "owner binding must not inherit the one-hour sticky-session TTL")
+	require.Equal(t, grokVideoRequestBindingTTL(svc.cfg), cache.sessionTTLs[routingKey])
+
+	// Losing the routing hint must not lose request ownership.
+	delete(cache.sessionBindings, routingKey)
+	delete(cache.sessionTTLs, routingKey)
 
 	accountID, err := svc.ResolveGrokMediaVideoRequestAccount(ctx, &groupID, "video-request-123", userID, apiKeyID)
 	require.NoError(t, err)
 	require.Equal(t, int64(63), accountID)
+	require.Equal(t, int64(63), cache.sessionBindings[routingKey])
+	require.Equal(t, grokVideoRequestBindingTTL(svc.cfg), cache.sessionTTLs[routingKey])
 
 	accountID, err = svc.ResolveGrokMediaVideoRequestAccount(ctx, &groupID, "video-request-123", userID+1, apiKeyID)
 	require.Error(t, err)
@@ -1828,6 +1922,140 @@ func TestGrokMediaVideoRequestBindingIsScopedToUserAndAPIKey(t *testing.T) {
 	accountID, err = svc.ResolveGrokMediaVideoRequestAccount(ctx, &groupID, "video-request-123", userID, apiKeyID+1)
 	require.Error(t, err)
 	require.Zero(t, accountID)
+}
+
+type grokMediaVideoOwnerRepoStub struct {
+	UsageLogRepository
+	accountID int64
+	err       error
+	calls     int
+	requestID string
+	userID    int64
+	apiKeyID  int64
+	groupID   *int64
+}
+
+func (r *grokMediaVideoOwnerRepoStub) FindGrokMediaVideoOwnerAccountID(
+	_ context.Context,
+	requestID string,
+	userID, apiKeyID int64,
+	groupID *int64,
+) (int64, error) {
+	r.calls++
+	r.requestID = requestID
+	r.userID = userID
+	r.apiKeyID = apiKeyID
+	if groupID != nil {
+		value := *groupID
+		r.groupID = &value
+	} else {
+		r.groupID = nil
+	}
+	return r.accountID, r.err
+}
+
+type grokMediaVideoOwnerCacheErrorStub struct {
+	GatewayCache
+	err error
+}
+
+func (c *grokMediaVideoOwnerCacheErrorStub) GetSessionAccountID(context.Context, int64, string) (int64, error) {
+	return 0, c.err
+}
+
+func TestResolveGrokMediaVideoRequestAccountRecoversExpiredLegacyBindingFromUsageLog(t *testing.T) {
+	groupID := int64(7)
+	const userID int64 = 41
+	const apiKeyID int64 = 51
+	const requestID = "expired-legacy-video"
+	cache := &stubGatewayCache{}
+	ownerRepo := &grokMediaVideoOwnerRepoStub{accountID: 81}
+	svc := &OpenAIGatewayService{
+		cache:        cache,
+		usageLogRepo: ownerRepo,
+		cfg: &config.Config{Gateway: config.GatewayConfig{OpenAIWS: config.GatewayOpenAIWSConfig{
+			StickySessionTTLSeconds: 1800,
+		}}},
+	}
+
+	accountID, err := svc.ResolveGrokMediaVideoRequestAccount(
+		context.Background(), &groupID, requestID, userID, apiKeyID,
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(81), accountID)
+	require.Equal(t, 1, ownerRepo.calls)
+	require.Equal(t, requestID, ownerRepo.requestID)
+	require.Equal(t, userID, ownerRepo.userID)
+	require.Equal(t, apiKeyID, ownerRepo.apiKeyID)
+	require.NotNil(t, ownerRepo.groupID)
+	require.Equal(t, groupID, *ownerRepo.groupID)
+
+	ownerKey := svc.openAISessionCacheKey(grokMediaVideoRequestOwnerBindingHash(requestID, userID, apiKeyID))
+	routingKey := svc.openAISessionCacheKey(GrokMediaVideoRequestSessionHash(requestID, userID, apiKeyID))
+	require.Equal(t, int64(81), cache.sessionBindings[ownerKey])
+	require.Zero(t, cache.sessionTTLs[ownerKey])
+	require.Equal(t, int64(81), cache.sessionBindings[routingKey])
+	require.Equal(t, grokVideoRequestBindingTTL(svc.cfg), cache.sessionTTLs[routingKey])
+
+	accountID, err = svc.ResolveGrokMediaVideoRequestAccount(
+		context.Background(), &groupID, requestID, userID, apiKeyID,
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(81), accountID)
+	require.Equal(t, 1, ownerRepo.calls, "durable cache hit must not query the database again")
+}
+
+func TestResolveGrokMediaVideoRequestAccountFailsClosedOnHistoryLookupError(t *testing.T) {
+	lookupErr := errors.New("history lookup failed")
+	ownerRepo := &grokMediaVideoOwnerRepoStub{err: lookupErr}
+	svc := &OpenAIGatewayService{cache: &stubGatewayCache{}, usageLogRepo: ownerRepo}
+
+	accountID, err := svc.ResolveGrokMediaVideoRequestAccount(
+		context.Background(), nil, "expired-video", 41, 51,
+	)
+
+	require.ErrorIs(t, err, lookupErr)
+	require.Zero(t, accountID)
+	require.Equal(t, 1, ownerRepo.calls)
+}
+
+func TestResolveGrokMediaVideoRequestAccountDoesNotFallbackOnCacheFailure(t *testing.T) {
+	cacheErr := errors.New("redis unavailable")
+	ownerRepo := &grokMediaVideoOwnerRepoStub{accountID: 81}
+	svc := &OpenAIGatewayService{
+		cache:        &grokMediaVideoOwnerCacheErrorStub{err: cacheErr},
+		usageLogRepo: ownerRepo,
+	}
+
+	accountID, err := svc.ResolveGrokMediaVideoRequestAccount(
+		context.Background(), nil, "video-request", 41, 51,
+	)
+
+	require.ErrorIs(t, err, cacheErr)
+	require.Zero(t, accountID)
+	require.Zero(t, ownerRepo.calls)
+}
+
+func TestResolveGrokMediaVideoRequestAccountPromotesLegacyRoutingBinding(t *testing.T) {
+	groupID := int64(7)
+	const userID int64 = 41
+	const apiKeyID int64 = 51
+	cache := &stubGatewayCache{sessionBindings: make(map[string]int64)}
+	svc := &OpenAIGatewayService{cache: cache}
+	routingKey := svc.openAISessionCacheKey(GrokMediaVideoRequestSessionHash("legacy-video", userID, apiKeyID))
+	ownerKey := svc.openAISessionCacheKey(grokMediaVideoRequestOwnerBindingHash("legacy-video", userID, apiKeyID))
+	cache.sessionBindings[routingKey] = 71
+
+	accountID, err := svc.ResolveGrokMediaVideoRequestAccount(
+		context.Background(), &groupID, "legacy-video", userID, apiKeyID,
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(71), accountID)
+	require.Equal(t, int64(71), cache.sessionBindings[ownerKey])
+	require.Zero(t, cache.sessionTTLs[ownerKey])
+	require.Equal(t, grokVideoRequestBindingTTL(svc.cfg), cache.sessionTTLs[routingKey])
 }
 
 func TestForwardGrokMedia429ReconcilesRateLimitBeforeCustomErrorBypass(t *testing.T) {
@@ -3768,7 +3996,9 @@ func TestIsGrokImageGenerationModel(t *testing.T) {
 		want  bool
 	}{
 		{"grok-imagine", true},
+		{"grok-imagine-image", true},
 		{"grok-imagine-image-quality", true},
+		{"grok-imagine-image-pro", true},
 		{"grok-imagine-edit", true},
 		{"grok-imagine-image-hd", true},
 		{"grok-4.5", false},

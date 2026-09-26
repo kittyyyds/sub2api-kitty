@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/imroc/req/v3"
@@ -488,6 +489,11 @@ func IsGPTImageGenerationModel(model string) bool {
 
 func isGrokImageGenerationModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
+	if _, ok := xai.CanonicalImageGenerationModel(model); ok {
+		return true
+	}
+	// Keep historical aliases and channel-defined grok-imagine-image-* names
+	// routable. The advertised model list contains only official model IDs.
 	return model == "grok-imagine" ||
 		model == "grok-imagine-edit" ||
 		strings.HasPrefix(model, "grok-imagine-image")

@@ -67,6 +67,12 @@ function modelPlazaDestination(wrapper: ReturnType<typeof mountHome>) {
 }
 
 describe('HomeView compact mode', () => {
+	 it('never renders executable branding URLs as document links or images', () => {
+	   const wrapper = mountHome({ doc_url: 'javascript:alert(1)', site_logo: 'javascript:alert(2)' })
+	   expect(wrapper.findAll('a').some(link => link.attributes('href')?.startsWith('javascript:'))).toBe(false)
+	   expect(wrapper.findAll('img').some(img => img.attributes('src')?.startsWith('javascript:'))).toBe(false)
+	   wrapper.unmount()
+	 })
   beforeEach(() => {
     authStore.isAuthenticated = false
     authStore.isAdmin = false
@@ -119,6 +125,16 @@ describe('HomeView compact mode', () => {
     authStore.isAuthenticated = true
 
     expect(compactDestination(mountHome({ compact_home_enabled: true }))).toBe('/dashboard')
+  })
+
+  it('keeps the public model pricing entry in compact mode', () => {
+    const wrapper = mountHome({ compact_home_enabled: true, model_plaza_enabled: true })
+    const destinations = wrapper
+      .get('[data-testid="compact-home"]')
+      .findAllComponents(RouterLinkStub)
+      .map((link) => link.props('to'))
+
+    expect(destinations).toContain('/model-plaza')
   })
 
   it('links administrators to the admin dashboard', () => {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"log"
 	"strings"
 	"sync"
@@ -97,6 +98,12 @@ func (s *CNProviderBalanceCheckService) Stop() {
 }
 
 func (s *CNProviderBalanceCheckService) runOnce() {
+	managedParent, managedDone, managedAllowed := managedinstance.Begin(context.Background())
+	if !managedAllowed {
+		return
+	}
+	defer managedDone()
+
 	// 收集 coding 探测目标（kimi/deepseek + 智谱）与 payg 检查队列。
 	// coding 探测统一在收集完成后按 4 并发执行：单账号探测 15-20s，串行 ×
 	// 多账号会耗尽整体预算（120s 上限），排在后面的账号快照会饥饿，
@@ -134,7 +141,7 @@ func (s *CNProviderBalanceCheckService) runOnce() {
 		}
 	}
 	for _, platform := range s.platforms() {
-		accounts, err := s.accountRepo.ListByPlatform(context.Background(), platform)
+		accounts, err := s.accountRepo.ListByPlatform(managedParent, platform)
 		if err != nil {
 			log.Printf("[CNBalance] list %s accounts failed: %v", platform, err)
 			continue
@@ -144,7 +151,7 @@ func (s *CNProviderBalanceCheckService) runOnce() {
 	// 智谱 / MiniMax 无余额端点，仅进额度探测。
 	if s.quotaService != nil {
 		for _, platform := range []string{PlatformZhipu, PlatformMiniMax} {
-			accounts, err := s.accountRepo.ListByPlatform(context.Background(), platform)
+			accounts, err := s.accountRepo.ListByPlatform(managedParent, platform)
 			if err != nil {
 				log.Printf("[CNBalance] list %s accounts failed: %v", platform, err)
 				continue
@@ -159,7 +166,7 @@ func (s *CNProviderBalanceCheckService) runOnce() {
 	if timeout > 300*time.Second {
 		timeout = 300 * time.Second
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(managedParent, timeout)
 	defer cancel()
 
 	threshold := s.cfg.Gateway.CNProviders.BalanceThreshold

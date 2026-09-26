@@ -1112,6 +1112,9 @@ type openAIWSAcquireQueueWait struct {
 }
 
 func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireRequest) (*openAIWSConnLease, error) {
+	if err := ValidateConfiguredAccountProxy(req.Account, req.ProxyURL); err != nil {
+		return nil, err
+	}
 	if p != nil {
 		p.metrics.acquireTotal.Add(1)
 	}
@@ -2138,6 +2141,9 @@ func (p *openAIWSConnPool) UnpinConn(accountID int64, connID string) {
 }
 
 func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequest) (*openAIWSConn, error) {
+	if err := ValidateConfiguredAccountProxy(req.Account, req.ProxyURL); err != nil {
+		return nil, err
+	}
 	if p == nil || p.clientDialer == nil {
 		return nil, errors.New("openai ws client dialer is nil")
 	}

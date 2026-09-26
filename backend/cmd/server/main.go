@@ -1,13 +1,17 @@
 package main
 
-//go:generate go run github.com/google/wire/cmd/wire
+//go:generate go run -mod=mod github.com/google/wire/cmd/wire
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
 	"errors"
 	"flag"
+	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,9 +24,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/mihomo"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
+	_ "github.com/lib/pq"
 
 	"github.com/gin-gonic/gin"
 )
@@ -59,6 +65,7 @@ func main() {
 
 	// Parse command line flags
 	setupMode := flag.Bool("setup", false, "Run setup wizard in CLI mode")
+	migrateOnly := flag.Bool("migrate-only", false, "Apply database migrations and exit")
 	showVersion := flag.Bool("version", false, "Show version information")
 	migrateMihomo := flag.String("migrate-mihomo", "", "Stage legacy Mihomo into the specified Sub2API data directory (root deployment only)")
 	checkMihomo := flag.String("check-managed-mihomo", "", "Check managed Mihomo in the specified data directory")
@@ -88,6 +95,19 @@ func main() {
 		log.Printf("Sub2API %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
+	if *setupMode && *migrateOnly {
+		log.Fatal("--setup and --migrate-only cannot be used together")
+	}
+	if os.Getenv("KITTY_MANAGED_INSTANCE") == "true" && (*setupMode || *migrateOnly) {
+		log.Fatal("Managed instances require an existing prepared database; setup and migrations run separately")
+	}
+	if *migrateOnly {
+		if err := runMigrationsOnly(); err != nil {
+			log.Fatalf("Database migration failed: %v", err)
+		}
+		log.Println("Database migrations completed")
+		return
+	}
 
 	// CLI setup mode
 	if *setupMode {
@@ -99,6 +119,9 @@ func main() {
 
 	// Check if setup is needed
 	if setup.NeedsSetup() {
+		if os.Getenv("KITTY_MANAGED_INSTANCE") == "true" {
+			log.Fatal("Managed instance requires the existing installation configuration; automatic setup is disabled")
+		}
 		// Check if auto-setup is enabled (for Docker deployment)
 		if setup.AutoSetupEnabled() {
 			log.Println("Auto setup mode enabled...")
@@ -115,6 +138,36 @@ func main() {
 
 	// Normal server mode
 	runMainServer()
+}
+
+func runMigrationsOnly() error {
+	return runMigrationsOnlyWith(config.LoadForBootstrap, sql.Open, repository.ApplyMigrations)
+}
+
+func runMigrationsOnlyWith(
+	loadConfig func() (*config.Config, error),
+	openDatabase func(driverName, dataSourceName string) (*sql.DB, error),
+	applyMigrations func(context.Context, *sql.DB) error,
+) error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("load bootstrap config: %w", err)
+	}
+	if cfg == nil {
+		return errors.New("load bootstrap config: empty config")
+	}
+	db, err := openDatabase("postgres", cfg.Database.DSNWithTimezone(cfg.Timezone))
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if err := applyMigrations(ctx, db); err != nil {
+		return fmt.Errorf("apply migrations: %w", err)
+	}
+	return nil
 }
 
 func runSetupServer() {
@@ -167,16 +220,28 @@ func runMainServer() {
 	}
 
 	buildInfo := handler.BuildInfo{
+		Commit:    Commit,
 		Version:   Version,
 		BuildType: BuildType,
 	}
 
+	if err := managedinstance.ConfigureFromEnv(); err != nil {
+		log.Fatalf("Managed instance configuration failed: %v", err)
+	}
 	app, err := initializeApplication(buildInfo)
 	if err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 	defer app.Cleanup()
 	if app.PluginManager != nil {
+		if managedinstance.Enabled() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err := app.PluginManager.ValidateManagedStartup(ctx)
+			cancel()
+			if err != nil {
+				log.Fatalf("Managed plugin compatibility check failed: %v", err)
+			}
+		}
 		if err := app.PluginManager.Start(context.Background()); err != nil {
 			log.Printf("Plugin manager started in degraded state: %v", err)
 		}
@@ -191,9 +256,18 @@ func runMainServer() {
 		}
 	}
 
+	// Bind before publishing readiness; a failed bind never appears ready.
+	listener, err := net.Listen("tcp", app.Server.Addr)
+	if err != nil {
+		log.Fatalf("Listen failed: %v", err)
+	}
+	if instance := managedinstance.Current(); instance != nil {
+		instance.MarkReady()
+		go instance.Run(context.Background())
+	}
 	// 启动服务器
 	go func() {
-		if err := app.Server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := app.Server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
@@ -209,11 +283,18 @@ func runMainServer() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if instance := managedinstance.Current(); instance != nil {
+		instance.Drain()
+		ctx = context.Background() // A managed host never turns a deadline into SIGKILL.
+	}
 
 	if err := app.Server.Shutdown(ctx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
 
+	if instance := managedinstance.Current(); instance != nil {
+		_ = instance.WaitDrained(context.Background()) // includes hijacked WebSockets
+	}
 	log.Println("Server exited")
 	mihomo.CloseAll()
 }

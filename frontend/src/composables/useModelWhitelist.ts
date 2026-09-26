@@ -443,6 +443,7 @@ export const commonErrorCodes = [
 // 按平台获取模型
 export function getModelsByPlatform(platform: string): string[] {
   switch (platform) {
+    case 'video': return []
     case 'openai': return openaiModels
     case 'anthropic':
     case 'claude': return claudeModels

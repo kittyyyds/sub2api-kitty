@@ -128,6 +128,14 @@ type AccountRepository interface {
 	ListShadowsByParent(ctx context.Context, parentID int64) ([]*Account, error)
 }
 
+// AccountGroupPriorityListRepository is an optional account-list capability
+// used by the admin UI when a concrete group is filtered and the group
+// priority feature is enabled. Keeping it separate preserves compatibility
+// with lightweight AccountRepository test doubles and non-Ent implementations.
+type AccountGroupPriorityListRepository interface {
+	ListWithFiltersUsingGroupPriority(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]Account, *pagination.PaginationResult, error)
+}
+
 // AccountExcelBPSRepository disables only BPS, provided the account credentials
 // and both opt-in switches still match at the time of the write.
 type AccountExcelBPSRepository interface {
@@ -232,6 +240,12 @@ func NewAccountService(accountRepo AccountRepository, groupRepo GroupRepository)
 
 // Create 创建账号
 func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (*Account, error) {
+	if err := ValidateVideoAccount(req.Platform, req.Type, req.Credentials); err != nil {
+		return nil, err
+	}
+	if err := validateVideoAccountGroupPlatforms(ctx, s.groupRepo, req.Platform, req.GroupIDs); err != nil {
+		return nil, err
+	}
 	// 验证分组是否存在（如果指定了分组）
 	if len(req.GroupIDs) > 0 {
 		if err := s.validateGroupIDsExist(ctx, req.GroupIDs); err != nil {
@@ -259,10 +273,6 @@ func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (
 		account.AutoPauseOnExpired = true
 	}
 
-	if err := s.accountRepo.Create(ctx, account); err != nil {
-		return nil, fmt.Errorf("create account: %w", err)
-	}
-
 	// require_oauth_only 检查：apikey 类型账号不可加入限制分组
 	if account.Type == AccountTypeAPIKey && len(req.GroupIDs) > 0 {
 		for _, gid := range req.GroupIDs {
@@ -276,14 +286,33 @@ func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (
 		}
 	}
 
-	// 绑定分组
-	if len(req.GroupIDs) > 0 {
-		if err := s.accountRepo.BindGroups(ctx, account.ID, req.GroupIDs); err != nil {
-			return nil, fmt.Errorf("bind groups: %w", err)
-		}
+	if err := createAccountAndBindGroups(ctx, s.accountRepo, account, req.GroupIDs); err != nil {
+		return nil, err
 	}
 
 	return account, nil
+}
+
+// Production repositories already provide the atomic duplicate-account writer.
+// Reuse it for a new account and its initial bindings so a race or binding error
+// cannot leave an orphan account after the caller receives an error.
+func createAccountAndBindGroups(ctx context.Context, repo AccountRepository, account *Account, groupIDs []int64) error {
+	if creator, ok := repo.(interface {
+		CreateWithAccountGroups(context.Context, *Account, []AccountGroup) error
+	}); ok && len(groupIDs) > 0 {
+		groups := make([]AccountGroup, 0, len(groupIDs))
+		for i, id := range groupIDs {
+			groups = append(groups, AccountGroup{GroupID: id, Priority: i + 1})
+		}
+		return creator.CreateWithAccountGroups(ctx, account, groups)
+	}
+	if err := repo.Create(ctx, account); err != nil {
+		return err
+	}
+	if len(groupIDs) > 0 {
+		return repo.BindGroups(ctx, account.ID, groupIDs)
+	}
+	return nil
 }
 
 // GetByID 根据ID获取账号
@@ -341,6 +370,9 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 		account.Credentials = SanitizeStoredCredentials(account.Platform, *req.Credentials)
 	}
 
+	if err := ValidateVideoAccount(account.Platform, account.Type, account.Credentials); err != nil {
+		return nil, err
+	}
 	if req.Extra != nil {
 		extra := make(map[string]any, len(*req.Extra))
 		for key, value := range *req.Extra {
@@ -379,6 +411,9 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 	// 先验证分组是否存在（在任何写操作之前）
 	if req.GroupIDs != nil {
 		if err := s.validateGroupIDsExist(ctx, *req.GroupIDs); err != nil {
+			return nil, err
+		}
+		if err := validateVideoAccountGroupPlatforms(ctx, s.groupRepo, account.Platform, *req.GroupIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -521,7 +556,7 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 	case PlatformGemini:
 		// TODO: 测试Gemini API凭证
 		return nil
-	case PlatformGrok:
+	case PlatformVideo, PlatformGrok:
 		// Grok OAuth credentials are validated via token exchange/refresh and request-path probes.
 		return nil
 	case PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo:

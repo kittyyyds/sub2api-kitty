@@ -8,7 +8,10 @@ vi.mock('@/i18n', () => {
     'nav.subscribe': '订阅',
     'nav.buySubscription': '充值/订阅',
   }
-  return { i18n: { global: { t: (key: string) => messages[key] ?? key } } }
+  return { i18n: { global: {
+    t: (key: string) => messages[key] ?? key,
+    te: (key: string) => key in messages,
+  } } }
 })
 
 describe('resolveDocumentTitle', () => {
@@ -21,8 +24,8 @@ describe('resolveDocumentTitle', () => {
   })
 
   it('站点名为空时，回退默认站点名', () => {
-    expect(resolveDocumentTitle('Dashboard', '')).toBe('Dashboard - Sub2API')
-    expect(resolveDocumentTitle(undefined, '   ')).toBe('Sub2API')
+    expect(resolveDocumentTitle('Dashboard', '')).toBe('Dashboard - Kitty奇妙屋')
+    expect(resolveDocumentTitle(undefined, '   ')).toBe('Kitty奇妙屋')
   })
 
   it('站点名变更时仅影响后续路由标题计算', () => {
@@ -35,6 +38,19 @@ describe('resolveDocumentTitle', () => {
 })
 
 describe('resolveRouteDocumentTitle', () => {
+  it('原生客户功能使用固定本地化标题，不依赖后台自定义菜单', () => {
+    const route = {
+      name: 'CustomPage',
+      params: { id: 'reset-radar' },
+      meta: {
+        title: 'Custom Page',
+        titleKey: 'customPage.title'
+      }
+    }
+
+    expect(resolveRouteDocumentTitle(route, 'KittyAPI')).toBe('GPT智力测评 - KittyAPI')
+  })
+
   it('自定义页面菜单加载后，使用菜单名称作为标题', () => {
     const route = {
       name: 'CustomPage',

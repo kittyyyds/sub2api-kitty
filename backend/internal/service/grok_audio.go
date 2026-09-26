@@ -138,7 +138,9 @@ func (s *OpenAIGatewayService) ProxyGrokRealtime(ctx context.Context, c *gin.Con
 	return s.ProxyGrokRealtimeConn(ctx, c, client, upstream)
 }
 
-type GrokRealtimeUpstream struct{ conn openAIWSClientConn }
+type GrokRealtimeUpstream struct {
+	conn openAIWSClientConn
+}
 
 // GrokRealtimeDialError preserves an HTTP status returned before WebSocket
 // upgrade so handlers can apply the normal Grok account policy.
@@ -154,6 +156,7 @@ func (u *GrokRealtimeUpstream) Close() error {
 	if u == nil || u.conn == nil {
 		return nil
 	}
+
 	return u.conn.Close()
 }
 
@@ -161,6 +164,7 @@ func (s *OpenAIGatewayService) OpenGrokRealtime(ctx context.Context, account *Ac
 	if s == nil || account == nil || account.Platform != PlatformGrok {
 		return nil, fmt.Errorf("grok realtime account is required")
 	}
+
 	base, err := buildGrokVoiceURL(account, s.cfg, "realtime")
 	if err != nil {
 		return nil, err
@@ -182,10 +186,14 @@ func (s *OpenAIGatewayService) OpenGrokRealtime(ctx context.Context, account *Ac
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
-	conn, status, _, err := s.getOpenAIWSPassthroughDialer().Dial(ctx, u.String(), headers, proxyURL)
+
+	dialCtx, cancelDial := context.WithTimeout(ctx, DefaultGrokRealtimeDialTimeout)
+	conn, status, _, err := s.getOpenAIWSPassthroughDialer().Dial(dialCtx, u.String(), headers, proxyURL)
+	cancelDial()
 	if err != nil {
 		return nil, &GrokRealtimeDialError{StatusCode: status, Err: err}
 	}
+
 	return &GrokRealtimeUpstream{conn: conn}, nil
 }
 
@@ -253,7 +261,8 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 		}
 	}()
 
-	return awaitGrokRealtimeAudioObserved(errCh, &audioObserved)
+	observed, err := awaitGrokRealtimeAudioObserved(errCh, &audioObserved)
+	return observed, err
 }
 
 // ProbeGrokRealtime performs the upstream WebSocket handshake without sending
@@ -266,6 +275,7 @@ func (s *OpenAIGatewayService) ProbeGrokRealtime(ctx context.Context, account *A
 	if account.Platform != PlatformGrok {
 		return fmt.Errorf("account platform %s is not supported for grok realtime", account.Platform)
 	}
+
 	base, err := buildGrokVoiceURL(account, s.cfg, "realtime")
 	if err != nil {
 		return err

@@ -56,6 +56,11 @@ const maxTokenLength = 8192
 // refreshTokenPrefix is the prefix for refresh tokens to distinguish them from access tokens.
 const refreshTokenPrefix = "rt_"
 
+const (
+	registrationTurnstileProofPurpose = "registration-turnstile"
+	registrationTurnstileProofTTL     = 15 * time.Minute
+)
+
 // JWTClaims JWT载荷数据
 type JWTClaims struct {
 	UserID       int64  `json:"user_id"`
@@ -66,6 +71,12 @@ type JWTClaims struct {
 	SessionID string `json:"sid,omitempty"`
 	// BindingHash 会话指纹哈希（IP+UA），会话绑定开启时校验；空值表示旧 token（平滑升级）。
 	BindingHash string `json:"bnd,omitempty"`
+	jwt.RegisteredClaims
+}
+
+type registrationTurnstileProofClaims struct {
+	Email   string `json:"email"`
+	Purpose string `json:"purpose"`
 	jwt.RegisteredClaims
 }
 
@@ -404,6 +415,125 @@ func (s *AuthService) VerifyCaptchaForRegister(ctx context.Context, proof Captch
 	return s.VerifyCaptcha(ctx, proof, remoteIP)
 }
 
+// VerifyCaptchaForRegistrationEmail verifies the selected captcha provider once and
+// returns a short-lived, email-bound proof for resend and final registration requests.
+func (s *AuthService) VerifyCaptchaForRegistrationEmail(ctx context.Context, captcha CaptchaProof, proof, email, remoteIP string) (string, error) {
+	if strings.TrimSpace(proof) != "" {
+		if err := s.verifyRegistrationTurnstileProof(proof, email); err != nil {
+			return "", err
+		}
+		return proof, nil
+	}
+
+	if err := s.VerifyCaptcha(ctx, captcha, remoteIP); err != nil {
+		return "", err
+	}
+	if !captchaProofPresent(captcha) {
+		return "", nil
+	}
+
+	return s.createRegistrationTurnstileProof(email)
+}
+
+// VerifyCaptchaForRegisterWithProof preserves Kitty's signed registration proof
+// while accepting all captcha providers added by the upstream captcha pipeline.
+func (s *AuthService) VerifyCaptchaForRegisterWithProof(ctx context.Context, captcha CaptchaProof, proof, email, remoteIP, verifyCode string) error {
+	if s.IsEmailVerifyEnabled(ctx) && strings.TrimSpace(verifyCode) != "" && strings.TrimSpace(proof) != "" {
+		return s.verifyRegistrationTurnstileProof(proof, email)
+	}
+	return s.VerifyCaptchaForRegister(ctx, captcha, remoteIP, verifyCode)
+}
+
+// VerifyTurnstileForRegistrationEmail keeps the Kitty internal API used by older
+// callers and unit tests while delegating to the provider-neutral implementation.
+func (s *AuthService) VerifyTurnstileForRegistrationEmail(ctx context.Context, token, proof, email, remoteIP string) (string, error) {
+	return s.VerifyCaptchaForRegistrationEmail(ctx, CaptchaProof{TurnstileToken: token}, proof, email, remoteIP)
+}
+
+// VerifyTurnstileForRegister keeps the Kitty proof contract for legacy callers.
+// Direct registration still validates a normal Turnstile token.
+func (s *AuthService) VerifyTurnstileForRegister(ctx context.Context, token, proof, email, remoteIP, verifyCode string) error {
+	if s.IsEmailVerifyEnabled(ctx) && strings.TrimSpace(verifyCode) != "" && strings.TrimSpace(proof) != "" {
+		return s.verifyRegistrationTurnstileProof(proof, email)
+	}
+	return s.VerifyCaptcha(ctx, CaptchaProof{TurnstileToken: token}, remoteIP)
+}
+
+func captchaProofPresent(proof CaptchaProof) bool {
+	return strings.TrimSpace(proof.TurnstileToken) != "" ||
+		strings.TrimSpace(proof.TencentTicket) != "" ||
+		strings.TrimSpace(proof.TencentRandstr) != ""
+}
+
+func (s *AuthService) createRegistrationTurnstileProof(email string) (string, error) {
+	key, err := s.registrationTurnstileProofKey()
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	claims := registrationTurnstileProofClaims{
+		Email:   normalizeRegistrationProofEmail(email),
+		Purpose: registrationTurnstileProofPurpose,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    registrationTurnstileProofPurpose,
+			Subject:   normalizeRegistrationProofEmail(email),
+			Audience:  jwt.ClaimStrings{registrationTurnstileProofPurpose},
+			ExpiresAt: jwt.NewNumericDate(now.Add(registrationTurnstileProofTTL)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now.Add(-time.Minute)),
+		},
+	}
+
+	proof, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+	if err != nil {
+		return "", ErrTurnstileVerificationFailed
+	}
+	return proof, nil
+}
+
+func (s *AuthService) verifyRegistrationTurnstileProof(proof, email string) error {
+	key, err := s.registrationTurnstileProofKey()
+	if err != nil {
+		return err
+	}
+
+	claims := &registrationTurnstileProofClaims{}
+	parsed, err := jwt.ParseWithClaims(
+		strings.TrimSpace(proof),
+		claims,
+		func(token *jwt.Token) (any, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, ErrTurnstileVerificationFailed
+			}
+			return key, nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithAudience(registrationTurnstileProofPurpose),
+		jwt.WithIssuer(registrationTurnstileProofPurpose),
+		jwt.WithExpirationRequired(),
+	)
+	if err != nil || !parsed.Valid || claims.Purpose != registrationTurnstileProofPurpose {
+		return ErrTurnstileVerificationFailed
+	}
+	if claims.Email != normalizeRegistrationProofEmail(email) || claims.Subject != claims.Email {
+		return ErrTurnstileVerificationFailed
+	}
+	return nil
+}
+
+func (s *AuthService) registrationTurnstileProofKey() ([]byte, error) {
+	if s == nil || s.cfg == nil || strings.TrimSpace(s.cfg.JWT.Secret) == "" {
+		return nil, ErrTurnstileNotConfigured
+	}
+	sum := sha256.Sum256([]byte(registrationTurnstileProofPurpose + ":" + s.cfg.JWT.Secret))
+	return sum[:], nil
+}
+
+func normalizeRegistrationProofEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
 func (s *AuthService) VerifyCaptcha(ctx context.Context, proof CaptchaProof, remoteIP string) error {
 	required := s.cfg != nil && s.cfg.Server.Mode == "release" && s.cfg.Turnstile.Required
 	if s.settingService == nil {
@@ -495,11 +625,6 @@ func (s *AuthService) VerifyActionCaptchaIfEnabled(ctx context.Context, proof Ca
 		proof.TencentRandstr,
 		remoteIP,
 	)
-}
-
-// VerifyTurnstileForRegister 保留旧内部接口，生产 handler 使用 VerifyCaptchaForRegister。
-func (s *AuthService) VerifyTurnstileForRegister(ctx context.Context, token, remoteIP, verifyCode string) error {
-	return s.VerifyCaptchaForRegister(ctx, CaptchaProof{TurnstileToken: token}, remoteIP, verifyCode)
 }
 
 // VerifyTurnstile 保留旧内部接口，生产 handler 使用 VerifyCaptcha。

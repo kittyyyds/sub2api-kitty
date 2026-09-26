@@ -55,6 +55,20 @@ func TestWriteSuccessResponse(t *testing.T) {
 			wantBody:        "",
 		},
 		{
+			name:            "dujiaopay returns empty 200",
+			providerKey:     payment.TypeDujiaoPay,
+			wantCode:        http.StatusOK,
+			wantContentType: "text/plain",
+			wantBody:        "",
+		},
+		{
+			name:            "paypal returns empty 200",
+			providerKey:     payment.TypePayPal,
+			wantCode:        http.StatusOK,
+			wantContentType: "text/plain",
+			wantBody:        "",
+		},
+		{
 			name:            "easypay returns plain text success",
 			providerKey:     "easypay",
 			wantCode:        http.StatusOK,
@@ -177,6 +191,30 @@ func TestExtractOutTradeNo(t *testing.T) {
 			providerKey: payment.TypeAirwallex,
 			rawBody:     `{"name":"payment_intent.succeeded","data":{"object":{"merchant_order_id":"sub2_awx_123"}}}`,
 			want:        "sub2_awx_123",
+		},
+		{
+			name:        "dujiaopay metadata payload",
+			providerKey: payment.TypeDujiaoPay,
+			rawBody:     `{"event_type":"order.paid","data":{"order_id":"do_123","metadata":{"out_trade_no":"sub2_djp_123"}}}`,
+			want:        "sub2_djp_123",
+		},
+		{
+			name:        "dujiaopay payload without merchant order id",
+			providerKey: payment.TypeDujiaoPay,
+			rawBody:     `{"event_type":"order.paid","data":{"order_id":"do_456"}}`,
+			want:        "",
+		},
+		{
+			name:        "paypal approved order purchase unit",
+			providerKey: payment.TypePayPal,
+			rawBody:     `{"event_type":"CHECKOUT.ORDER.APPROVED","resource":{"id":"ORDER-1","purchase_units":[{"custom_id":"sub2_paypal_1","invoice_id":"sub2_paypal_1"}]}}`,
+			want:        "sub2_paypal_1",
+		},
+		{
+			name:        "paypal completed capture resource",
+			providerKey: payment.TypePayPal,
+			rawBody:     `{"event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"CAPTURE-1","custom_id":"sub2_paypal_2"}}`,
+			want:        "sub2_paypal_2",
 		},
 	}
 

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"io"
 	"maps"
 	"math/rand/v2"
@@ -442,7 +443,7 @@ func ProvideOllamaCloudUsageService(
 	svc := NewOllamaCloudUsageService(accountRepo, httpUpstream, settingService, encryptor, keyConfigured)
 	svc.lockCache = lockCache
 	svc.db = db
-	svc.Start()
+	managedinstance.Register("OllamaCloudUsageService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -717,6 +718,12 @@ func (s *OllamaCloudUsageService) Refresh(ctx context.Context, accountID int64) 
 }
 
 func (s *OllamaCloudUsageService) RunDue(ctx context.Context) error {
+	ctx, managedDone, managedAllowed := managedinstance.Begin(ctx)
+	if !managedAllowed {
+		return nil
+	}
+	defer managedDone()
+
 	if s == nil || s.accountRepo == nil {
 		return nil
 	}

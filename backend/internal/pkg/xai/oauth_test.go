@@ -370,6 +370,39 @@ func TestDefaultModelMappingIncludesGrokAliases(t *testing.T) {
 	require.Equal(t, DefaultImagineVideoModel, mapping["grok-imagine-video"])
 	require.Equal(t, DefaultImagineVideo15Model, mapping["grok-imagine-video-1.5"])
 	require.Equal(t, DefaultImagineVideo15Model, mapping["grok-imagine-video-1.5-preview"])
+	require.Equal(t, DefaultImagineImageFastModel, mapping["grok-imagine-image-2026-03-02"])
+	require.Equal(t, DefaultImagineImageQualityModel, mapping["grok-imagine-image-pro"])
+	require.Equal(t, DefaultImagineVideo15LegacyModel, mapping["grok-imagine-video-1.5-2026-05-30"])
 	_, hasGPT := mapping["gpt-*"]
 	require.False(t, hasGPT, "cross-client wildcards must be opt-in")
+
+	ids := DefaultModelIDs()
+	require.Contains(t, ids, ModelGrokImagineImage)
+	require.Contains(t, ids, ModelGrokImagineImageQuality)
+	require.NotContains(t, ids, "grok-imagine")
+	require.NotContains(t, ids, "grok-imagine-edit")
+}
+
+func TestCanonicalMediaModels(t *testing.T) {
+	t.Parallel()
+
+	image, ok := CanonicalImageGenerationModel(" grok-imagine-image-pro ")
+	require.True(t, ok)
+	require.Equal(t, ModelGrokImagineImageQuality, image)
+
+	video, ok := CanonicalVideoGenerationModel("grok-imagine-video-1.5-2026-05-30")
+	require.True(t, ok)
+	require.Equal(t, ModelGrokImagineVideo15, video)
+
+	_, ok = CanonicalImageGenerationModel("grok-imagine-edit")
+	require.False(t, ok)
+	_, ok = CanonicalVideoGenerationModel("grok-imagine-video-future")
+	require.False(t, ok)
+
+	require.True(t, IsMediaCompatibilityAlias("grok-imagine-edit"))
+	require.True(t, IsMediaCompatibilityAlias("grok-imagine-image-pro"))
+	require.True(t, IsMediaCompatibilityAlias(DefaultImagineVideo15LegacyModel))
+	require.False(t, IsMediaCompatibilityAlias(ModelGrokImagineImage))
+	require.False(t, IsMediaCompatibilityAlias(ModelGrokImagineVideo15))
+	require.False(t, IsMediaCompatibilityAlias("customer-video"))
 }

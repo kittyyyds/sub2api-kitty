@@ -42,7 +42,7 @@ func RequestLogger() gin.HandlerFunc {
 			zap.String("component", "http"),
 			zap.String("request_id", requestID),
 			zap.String("client_request_id", strings.TrimSpace(clientRequestID)),
-			zap.String("path", requestLogPath(c.Request.URL.Path)),
+			zap.String("path", sanitizedLogPath(requestLogPath(c.Request.URL.Path))),
 			zap.String("method", c.Request.Method),
 		)
 

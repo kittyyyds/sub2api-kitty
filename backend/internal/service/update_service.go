@@ -17,12 +17,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 var (
+	ErrUpdateRestartRequired     = infraerrors.Conflict("UPDATE_RESTART_REQUIRED", "restart the service before another update or rollback")
 	ErrNoUpdateAvailable         = infraerrors.Conflict("ALREADY_UP_TO_DATE", "no update available; current version is latest")
 	ErrRollbackVersionNotAllowed = infraerrors.BadRequest("ROLLBACK_VERSION_NOT_ALLOWED", "version is not in the allowed rollback list")
 )
@@ -33,7 +35,7 @@ const (
 	// Releases are maintained on the owner-controlled production fork. Keep the
 	// updater independent from the upstream repository so production installs
 	// see our release stream and can update to our fork's assets.
-	githubRepo = "ranxi2001/sub2api"
+	githubRepo = "kittyyyds/sub2api-kittyyyds"
 
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"
@@ -64,10 +66,13 @@ type GitHubReleaseClient interface {
 
 // UpdateService handles software updates
 type UpdateService struct {
-	cache          UpdateCache
-	githubClient   GitHubReleaseClient
-	currentVersion string
-	buildType      string // "source" for manual builds, "release" for CI builds
+	mutationMu      sync.Mutex
+	restartRequired bool
+	cache           UpdateCache
+	githubClient    GitHubReleaseClient
+	currentVersion  string
+	buildType       string // "source" for manual builds, "release" for CI builds
+	executablePath  func() (string, error)
 }
 
 // NewUpdateService creates a new UpdateService
@@ -77,6 +82,7 @@ func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, versi
 		githubClient:   githubClient,
 		currentVersion: version,
 		buildType:      buildType,
+		executablePath: os.Executable,
 	}
 }
 
@@ -166,7 +172,8 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 // PerformUpdate downloads and applies the update
 // Uses atomic file replacement pattern for safe in-place updates
 func (s *UpdateService) PerformUpdate(ctx context.Context) error {
-	info, err := s.CheckUpdate(ctx, true)
+	// Mutation requires fresh release metadata; cache fallback is for display.
+	info, err := s.fetchLatestRelease(ctx)
 	if err != nil {
 		return err
 	}
@@ -175,43 +182,32 @@ func (s *UpdateService) PerformUpdate(ctx context.Context) error {
 		return ErrNoUpdateAvailable
 	}
 
-	return s.applyReleaseAssets(ctx, info.ReleaseInfo.Assets)
+	if info.ReleaseInfo == nil {
+		return fmt.Errorf("release metadata unavailable")
+	}
+	return s.applyReleaseAssets(ctx, info.ReleaseInfo.Assets, info.LatestVersion)
 }
 
 // applyReleaseAssets downloads the platform archive from the given release assets,
 // verifies its checksum, and atomically swaps the running binary.
 // Shared by PerformUpdate (latest) and RollbackToVersion (specific older version).
-func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []Asset) error {
-	// Find matching archive and checksum for current platform
-	archiveName := s.getArchiveName()
-	var downloadURL string
-	var checksumURL string
-
-	for _, asset := range releaseAssets {
-		if strings.Contains(asset.Name, archiveName) && !strings.HasSuffix(asset.Name, ".txt") {
-			downloadURL = asset.DownloadURL
-		}
-		if asset.Name == "checksums.txt" {
-			checksumURL = asset.DownloadURL
-		}
+func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []Asset, version string) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
+	if s.restartRequired {
+		return ErrUpdateRestartRequired
 	}
-
-	if downloadURL == "" {
-		return fmt.Errorf("no compatible release found for %s/%s", runtime.GOOS, runtime.GOARCH)
+	contract, err := s.compatibleRelease(ctx, releaseAssets, version)
+	if err != nil {
+		return err
 	}
-
-	// SECURITY: Validate download URL is from trusted domain
-	if err := validateDownloadURL(downloadURL); err != nil {
-		return fmt.Errorf("invalid download URL: %w", err)
-	}
-	if checksumURL != "" {
-		if err := validateDownloadURL(checksumURL); err != nil {
-			return fmt.Errorf("invalid checksum URL: %w", err)
-		}
+	archive, checksums, err := s.compatiblePlatformAssets(releaseAssets, version, contract)
+	if err != nil {
+		return err
 	}
 
 	// Get current executable path
-	exePath, err := os.Executable()
+	exePath, err := s.executablePath()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
@@ -220,6 +216,14 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 		return fmt.Errorf("failed to resolve symlinks: %w", err)
 	}
 
+	if err := s.applyCompatibleArchiveAt(ctx, archive, checksums, contract, exePath); err != nil {
+		return err
+	}
+	s.restartRequired = true
+	return nil
+}
+
+func (s *UpdateService) applyCompatibleArchiveAt(ctx context.Context, archive, checksums Asset, contract *compatiblePackage, exePath string) error {
 	exeDir := filepath.Dir(exePath)
 
 	// Create temp directory in the SAME directory as executable
@@ -231,16 +235,19 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Download archive
-	archivePath := filepath.Join(tempDir, filepath.Base(downloadURL))
-	if err := s.downloadFile(ctx, downloadURL, archivePath); err != nil {
+	archivePath := filepath.Join(tempDir, archive.Name)
+	if err := s.downloadFile(ctx, archive.DownloadURL, archivePath); err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
+	if err := checkPackageFile(archivePath, contract.Artifacts[archive.Name]); err != nil {
+		return err
+	}
 
-	// Verify checksum if available
-	if checksumURL != "" {
-		if err := s.verifyChecksum(ctx, archivePath, checksumURL); err != nil {
-			return fmt.Errorf("checksum verification failed: %w", err)
-		}
+	if info, err := os.Stat(archivePath); err != nil || info.Size() != archive.Size {
+		return fmt.Errorf("downloaded archive size mismatch")
+	}
+	if err := s.verifyChecksum(ctx, archivePath, checksums.DownloadURL); err != nil {
+		return fmt.Errorf("checksum verification failed: %w", err)
 	}
 
 	// Extract binary from archive
@@ -254,37 +261,20 @@ func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []
 		return fmt.Errorf("chmod failed: %w", err)
 	}
 
-	// Atomic replacement using rename pattern:
-	// 1. Rename current -> backup (atomic on Unix)
-	// 2. Rename new -> current (atomic on Unix, same filesystem)
-	// If step 2 fails, restore backup
-	backupPath := exePath + ".backup"
-
-	// Remove old backup if exists
-	_ = os.Remove(backupPath)
-
-	// Step 1: Move current binary to backup
-	if err := os.Rename(exePath, backupPath); err != nil {
-		return fmt.Errorf("backup failed: %w", err)
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-
-	// Step 2: Move new binary to target location (atomic, same filesystem)
-	if err := os.Rename(newBinaryPath, exePath); err != nil {
-		// Restore backup on failure
-		if restoreErr := os.Rename(backupPath, exePath); restoreErr != nil {
-			return fmt.Errorf("replace failed and restore failed: %w (restore error: %v)", err, restoreErr)
-		}
-		return fmt.Errorf("replace failed (restored backup): %w", err)
-	}
-
-	// Success - backup file is kept for rollback capability
-	// It will be cleaned up on next successful update
-	return nil
+	return replaceCompatibleBinary(exePath, newBinaryPath, s.currentVersion, os.Rename)
 }
 
 // Rollback restores the previous version
 func (s *UpdateService) Rollback() error {
-	exePath, err := os.Executable()
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
+	if s.restartRequired {
+		return ErrUpdateRestartRequired
+	}
+	exePath, err := s.executablePath()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
@@ -293,16 +283,32 @@ func (s *UpdateService) Rollback() error {
 		return fmt.Errorf("failed to resolve symlinks: %w", err)
 	}
 
-	backupFile := exePath + ".backup"
-	if _, err := os.Stat(backupFile); os.IsNotExist(err) {
-		return fmt.Errorf("no backup found")
+	if err := rollbackCompatibleBinaryAt(exePath); err != nil {
+		return err
 	}
+	s.restartRequired = true
+	return nil
+}
 
-	// Replace current with backup
-	if err := os.Rename(backupFile, exePath); err != nil {
+func rollbackCompatibleBinaryAt(exePath string) error {
+	backupFile := exePath + ".backup"
+	if err := validateBackupContract(backupFile); err != nil {
+		return err
+	}
+	// Copy first: a failed replacement leaves both the live binary and the
+	// validated backup intact, and a successful rollback keeps its evidence.
+	dir, err := os.MkdirTemp(filepath.Dir(exePath), ".sub2api-rollback-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	candidate := filepath.Join(dir, "sub2api")
+	if err := copyUpdateBinary(backupFile, candidate); err != nil {
+		return err
+	}
+	if err := os.Rename(candidate, exePath); err != nil {
 		return fmt.Errorf("rollback failed: %w", err)
 	}
-
 	return nil
 }
 
@@ -360,7 +366,7 @@ func (s *UpdateService) RollbackToVersion(ctx context.Context, version string) e
 		}
 	}
 
-	return s.applyReleaseAssets(ctx, assets)
+	return s.applyReleaseAssets(ctx, assets, target)
 }
 
 // fetchRollbackCandidates fetches recent releases and keeps the newest
@@ -385,6 +391,14 @@ func (s *UpdateService) fetchRollbackCandidates(ctx context.Context) ([]*GitHubR
 		if compareVersions(v, s.currentVersion) >= 0 {
 			continue
 		}
+		assets := packageAssets(r)
+		contract, err := s.compatibleRelease(ctx, assets, v)
+		if err != nil {
+			continue
+		}
+		if _, _, err := s.compatiblePlatformAssets(assets, v, contract); err != nil {
+			continue
+		}
 		seen[v] = true
 		candidates = append(candidates, r)
 	}
@@ -407,6 +421,9 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 	if err != nil {
 		return nil, err
 	}
+	if release == nil || release.Draft || release.Prerelease {
+		return nil, fmt.Errorf("no published compatible release metadata")
+	}
 
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
 
@@ -419,7 +436,7 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 		}
 	}
 
-	return &UpdateInfo{
+	info := &UpdateInfo{
 		CurrentVersion: s.currentVersion,
 		LatestVersion:  latestVersion,
 		HasUpdate:      compareVersions(s.currentVersion, latestVersion) < 0,
@@ -432,7 +449,18 @@ func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, er
 		},
 		Cached:    false,
 		BuildType: s.buildType,
-	}, nil
+	}
+	if info.HasUpdate {
+		contract, err := s.compatibleRelease(ctx, assets, latestVersion)
+		if err == nil {
+			_, _, err = s.compatiblePlatformAssets(assets, latestVersion, contract)
+		}
+		if err != nil {
+			info.HasUpdate = false
+			info.Warning = "新版未通过本站兼容校验，保留当前版本：" + err.Error()
+		}
+	}
+	return info, nil
 }
 
 func (s *UpdateService) downloadFile(ctx context.Context, downloadURL, dest string) error {
@@ -477,6 +505,9 @@ func (s *UpdateService) verifyChecksum(ctx context.Context, filePath, checksumUR
 	if err != nil {
 		return fmt.Errorf("failed to download checksums: %w", err)
 	}
+	if len(checksumData) > 1024*1024 {
+		return fmt.Errorf("checksums file is too large")
+	}
 
 	// Calculate file hash
 	f, err := os.Open(filePath)
@@ -494,15 +525,25 @@ func (s *UpdateService) verifyChecksum(ctx context.Context, filePath, checksumUR
 	// Find expected hash in checksums file
 	fileName := filepath.Base(filePath)
 	scanner := bufio.NewScanner(strings.NewReader(string(checksumData)))
+	found := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		parts := strings.Fields(line)
-		if len(parts) == 2 && parts[1] == fileName {
-			if parts[0] == actualHash {
-				return nil
+		if len(parts) == 2 && strings.TrimPrefix(parts[1], "*") == fileName {
+			if found {
+				return fmt.Errorf("ambiguous checksum for %s", fileName)
 			}
-			return fmt.Errorf("checksum mismatch: expected %s, got %s", parts[0], actualHash)
+			found = true
+			if !strings.EqualFold(parts[0], actualHash) {
+				return fmt.Errorf("checksum mismatch for %s", fileName)
+			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	if found {
+		return nil
 	}
 
 	return fmt.Errorf("checksum not found for %s", fileName)
@@ -529,7 +570,8 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 
 	// Handle tar archive
 	if strings.Contains(archivePath, ".tar") {
-		tr := tar.NewReader(reader)
+		tr := tar.NewReader(io.LimitReader(reader, maxDownloadSize*2+1))
+		found := false
 		for {
 			hdr, err := tr.Next()
 			if err == io.EOF {
@@ -555,9 +597,13 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 
 			// Only extract the specific binary we need
 			if baseName == "sub2api" || baseName == "sub2api.exe" {
+				if found {
+					return fmt.Errorf("multiple binaries in archive")
+				}
+				found = true
 				// Additional security: limit file size (max 500MB)
 				const maxBinarySize = 500 * 1024 * 1024
-				if hdr.Size > maxBinarySize {
+				if hdr.Size <= 0 || hdr.Size > maxBinarySize {
 					return fmt.Errorf("binary too large: %d bytes (max %d)", hdr.Size, maxBinarySize)
 				}
 
@@ -568,15 +614,22 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 
 				// Use LimitReader to prevent decompression bombs
 				limited := io.LimitReader(tr, maxBinarySize)
-				if _, err := io.Copy(out, limited); err != nil {
+				n, err := io.Copy(out, limited)
+				if err != nil || n != hdr.Size {
+					_ = out.Close()
+					return fmt.Errorf("incomplete archive binary")
+				}
+				if err := out.Sync(); err != nil {
 					_ = out.Close()
 					return err
 				}
 				if err := out.Close(); err != nil {
 					return err
 				}
-				return nil
 			}
+		}
+		if found {
+			return nil
 		}
 		return fmt.Errorf("binary not found in archive")
 	}
@@ -597,6 +650,9 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 }
 
 func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
+	if s.cache == nil {
+		return nil, fmt.Errorf("update cache unavailable")
+	}
 	data, err := s.cache.GetUpdateInfo(ctx)
 	if err != nil {
 		return nil, err
@@ -611,8 +667,21 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 		return nil, err
 	}
 
-	if time.Now().Unix()-cached.Timestamp > updateCacheTTL {
+	age := time.Now().Unix() - cached.Timestamp
+	if age < 0 || age > updateCacheTTL || !isCompatibleVersion(cached.Latest) {
 		return nil, fmt.Errorf("cache expired")
+	}
+	if cached.ReleaseInfo == nil {
+		return nil, fmt.Errorf("cached release metadata missing")
+	}
+	if compareVersions(s.currentVersion, cached.Latest) < 0 {
+		contract, err := s.compatibleRelease(ctx, cached.ReleaseInfo.Assets, cached.Latest)
+		if err != nil {
+			return nil, err
+		}
+		if _, _, err := s.compatiblePlatformAssets(cached.ReleaseInfo.Assets, cached.Latest, contract); err != nil {
+			return nil, err
+		}
 	}
 
 	return &UpdateInfo{
@@ -626,6 +695,9 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 }
 
 func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {
+	if s.cache == nil {
+		return
+	}
 	cacheData := struct {
 		Latest      string       `json:"latest"`
 		ReleaseInfo *ReleaseInfo `json:"release_info"`
@@ -653,7 +725,28 @@ func compareVersions(current, latest string) int {
 			return 1
 		}
 	}
+	// Local compatibility releases can carry fixes without changing the upstream
+	// version. Only this distribution's numeric revision extends upstream order.
+	currentRevision, currentKitty := compatibleRevision(current)
+	latestRevision, latestKitty := compatibleRevision(latest)
+	if currentKitty && latestKitty {
+		if currentRevision < latestRevision {
+			return -1
+		}
+		if currentRevision > latestRevision {
+			return 1
+		}
+	}
 	return 0
+}
+
+func compatibleRevision(version string) (int, bool) {
+	_, suffix, ok := strings.Cut(version, "-kitty.")
+	if !ok {
+		return 0, false
+	}
+	value, err := strconv.Atoi(suffix)
+	return value, err == nil && value > 0
 }
 
 func parseVersion(v string) [3]int {

@@ -2,7 +2,7 @@
 
 package repository
 
-// migration 193 回归：groups 触发器的 durable 失效监视清单必须覆盖利润控制
+// migration 196 回归：groups 触发器的 durable 失效监视清单必须覆盖利润控制和 Grok 提示词
 // 配置及 D 依赖的分组计价字段（正常后台保存走 InvalidateAuthCacheByGroupID 即时失效，触发器兜底
 // 直改 SQL / 更新与失效之间崩溃等 out-of-band 场景）。
 
@@ -78,6 +78,19 @@ func TestAuthCacheInvalidationTrigger_ProfitControlColumns(t *testing.T) {
 	_, err = integrationDB.ExecContext(ctx, "UPDATE groups SET profit_min_margin = profit_min_margin WHERE id = $1", group.ID)
 	require.NoError(t, err)
 	require.Zero(t, count(), "利润字段无实际变化的 UPDATE 不得入队")
+
+	for name, update := range map[string]string{
+		"grok_prompt_enabled": "grok_prompt_enabled = NOT grok_prompt_enabled",
+		"grok_prompt_mode":    "grok_prompt_mode = 'append'",
+		"grok_prompt_content": "grok_prompt_content = 'integration prompt'",
+	} {
+		t.Run(name, func(t *testing.T) {
+			clear()
+			_, err := integrationDB.ExecContext(ctx, "UPDATE groups SET "+update+" WHERE id = $1", group.ID)
+			require.NoError(t, err)
+			require.Equal(t, 1, count(), name+" 变更必须入队")
+		})
+	}
 
 	for name, update := range map[string]string{
 		"platform":             "platform = 'anthropic'",

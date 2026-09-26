@@ -40,6 +40,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/securitypolicykeyword"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
@@ -91,6 +92,7 @@ const (
 	TypePromoCodeUsage                = "PromoCodeUsage"
 	TypeProxy                         = "Proxy"
 	TypeRedeemCode                    = "RedeemCode"
+	TypeSecurityPolicyKeyword         = "SecurityPolicyKeyword"
 	TypeSecuritySecret                = "SecuritySecret"
 	TypeSetting                       = "Setting"
 	TypeSubscriptionPlan              = "SubscriptionPlan"
@@ -115,6 +117,8 @@ type APIKeyMutation struct {
 	updated_at         *time.Time
 	deleted_at         *time.Time
 	key                *string
+	key_hash           *string
+	key_prefix         *string
 	name               *string
 	status             *string
 	last_used_at       *time.Time
@@ -441,9 +445,120 @@ func (m *APIKeyMutation) OldKey(ctx context.Context) (v string, err error) {
 	return oldValue.Key, nil
 }
 
+// ClearKey clears the value of the "key" field.
+func (m *APIKeyMutation) ClearKey() {
+	m.key = nil
+	m.clearedFields[apikey.FieldKey] = struct{}{}
+}
+
+// KeyCleared returns if the "key" field was cleared in this mutation.
+func (m *APIKeyMutation) KeyCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldKey]
+	return ok
+}
+
 // ResetKey resets all changes to the "key" field.
 func (m *APIKeyMutation) ResetKey() {
 	m.key = nil
+	delete(m.clearedFields, apikey.FieldKey)
+}
+
+// SetKeyHash sets the "key_hash" field.
+func (m *APIKeyMutation) SetKeyHash(s string) {
+	m.key_hash = &s
+}
+
+// KeyHash returns the value of the "key_hash" field in the mutation.
+func (m *APIKeyMutation) KeyHash() (r string, exists bool) {
+	v := m.key_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyHash returns the old "key_hash" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldKeyHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyHash: %w", err)
+	}
+	return oldValue.KeyHash, nil
+}
+
+// ClearKeyHash clears the value of the "key_hash" field.
+func (m *APIKeyMutation) ClearKeyHash() {
+	m.key_hash = nil
+	m.clearedFields[apikey.FieldKeyHash] = struct{}{}
+}
+
+// KeyHashCleared returns if the "key_hash" field was cleared in this mutation.
+func (m *APIKeyMutation) KeyHashCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldKeyHash]
+	return ok
+}
+
+// ResetKeyHash resets all changes to the "key_hash" field.
+func (m *APIKeyMutation) ResetKeyHash() {
+	m.key_hash = nil
+	delete(m.clearedFields, apikey.FieldKeyHash)
+}
+
+// SetKeyPrefix sets the "key_prefix" field.
+func (m *APIKeyMutation) SetKeyPrefix(s string) {
+	m.key_prefix = &s
+}
+
+// KeyPrefix returns the value of the "key_prefix" field in the mutation.
+func (m *APIKeyMutation) KeyPrefix() (r string, exists bool) {
+	v := m.key_prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyPrefix returns the old "key_prefix" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldKeyPrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyPrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyPrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyPrefix: %w", err)
+	}
+	return oldValue.KeyPrefix, nil
+}
+
+// ClearKeyPrefix clears the value of the "key_prefix" field.
+func (m *APIKeyMutation) ClearKeyPrefix() {
+	m.key_prefix = nil
+	m.clearedFields[apikey.FieldKeyPrefix] = struct{}{}
+}
+
+// KeyPrefixCleared returns if the "key_prefix" field was cleared in this mutation.
+func (m *APIKeyMutation) KeyPrefixCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldKeyPrefix]
+	return ok
+}
+
+// ResetKeyPrefix resets all changes to the "key_prefix" field.
+func (m *APIKeyMutation) ResetKeyPrefix() {
+	m.key_prefix = nil
+	delete(m.clearedFields, apikey.FieldKeyPrefix)
 }
 
 // SetName sets the "name" field.
@@ -1532,7 +1647,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1547,6 +1662,12 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.key != nil {
 		fields = append(fields, apikey.FieldKey)
+	}
+	if m.key_hash != nil {
+		fields = append(fields, apikey.FieldKeyHash)
+	}
+	if m.key_prefix != nil {
+		fields = append(fields, apikey.FieldKeyPrefix)
 	}
 	if m.name != nil {
 		fields = append(fields, apikey.FieldName)
@@ -1620,6 +1741,10 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case apikey.FieldKey:
 		return m.Key()
+	case apikey.FieldKeyHash:
+		return m.KeyHash()
+	case apikey.FieldKeyPrefix:
+		return m.KeyPrefix()
 	case apikey.FieldName:
 		return m.Name()
 	case apikey.FieldGroupID:
@@ -1675,6 +1800,10 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldUserID(ctx)
 	case apikey.FieldKey:
 		return m.OldKey(ctx)
+	case apikey.FieldKeyHash:
+		return m.OldKeyHash(ctx)
+	case apikey.FieldKeyPrefix:
+		return m.OldKeyPrefix(ctx)
 	case apikey.FieldName:
 		return m.OldName(ctx)
 	case apikey.FieldGroupID:
@@ -1754,6 +1883,20 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetKey(v)
+		return nil
+	case apikey.FieldKeyHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyHash(v)
+		return nil
+	case apikey.FieldKeyPrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyPrefix(v)
 		return nil
 	case apikey.FieldName:
 		v, ok := value.(string)
@@ -2013,6 +2156,15 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldDeletedAt) {
 		fields = append(fields, apikey.FieldDeletedAt)
 	}
+	if m.FieldCleared(apikey.FieldKey) {
+		fields = append(fields, apikey.FieldKey)
+	}
+	if m.FieldCleared(apikey.FieldKeyHash) {
+		fields = append(fields, apikey.FieldKeyHash)
+	}
+	if m.FieldCleared(apikey.FieldKeyPrefix) {
+		fields = append(fields, apikey.FieldKeyPrefix)
+	}
 	if m.FieldCleared(apikey.FieldGroupID) {
 		fields = append(fields, apikey.FieldGroupID)
 	}
@@ -2053,6 +2205,15 @@ func (m *APIKeyMutation) ClearField(name string) error {
 	switch name {
 	case apikey.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case apikey.FieldKey:
+		m.ClearKey()
+		return nil
+	case apikey.FieldKeyHash:
+		m.ClearKeyHash()
+		return nil
+	case apikey.FieldKeyPrefix:
+		m.ClearKeyPrefix()
 		return nil
 	case apikey.FieldGroupID:
 		m.ClearGroupID()
@@ -2100,6 +2261,12 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldKey:
 		m.ResetKey()
+		return nil
+	case apikey.FieldKeyHash:
+		m.ResetKeyHash()
+		return nil
+	case apikey.FieldKeyPrefix:
+		m.ResetKeyPrefix()
 		return nil
 	case apikey.FieldName:
 		m.ResetName()
@@ -22255,6 +22422,9 @@ type GroupMutation struct {
 	peak_rate_multiplier                    *float64
 	addpeak_rate_multiplier                 *float64
 	is_exclusive                            *bool
+	security_policy_enabled                 *bool
+	security_policy_mode                    *string
+	security_policy_email_enabled           *bool
 	status                                  *string
 	duplicate_operation_id                  *string
 	platform                                *string
@@ -22278,6 +22448,7 @@ type GroupMutation struct {
 	addimage_price_2k                       *float64
 	image_price_4k                          *float64
 	addimage_price_4k                       *float64
+	image_model_prices                      *map[string]map[string]float64
 	batch_image_discount_multiplier         *float64
 	addbatch_image_discount_multiplier      *float64
 	batch_image_hold_multiplier             *float64
@@ -22334,6 +22505,9 @@ type GroupMutation struct {
 	max_reasoning_effort_over_limit         *string
 	reasoning_effort_mappings               *[]domain.ReasoningEffortMapping
 	appendreasoning_effort_mappings         []domain.ReasoningEffortMapping
+	grok_prompt_enabled                     *bool
+	grok_prompt_mode                        *string
+	grok_prompt_content                     *string
 	profit_control_enabled                  *bool
 	profit_min_margin                       *float64
 	addprofit_min_margin                    *float64
@@ -22921,6 +23095,114 @@ func (m *GroupMutation) OldIsExclusive(ctx context.Context) (v bool, err error) 
 // ResetIsExclusive resets all changes to the "is_exclusive" field.
 func (m *GroupMutation) ResetIsExclusive() {
 	m.is_exclusive = nil
+}
+
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (m *GroupMutation) SetSecurityPolicyEnabled(b bool) {
+	m.security_policy_enabled = &b
+}
+
+// SecurityPolicyEnabled returns the value of the "security_policy_enabled" field in the mutation.
+func (m *GroupMutation) SecurityPolicyEnabled() (r bool, exists bool) {
+	v := m.security_policy_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecurityPolicyEnabled returns the old "security_policy_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldSecurityPolicyEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecurityPolicyEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecurityPolicyEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecurityPolicyEnabled: %w", err)
+	}
+	return oldValue.SecurityPolicyEnabled, nil
+}
+
+// ResetSecurityPolicyEnabled resets all changes to the "security_policy_enabled" field.
+func (m *GroupMutation) ResetSecurityPolicyEnabled() {
+	m.security_policy_enabled = nil
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (m *GroupMutation) SetSecurityPolicyMode(s string) {
+	m.security_policy_mode = &s
+}
+
+// SecurityPolicyMode returns the value of the "security_policy_mode" field in the mutation.
+func (m *GroupMutation) SecurityPolicyMode() (r string, exists bool) {
+	v := m.security_policy_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecurityPolicyMode returns the old "security_policy_mode" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldSecurityPolicyMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecurityPolicyMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecurityPolicyMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecurityPolicyMode: %w", err)
+	}
+	return oldValue.SecurityPolicyMode, nil
+}
+
+// ResetSecurityPolicyMode resets all changes to the "security_policy_mode" field.
+func (m *GroupMutation) ResetSecurityPolicyMode() {
+	m.security_policy_mode = nil
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (m *GroupMutation) SetSecurityPolicyEmailEnabled(b bool) {
+	m.security_policy_email_enabled = &b
+}
+
+// SecurityPolicyEmailEnabled returns the value of the "security_policy_email_enabled" field in the mutation.
+func (m *GroupMutation) SecurityPolicyEmailEnabled() (r bool, exists bool) {
+	v := m.security_policy_email_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSecurityPolicyEmailEnabled returns the old "security_policy_email_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldSecurityPolicyEmailEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSecurityPolicyEmailEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSecurityPolicyEmailEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSecurityPolicyEmailEnabled: %w", err)
+	}
+	return oldValue.SecurityPolicyEmailEnabled, nil
+}
+
+// ResetSecurityPolicyEmailEnabled resets all changes to the "security_policy_email_enabled" field.
+func (m *GroupMutation) ResetSecurityPolicyEmailEnabled() {
+	m.security_policy_email_enabled = nil
 }
 
 // SetStatus sets the "status" field.
@@ -23718,6 +24000,55 @@ func (m *GroupMutation) ResetImagePrice4k() {
 	m.image_price_4k = nil
 	m.addimage_price_4k = nil
 	delete(m.clearedFields, group.FieldImagePrice4k)
+}
+
+// SetImageModelPrices sets the "image_model_prices" field.
+func (m *GroupMutation) SetImageModelPrices(value map[string]map[string]float64) {
+	m.image_model_prices = &value
+}
+
+// ImageModelPrices returns the value of the "image_model_prices" field in the mutation.
+func (m *GroupMutation) ImageModelPrices() (r map[string]map[string]float64, exists bool) {
+	v := m.image_model_prices
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImageModelPrices returns the old "image_model_prices" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldImageModelPrices(ctx context.Context) (v map[string]map[string]float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImageModelPrices is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImageModelPrices requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImageModelPrices: %w", err)
+	}
+	return oldValue.ImageModelPrices, nil
+}
+
+// ClearImageModelPrices clears the value of the "image_model_prices" field.
+func (m *GroupMutation) ClearImageModelPrices() {
+	m.image_model_prices = nil
+	m.clearedFields[group.FieldImageModelPrices] = struct{}{}
+}
+
+// ImageModelPricesCleared returns if the "image_model_prices" field was cleared in this mutation.
+func (m *GroupMutation) ImageModelPricesCleared() bool {
+	_, ok := m.clearedFields[group.FieldImageModelPrices]
+	return ok
+}
+
+// ResetImageModelPrices resets all changes to the "image_model_prices" field.
+func (m *GroupMutation) ResetImageModelPrices() {
+	m.image_model_prices = nil
+	delete(m.clearedFields, group.FieldImageModelPrices)
 }
 
 // SetBatchImageDiscountMultiplier sets the "batch_image_discount_multiplier" field.
@@ -25613,6 +25944,114 @@ func (m *GroupMutation) ResetReasoningEffortMappings() {
 	m.appendreasoning_effort_mappings = nil
 }
 
+// SetGrokPromptEnabled sets the "grok_prompt_enabled" field.
+func (m *GroupMutation) SetGrokPromptEnabled(b bool) {
+	m.grok_prompt_enabled = &b
+}
+
+// GrokPromptEnabled returns the value of the "grok_prompt_enabled" field in the mutation.
+func (m *GroupMutation) GrokPromptEnabled() (r bool, exists bool) {
+	v := m.grok_prompt_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrokPromptEnabled returns the old "grok_prompt_enabled" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldGrokPromptEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrokPromptEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrokPromptEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrokPromptEnabled: %w", err)
+	}
+	return oldValue.GrokPromptEnabled, nil
+}
+
+// ResetGrokPromptEnabled resets all changes to the "grok_prompt_enabled" field.
+func (m *GroupMutation) ResetGrokPromptEnabled() {
+	m.grok_prompt_enabled = nil
+}
+
+// SetGrokPromptMode sets the "grok_prompt_mode" field.
+func (m *GroupMutation) SetGrokPromptMode(s string) {
+	m.grok_prompt_mode = &s
+}
+
+// GrokPromptMode returns the value of the "grok_prompt_mode" field in the mutation.
+func (m *GroupMutation) GrokPromptMode() (r string, exists bool) {
+	v := m.grok_prompt_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrokPromptMode returns the old "grok_prompt_mode" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldGrokPromptMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrokPromptMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrokPromptMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrokPromptMode: %w", err)
+	}
+	return oldValue.GrokPromptMode, nil
+}
+
+// ResetGrokPromptMode resets all changes to the "grok_prompt_mode" field.
+func (m *GroupMutation) ResetGrokPromptMode() {
+	m.grok_prompt_mode = nil
+}
+
+// SetGrokPromptContent sets the "grok_prompt_content" field.
+func (m *GroupMutation) SetGrokPromptContent(s string) {
+	m.grok_prompt_content = &s
+}
+
+// GrokPromptContent returns the value of the "grok_prompt_content" field in the mutation.
+func (m *GroupMutation) GrokPromptContent() (r string, exists bool) {
+	v := m.grok_prompt_content
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGrokPromptContent returns the old "grok_prompt_content" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldGrokPromptContent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGrokPromptContent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGrokPromptContent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGrokPromptContent: %w", err)
+	}
+	return oldValue.GrokPromptContent, nil
+}
+
+// ResetGrokPromptContent resets all changes to the "grok_prompt_content" field.
+func (m *GroupMutation) ResetGrokPromptContent() {
+	m.grok_prompt_content = nil
+}
+
 // SetProfitControlEnabled sets the "profit_control_enabled" field.
 func (m *GroupMutation) SetProfitControlEnabled(b bool) {
 	m.profit_control_enabled = &b
@@ -26119,7 +26558,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 67)
+	fields := make([]string, 0, 74)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -26152,6 +26591,15 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.is_exclusive != nil {
 		fields = append(fields, group.FieldIsExclusive)
+	}
+	if m.security_policy_enabled != nil {
+		fields = append(fields, group.FieldSecurityPolicyEnabled)
+	}
+	if m.security_policy_mode != nil {
+		fields = append(fields, group.FieldSecurityPolicyMode)
+	}
+	if m.security_policy_email_enabled != nil {
+		fields = append(fields, group.FieldSecurityPolicyEmailEnabled)
 	}
 	if m.status != nil {
 		fields = append(fields, group.FieldStatus)
@@ -26197,6 +26645,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.image_price_4k != nil {
 		fields = append(fields, group.FieldImagePrice4k)
+	}
+	if m.image_model_prices != nil {
+		fields = append(fields, group.FieldImageModelPrices)
 	}
 	if m.batch_image_discount_multiplier != nil {
 		fields = append(fields, group.FieldBatchImageDiscountMultiplier)
@@ -26312,6 +26763,15 @@ func (m *GroupMutation) Fields() []string {
 	if m.reasoning_effort_mappings != nil {
 		fields = append(fields, group.FieldReasoningEffortMappings)
 	}
+	if m.grok_prompt_enabled != nil {
+		fields = append(fields, group.FieldGrokPromptEnabled)
+	}
+	if m.grok_prompt_mode != nil {
+		fields = append(fields, group.FieldGrokPromptMode)
+	}
+	if m.grok_prompt_content != nil {
+		fields = append(fields, group.FieldGrokPromptContent)
+	}
 	if m.profit_control_enabled != nil {
 		fields = append(fields, group.FieldProfitControlEnabled)
 	}
@@ -26351,6 +26811,12 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.PeakRateMultiplier()
 	case group.FieldIsExclusive:
 		return m.IsExclusive()
+	case group.FieldSecurityPolicyEnabled:
+		return m.SecurityPolicyEnabled()
+	case group.FieldSecurityPolicyMode:
+		return m.SecurityPolicyMode()
+	case group.FieldSecurityPolicyEmailEnabled:
+		return m.SecurityPolicyEmailEnabled()
 	case group.FieldStatus:
 		return m.Status()
 	case group.FieldDuplicateOperationID:
@@ -26381,6 +26847,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.ImagePrice2k()
 	case group.FieldImagePrice4k:
 		return m.ImagePrice4k()
+	case group.FieldImageModelPrices:
+		return m.ImageModelPrices()
 	case group.FieldBatchImageDiscountMultiplier:
 		return m.BatchImageDiscountMultiplier()
 	case group.FieldBatchImageHoldMultiplier:
@@ -26457,6 +26925,12 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.MaxReasoningEffortOverLimit()
 	case group.FieldReasoningEffortMappings:
 		return m.ReasoningEffortMappings()
+	case group.FieldGrokPromptEnabled:
+		return m.GrokPromptEnabled()
+	case group.FieldGrokPromptMode:
+		return m.GrokPromptMode()
+	case group.FieldGrokPromptContent:
+		return m.GrokPromptContent()
 	case group.FieldProfitControlEnabled:
 		return m.ProfitControlEnabled()
 	case group.FieldProfitMinMargin:
@@ -26494,6 +26968,12 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldPeakRateMultiplier(ctx)
 	case group.FieldIsExclusive:
 		return m.OldIsExclusive(ctx)
+	case group.FieldSecurityPolicyEnabled:
+		return m.OldSecurityPolicyEnabled(ctx)
+	case group.FieldSecurityPolicyMode:
+		return m.OldSecurityPolicyMode(ctx)
+	case group.FieldSecurityPolicyEmailEnabled:
+		return m.OldSecurityPolicyEmailEnabled(ctx)
 	case group.FieldStatus:
 		return m.OldStatus(ctx)
 	case group.FieldDuplicateOperationID:
@@ -26524,6 +27004,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldImagePrice2k(ctx)
 	case group.FieldImagePrice4k:
 		return m.OldImagePrice4k(ctx)
+	case group.FieldImageModelPrices:
+		return m.OldImageModelPrices(ctx)
 	case group.FieldBatchImageDiscountMultiplier:
 		return m.OldBatchImageDiscountMultiplier(ctx)
 	case group.FieldBatchImageHoldMultiplier:
@@ -26600,6 +27082,12 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldMaxReasoningEffortOverLimit(ctx)
 	case group.FieldReasoningEffortMappings:
 		return m.OldReasoningEffortMappings(ctx)
+	case group.FieldGrokPromptEnabled:
+		return m.OldGrokPromptEnabled(ctx)
+	case group.FieldGrokPromptMode:
+		return m.OldGrokPromptMode(ctx)
+	case group.FieldGrokPromptContent:
+		return m.OldGrokPromptContent(ctx)
 	case group.FieldProfitControlEnabled:
 		return m.OldProfitControlEnabled(ctx)
 	case group.FieldProfitMinMargin:
@@ -26691,6 +27179,27 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIsExclusive(v)
+		return nil
+	case group.FieldSecurityPolicyEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecurityPolicyEnabled(v)
+		return nil
+	case group.FieldSecurityPolicyMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecurityPolicyMode(v)
+		return nil
+	case group.FieldSecurityPolicyEmailEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSecurityPolicyEmailEnabled(v)
 		return nil
 	case group.FieldStatus:
 		v, ok := value.(string)
@@ -26796,6 +27305,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetImagePrice4k(v)
+		return nil
+	case group.FieldImageModelPrices:
+		v, ok := value.(map[string]map[string]float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImageModelPrices(v)
 		return nil
 	case group.FieldBatchImageDiscountMultiplier:
 		v, ok := value.(float64)
@@ -27062,6 +27578,27 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetReasoningEffortMappings(v)
+		return nil
+	case group.FieldGrokPromptEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrokPromptEnabled(v)
+		return nil
+	case group.FieldGrokPromptMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrokPromptMode(v)
+		return nil
+	case group.FieldGrokPromptContent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGrokPromptContent(v)
 		return nil
 	case group.FieldProfitControlEnabled:
 		v, ok := value.(bool)
@@ -27468,6 +28005,9 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldImagePrice4k) {
 		fields = append(fields, group.FieldImagePrice4k)
 	}
+	if m.FieldCleared(group.FieldImageModelPrices) {
+		fields = append(fields, group.FieldImageModelPrices)
+	}
 	if m.FieldCleared(group.FieldVideoPrice480p) {
 		fields = append(fields, group.FieldVideoPrice480p)
 	}
@@ -27547,6 +28087,9 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldImagePrice4k:
 		m.ClearImagePrice4k()
+		return nil
+	case group.FieldImageModelPrices:
+		m.ClearImageModelPrices()
 		return nil
 	case group.FieldVideoPrice480p:
 		m.ClearVideoPrice480p()
@@ -27628,6 +28171,15 @@ func (m *GroupMutation) ResetField(name string) error {
 	case group.FieldIsExclusive:
 		m.ResetIsExclusive()
 		return nil
+	case group.FieldSecurityPolicyEnabled:
+		m.ResetSecurityPolicyEnabled()
+		return nil
+	case group.FieldSecurityPolicyMode:
+		m.ResetSecurityPolicyMode()
+		return nil
+	case group.FieldSecurityPolicyEmailEnabled:
+		m.ResetSecurityPolicyEmailEnabled()
+		return nil
 	case group.FieldStatus:
 		m.ResetStatus()
 		return nil
@@ -27672,6 +28224,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldImagePrice4k:
 		m.ResetImagePrice4k()
+		return nil
+	case group.FieldImageModelPrices:
+		m.ResetImageModelPrices()
 		return nil
 	case group.FieldBatchImageDiscountMultiplier:
 		m.ResetBatchImageDiscountMultiplier()
@@ -27786,6 +28341,15 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldReasoningEffortMappings:
 		m.ResetReasoningEffortMappings()
+		return nil
+	case group.FieldGrokPromptEnabled:
+		m.ResetGrokPromptEnabled()
+		return nil
+	case group.FieldGrokPromptMode:
+		m.ResetGrokPromptMode()
+		return nil
+	case group.FieldGrokPromptContent:
+		m.ResetGrokPromptContent()
 		return nil
 	case group.FieldProfitControlEnabled:
 		m.ResetProfitControlEnabled()
@@ -40139,6 +40703,754 @@ func (m *RedeemCodeMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown RedeemCode edge %s", name)
+}
+
+// SecurityPolicyKeywordMutation represents an operation that mutates the SecurityPolicyKeyword nodes in the graph.
+type SecurityPolicyKeywordMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	created_at    *time.Time
+	updated_at    *time.Time
+	deleted_at    *time.Time
+	keyword       *string
+	category      *string
+	enabled       *bool
+	clearedFields map[string]struct{}
+	group         *int64
+	clearedgroup  bool
+	done          bool
+	oldValue      func(context.Context) (*SecurityPolicyKeyword, error)
+	predicates    []predicate.SecurityPolicyKeyword
+}
+
+var _ ent.Mutation = (*SecurityPolicyKeywordMutation)(nil)
+
+// securitypolicykeywordOption allows management of the mutation configuration using functional options.
+type securitypolicykeywordOption func(*SecurityPolicyKeywordMutation)
+
+// newSecurityPolicyKeywordMutation creates new mutation for the SecurityPolicyKeyword entity.
+func newSecurityPolicyKeywordMutation(c config, op Op, opts ...securitypolicykeywordOption) *SecurityPolicyKeywordMutation {
+	m := &SecurityPolicyKeywordMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSecurityPolicyKeyword,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSecurityPolicyKeywordID sets the ID field of the mutation.
+func withSecurityPolicyKeywordID(id int64) securitypolicykeywordOption {
+	return func(m *SecurityPolicyKeywordMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SecurityPolicyKeyword
+		)
+		m.oldValue = func(ctx context.Context) (*SecurityPolicyKeyword, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SecurityPolicyKeyword.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSecurityPolicyKeyword sets the old SecurityPolicyKeyword of the mutation.
+func withSecurityPolicyKeyword(node *SecurityPolicyKeyword) securitypolicykeywordOption {
+	return func(m *SecurityPolicyKeywordMutation) {
+		m.oldValue = func(context.Context) (*SecurityPolicyKeyword, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SecurityPolicyKeywordMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SecurityPolicyKeywordMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SecurityPolicyKeywordMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SecurityPolicyKeywordMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SecurityPolicyKeyword.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SecurityPolicyKeywordMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SecurityPolicyKeywordMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SecurityPolicyKeyword entity.
+// If the SecurityPolicyKeyword object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecurityPolicyKeywordMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SecurityPolicyKeywordMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SecurityPolicyKeywordMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SecurityPolicyKeywordMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SecurityPolicyKeyword entity.
+// If the SecurityPolicyKeyword object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecurityPolicyKeywordMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SecurityPolicyKeywordMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *SecurityPolicyKeywordMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *SecurityPolicyKeywordMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the SecurityPolicyKeyword entity.
+// If the SecurityPolicyKeyword object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecurityPolicyKeywordMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *SecurityPolicyKeywordMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[securitypolicykeyword.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *SecurityPolicyKeywordMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[securitypolicykeyword.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *SecurityPolicyKeywordMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, securitypolicykeyword.FieldDeletedAt)
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *SecurityPolicyKeywordMutation) SetGroupID(i int64) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *SecurityPolicyKeywordMutation) GroupID() (r int64, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the SecurityPolicyKeyword entity.
+// If the SecurityPolicyKeyword object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecurityPolicyKeywordMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *SecurityPolicyKeywordMutation) ClearGroupID() {
+	m.group = nil
+	m.clearedFields[securitypolicykeyword.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *SecurityPolicyKeywordMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[securitypolicykeyword.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *SecurityPolicyKeywordMutation) ResetGroupID() {
+	m.group = nil
+	delete(m.clearedFields, securitypolicykeyword.FieldGroupID)
+}
+
+// SetKeyword sets the "keyword" field.
+func (m *SecurityPolicyKeywordMutation) SetKeyword(s string) {
+	m.keyword = &s
+}
+
+// Keyword returns the value of the "keyword" field in the mutation.
+func (m *SecurityPolicyKeywordMutation) Keyword() (r string, exists bool) {
+	v := m.keyword
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyword returns the old "keyword" field's value of the SecurityPolicyKeyword entity.
+// If the SecurityPolicyKeyword object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecurityPolicyKeywordMutation) OldKeyword(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyword is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyword requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyword: %w", err)
+	}
+	return oldValue.Keyword, nil
+}
+
+// ResetKeyword resets all changes to the "keyword" field.
+func (m *SecurityPolicyKeywordMutation) ResetKeyword() {
+	m.keyword = nil
+}
+
+// SetCategory sets the "category" field.
+func (m *SecurityPolicyKeywordMutation) SetCategory(s string) {
+	m.category = &s
+}
+
+// Category returns the value of the "category" field in the mutation.
+func (m *SecurityPolicyKeywordMutation) Category() (r string, exists bool) {
+	v := m.category
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCategory returns the old "category" field's value of the SecurityPolicyKeyword entity.
+// If the SecurityPolicyKeyword object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecurityPolicyKeywordMutation) OldCategory(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCategory is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCategory requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCategory: %w", err)
+	}
+	return oldValue.Category, nil
+}
+
+// ResetCategory resets all changes to the "category" field.
+func (m *SecurityPolicyKeywordMutation) ResetCategory() {
+	m.category = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *SecurityPolicyKeywordMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *SecurityPolicyKeywordMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the SecurityPolicyKeyword entity.
+// If the SecurityPolicyKeyword object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SecurityPolicyKeywordMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *SecurityPolicyKeywordMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *SecurityPolicyKeywordMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[securitypolicykeyword.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *SecurityPolicyKeywordMutation) GroupCleared() bool {
+	return m.GroupIDCleared() || m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *SecurityPolicyKeywordMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *SecurityPolicyKeywordMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// Where appends a list predicates to the SecurityPolicyKeywordMutation builder.
+func (m *SecurityPolicyKeywordMutation) Where(ps ...predicate.SecurityPolicyKeyword) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SecurityPolicyKeywordMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SecurityPolicyKeywordMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SecurityPolicyKeyword, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SecurityPolicyKeywordMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SecurityPolicyKeywordMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SecurityPolicyKeyword).
+func (m *SecurityPolicyKeywordMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SecurityPolicyKeywordMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.created_at != nil {
+		fields = append(fields, securitypolicykeyword.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, securitypolicykeyword.FieldUpdatedAt)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, securitypolicykeyword.FieldDeletedAt)
+	}
+	if m.group != nil {
+		fields = append(fields, securitypolicykeyword.FieldGroupID)
+	}
+	if m.keyword != nil {
+		fields = append(fields, securitypolicykeyword.FieldKeyword)
+	}
+	if m.category != nil {
+		fields = append(fields, securitypolicykeyword.FieldCategory)
+	}
+	if m.enabled != nil {
+		fields = append(fields, securitypolicykeyword.FieldEnabled)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SecurityPolicyKeywordMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case securitypolicykeyword.FieldCreatedAt:
+		return m.CreatedAt()
+	case securitypolicykeyword.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case securitypolicykeyword.FieldDeletedAt:
+		return m.DeletedAt()
+	case securitypolicykeyword.FieldGroupID:
+		return m.GroupID()
+	case securitypolicykeyword.FieldKeyword:
+		return m.Keyword()
+	case securitypolicykeyword.FieldCategory:
+		return m.Category()
+	case securitypolicykeyword.FieldEnabled:
+		return m.Enabled()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SecurityPolicyKeywordMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case securitypolicykeyword.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case securitypolicykeyword.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case securitypolicykeyword.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
+	case securitypolicykeyword.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case securitypolicykeyword.FieldKeyword:
+		return m.OldKeyword(ctx)
+	case securitypolicykeyword.FieldCategory:
+		return m.OldCategory(ctx)
+	case securitypolicykeyword.FieldEnabled:
+		return m.OldEnabled(ctx)
+	}
+	return nil, fmt.Errorf("unknown SecurityPolicyKeyword field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SecurityPolicyKeywordMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case securitypolicykeyword.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case securitypolicykeyword.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case securitypolicykeyword.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
+		return nil
+	case securitypolicykeyword.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case securitypolicykeyword.FieldKeyword:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyword(v)
+		return nil
+	case securitypolicykeyword.FieldCategory:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategory(v)
+		return nil
+	case securitypolicykeyword.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SecurityPolicyKeyword field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SecurityPolicyKeywordMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SecurityPolicyKeywordMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SecurityPolicyKeywordMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SecurityPolicyKeyword numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SecurityPolicyKeywordMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(securitypolicykeyword.FieldDeletedAt) {
+		fields = append(fields, securitypolicykeyword.FieldDeletedAt)
+	}
+	if m.FieldCleared(securitypolicykeyword.FieldGroupID) {
+		fields = append(fields, securitypolicykeyword.FieldGroupID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SecurityPolicyKeywordMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SecurityPolicyKeywordMutation) ClearField(name string) error {
+	switch name {
+	case securitypolicykeyword.FieldDeletedAt:
+		m.ClearDeletedAt()
+		return nil
+	case securitypolicykeyword.FieldGroupID:
+		m.ClearGroupID()
+		return nil
+	}
+	return fmt.Errorf("unknown SecurityPolicyKeyword nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SecurityPolicyKeywordMutation) ResetField(name string) error {
+	switch name {
+	case securitypolicykeyword.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case securitypolicykeyword.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case securitypolicykeyword.FieldDeletedAt:
+		m.ResetDeletedAt()
+		return nil
+	case securitypolicykeyword.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case securitypolicykeyword.FieldKeyword:
+		m.ResetKeyword()
+		return nil
+	case securitypolicykeyword.FieldCategory:
+		m.ResetCategory()
+		return nil
+	case securitypolicykeyword.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	}
+	return fmt.Errorf("unknown SecurityPolicyKeyword field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SecurityPolicyKeywordMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.group != nil {
+		edges = append(edges, securitypolicykeyword.EdgeGroup)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SecurityPolicyKeywordMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case securitypolicykeyword.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SecurityPolicyKeywordMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SecurityPolicyKeywordMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SecurityPolicyKeywordMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedgroup {
+		edges = append(edges, securitypolicykeyword.EdgeGroup)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SecurityPolicyKeywordMutation) EdgeCleared(name string) bool {
+	switch name {
+	case securitypolicykeyword.EdgeGroup:
+		return m.clearedgroup
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SecurityPolicyKeywordMutation) ClearEdge(name string) error {
+	switch name {
+	case securitypolicykeyword.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown SecurityPolicyKeyword unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SecurityPolicyKeywordMutation) ResetEdge(name string) error {
+	switch name {
+	case securitypolicykeyword.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown SecurityPolicyKeyword edge %s", name)
 }
 
 // SecuritySecretMutation represents an operation that mutates the SecuritySecret nodes in the graph.

@@ -83,9 +83,9 @@
           </button>
         </div>
 
-        <UsageFilters v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel">
+        <UsageFilters v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel" @export-audit="exportAudit">
           <template #after-reset>
-            <div v-if="activeTab !== 'ranking'" class="relative" ref="columnDropdownRef">
+            <div v-if="activeTab !== 'ranking' && activeTab !== 'audit'" class="relative" ref="columnDropdownRef">
               <button
                 data-testid="usage-column-settings"
                 @click="showColumnDropdown = !showColumnDropdown"
@@ -132,11 +132,22 @@
             :server-side-sort="true"
             :default-sort-key="'created_at'"
             :default-sort-order="'desc'"
+            :show-cache-hit-rate="true"
             @sort="handleSort"
             @userClick="handleUserClick"
             @ipGeoBatchFailed="handleIpGeoBatchFailed"
           />
           <Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" />
+        </div>
+        <div v-if="auditMounted" v-show="activeTab === 'audit'" class="overflow-hidden rounded-b-2xl">
+          <UsageAuditPanel
+            :stats="auditStats"
+            :stats-loading="auditStatsLoading"
+            :rows="auditLogs"
+            :loading="auditLoading"
+            @user-click="handleUserClick"
+          />
+          <Pagination v-if="auditPagination.total > 0" :page="auditPagination.page" :total="auditPagination.total" :page-size="auditPagination.page_size" @update:page="handleAuditPageChange" @update:pageSize="handleAuditPageSizeChange" />
         </div>
         <div v-show="activeTab === 'errors'" class="overflow-hidden rounded-b-2xl">
           <OpsErrorLogTable
@@ -193,10 +204,12 @@ import { useAppStore } from '@/stores/app'; import { adminAPI } from '@/api/admi
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
+import { formatCacheHitRate } from '@/utils/usageCacheHitRate'
 import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import Select from '@/components/common/Select.vue'; import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'; import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
 import UserTokenRanking from '@/components/admin/usage/UserTokenRanking.vue'
+import UsageAuditPanel from '@/components/admin/usage/UsageAuditPanel.vue'
 import UsageCleanupDialog from '@/components/admin/usage/UsageCleanupDialog.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import OpsErrorLogTable from '@/views/admin/ops/components/OpsErrorLogTable.vue'
@@ -206,7 +219,7 @@ import type { OpsErrorLog } from '@/api/admin/ops'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'; import GroupDistributionChart from '@/components/charts/GroupDistributionChart.vue'; import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import EndpointDistributionChart from '@/components/charts/EndpointDistributionChart.vue'
 import Icon from '@/components/icons/Icon.vue'
-import type { AdminUsageLog, TrendDataPoint, ModelStat, GroupStat, EndpointStat, AdminUser } from '@/types'; import type { AdminUsageStatsResponse, AdminUsageQueryParams } from '@/api/admin/usage'
+import type { AdminUsageLog, TrendDataPoint, ModelStat, GroupStat, EndpointStat, AdminUser } from '@/types'; import type { AdminUsageStatsResponse, AdminUsageQueryParams, UsageAuditQueryParams, UsageAuditStatsResponse } from '@/api/admin/usage'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -215,6 +228,7 @@ type EndpointSource = 'inbound' | 'upstream' | 'path'
 type ModelDistributionSource = 'requested' | 'upstream' | 'mapping'
 const route = useRoute()
 const usageStats = ref<AdminUsageStatsResponse | null>(null); const usageLogs = ref<AdminUsageLog[]>([]); const loading = ref(false); const exporting = ref(false)
+const auditStats = ref<UsageAuditStatsResponse | null>(null); const auditLogs = ref<AdminUsageLog[]>([]); const auditLoading = ref(false); const auditStatsLoading = ref(false)
 const trendData = ref<TrendDataPoint[]>([]); const requestedModelStats = ref<ModelStat[]>([]); const upstreamModelStats = ref<ModelStat[]>([]); const mappingModelStats = ref<ModelStat[]>([]); const groupStats = ref<GroupStat[]>([]); const chartsLoading = ref(false); const modelStatsLoading = ref(false); const granularity = ref<'day' | 'hour'>('hour')
 const modelDistributionMetric = ref<DistributionMetric>('tokens')
 const modelDistributionSource = ref<ModelDistributionSource>('requested')
@@ -230,10 +244,11 @@ const inboundEndpointStats = ref<EndpointStat[]>([])
 const upstreamEndpointStats = ref<EndpointStat[]>([])
 const endpointPathStats = ref<EndpointStat[]>([])
 const endpointStatsLoading = ref(false)
-let abortController: AbortController | null = null; let exportAbortController: AbortController | null = null
+let abortController: AbortController | null = null; let auditAbortController: AbortController | null = null; let exportAbortController: AbortController | null = null
 let chartReqSeq = 0
 let statsReqSeq = 0
 let modelStatsReqSeq = 0
+let auditStatsReqSeq = 0
 const exportProgress = reactive({ show: false, progress: 0, current: 0, total: 0, estimatedTime: '' })
 const cleanupDialogVisible = ref(false)
 // Balance history modal state
@@ -301,6 +316,7 @@ const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start); const endDate = ref(defaultRange.end)
 const filters = ref<AdminUsageQueryParams>({ user_id: undefined, model: undefined, group_id: undefined, request_type: undefined, native_compaction_v2: null, billing_type: null, start_date: startDate.value, end_date: endDate.value })
 const pagination = reactive({ page: 1, page_size: getPersistedPageSize(), total: 0 })
+const auditPagination = reactive({ page: 1, page_size: getPersistedPageSize(), total: 0 })
 const sortState = reactive({
   sort_by: 'created_at',
   sort_order: 'desc' as 'asc' | 'desc'
@@ -315,13 +331,14 @@ const getNumericQueryValue = (value: string | null | Array<string | null> | unde
   const raw = getSingleQueryValue(value)
   if (!raw) return undefined
   const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : undefined
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 const applyRouteQueryFilters = () => {
   const queryStartDate = getSingleQueryValue(route.query.start_date)
   const queryEndDate = getSingleQueryValue(route.query.end_date)
   const queryUserId = getNumericQueryValue(route.query.user_id)
+  const queryAPIKeyId = getNumericQueryValue(route.query.api_key_id)
 
   if (queryStartDate) {
     startDate.value = queryStartDate
@@ -333,6 +350,7 @@ const applyRouteQueryFilters = () => {
   filters.value = {
     ...filters.value,
     user_id: queryUserId,
+    api_key_id: queryAPIKeyId,
     start_date: startDate.value,
     end_date: endDate.value
   }
@@ -389,6 +407,18 @@ const buildUsageListParams = (
   }
 }
 
+const buildAuditQueryParams = (): UsageAuditQueryParams => {
+  const auditParams = { ...buildUsageListParams(auditPagination.page, auditPagination.page_size, true) }
+  delete auditParams.page
+  delete auditParams.page_size
+  delete auditParams.sort_by
+  delete auditParams.sort_order
+  delete auditParams.error_phase
+  delete auditParams.error_category
+  delete auditParams.status_code
+  return auditParams
+}
+
 const loadLogs = async () => {
   abortController?.abort(); const c = new AbortController(); abortController = c; loading.value = true
   try {
@@ -399,6 +429,55 @@ const loadLogs = async () => {
     if(!c.signal.aborted) { usageLogs.value = res.items; pagination.total = res.total }
   } catch (error: any) { if(error?.name !== 'AbortError') console.error('Failed to load usage logs:', error) } finally { if(abortController === c) loading.value = false }
 }
+
+const loadAuditLogs = async () => {
+  auditAbortController?.abort()
+  const controller = new AbortController()
+  auditAbortController = controller
+  auditLoading.value = true
+  try {
+    const res = await adminUsageAPI.list({
+      ...buildAuditQueryParams(),
+      page: auditPagination.page,
+      page_size: auditPagination.page_size,
+      sort_by: 'created_at',
+      sort_order: 'desc',
+    }, { signal: controller.signal })
+    if (!controller.signal.aborted) {
+      auditLogs.value = res.items
+      auditPagination.total = res.total
+    }
+  } catch (error: any) {
+    if (error?.name !== 'AbortError') {
+      console.error('Failed to load usage audit logs:', error)
+      appStore.showError(t('admin.usage.audit.loadFailed'))
+    }
+  } finally {
+    if (auditAbortController === controller) auditLoading.value = false
+  }
+}
+
+const loadAuditStats = async () => {
+  const seq = ++auditStatsReqSeq
+  auditStatsLoading.value = true
+  try {
+    const stats = await adminUsageAPI.getAuditStats(buildAuditQueryParams())
+    if (seq === auditStatsReqSeq) auditStats.value = stats
+  } catch (error) {
+    if (seq === auditStatsReqSeq) {
+      console.error('Failed to load usage audit stats:', error)
+      appStore.showError(t('admin.usage.audit.loadFailed'))
+    }
+  } finally {
+    if (seq === auditStatsReqSeq) auditStatsLoading.value = false
+  }
+}
+
+const loadAuditData = () => {
+  void loadAuditLogs()
+  void loadAuditStats()
+}
+
 const loadStats = async (force = false) => {
   const seq = ++statsReqSeq
   endpointStatsLoading.value = true
@@ -520,6 +599,7 @@ const loadChartData = async () => {
 }
 const applyFilters = () => {
   pagination.page = 1
+  auditPagination.page = 1
   invalidateModelStatsCache()
   loadLogs()
   loadStats()
@@ -531,6 +611,7 @@ const applyFilters = () => {
   } else {
     errRows.value = []
   }
+  if (activeTab.value === 'audit') loadAuditData()
 }
 const refreshData = () => {
   invalidateModelStatsCache()
@@ -539,6 +620,7 @@ const refreshData = () => {
   loadModelStats(modelDistributionSource.value, true)
   loadChartData()
   if (activeTab.value === 'errors') loadAdminErrors()
+  if (activeTab.value === 'audit') loadAuditData()
   if (rankingMounted.value) rankingRef.value?.reload()
 }
 const resetFilters = () => {
@@ -551,6 +633,8 @@ const resetFilters = () => {
 }
 const handlePageChange = (p: number) => { pagination.page = p; loadLogs() }
 const handlePageSizeChange = (s: number) => { pagination.page_size = s; pagination.page = 1; loadLogs() }
+const handleAuditPageChange = (p: number) => { auditPagination.page = p; void loadAuditLogs() }
+const handleAuditPageSizeChange = (s: number) => { auditPagination.page_size = s; auditPagination.page = 1; void loadAuditLogs() }
 const handleSort = (key: string, order: 'asc' | 'desc') => {
   sortState.sort_by = key
   sortState.sort_order = order
@@ -586,6 +670,7 @@ const exportToExcel = async () => {
       t('usage.type'),
       t('admin.usage.inputTokens'), t('admin.usage.outputTokens'),
       t('admin.usage.cacheReadTokens'), t('admin.usage.cacheCreationTokens'),
+      t('admin.usage.cacheHitRate'),
       t('admin.usage.inputCost'), t('admin.usage.outputCost'),
       t('admin.usage.cacheReadCost'), t('admin.usage.cacheCreationCost'),
       t('usage.rate'), t('usage.accountMultiplier'), t('usage.original'), t('usage.userBilled'), t('usage.accountBilled'),
@@ -604,6 +689,7 @@ const exportToExcel = async () => {
         log.upstream_model || log.model, log.upstream_response_model || '', log.upstream_model_mismatch == null ? '' : t(log.upstream_model_mismatch ? 'common.yes' : 'common.no'), formatReasoningEffort(log.reasoning_effort), formatReasoningEffort(log.upstream_reasoning_effort || log.reasoning_effort), log.group?.name || '',
         log.inbound_endpoint || '', log.upstream_endpoint || '', getRequestTypeLabel(log),
         log.input_tokens, log.output_tokens, log.cache_read_tokens, log.cache_creation_tokens,
+        formatCacheHitRate(log, ''),
         log.input_cost?.toFixed(6) || '0.000000', log.output_cost?.toFixed(6) || '0.000000',
         log.cache_read_cost?.toFixed(6) || '0.000000', log.cache_creation_cost?.toFixed(6) || '0.000000',
         log.rate_multiplier?.toPrecision(4) || '1.00', (log.account_rate_multiplier ?? 1).toPrecision(4),
@@ -629,6 +715,23 @@ const exportToExcel = async () => {
   finally { if(exportAbortController === c) { exportAbortController = null; exporting.value = false; exportProgress.show = false } }
 }
 
+const exportAudit = async (format: 'csv' | 'json') => {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await adminUsageAPI.exportAudit(buildAuditQueryParams(), format)
+    const start = filters.value.start_date || 'all'
+    const end = filters.value.end_date || 'all'
+    saveAs(blob, `usage-audit_${start}_to_${end}.${format}`)
+    appStore.showSuccess(t('admin.usage.audit.exportSuccess'))
+  } catch (error) {
+    console.error('Failed to export usage audit:', error)
+    appStore.showError(t('admin.usage.audit.exportFailed'))
+  } finally {
+    exporting.value = false
+  }
+}
+
 // Column visibility
 const ALWAYS_VISIBLE = ['user', 'created_at']
 const DEFAULT_HIDDEN_COLUMNS = ['request_id', 'upstream_request_id', 'user_agent']
@@ -649,6 +752,7 @@ const allColumns = computed(() => [
   { key: 'stream', label: t('usage.type'), sortable: false },
   { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
   { key: 'tokens', label: t('usage.tokens'), sortable: false },
+  { key: 'cache_hit_rate', label: t('admin.usage.cacheHitRate'), sortable: false },
   { key: 'cost', label: t('usage.cost'), sortable: false },
   { key: 'latency', label: t('usage.latency'), sortable: false },
   { key: 'created_at', label: t('usage.time'), sortable: true },
@@ -784,19 +888,25 @@ const loadSavedColumns = () => {
 }
 
 // Detail tabs
-type DetailTab = 'usage' | 'errors' | 'ranking'
+type DetailTab = 'usage' | 'audit' | 'errors' | 'ranking'
 const activeTab = ref<DetailTab>('usage')
 const detailTabs = computed(() => [
   { key: 'usage' as const, label: t('usage.tabs.usage'), icon: 'document' as const },
+  { key: 'audit' as const, label: t('usage.tabs.audit'), icon: 'shield' as const },
   { key: 'errors' as const, label: t('usage.tabs.errors'), icon: 'exclamationTriangle' as const },
   { key: 'ranking' as const, label: t('usage.tabs.ranking'), icon: 'chart' as const },
 ])
 const usageFiltersRef = ref<InstanceType<typeof UsageFilters> | null>(null)
+const auditMounted = ref(false)
 const rankingMounted = ref(false)
 const rankingRef = ref<InstanceType<typeof UserTokenRanking> | null>(null)
 
 const switchTab = (tab: DetailTab) => {
   activeTab.value = tab
+  if (tab === 'audit') {
+    auditMounted.value = true
+    if (auditLogs.value.length === 0 || auditStats.value === null) loadAuditData()
+  }
   if (tab === 'errors' && errRows.value.length === 0) loadAdminErrors()
   if (tab === 'ranking') rankingMounted.value = true
 }
@@ -878,7 +988,7 @@ onMounted(() => {
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)
 })
-onUnmounted(() => { abortController?.abort(); exportAbortController?.abort(); document.removeEventListener('click', handleColumnClickOutside) })
+onUnmounted(() => { abortController?.abort(); auditAbortController?.abort(); exportAbortController?.abort(); document.removeEventListener('click', handleColumnClickOutside) })
 
 watch(modelDistributionSource, (source) => {
   void loadModelStats(source)

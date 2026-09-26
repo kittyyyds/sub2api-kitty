@@ -42,6 +42,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       create: createAccountMock,
+      getOpenAIRequestTimezones: vi.fn().mockResolvedValue({ default: 'Asia/Singapore', timezones: ['Asia/Singapore', 'America/New_York'] }),
       probeUpstreamBilling: probeUpstreamBillingMock,
       syncUpstreamModels: syncUpstreamModelsMock,
       checkMixedChannelRisk: vi.fn().mockResolvedValue({ has_risk: false }),
@@ -216,6 +217,37 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+
+
+  it('creates video API-key accounts with explicit provider and base URL without OAuth', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video provider')
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue('https://video.example.test')
+    await wrapper.get('input[type="password"]').setValue('video-fixture-key')
+    await wrapper.get('[data-testid="grok-media-provider"]').setValue('suanli_special')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).toHaveBeenCalledWith(expect.objectContaining({
+      platform: 'video', type: 'apikey',
+      credentials: expect.objectContaining({ base_url: 'https://video.example.test', api_key: 'video-fixture-key', grok_media_provider: 'suanli_special' }),
+    }))
+    expect(wrapper.findComponent(OAuthAuthorizationFlowStub).exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not create a video account with an implicit Anthropic base URL', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video provider')
+    await wrapper.get('input[type="password"]').setValue('video-fixture-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
 
   it('sets month and year expiry presets without submitting the account form', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -675,6 +707,28 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload?.upstream_billing_probe_enabled).toBe(true)
     // 创建成功后前端立即发起一次首探（与其他 apikey 平台一致）。
     expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
+  })
+
+  it.each([
+    ['import-codex-session', importCodexSessionMock],
+    ['import-codex-pat', createOpenAICodexPATMock]
+  ] as const)('preserves timezone and the selected account pool on %s', async (event, request) => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
+    await wrapper.get('[data-testid="request-timezone-search"]').setValue(true)
+    const fields = wrapper.findComponent({ name: 'AccountTierRoutingFields' })
+    fields.vm.$emit('update:enabled', true)
+    fields.vm.$emit('update:pool', 'premium')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Tiered import')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get(`[data-testid="${event}"]`).trigger('click')
+    await flushPromises()
+    expect(request.mock.calls[0]?.[0]?.extra).toMatchObject({
+      tiered_routing_enabled: true, pool: 'premium', openai_request_timezone_enabled: true,
+      openai_request_timezone: 'Asia/Singapore', openai_request_timezone_sync_search: true
+    })
   })
 
   it('leaves Codex session import billing ownership to the backend', async () => {

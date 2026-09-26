@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createVideoModelPricesForm,
+  getConfiguredVideoModelPrice,
+  resolveVideoModelCustomerPrice,
   serializeVideoModelPrices,
   videoModelPriceFamilyRows
 } from '../groupsVideoModelPricing'
@@ -43,5 +45,42 @@ describe('Grok video model pricing form', () => {
     expect(serializeVideoModelPrices(form)).toMatchObject({
       'grok-imagine-video-2': { '480p': 0.2 }
     })
+  })
+
+  it('treats a populated model tier as the exact final per-second price', () => {
+    const form = createVideoModelPricesForm({
+      'grok-imagine-video-1.5': { '720p': 0.01 }
+    })
+
+    expect(getConfiguredVideoModelPrice(form, 'grok-imagine-video-1.5', '720p')).toBe(0.01)
+    expect(resolveVideoModelCustomerPrice(
+      form,
+      'grok-imagine-video-1.5',
+      '720p',
+      0.5,
+      0.15,
+      0.14
+    )).toBe(0.01)
+  })
+
+  it('uses flat/default per-second pricing and the multiplier only for empty tiers', () => {
+    const form = createVideoModelPricesForm()
+
+    expect(resolveVideoModelCustomerPrice(
+      form,
+      'grok-imagine-video-1.5',
+      '720p',
+      0.2,
+      0.5,
+      0.07
+    )).toBeCloseTo(0.1)
+    expect(resolveVideoModelCustomerPrice(
+      form,
+      'grok-imagine-video-1.5',
+      '1080p',
+      null,
+      0.5,
+      0.07
+    )).toBeCloseTo(0.125)
   })
 })

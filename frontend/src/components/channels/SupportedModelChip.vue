@@ -65,103 +65,45 @@
               <span>{{ billingModeLabel }}</span>
             </div>
 
-            <template v-if="model.pricing.billing_mode === BILLING_MODE_TOKEN">
-              <PricingRow
-                :label="t(prefixKey('inputPrice'))"
-                :value="model.pricing.input_price"
-                :unit="t(prefixKey('unitPerMillion'))"
-                :scale="perMillionScale"
-              />
-              <PricingRow
-                :label="t(prefixKey('outputPrice'))"
-                :value="model.pricing.output_price"
-                :unit="t(prefixKey('unitPerMillion'))"
-                :scale="perMillionScale"
-              />
-              <PricingRow
-                :label="t(prefixKey('cacheWrite5mPrice'))"
-                :value="model.pricing.cache_write_price"
-                :unit="t(prefixKey('unitPerMillion'))"
-                :scale="perMillionScale"
-              />
-              <PricingRow
-                v-if="model.pricing.cache_write_1h_price != null"
-                :label="t(prefixKey('cacheWrite1hPrice'))"
-                :value="model.pricing.cache_write_1h_price"
-                :unit="t(prefixKey('unitPerMillion'))"
-                :scale="perMillionScale"
-              />
-              <PricingRow
-                :label="t(prefixKey('cacheReadPrice'))"
-                :value="model.pricing.cache_read_price"
-                :unit="t(prefixKey('unitPerMillion'))"
-                :scale="perMillionScale"
-              />
-              <PricingRow
-                v-if="model.pricing.image_input_price != null && model.pricing.image_input_price > 0"
-                :label="t(prefixKey('imageInputPrice'))"
-                :value="model.pricing.image_input_price"
-                :unit="t(prefixKey('unitPerMillion'))"
-                :scale="perMillionScale"
-              />
-              <PricingRow
-                v-if="model.pricing.image_output_price != null && model.pricing.image_output_price > 0"
-                :label="t(prefixKey('imageOutputPrice'))"
-                :value="model.pricing.image_output_price"
-                :unit="t(prefixKey('unitPerMillion'))"
-                :scale="perMillionScale"
-              />
-            </template>
-
-            <PricingRow
-              v-if="
-                model.pricing.billing_mode === BILLING_MODE_PER_REQUEST &&
-                model.pricing.per_request_price != null
-              "
-              :label="t(prefixKey('perRequestPrice'))"
-              :value="model.pricing.per_request_price"
-              :unit="t(prefixKey('unitPerRequest'))"
-              :scale="1"
-            />
-
-            <PricingRow
-              v-if="
-                model.pricing.billing_mode === BILLING_MODE_IMAGE &&
-                model.pricing.image_output_price != null
-              "
-              :label="t(prefixKey('imageOutputPrice'))"
-              :value="model.pricing.image_output_price"
-              :unit="t(prefixKey('unitPerRequest'))"
-              :scale="1"
-            />
-
-            <PricingRow
-              v-if="model.pricing.billing_mode === BILLING_MODE_VIDEO && model.pricing.per_request_price != null"
-              :label="t(prefixKey('videoPrice'))"
-              :value="model.pricing.per_request_price"
-              :unit="t(prefixKey('unitPerSecond'))"
-              :scale="1"
-            />
-
             <div
-              v-if="model.pricing.intervals && model.pricing.intervals.length > 0"
-              class="mt-2 border-t pt-2"
+              v-for="priceGroup in effectivePricingGroups"
+              :key="priceGroup.id"
+              class="space-y-2 border-t pt-2 first:border-t-0 first:pt-0"
               :class="[popoverBorderClass]"
             >
-              <div class="mb-1 font-medium text-gray-600 dark:text-gray-400">
-                {{ t(prefixKey('intervals')) }}
+              <div
+                v-if="priceGroup.showHeader"
+                class="flex items-center justify-between gap-2 font-medium"
+              >
+                <span class="truncate">{{ priceGroup.name }}</span>
+                <span class="flex-shrink-0 text-primary-600 dark:text-primary-400">
+                  {{ isFinalVideoPrice(priceGroup) ? t('videoModule.finalPrice') : `${t(prefixKey('actualPrice'))} ×${effectiveRate(priceGroup)}` }}
+                </span>
               </div>
-              <div class="space-y-1">
-                <div
-                  v-for="(iv, idx) in model.pricing.intervals"
-                  :key="idx"
-                  class="flex justify-between text-[11px]"
-                >
-                  <span class="text-gray-500 dark:text-gray-400">
-                    <template v-if="iv.tier_label">{{ iv.tier_label }}</template>
-                    <template v-else>{{ formatRange(iv.min_tokens, iv.max_tokens) }}</template>
-                  </span>
-                  <span>{{ formatInterval(iv, model.pricing) }}</span>
+              <template v-if="model.pricing.billing_mode === BILLING_MODE_TOKEN">
+                <PricingRow :label="t(prefixKey('inputPrice'))" :value="model.pricing.input_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow :label="t(prefixKey('outputPrice'))" :value="model.pricing.output_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow :label="t(prefixKey('cacheWrite5mPrice'))" :value="model.pricing.cache_write_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow v-if="model.pricing.cache_write_1h_price != null" :label="t(prefixKey('cacheWrite1hPrice'))" :value="model.pricing.cache_write_1h_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow :label="t(prefixKey('cacheReadPrice'))" :value="model.pricing.cache_read_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow v-if="model.pricing.image_input_price != null && model.pricing.image_input_price > 0" :label="t(prefixKey('imageInputPrice'))" :value="model.pricing.image_input_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+                <PricingRow v-if="model.pricing.image_output_price != null && model.pricing.image_output_price > 0" :label="t(prefixKey('imageOutputPrice'))" :value="model.pricing.image_output_price" :unit="t(prefixKey('unitPerMillion'))" :scale="perMillionScale * effectiveRate(priceGroup)" />
+              </template>
+
+              <PricingRow v-if="model.pricing.billing_mode === BILLING_MODE_PER_REQUEST && model.pricing.per_request_price != null" :label="t(prefixKey('perRequestPrice'))" :value="model.pricing.per_request_price" :unit="t(prefixKey('unitPerRequest'))" :scale="effectiveRate(priceGroup)" />
+              <PricingRow v-if="model.pricing.billing_mode === BILLING_MODE_IMAGE && model.pricing.per_request_price != null" :label="t(prefixKey('perImagePrice'))" :value="model.pricing.per_request_price" :unit="t(prefixKey('unitPerImage'))" :scale="effectiveRate(priceGroup)" />
+              <PricingRow v-if="model.pricing.billing_mode === BILLING_MODE_VIDEO && model.pricing.per_request_price != null" :label="t(prefixKey('perSecondPrice'))" :value="model.pricing.per_request_price" :unit="t(prefixKey('unitPerSecond'))" :scale="effectiveRate(priceGroup)" />
+
+              <div v-if="model.pricing.intervals && model.pricing.intervals.length > 0" class="mt-2 border-t pt-2" :class="[popoverBorderClass]">
+                <div class="mb-1 font-medium text-gray-600 dark:text-gray-400">{{ t(prefixKey('intervals')) }}</div>
+                <div class="space-y-1">
+                  <div v-for="(iv, idx) in model.pricing.intervals" :key="idx" class="flex justify-between text-[11px]">
+                    <span class="text-gray-500 dark:text-gray-400">
+                      <template v-if="iv.tier_label">{{ iv.tier_label }}</template>
+                      <template v-else>{{ formatRange(iv.min_tokens, iv.max_tokens) }}</template>
+                    </span>
+                    <span>{{ formatInterval(iv, model.pricing, effectiveRate(priceGroup)) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -185,7 +127,9 @@ import {
 } from '@/constants/channel'
 // 复用 api/channels.ts 的用户侧最小形态 DTO。
 // admin 侧 ChannelModelPricing 字段更多，但结构上是用户 DTO 的超集，admin 视图传入可直接通过结构化子类型检查。
-import type { UserPricingInterval, UserSupportedModel, UserSupportedModelPricing } from '@/api/channels'
+import type { UserAvailableGroup, UserPricingInterval, UserSupportedModel, UserSupportedModelPricing } from '@/api/channels'
+// 复用 api/channels.ts 的用户侧最小形态 DTO。
+// admin 侧 ChannelModelPricing 字段更多，但结构上是用户 DTO 的超集，admin 视图传入可直接通过结构化子类型检查。
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import type { GroupPlatform } from '@/types'
 import { platformBadgeClass, platformBorderClass, platformBadgeLightClass } from '@/utils/platformColors'
@@ -202,12 +146,17 @@ const props = withDefaults(
      * 仅用于视觉，不影响业务逻辑。
      */
     platformHint?: string
+    /** 用户侧传入同平台分组，价格将按每个分组的实际生效倍率展示。 */
+    pricingGroups?: UserAvailableGroup[]
+    userGroupRates?: Record<number, number>
   }>(),
   {
     pricingKeyPrefix: 'availableChannels.pricing',
     noPricingLabel: '',
     showPlatform: true,
-    platformHint: ''
+    platformHint: '',
+    pricingGroups: () => [],
+    userGroupRates: () => ({})
   }
 )
 
@@ -217,6 +166,50 @@ const { t } = useI18n()
 
 /** 按 token 定价展示时的换算单位：每百万 token。 */
 const perMillionScale = 1_000_000
+
+type PricingGroupView = UserAvailableGroup & { showHeader: boolean }
+
+const effectivePricingGroups = computed<PricingGroupView[]>(() => {
+  if (props.pricingGroups.length > 0) {
+    return props.pricingGroups.map((group) => ({ ...group, showHeader: true }))
+  }
+  return [{
+    id: 0,
+    name: '',
+    platform: '',
+    subscription_type: 'standard',
+    rate_multiplier: 1,
+    peak_rate_enabled: false,
+    peak_start: '',
+    peak_end: '',
+    peak_rate_multiplier: 1,
+    is_exclusive: false,
+    image_rate_independent: false,
+    image_rate_multiplier: 1,
+    video_rate_independent: false,
+    video_rate_multiplier: 1,
+    showHeader: false,
+  }]
+})
+
+function isFinalVideoPrice(group: PricingGroupView): boolean {
+  return (group.platform === 'video' || effectivePlatform.value === 'video')
+    && (props.model.pricing?.billing_mode === BILLING_MODE_VIDEO
+      || props.model.pricing?.billing_mode === BILLING_MODE_PER_REQUEST)
+}
+
+function effectiveRate(group: PricingGroupView): number {
+  if (isFinalVideoPrice(group)) return 1
+  switch (props.model.pricing?.billing_mode) {
+    case BILLING_MODE_IMAGE:
+      if (group.image_rate_independent) return group.image_rate_multiplier
+      break
+    case BILLING_MODE_VIDEO:
+      if (group.video_rate_independent) return group.video_rate_multiplier
+      break
+  }
+  return props.userGroupRates[group.id] ?? group.rate_multiplier
+}
 
 // Popover border + header classes echo the platform theme so each card reads
 // at a glance which model family it belongs to.
@@ -256,16 +249,18 @@ function formatRange(min: number, max: number | null): string {
   return `(${min}, ${maxLabel}]`
 }
 
-function formatInterval(iv: UserPricingInterval, pricing: UserSupportedModelPricing): string {
-  if (pricing.billing_mode === BILLING_MODE_VIDEO) {
-    return `${formatScaled(iv.per_request_price, 1)} ${t(prefixKey('unitPerSecond'))}`
-  }
-  if (pricing.billing_mode === BILLING_MODE_PER_REQUEST || pricing.billing_mode === BILLING_MODE_IMAGE) {
-    return formatScaled(iv.per_request_price, 1)
+function formatInterval(iv: UserPricingInterval, pricing: UserSupportedModelPricing, rate = 1): string {
+  if (pricing.billing_mode === BILLING_MODE_PER_REQUEST || pricing.billing_mode === BILLING_MODE_IMAGE || pricing.billing_mode === BILLING_MODE_VIDEO) {
+    const unitKey = pricing.billing_mode === BILLING_MODE_VIDEO
+      ? 'unitPerSecond'
+      : pricing.billing_mode === BILLING_MODE_IMAGE
+        ? 'unitPerImage'
+        : 'unitPerRequest'
+    return `${formatScaled(iv.per_request_price, rate)} ${t(prefixKey(unitKey))}`
   }
   const resolved = resolveIntervalPrices(iv, pricing)
-  const input = formatScaled(resolved.input_price, perMillionScale)
-  const output = formatScaled(resolved.output_price, perMillionScale)
+  const input = formatScaled(resolved.input_price, perMillionScale * rate)
+  const output = formatScaled(resolved.output_price, perMillionScale * rate)
   return `${input} / ${output}`
 }
 

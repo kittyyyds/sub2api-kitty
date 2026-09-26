@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"strconv"
+	"sync"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -355,6 +357,9 @@ var (
 )
 
 type concurrencyCache struct {
+	managedMu           sync.Mutex
+	managedSlots        map[managedSlot]struct{}
+	managedHealthy      bool
 	rdb                 *redis.Client
 	slotTTLSeconds      int // 槽位过期时间（秒）
 	waitQueueTTLSeconds int // 等待队列过期时间（秒）
@@ -370,11 +375,16 @@ func NewConcurrencyCache(rdb *redis.Client, slotTTLMinutes int, waitQueueTTLSeco
 	if waitQueueTTLSeconds <= 0 {
 		waitQueueTTLSeconds = slotTTLMinutes * 60
 	}
-	return &concurrencyCache{
+	c := &concurrencyCache{
 		rdb:                 rdb,
 		slotTTLSeconds:      slotTTLMinutes * 60,
 		waitQueueTTLSeconds: waitQueueTTLSeconds,
 	}
+	if managedinstance.Enabled() {
+		configureManagedLeaseStore(rdb)
+		c.startManagedRenewals()
+	}
+	return c
 }
 
 // Helper functions for key generation
@@ -636,6 +646,7 @@ func (c *concurrencyCache) AcquireAccountSlot(ctx context.Context, accountID int
 		return false, err
 	}
 	if result == 1 {
+		c.trackManagedSlot(key, requestID)
 		// 成功占槽后标记活跃账号，后台清理即可从索引定位候选账号。
 		c.touchActiveIndexAt(ctx, accountActiveIndexKey, accountID, now+int64(c.slotTTLSeconds))
 	}
@@ -644,6 +655,7 @@ func (c *concurrencyCache) AcquireAccountSlot(ctx context.Context, accountID int
 
 func (c *concurrencyCache) ReleaseAccountSlot(ctx context.Context, accountID int64, requestID string) error {
 	key := accountSlotKey(accountID)
+	c.untrackManagedSlot(key, requestID)
 	if err := c.rdb.ZRem(ctx, key, requestID).Err(); err != nil {
 		return err
 	}
@@ -713,6 +725,7 @@ func (c *concurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, ma
 		return false, err
 	}
 	if result == 1 {
+		c.trackManagedSlot(key, requestID)
 		// 成功占槽后标记活跃用户，避免启动清理依赖全量 SCAN。
 		c.touchActiveIndexAt(ctx, userActiveIndexKey, userID, now+int64(c.slotTTLSeconds))
 	}
@@ -721,6 +734,7 @@ func (c *concurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, ma
 
 func (c *concurrencyCache) ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error {
 	key := userSlotKey(userID)
+	c.untrackManagedSlot(key, requestID)
 	if err := c.rdb.ZRem(ctx, key, requestID).Err(); err != nil {
 		return err
 	}
@@ -742,11 +756,15 @@ func (c *concurrencyCache) GetUserConcurrency(ctx context.Context, userID int64)
 func (c *concurrencyCache) TrackAPIKeySlot(ctx context.Context, apiKeyID int64, requestID string) error {
 	key := apiKeySlotKey(apiKeyID)
 	_, err := trackSlotScript.Run(ctx, c.rdb, []string{key}, c.slotTTLSeconds, requestID).Result()
+	if err == nil {
+		c.trackManagedSlot(key, requestID)
+	}
 	return err
 }
 
 func (c *concurrencyCache) ReleaseAPIKeySlot(ctx context.Context, apiKeyID int64, requestID string) error {
 	key := apiKeySlotKey(apiKeyID)
+	c.untrackManagedSlot(key, requestID)
 	return c.rdb.ZRem(ctx, key, requestID).Err()
 }
 
@@ -1144,6 +1162,11 @@ func (c *concurrencyCache) reconcileExpiredIndexCandidates(ctx context.Context, 
 // API Key 槽位（concurrency:api_key:*）是 stats-only 数据：每次 Track/读取都会按分数
 // 裁剪过期成员，key 自带 TTL，可在一个 slot TTL 内自愈，因此不参与启动清理。
 func (c *concurrencyCache) CleanupStaleProcessSlots(ctx context.Context, activeRequestPrefix string) error {
+	// A different prefix may belong to a healthy draining peer. Managed instances
+	// rely on owner-only renewal and TTL expiry, never global startup deletion.
+	if managedinstance.Enabled() {
+		return nil
+	}
 	if activeRequestPrefix == "" {
 		return nil
 	}

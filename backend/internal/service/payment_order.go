@@ -213,6 +213,17 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	if err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
 	}
+	if req.OrderType == payment.OrderTypeBalance && s.rechargeBonusRepo != nil {
+		rule, matchErr := s.rechargeBonusRepo.MatchRule(ctx, req.Amount, time.Now().UTC())
+		if matchErr != nil {
+			return nil, fmt.Errorf("match recharge bonus rule: %w", matchErr)
+		}
+		if rule != nil {
+			if snapshotErr := s.rechargeBonusRepo.SnapshotOrder(ctx, tx.Client(), order.ID, rule); snapshotErr != nil {
+				return nil, fmt.Errorf("snapshot recharge bonus rule: %w", snapshotErr)
+			}
+		}
+	}
 	code := fmt.Sprintf("PAY-%d-%d", order.ID, time.Now().UnixNano()%100000)
 	order, err = tx.PaymentOrder.UpdateOneID(order.ID).SetRechargeCode(code).Save(ctx)
 	if err != nil {
@@ -302,6 +313,18 @@ func buildPaymentOrderProviderSnapshot(sel *payment.InstanceSelection, req Creat
 	if providerKey == payment.TypeAirwallex {
 		if accountID := strings.TrimSpace(sel.Config["accountId"]); accountID != "" {
 			snapshot["merchant_id"] = accountID
+		}
+		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
+	}
+	if providerKey == payment.TypeDujiaoPay {
+		if keyID := strings.TrimSpace(sel.Config["keyId"]); keyID != "" {
+			snapshot["merchant_id"] = keyID
+		}
+		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
+	}
+	if providerKey == payment.TypePayPal {
+		if clientID := strings.TrimSpace(sel.Config["clientId"]); clientID != "" {
+			snapshot["merchant_id"] = clientID
 		}
 		snapshot["currency"] = paymentProviderConfigCurrency(providerKey, sel.Config)
 	}

@@ -4,6 +4,22 @@
 
 This directory contains SQL migration files for database schema changes. The migration system uses SHA256 checksums to ensure migration immutability and consistency across environments.
 
+## Kitty retired data operations (2026-09-26)
+
+`history/188_enable_grok_enhancement_group.sql` preserves the original bytes of
+the retired Grok prompt campaign activation. Its trimmed SHA256 remains
+`d53c9ab1f36d012ae13dfdb22b7303c94d6d9ebe01704430b681f9c6fc24fbe1`.
+It is embedded only in `HistoryFS` for audit; startup embeds and applies the
+337 active SQL files in `FS`. A clean installation does not create a fictitious
+historical Grok group and does not execute this retired data action.
+
+An existing database keeps its original `188_enable_grok_enhancement_group.sql`
+ledger row and existing data unchanged. No migration row is inserted, removed,
+renamed, or rewritten to simulate execution. The managed read-only validator
+accepts this one extra historical row only with the exact checksum above; an
+unknown or changed historical checksum remains an error. Historical column
+definitions in 187 and shared cache-invalidation logic in 196 remain active.
+
 ## Migration File Naming
 
 Format: `NNN_description.sql`

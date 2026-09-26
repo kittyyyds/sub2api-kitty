@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -83,7 +84,8 @@ func TestForwardGrokMediaContentUsesUpstreamCredentialAndStreamsRange(t *testing
 					`attachment; filename="task-1.mp4"`,
 				},
 			},
-			Body: io.NopCloser(strings.NewReader("video-payload")),
+			ContentLength: 13, // HTTP transport populates this from the response body framing.
+			Body:          io.NopCloser(strings.NewReader("video-payload")),
 		}},
 	}
 	svc := &OpenAIGatewayService{cfg: &config.Config{}, httpUpstream: upstream}
@@ -111,7 +113,10 @@ func TestForwardGrokMediaContentUsesUpstreamCredentialAndStreamsRange(t *testing
 	require.Equal(t, "13", recorder.Header().Get("Content-Length"))
 	require.Equal(t, "bytes 0-12/100", recorder.Header().Get("Content-Range"))
 	require.Equal(t, "bytes", recorder.Header().Get("Accept-Ranges"))
-	require.Equal(t, `attachment; filename="task-1.mp4"`, recorder.Header().Get("Content-Disposition"))
+	disposition, params, err := mime.ParseMediaType(recorder.Header().Get("Content-Disposition"))
+	require.NoError(t, err)
+	require.Equal(t, "inline", disposition)
+	require.Equal(t, "task-1.mp4", params["filename"])
 	require.True(t, IsResponseCommitted(c))
 }
 
@@ -137,7 +142,8 @@ func TestForwardGrokMediaContentStreamsFullResponseWithSafeDefaults(t *testing.T
 	require.Equal(t, "full-video", recorder.Body.String())
 	require.Len(t, upstream.requests, 2)
 	require.Empty(t, upstream.requests[1].Header.Get("Range"))
-	require.Equal(t, "application/octet-stream", recorder.Header().Get("Content-Type"))
+	require.Equal(t, "video/mp4", recorder.Header().Get("Content-Type"))
+	require.Equal(t, "inline", recorder.Header().Get("Content-Disposition"))
 	require.Empty(t, recorder.Header().Get("Content-Length"))
 	require.Empty(t, recorder.Header().Get("Set-Cookie"))
 	require.Empty(t, recorder.Header().Get("X-Upstream-Secret"))
@@ -154,7 +160,8 @@ func TestForwardGrokMediaContentPreservesRangeNotSatisfiable(t *testing.T) {
 				"Content-Range":  []string{"bytes */100"},
 				"Accept-Ranges":  []string{"bytes"},
 			},
-			Body: io.NopCloser(strings.NewReader("bad-range!!")),
+			ContentLength: 11, // HTTP transport populates this from the response body framing.
+			Body:          io.NopCloser(strings.NewReader("bad-range!!")),
 		}},
 	}
 	svc := &OpenAIGatewayService{cfg: &config.Config{}, httpUpstream: upstream}
@@ -188,7 +195,8 @@ func TestForwardGrokMediaContentFetchesValidatedSignedURLWithoutCredentials(t *t
 					"Content-Length": []string{"13"},
 					"Content-Range":  []string{"bytes 0-12/100"},
 				},
-				Body: io.NopCloser(strings.NewReader("video-payload")),
+				ContentLength: 13, // HTTP transport populates this from the response body framing.
+				Body:          io.NopCloser(strings.NewReader("video-payload")),
 			},
 		},
 	}
@@ -230,9 +238,10 @@ func TestForwardGrokMediaContentFollowsAuthenticatedSub2APIRelay(t *testing.T) {
 				responses: []*http.Response{
 					grokMediaContentStatusResponse(`{"status":"completed","video":{"url":"` + statusURL + `"}}`),
 					{
-						StatusCode: http.StatusOK,
-						Header:     http.Header{"Content-Type": []string{"video/mp4"}},
-						Body:       io.NopCloser(strings.NewReader("video-payload")),
+						StatusCode:    http.StatusOK,
+						Header:        http.Header{"Content-Type": []string{"video/mp4"}},
+						ContentLength: 13, // HTTP transport populates this from the response body framing.
+						Body:          io.NopCloser(strings.NewReader("video-payload")),
 					},
 				},
 			}

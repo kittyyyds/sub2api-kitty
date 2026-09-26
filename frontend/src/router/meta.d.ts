@@ -18,6 +18,7 @@ declare module 'vue-router' {
      * @default false
      */
     requiresAdmin?: boolean
+    requiresSuperAdmin?: boolean
     requiresRequestCapture?: boolean
 
     /**
@@ -51,10 +52,10 @@ declare module 'vue-router' {
     requiresPayment?: boolean
 
     /**
-     * 是否要求风控中心功能开关已启用
+     * Whether this route requires the channel monitor feature to be enabled
      * @default false
      */
-    requiresRiskControl?: boolean
+    requiresChannelMonitor?: boolean
 
     /**
      * 是否要求订阅功能开关（subscription_enabled，opt-out）未被显式关闭

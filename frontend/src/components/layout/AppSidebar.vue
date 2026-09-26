@@ -1,9 +1,9 @@
 <template>
   <aside
-    class="sidebar"
+    class="sidebar kitty-console-sidebar"
     :class="[
-      sidebarCollapsed ? 'w-[72px]' : 'w-64',
-      { '-translate-x-full lg:translate-x-0': !mobileOpen }
+      isAdmin ? (sidebarCollapsed ? 'w-[68px]' : 'w-[230px]') : (sidebarCollapsed ? 'w-[72px]' : 'w-64'),
+      { '-translate-x-full lg:translate-x-0': !mobileOpen, 'is-collapsed': sidebarCollapsed }
     ]"
   >
     <!-- Logo/Brand -->
@@ -14,7 +14,7 @@
         class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow transition-opacity hover:opacity-80"
         @click="handleMenuItemClick(homePath)"
       >
-        <img v-if="settingsLoaded" :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
+        <img v-if="settingsLoaded" :src="siteLogo || '/relay-mark.svg'" alt="Logo" class="h-full w-full object-contain" />
       </router-link>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
         <router-link
@@ -25,7 +25,8 @@
           {{ siteName }}
         </router-link>
         <!-- Version Badge -->
-        <VersionBadge :version="siteVersion" />
+        <VersionBadge v-if="isAdmin" :version="siteVersion" />
+        <span v-else class="text-[10px] tracking-[.15em] text-gray-400 dark:text-dark-400">AI RELAY WORKSPACE</span>
       </div>
     </div>
 
@@ -128,27 +129,37 @@
 
       <!-- Regular User View -->
       <template v-else-if="!appStore.backendModeEnabled">
-        <div class="sidebar-section">
-          <router-link
-            v-for="item in userNavItems"
-            :key="item.path"
-            :to="item.path"
+        <section v-for="section in customerNavSections" :key="section.id" class="sidebar-section" :data-customer-section="section.id"
+          :style="{ '--kc-nav-rows': section.items.length + (section.id === 'other' ? sidebarContacts.length : 0) }">
+          <div v-if="section.label" class="sidebar-category" :class="{ 'sidebar-category-collapsed': sidebarCollapsed }" :title="sidebarCollapsed ? section.label : undefined">
+            <component v-if="sidebarCollapsed" :is="section.icon" class="h-5 w-5" />
+            <span v-else>{{ section.label }}</span>
+          </div>
+          <div :id="`sidebar-category-${section.id}`">
+          <router-link v-for="item in section.items" :key="item.path" :to="item.path"
             class="sidebar-link mb-1"
             :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
-            :title="sidebarCollapsed ? item.label : undefined"
-            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
-            @click="handleMenuItemClick(item.path)"
-          >
+            :title="sidebarCollapsed ? item.label : undefined" :aria-label="item.label"
+            :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined" @click="handleMenuItemClick(item.path)">
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
             <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
           </router-link>
-        </div>
+          <template v-if="section.id === 'other'">
+            <button v-for="contact in sidebarContacts" :key="contact.id" class="sidebar-link mb-1 w-full" type="button"
+              :class="{ 'sidebar-link-collapsed': sidebarCollapsed }" :title="sidebarCollapsed ? contact.label : undefined"
+              :aria-label="contact.label" aria-haspopup="dialog" @click="openContact(contact.tab)">
+              <component :is="contact.icon" class="h-5 w-5 flex-shrink-0" />
+              <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ contact.label }}</span>
+            </button>
+          </template>
+          </div>
+        </section>
       </template>
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+    <div class="sidebar-footer mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
@@ -177,6 +188,8 @@
     </div>
   </aside>
 
+  <CustomerContactDialog v-if="!isAdmin" :show="contactOpen" :initial-tab="contactTab" @close="contactOpen = false" />
+
   <!-- Mobile Overlay -->
   <transition name="fade">
     <div
@@ -193,12 +206,20 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import CustomerContactDialog from './CustomerContactDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
-import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import { useTheme } from '@/composables/useTheme'
+import {
+  NATIVE_CUSTOM_FEATURES,
+  isReservedCustomerFeatureId,
+  type NativeCustomFeatureId
+} from '@/features/customer-console/nativeFeatureRegistry'
+
+type SidebarPromoTone = 'hot' | 'deal' | 'rebate'
 
 interface NavItem {
   path: string
@@ -219,6 +240,11 @@ interface NavItem {
    * 开关切换时菜单自动更新。
    */
   featureFlag?: () => boolean | undefined
+  badge?: {
+    label: string
+    emoji: string
+    tone: SidebarPromoTone
+  }
 }
 
 // applyFeatureFlags 递归过滤掉 featureFlag() === false 的节点（含子节点）。
@@ -245,12 +271,26 @@ const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
 const adminSettingsStore = useAdminSettingsStore()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
+const { isDark, toggleTheme } = useTheme()
 
 const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
 const sidebarNavRef = ref<HTMLElement | null>(null)
-const isDark = ref(document.documentElement.classList.contains('dark'))
+const contactOpen = ref(false)
+const contactTab = ref<'service' | 'after-sales'>('service')
+const sidebarContacts = computed(() => [
+  { id: 'contact', label: t('nav.contactUs'), icon: ChatIcon, tab: 'service' as const },
+])
+async function openContact(tab: 'service' | 'after-sales') {
+  contactTab.value = tab
+  const wasMobileOpen = mobileOpen.value
+  appStore.setMobileOpen(false)
+  await nextTick()
+  // Restore focus to a visible control after the mobile drawer closes.
+  if (wasMobileOpen) document.querySelector<HTMLButtonElement>('[data-mobile-menu-toggle]')?.focus()
+  contactOpen.value = true
+}
 
 const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
 
@@ -262,7 +302,7 @@ const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
 
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
-const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
+const siteLogo = computed(() => appStore.brandLogoUrl)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
@@ -312,6 +352,21 @@ const BatchImageIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z'
+        })
+      ]
+    )
+}
+
+const ChatIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M8.625 9.75h.008v.008h-.008V9.75zm3.75 0h.008v.008h-.008V9.75zm3.75 0h.008v.008h-.008V9.75zM21 11.25c0 4.142-4.03 7.5-9 7.5a10.2 10.2 0 01-3.852-.742L3 19.5l1.575-4.2A6.98 6.98 0 013 11.25c0-4.142 4.03-7.5 9-7.5s9 3.358 9 7.5z'
         })
       ]
     )
@@ -671,6 +726,15 @@ const ShieldIcon = {
     )
 }
 
+const CurrencyDollarIcon = {
+  render: () => h('svg', {
+    fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5'
+  }, [h('path', {
+    'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    d: 'M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+  })])
+}
+
 const PriceTagIcon = {
   render: () =>
     h(
@@ -727,17 +791,32 @@ const purchaseNavLabel = computed(() => {
   }
 })
 const flagAffiliate = makeSidebarFlag(FeatureFlags.affiliate)
-const flagRiskControl = makeSidebarFlag(FeatureFlags.riskControl)
 const flagPluginManagement = makeSidebarFlag(FeatureFlags.pluginManagement)
 const flagOpsMonitoring = () => adminSettingsStore.opsMonitoringEnabled
 const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 const flagBatchImageAccess = () => canUseBatchImage.value
 
+const nativeFeatureIcons: Record<NativeCustomFeatureId, unknown> = {
+  'reset-radar': ChartIcon,
+  'billing-rules': PriceTagIcon,
+  docs: OrderListIcon
+}
+
+function buildNativeFeatureNavItem(id: NativeCustomFeatureId): NavItem {
+  const feature = NATIVE_CUSTOM_FEATURES.find((item) => item.id === id)
+  if (!feature) throw new Error(`Native customer feature is missing: ${id}`)
+
+  return {
+    path: feature.path,
+    label: t(feature.labelKey),
+    icon: nativeFeatureIcons[id]
+  }
+}
+
 // buildSelfNavItems 构造用户自己的导航项（用户端主菜单和管理员的"我的账户"子菜单共享这组声明）。
 // withDashboard=true 时包含仪表盘（用户端），false 时不含（管理员的个人区已经有独立仪表盘入口）。
 //
-// 条目顺序：密钥 → 用量 → 可用渠道 → 渠道状态 → 鹈鹕测智 → 订阅/支付 → 兑换/资料。
-// 可用渠道紧挨渠道状态之上，让用户"先看自己能用什么、再看对应状态"。
+// 原生功能按任务上下文插入：雷达与计费跟随渠道状态。
 function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   const items: NavItem[] = []
   if (withDashboard) {
@@ -745,16 +824,54 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   }
   items.push(
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
+    { path: '/chat', label: t('nav.onlineChat'), icon: ChatIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
+    {
+      path: '/apps',
+      label: t('nav.appCenter'),
+      icon: BatchImageIcon,
+      badge: {
+        label: t('nav.hotRecommendation'),
+        emoji: '🔥',
+        tone: 'hot'
+      }
+    },
+    { path: '/creative-canvas', label: '无限画布', icon: FolderIcon },
+    { path: '/video-tasks', label: '视频任务', icon: OrderIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
+    { path: '/billing', label: t('nav.billing'), icon: CreditCardIcon, hideInSimpleMode: true },
+    { path: '/tickets', label: t('nav.tickets'), icon: TicketIcon, hideInSimpleMode: true },
+    buildNativeFeatureNavItem('billing-rules'),
     { path: '/pelican-showcase', label: t('nav.pelicanShowcase'), icon: GalleryIcon, featureFlag: flagPelicanShowcase },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
-    { path: '/purchase', label: purchaseNavLabel.value, icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
+    {
+      path: '/purchase',
+      label: purchaseNavLabel.value,
+      icon: RechargeSubscriptionIcon,
+      hideInSimpleMode: true,
+      featureFlag: flagPayment,
+      badge: {
+        label: t('nav.limitedOffer'),
+        emoji: '🎁',
+        tone: 'deal'
+      }
+    },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
-    { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
+    {
+      path: '/affiliate',
+      label: t('nav.affiliate'),
+      icon: UsersIcon,
+      hideInSimpleMode: true,
+      featureFlag: flagAffiliate,
+      badge: {
+        label: t('nav.affiliateBadge'),
+        emoji: '💸',
+        tone: 'rebate'
+      }
+    },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
       path: `/custom/${item.id}`,
@@ -772,8 +889,30 @@ function finalizeNav(items: NavItem[]): NavItem[] {
   return authStore.isSimpleMode ? visible.filter(item => !item.hideInSimpleMode) : visible
 }
 
-// User navigation items (for regular users)
+// Regular users keep the original flat navigation order.
 const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
+
+// User-requested categories reorganize links only; existing feature gates stay authoritative.
+const customerNavSections = computed(() => {
+  const items = [...userNavItems.value,
+    { path: '/model-plaza?embedded=1', label: t('nav.modelPricing'), icon: CurrencyDollarIcon, featureFlag: makeSidebarFlag(FeatureFlags.modelPlaza) },
+    { ...buildNativeFeatureNavItem('docs'), label: t('nav.usageDocs') },
+    buildNativeFeatureNavItem('reset-radar'),
+  ].filter(item => !item.featureFlag || item.featureFlag() !== false)
+  const definitions = [
+    { id: 'overview', label: '', icon: DashboardIcon, paths: ['/dashboard'] },
+    { id: 'api', label: 'API', icon: KeyIcon, paths: ['/keys','/usage','/model-plaza?embedded=1','/monitor','/custom/docs'] },
+    { id: 'media', label: t('nav.mediaSection'), icon: FolderIcon, paths: ['/apps','/creative-canvas','/video-tasks'] },
+    { id: 'billing', label: t('nav.billing'), icon: CreditCardIcon, paths: ['/purchase','/orders','/redeem','/affiliate'] },
+    { id: 'other', label: t('nav.otherSection'), icon: UserIcon, paths: ['/profile','/tickets','/pelican-showcase', ...customMenuItemsForUser.value.map(item => `/custom/${item.id}`)] },
+  ]
+  return definitions.map(section => ({
+    id: section.id, label: section.label, icon: section.icon,
+    items: section.paths.flatMap(path => items.filter(item => item.path === path).map(item => ({...item, label: path === '/purchase' ? t('nav.recharge') : item.label}))),
+  }))
+})
+
+
 
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
@@ -784,7 +923,7 @@ const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems
 const customMenuItemsForUser = computed(() => {
   const items = appStore.cachedPublicSettings?.custom_menu_items ?? []
   return items
-    .filter((item) => item.visibility === 'user')
+    .filter((item) => item.visibility === 'user' && !isReservedCustomerFeatureId(item.id))
     .sort((a, b) => a.sort_order - b.sort_order)
 })
 
@@ -830,10 +969,10 @@ const adminNavItems = computed((): NavItem[] => {
       label: t('nav.securityAudit'),
       icon: ShieldIcon,
       expandOnly: true,
-      featureFlag: flagRiskControl,
       children: [
         { path: '/admin/risk-control', label: t('nav.contentModeration'), icon: ShieldIcon },
         { path: '/admin/prompt-audit', label: t('nav.promptAudit'), icon: ShieldIcon },
+        { path: '/admin/security-policy', label: t('nav.securityPolicy'), icon: ShieldIcon },
       ],
     },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
@@ -865,37 +1004,37 @@ const adminNavItems = computed((): NavItem[] => {
       ],
     },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
+    { path: '/admin/video-tasks', label: '视频任务', icon: OrderIcon },
+    { path: '/admin/global-pricing', label: t('nav.globalPricing'), icon: PriceTagIcon },
+    { path: '/admin/tiered-routing', label: t('nav.tieredRouting'), icon: SignalIcon },
+    { path: '/admin/spend-guard', label: t('nav.spendGuard'), icon: ShieldIcon },
+    { path: '/admin/tickets', label: t('nav.ticketsAdmin'), icon: TicketIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]
 
-  const visible = applyFeatureFlags(baseItems)
+  const visible = applyFeatureFlags(baseItems).filter(item => authStore.isSuperAdmin || item.path !== '/admin/plugins')
 
   // 简单模式下，在系统设置前插入 API密钥
   if (authStore.isSimpleMode) {
     const filtered = visible.filter(item => !item.hideInSimpleMode)
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
-    filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
+    if (authStore.isSuperAdmin) filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     for (const cm of customMenuItemsForAdmin.value) {
       filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
     }
     return filtered
   }
 
-  visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
+  if (authStore.isSuperAdmin) visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {
     visible.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
   }
   return visible
 })
 
+
 function toggleSidebar() {
   appStore.toggleSidebar()
-}
-
-function toggleTheme() {
-  isDark.value = !isDark.value
-  document.documentElement.classList.toggle('dark', isDark.value)
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
 }
 
 function closeMobile() {
@@ -923,12 +1062,13 @@ function handleMenuItemClick(itemPath: string) {
 }
 
 function isActive(path: string): boolean {
-  return route.path === path || route.path.startsWith(path + '/')
+  const pathname = path.split('?')[0]
+  return route.path === pathname || route.path.startsWith(pathname + '/')
 }
 
 function isGroupActive(item: NavItem): boolean {
   if (!item.children) return false
-  return item.children.some(child => route.path === child.path)
+  return item.children.some(child => isActive(child.path))
 }
 
 function isGroupExpanded(item: NavItem): boolean {
@@ -943,7 +1083,7 @@ function toggleGroup(item: NavItem) {
 
 /**
  * Click handler for collapsible parent items.
- * - When sidebar is collapsed: do nothing (children are not visible).
+ * - When sidebar is collapsed: do nothing (admin children are not visible).
  * - When `expandOnly` is true: only toggle expand state.
  * - Otherwise (default, e.g. /admin/orders): navigate to the parent path
  *   (router-link semantics) and ensure the group is expanded.
@@ -959,16 +1099,6 @@ function handleGroupClick(item: NavItem) {
     router.push(item.path)
   }
   groupExpandOverrides.value.set(item.path, true)
-}
-
-// Initialize theme
-const savedTheme = localStorage.getItem('theme')
-if (
-  savedTheme === 'dark' ||
-  (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
-) {
-  isDark.value = true
-  document.documentElement.classList.add('dark')
 }
 
 // Fetch admin settings (for feature-gated nav items like Ops).
@@ -1112,6 +1242,52 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+.sidebar-label-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.sidebar-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-promo-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.125rem;
+  min-height: 1.125rem;
+  padding: 0 0.25rem;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sidebar-promo-badge-hot {
+  color: var(--customer-copper, #c66a18);
+  background: var(--customer-copper-soft, rgba(198, 106, 24, 0.14));
+  box-shadow: 0 0 12px rgba(255, 173, 104, 0.18);
+}
+
+.sidebar-promo-badge-deal {
+  color: #d83a5b;
+  background: rgba(216, 58, 91, 0.16);
+  box-shadow: 0 0 12px rgba(255, 89, 123, 0.28);
+  font-size: 0.625rem;
+}
+
+.sidebar-promo-badge-rebate {
+  color: #087f5b;
+  background: rgba(8, 127, 91, 0.14);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.22);
+  font-size: 0.625rem;
 }
 
 .sidebar-label-collapsed {

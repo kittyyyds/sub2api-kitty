@@ -1,3 +1,5 @@
+import type { UserPricingInterval } from '@/api/channels'
+
 /**
  * formatScaled formats a per-token (or per-request) USD price scaled by `scale`.
  *
@@ -23,7 +25,35 @@ export function formatScaled(value: number | null, scale: number, minFractionDig
   return `$${s}`
 }
 
-import type { UserPricingInterval } from '@/api/channels'
+/** Display-only exchange rate used by the customer-facing model price catalog. */
+export const DISPLAY_USD_TO_CNY_RATE = 7
+
+/** Formats a value that is already denominated in CNY. */
+export function formatCnyAmount(
+  value: number | null,
+  scale = 1,
+  minFractionDigits = 2
+): string {
+  if (value == null) return '-'
+  const formatted = formatScaled(value, scale, minFractionDigits)
+  return `¥${formatted.slice(1)}`
+}
+
+/**
+ * Converts a USD source price to the catalog's RMB display value.
+ * Billing remains based on the backend USD price and configured multiplier.
+ */
+export function formatCnyScaled(
+  value: number | null,
+  scale: number,
+  minFractionDigits = 2
+): string {
+  return formatCnyAmount(
+    value == null ? null : value * DISPLAY_USD_TO_CNY_RATE,
+    scale,
+    minFractionDigits
+  )
+}
 
 type TokenPrices = Pick<UserPricingInterval, 'input_price' | 'output_price' | 'cache_write_price' | 'cache_write_1h_price' | 'cache_read_price'>
 

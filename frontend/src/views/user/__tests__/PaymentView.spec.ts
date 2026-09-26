@@ -3,7 +3,7 @@ import { flushPromises, shallowMount } from '@vue/test-utils'
 import PaymentView from '../PaymentView.vue'
 import { PAYMENT_RECOVERY_STORAGE_KEY } from '@/components/payment/paymentFlow'
 import { formatPaymentAmount } from '@/components/payment/currency'
-import AmountInput from '@/components/payment/AmountInput.vue'
+import RechargePackages from '@/components/payment/RechargePackages.vue'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import en from '@/i18n/locales/en'
 import zh from '@/i18n/locales/zh'
@@ -19,6 +19,7 @@ const routerPush = vi.hoisted(() => vi.fn())
 const routerResolve = vi.hoisted(() => vi.fn(() => ({ href: '/payment/stripe?mock=1' })))
 const createOrder = vi.hoisted(() => vi.fn())
 const refreshUser = vi.hoisted(() => vi.fn())
+const authUser = vi.hoisted(() => ({ username: 'demo-user', balance: 0 }))
 const fetchActiveSubscriptions = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const showError = vi.hoisted(() => vi.fn())
 const showInfo = vi.hoisted(() => vi.fn())
@@ -57,10 +58,7 @@ vi.mock('vue-i18n', async () => {
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
-    user: {
-      username: 'demo-user',
-      balance: 0,
-    },
+    user: authUser,
     refreshUser,
   }),
 }))
@@ -130,6 +128,12 @@ function checkoutInfoFixture(overrides: Partial<CheckoutInfoResponse> = {}) {
     help_text: '',
     help_image_url: '',
     stripe_publishable_key: '',
+    alipay_force_qrcode: false,
+    recharge_bonus_rules: [],
+    recharge_bonus_summary: {
+      available_amount: 0,
+      active_grants: 0,
+    },
   }
 
   return {
@@ -399,7 +403,7 @@ describe('PaymentView recharge rate preview', () => {
       },
     })
     await flushPromises()
-    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 10)
+    wrapper.getComponent(RechargePackages).vm.$emit('select', 10)
     await flushPromises()
 
     expect(translate).toHaveBeenCalledWith('payment.rechargeRatePreview', {
@@ -408,6 +412,110 @@ describe('PaymentView recharge rate preview', () => {
     })
     expect(en.payment.rechargeRatePreview).toBe('Current rate: 1 {currency} = {usd} USD')
     expect(zh.payment.rechargeRatePreview).toBe('当前倍率：1 {currency} = {usd} USD')
+  })
+})
+
+describe('PaymentView checkout credit breakdown', () => {
+  beforeEach(() => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    window.localStorage.clear()
+    createOrder.mockReset()
+    authUser.balance = 5
+    refreshUser.mockReset().mockResolvedValue(authUser)
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture({
+      balance_recharge_multiplier: 0.5,
+      recharge_fee_rate: 5,
+      recharge_bonus_rules: [{ id: 1, recharge_amount: 30, bonus_amount: 1, validity_days: 7 }],
+      recharge_bonus_summary: { available_amount: 2, active_grants: 1 },
+    }))
+  })
+
+  async function mountRecharge() {
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true } },
+    })
+    await flushPromises()
+    wrapper.getComponent(RechargePackages).vm.$emit('select', 30)
+    await flushPromises()
+    return wrapper
+  }
+
+  it('shows base credit, new bonus and projected balance without duplicating old bonuses or fees', async () => {
+    const wrapper = await mountRecharge()
+    expect(wrapper.get('[data-testid="base-credit"]').text()).toBe('$15.00')
+    expect(wrapper.get('[data-testid="new-bonus"]').text()).toBe('+$1.00')
+    expect(wrapper.get('[data-testid="total-credit"]').text()).toBe('$16.00')
+    expect(wrapper.get('[data-testid="current-balance"]').text()).toBe('$5.00')
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('$21.00')
+    expect(wrapper.get('.checkout-summary__total').text()).toContain(formatPaymentAmount(31.5, 'CNY'))
+    expect(wrapper.getComponent(RechargePackages).props('bonusRules')).toHaveLength(1)
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('rejects non-package amounts and shows the chosen package without a custom input', async () => {
+    const wrapper = await mountRecharge()
+    wrapper.getComponent(RechargePackages).vm.$emit('select', 31)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="total-credit"]').text()).toBe('$16.00')
+    expect(wrapper.find('#checkout-custom-amount').exists()).toBe(false)
+    expect(routerPush).toHaveBeenLastCalledWith({ path: '/purchase', query: { checkout: '1', amount: '30' } })
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('labels a zero-day bonus as permanent without changing the credited amount', async () => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
+      recharge_bonus_rules: [{ id: 1, recharge_amount: 30, bonus_amount: 1, validity_days: 0 }],
+    }))
+    const wrapper = await mountRecharge()
+    expect(wrapper.text()).toContain('payment.permanentTierBonus')
+    expect(wrapper.text()).toContain('payment.neverExpires')
+    expect(wrapper.text()).not.toContain('payment.bonusValidity')
+    expect(wrapper.get('[data-testid="total-credit"]').text()).toBe('$31.00')
+    wrapper.unmount()
+  })
+
+  it('refreshes account balance after checkout has expired old grants', async () => {
+    refreshUser.mockImplementation(async () => { authUser.balance = 3; return authUser })
+    const wrapper = await mountRecharge()
+    expect(refreshUser).toHaveBeenCalledOnce()
+    expect(getCheckoutInfo.mock.invocationCallOrder[0]).toBeLessThan(refreshUser.mock.invocationCallOrder[0])
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('$19.00')
+    wrapper.unmount()
+  })
+
+  it('hides stale balance estimates when balance refresh fails without blocking checkout', async () => {
+    refreshUser.mockRejectedValue(new Error('unavailable'))
+    const wrapper = await mountRecharge()
+    expect(wrapper.get('[data-testid="current-balance"]').text()).toBe('-')
+    expect(wrapper.get('[data-testid="projected-balance"]').text()).toBe('-')
+    expect(wrapper.text()).toContain('payment.balanceUnavailable')
+    expect(wrapper.get('.checkout-submit').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('selects a fixed package before opening payment methods', async () => {
+    const wrapper = await mountRecharge()
+    expect(wrapper.getComponent(RechargePackages).props('amounts')).toEqual([5, 10, 30, 50, 100, 500, 1000, 5000])
+    wrapper.getComponent(RechargePackages).vm.$emit('select', 50)
+    await flushPromises()
+    expect(wrapper.get('#checkout-amount-title').text()).toBe(formatPaymentAmount(50, 'CNY'))
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.getComponent(RechargePackages).vm.$emit('select', 10)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="base-credit"]').text()).toBe('$5.00')
+    expect(wrapper.get('.checkout-submit').attributes('disabled')).toBeUndefined()
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('keeps the eight fixed packages when there are no active campaigns', async () => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture())
+    const wrapper = await mountRecharge()
+    expect(wrapper.getComponent(RechargePackages).props('amounts')).toEqual([5, 10, 30, 50, 100, 500, 1000, 5000])
+    wrapper.unmount()
   })
 })
 

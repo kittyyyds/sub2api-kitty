@@ -2127,7 +2127,7 @@ func TestMatchingPlatforms(t *testing.T) {
 		{"anthropic returns itself", PlatformAnthropic, []string{PlatformAnthropic}},
 		{"gemini returns itself", PlatformGemini, []string{PlatformGemini}},
 		{"openai returns itself", PlatformOpenAI, []string{PlatformOpenAI}},
-		{"composite returns concrete platforms", PlatformComposite, []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo}},
+		{"composite returns concrete platforms", PlatformComposite, []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformVideo, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo}},
 	}
 
 	for _, tt := range tests {
@@ -2477,13 +2477,28 @@ func TestValidatePricingBillingMode(t *testing.T) {
 			name:    "per_request no price no intervals - invalid",
 			pricing: []ChannelModelPricing{{BillingMode: BillingModePerRequest}},
 			wantErr: true,
-			errMsg:  "per-request price or intervals required",
+			errMsg:  "unit price or intervals required",
 		},
 		{
 			name:    "image no price no intervals - invalid",
 			pricing: []ChannelModelPricing{{BillingMode: BillingModeImage}},
 			wantErr: true,
-			errMsg:  "per-request price or intervals required",
+			errMsg:  "unit price or intervals required",
+		},
+		{
+			name: "video with intervals - valid",
+			pricing: []ChannelModelPricing{{
+				BillingMode: BillingModeVideo,
+				Intervals: []PricingInterval{
+					{TierLabel: VideoBillingResolution720P, PerRequestPrice: testPtrFloat64(0.14)},
+				},
+			}},
+		},
+		{
+			name:    "video no price no intervals - invalid",
+			pricing: []ChannelModelPricing{{BillingMode: BillingModeVideo}},
+			wantErr: true,
+			errMsg:  "unit price or intervals required",
 		},
 		{
 			name:    "empty list - valid",

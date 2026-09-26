@@ -1022,11 +1022,15 @@ func TestCalculateGrokImagineImageCostUsesDefaultRateCard(t *testing.T) {
 	standard2K := svc.CalculateImageCost("grok-imagine-image", "2K", 1, nil, 1.0)
 	quality1K := svc.CalculateImageCost("grok-imagine-image-quality", "1K", 1, nil, 1.0)
 	quality2K := svc.CalculateImageCost("grok-imagine-image-quality", "2K", 1, nil, 1.0)
+	qualityAlias2K := svc.CalculateImageCost("grok-imagine-image-pro", "2K", 1, nil, 1.0)
+	legacyEdit2K := svc.CalculateImageCost("grok-imagine-edit", "2K", 1, nil, 1.0)
 
 	require.InDelta(t, 0.02, standard1K.TotalCost, 1e-10)
 	require.InDelta(t, 0.02, standard2K.TotalCost, 1e-10)
 	require.InDelta(t, 0.05, quality1K.TotalCost, 1e-10)
 	require.InDelta(t, 0.07, quality2K.TotalCost, 1e-10)
+	require.InDelta(t, 0.07, qualityAlias2K.TotalCost, 1e-10)
+	require.InDelta(t, 0.07, legacyEdit2K.TotalCost, 1e-10)
 }
 
 func TestCalculateGrokImagineVideoCostUsesDefaultRateCard(t *testing.T) {
@@ -1038,12 +1042,63 @@ func TestCalculateGrokImagineVideoCostUsesDefaultRateCard(t *testing.T) {
 	video15_480P := svc.CalculateVideoCost("grok-imagine-video-1.5", "480p", 1, 1, nil, 1.0)
 	video15_720P := svc.CalculateVideoCost("grok-imagine-video-1.5", "720p", 1, 1, nil, 1.0)
 	video15_1080P := svc.CalculateVideoCost("grok-imagine-video-1.5", "1080p", 1, 1, nil, 1.0)
+	video15Alias720P := svc.CalculateVideoCost("grok-imagine-video-1.5-preview", "720p", 1, 1, nil, 1.0)
 
 	require.InDelta(t, 0.05, standard480P.TotalCost, 1e-10)
 	require.InDelta(t, 0.07, standard720P.TotalCost, 1e-10)
 	require.InDelta(t, 0.08, video15_480P.TotalCost, 1e-10)
 	require.InDelta(t, 0.14, video15_720P.TotalCost, 1e-10)
 	require.InDelta(t, 0.25, video15_1080P.TotalCost, 1e-10)
+	require.InDelta(t, 0.14, video15Alias720P.TotalCost, 1e-10)
+}
+
+func TestCalculateUpstreamGrokMediaRatesAtOnePointFiveMultiplier(t *testing.T) {
+	svc := newTestBillingService()
+	standardImage1K := 0.010
+	standardImage2K := 0.010
+	qualityImage1K := 0.005
+	qualityImage2K := 0.007
+	legacyVideo480P := 0.050
+	legacyVideo720P := 0.070
+	legacyVideo1080P := 0.100
+	video15480P := 0.080
+	video15720P := 0.140
+	video151080P := 0.250
+	standardImagePrices := &ImagePriceConfig{Price1K: &standardImage1K, Price2K: &standardImage2K}
+	qualityImagePrices := &ImagePriceConfig{Price1K: &qualityImage1K, Price2K: &qualityImage2K}
+	legacyVideoPrices := &VideoPriceConfig{
+		Price480P:  &legacyVideo480P,
+		Price720P:  &legacyVideo720P,
+		Price1080P: &legacyVideo1080P,
+	}
+	video15Prices := &VideoPriceConfig{
+		Price480P:  &video15480P,
+		Price720P:  &video15720P,
+		Price1080P: &video151080P,
+	}
+
+	tests := []struct {
+		name string
+		cost *CostBreakdown
+		want float64
+	}{
+		{name: "standard image 1K", cost: svc.CalculateImageCost("grok-imagine-image", "1K", 1, standardImagePrices, 1.5), want: 0.015},
+		{name: "standard image 2K", cost: svc.CalculateImageCost("grok-imagine-image", "2K", 1, standardImagePrices, 1.5), want: 0.015},
+		{name: "quality image 1K", cost: svc.CalculateImageCost("grok-imagine-image-quality", "1K", 1, qualityImagePrices, 1.5), want: 0.0075},
+		{name: "quality image 2K", cost: svc.CalculateImageCost("grok-imagine-image-quality", "2K", 1, qualityImagePrices, 1.5), want: 0.0105},
+		{name: "legacy video 480p per second", cost: svc.CalculateVideoCost("grok-imagine-video", "480p", 1, 1, legacyVideoPrices, 1.5), want: 0.075},
+		{name: "legacy video 720p per second", cost: svc.CalculateVideoCost("grok-imagine-video", "720p", 1, 1, legacyVideoPrices, 1.5), want: 0.105},
+		{name: "legacy video 1080p per second", cost: svc.CalculateVideoCost("grok-imagine-video", "1080p", 1, 1, legacyVideoPrices, 1.5), want: 0.150},
+		{name: "video 1.5 480p per second", cost: svc.CalculateVideoCost("grok-imagine-video-1.5", "480p", 1, 1, video15Prices, 1.5), want: 0.120},
+		{name: "video 1.5 720p per second", cost: svc.CalculateVideoCost("grok-imagine-video-1.5", "720p", 1, 1, video15Prices, 1.5), want: 0.210},
+		{name: "video 1.5 1080p per second", cost: svc.CalculateVideoCost("grok-imagine-video-1.5", "1080p", 1, 1, video15Prices, 1.5), want: 0.375},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.InDelta(t, tt.want, tt.cost.ActualCost, 1e-10)
+		})
+	}
 }
 
 func TestIsModelSupported(t *testing.T) {

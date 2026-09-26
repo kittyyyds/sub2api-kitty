@@ -418,6 +418,8 @@ const defaultBaseUrl = typeof window !== 'undefined' ? window.location.origin : 
 const providerWebhookHintMap: Record<string, string> = {
   stripe: 'admin.settings.payment.stripeWebhookHint',
   airwallex: 'admin.settings.payment.airwallexWebhookHint',
+  dujiaopay: 'admin.settings.payment.dujiaoPayWebhookHint',
+  paypal: 'admin.settings.payment.paypalWebhookHint',
 }
 
 const providerWebhookUrl = computed(() => {
@@ -534,6 +536,22 @@ const paymentGuide = computed<PaymentGuide | null>(() => {
     return {
       summary: t('admin.settings.payment.airwallexGuideSummary'),
       note: t('admin.settings.payment.airwallexGuideNote'),
+      items: [],
+    }
+  }
+
+  if (form.provider_key === 'dujiaopay') {
+    return {
+      summary: t('admin.settings.payment.dujiaoPayGuideSummary'),
+      note: t('admin.settings.payment.dujiaoPayGuideNote'),
+      items: [],
+    }
+  }
+
+  if (form.provider_key === 'paypal') {
+    return {
+      summary: t('admin.settings.payment.paypalGuideSummary'),
+      note: t('admin.settings.payment.paypalGuideNote'),
       items: [],
     }
   }

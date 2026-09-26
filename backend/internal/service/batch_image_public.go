@@ -91,6 +91,7 @@ type BatchImagePublicService struct {
 	Pricing           BatchImagePricingResolver
 	BillingRepo       UsageBillingRepository
 	AuthCache         APIKeyAuthCacheInvalidator
+	SettingService    *SettingService
 	Config            *config.Config
 }
 
@@ -182,7 +183,7 @@ type BatchImageItemsQuery struct {
 	Cursor string
 }
 
-func NewBatchImagePublicService(repo BatchImageRepository, accountRepo AccountRepository, groupRepo GroupRepository, userGroupRateRepo UserGroupRateRepository, queue BatchImageQueue, pricing *BatchImageModelPricingResolver, billingRepo UsageBillingRepository, authCache APIKeyAuthCacheInvalidator, cfg *config.Config) *BatchImagePublicService {
+func NewBatchImagePublicService(repo BatchImageRepository, accountRepo AccountRepository, groupRepo GroupRepository, userGroupRateRepo UserGroupRateRepository, queue BatchImageQueue, pricing *BatchImageModelPricingResolver, billingRepo UsageBillingRepository, authCache APIKeyAuthCacheInvalidator, settingService *SettingService, cfg *config.Config) *BatchImagePublicService {
 	return &BatchImagePublicService{
 		Repo:              repo,
 		AccountRepo:       accountRepo,
@@ -193,6 +194,7 @@ func NewBatchImagePublicService(repo BatchImageRepository, accountRepo AccountRe
 		Pricing:           pricing,
 		BillingRepo:       billingRepo,
 		AuthCache:         authCache,
+		SettingService:    settingService,
 		Config:            cfg,
 	}
 }
@@ -972,7 +974,11 @@ func (s *BatchImagePublicService) listCandidateAccounts(ctx context.Context, gro
 		return nil, ErrBatchImageNoAccountAvailable
 	}
 	if groupID != nil && *groupID > 0 {
-		return s.AccountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
+		accounts, err := s.AccountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
+		if s.SettingService != nil {
+			ApplyAccountGroupPriorities(accounts, groupID, s.SettingService.IsAccountGroupPriorityEnabled(ctx))
+		}
+		return accounts, err
 	}
 	return s.AccountRepo.ListSchedulableByPlatform(ctx, platform)
 }

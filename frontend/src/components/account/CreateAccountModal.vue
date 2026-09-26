@@ -67,6 +67,9 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <AccountTierRoutingFields v-model:enabled="tierRoutingEnabled" v-model:pool="tierRoutingPool" />
+      <OpenAIRequestTimezoneField v-if="form.platform === 'openai'" v-model="requestTimezone" />
+
       <!-- Platform Selection - Segmented Control Style -->
       <div>
         <label class="input-label">{{ t('admin.accounts.platform') }}</label>
@@ -146,6 +149,11 @@
           >
             <Icon name="cloud" size="sm" />
             Antigravity
+          </button>
+          <button type="button" @click="form.platform = 'video'" data-testid="account-platform-video"
+            class="flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all"
+            :class="form.platform === 'video' ? 'bg-white text-cyan-700 shadow-sm dark:bg-dark-600 dark:text-cyan-300' : 'text-gray-600 dark:text-gray-400'">
+            <PlatformIcon platform="video" size="sm" />{{ t('videoModule.title') }}
           </button>
           <button
             type="button"
@@ -1359,6 +1367,12 @@
 
       <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
       <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
+        <GrokMediaProviderSelect
+          v-if="form.platform === 'grok' || form.platform === 'video'"
+          :video-platform="form.platform === 'video'"
+          v-model="grokMediaProvider"
+          @use-suanli-url="apiKeyBaseUrl = 'https://suanliai.top'"
+        />
         <div v-if="!isMultiProtocolPlatform || apiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
@@ -3306,6 +3320,7 @@
         </div>
       </div>
 
+
       <!-- Codex 指纹收敛模式（仅 OpenAI OAuth） -->
       <div
         v-if="form.platform === 'openai' && accountCategory === 'oauth-based'"
@@ -3894,6 +3909,10 @@
 </template>
 
 <script setup lang="ts">
+import OpenAIRequestTimezoneField from './OpenAIRequestTimezoneField.vue'
+import { readOpenAIRequestTimezone, withOpenAIRequestTimezone } from '@/utils/openAIRequestTimezone'
+import AccountTierRoutingFields from './AccountTierRoutingFields.vue'
+import { withAccountTierRouting, type AccountTierPool } from '@/utils/accountTierRouting'
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -3944,6 +3963,8 @@ import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
+import GrokMediaProviderSelect from '@/components/account/GrokMediaProviderSelect.vue'
+import { applyGrokMediaProvider, type GrokMediaProvider } from '@/components/account/grokMediaProvider'
 import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import OpenCodeGoProtocolRulesEditor from '@/components/account/OpenCodeGoProtocolRulesEditor.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
@@ -4027,14 +4048,14 @@ const withUpstreamRequestIdHeader = <T extends Record<string, unknown> | undefin
 const baseUrlHint = computed(() => {
   if (form.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
-  if (form.platform === 'grok') return ''
+  if (form.platform === 'grok' || form.platform === 'video') return ''
   return t('admin.accounts.baseUrlHint')
 })
 
 const apiKeyHint = computed(() => {
   if (form.platform === 'openai') return t('admin.accounts.openai.apiKeyHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.apiKeyHint')
-  if (form.platform === 'grok') return ''
+  if (form.platform === 'grok' || form.platform === 'video') return ''
   return t('admin.accounts.apiKeyHint')
 })
 
@@ -4049,6 +4070,8 @@ const apiKeyBaseUrlPlaceholder = computed(() => {
       return 'https://api.openai.com'
     case 'gemini':
       return 'https://generativelanguage.googleapis.com'
+    case 'video':
+      return 'https://video.example.com'
     case 'grok':
       return 'https://api.x.ai/v1'
     default:
@@ -4062,6 +4085,8 @@ const apiKeyValuePlaceholder = computed(() => {
       return 'sk-proj-...'
     case 'gemini':
       return 'AIza...'
+    case 'video':
+      return 'API Key'
     case 'grok':
       return 'xai-...'
     case 'kimi':
@@ -4159,6 +4184,7 @@ const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_acco
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+const grokMediaProvider = ref<GrokMediaProvider>('')
 const upstreamBillingAutoProbeEnabled = ref(true)
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）账号类型、API 协议与端点 ──
@@ -4369,6 +4395,10 @@ const upstreamModelsPreviewed = ref(false)
 const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
+const requestTimezone = ref(readOpenAIRequestTimezone())
+const tierRoutingEnabled = ref(false)
+const tierRoutingPool = ref<AccountTierPool>('standard')
+
 const poolModeEnabled = ref(false)
 const poolModeRetryCount = ref(DEFAULT_POOL_MODE_RETRY_COUNT)
 const poolModeRetryStatusCodesInput = ref('')
@@ -4742,6 +4772,7 @@ const form = reactive({
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
+  if (form.platform === 'video') return false
   // Antigravity upstream 类型不需要 OAuth 流程
   if (form.platform === 'antigravity' && antigravityAccountType.value === 'upstream') {
     return false
@@ -4816,6 +4847,7 @@ watch(
 watch(
   [accountCategory, addMethod, antigravityAccountType, () => form.platform],
   ([category, method, agType]) => {
+    if (form.platform === 'video') { form.type = 'apikey'; return }
     // Antigravity upstream 类型（实际创建为 apikey）
     if (form.platform === 'antigravity' && agType === 'upstream') {
       form.type = 'apikey'
@@ -4841,6 +4873,7 @@ watch(
 watch(
   () => form.platform,
   (newPlatform) => {
+    grokMediaProvider.value = ''
     // Reset base URL based on platform
     if (isCNProviderPlatform(newPlatform) || newPlatform === 'opencode_go') {
       const mode = newPlatform === 'opencode_go' ? openCodeAccountMode.value : accountMode.value
@@ -4874,6 +4907,13 @@ watch(
       antigravityWhitelistModels.value = []
       antigravityModelMappings.value = []
       antigravityModelRestrictionMode.value = 'mapping'
+    }
+    if (newPlatform === 'video') {
+      accountCategory.value = 'apikey'
+      form.type = 'apikey'
+      apiKeyBaseUrl.value = ''
+      form.concurrency = 1
+      form.load_factor = null
     }
     if (newPlatform === 'grok') {
       accountCategory.value = 'oauth-based'
@@ -5247,10 +5287,15 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
   }
 }
 
+const createAccountWithTierRouting = (payload: CreateAccountRequest) => adminAPI.accounts.create({
+  ...payload,
+  extra: withAccountTierRouting(payload.extra, tierRoutingEnabled.value, tierRoutingPool.value)
+})
+
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
   submitting.value = true
   try {
-    const account = await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    const account = await createAccountWithTierRouting(withAntigravityConfirmFlag(payload))
     const modelMapping = payload.credentials.model_mapping
     const hasConcreteMappedTarget = payload.type === 'apikey' &&
       typeof modelMapping === 'object' &&
@@ -5325,6 +5370,7 @@ const resetForm = () => {
   adaptiveBaseUrls.value = { chat_completions: '', anthropic: '', responses: '' }
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
+  grokMediaProvider.value = ''
   upstreamRequestIdHeader.value = ''
   upstreamBillingAutoProbeEnabled.value = true
   editQuotaLimit.value = null
@@ -5346,6 +5392,9 @@ const resetForm = () => {
   fetchAntigravityDefaultMappings().then(mappings => {
     antigravityModelMappings.value = [...mappings]
   })
+  requestTimezone.value = readOpenAIRequestTimezone()
+  tierRoutingEnabled.value = false
+  tierRoutingPool.value = 'standard'
   poolModeEnabled.value = false
   poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
   poolModeRetryStatusCodesInput.value = ''
@@ -5431,7 +5480,7 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     return base
   }
 
-  const extra: Record<string, unknown> = { ...(base || {}) }
+  const extra: Record<string, unknown> = withOpenAIRequestTimezone(base, requestTimezone.value)
   if (accountCategory.value === 'oauth-based') {
     extra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
     extra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(openaiOAuthResponsesWebSocketV2Mode.value)
@@ -5780,6 +5829,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (form.platform === 'video' && !apiKeyBaseUrl.value.trim()) {
+    appStore.showError(t('videoModule.baseUrlRequired'))
+    return
+  }
+
   // Determine default base URL based on platform
   const defaultBaseUrl =
     form.platform === 'openai'
@@ -5795,6 +5849,7 @@ const handleSubmit = async () => {
     base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
     api_key: apiKeyValue.value.trim()
   }
+  if (form.platform === 'grok' || form.platform === 'video') applyGrokMediaProvider(credentials, grokMediaProvider.value)
   if (form.platform === 'gemini') {
     credentials.tier_id = geminiTierAIStudio.value
   }
@@ -6070,7 +6125,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           return
         }
 
-        await adminAPI.accounts.create({
+        await createAccountWithTierRouting({
           name: accountName,
           notes: form.notes,
           platform: 'grok',
@@ -6141,6 +6196,7 @@ const handleGrokImportSSO = async (ssoInput: string) => {
   try {
     const result = await adminAPI.grok.createFromSSO({
       sso_tokens: ssoTokens,
+      extra: withAccountTierRouting(undefined, tierRoutingEnabled.value, tierRoutingPool.value),
       name: form.name || undefined,
       notes: form.notes || undefined,
       proxy_id: form.proxy_id,
@@ -6247,7 +6303,7 @@ const handleGrokAuthorizePassword = async (emailPasswordInput: string) => {
           return
         }
 
-        await adminAPI.accounts.create({
+        await createAccountWithTierRouting({
           name: accountName,
           notes: form.notes,
           platform: 'grok',
@@ -6346,7 +6402,7 @@ const handleOpenAIExchange = async (authCode: string) => {
     }
 
     if (shouldCreateOpenAI) {
-      await adminAPI.accounts.create({
+      await createAccountWithTierRouting({
         name: form.name,
         notes: form.notes,
         platform: 'openai',
@@ -6453,7 +6509,7 @@ const handleOpenAIImportCodexSession = async (content: string) => {
   oauthClient.error.value = ''
 
   try {
-    const extra = buildOpenAICodexImportExtra()
+    const extra = withAccountTierRouting(buildOpenAICodexImportExtra(), tierRoutingEnabled.value, tierRoutingPool.value)
     const result = await adminAPI.accounts.importCodexSession({
       content: trimmed,
       name: form.name,
@@ -6531,7 +6587,7 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
   oauthClient.error.value = ''
 
   try {
-    const extra = buildOpenAICodexImportExtra()
+    const extra = withAccountTierRouting(buildOpenAICodexImportExtra(), tierRoutingEnabled.value, tierRoutingPool.value)
     await adminAPI.accounts.createOpenAICodexPAT({
       access_token: trimmed,
       name: form.name,
@@ -6627,7 +6683,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
         const accountName = refreshTokens.length > 1 ? `${baseName} #${i + 1}` : baseName
 
         if (shouldCreateOpenAI) {
-          await adminAPI.accounts.create({
+          await createAccountWithTierRouting({
             name: accountName,
             notes: form.notes,
             platform: 'openai',
@@ -6742,7 +6798,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
-        await adminAPI.accounts.create(createPayload)
+        await createAccountWithTierRouting(createPayload)
         successCount++
       } catch (error: any) {
         failedCount++
@@ -7107,7 +7163,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           credentials.temp_unschedulable_rules = tempUnschedPayload
         }
 
-        await adminAPI.accounts.create({
+        await createAccountWithTierRouting({
           name: accountName,
           notes: form.notes,
           platform: form.platform,

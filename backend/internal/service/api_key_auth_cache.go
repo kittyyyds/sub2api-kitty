@@ -60,6 +60,9 @@ type APIKeyAuthUserSnapshot struct {
 
 // APIKeyAuthGroupSnapshot 分组快照
 type APIKeyAuthGroupSnapshot struct {
+	SecurityPolicyEnabled           bool                          `json:"security_policy_enabled"`
+	SecurityPolicyMode              string                        `json:"security_policy_mode"`
+	SecurityPolicyEmailEnabled      bool                          `json:"security_policy_email_enabled"`
 	ID                              int64                         `json:"id"`
 	Name                            string                        `json:"name"`
 	Platform                        string                        `json:"platform"`
@@ -77,6 +80,7 @@ type APIKeyAuthGroupSnapshot struct {
 	ImagePrice1K                    *float64                      `json:"image_price_1k,omitempty"`
 	ImagePrice2K                    *float64                      `json:"image_price_2k,omitempty"`
 	ImagePrice4K                    *float64                      `json:"image_price_4k,omitempty"`
+	ImageModelPrices                map[string]map[string]float64 `json:"image_model_prices,omitempty"`
 	VideoRateIndependent            bool                          `json:"video_rate_independent"`
 	VideoRateMultiplier             float64                       `json:"video_rate_multiplier"`
 	VideoPrice480P                  *float64                      `json:"video_price_480p,omitempty"`

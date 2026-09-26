@@ -606,6 +606,21 @@ func (s *PaymentService) handleGwFail(ctx context.Context, p *RefundPlan, gErr e
 }
 
 func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*RefundResult, error) {
+	bonusRevoked := 0.0
+	if s.rechargeBonusRepo != nil && p.Order != nil && p.Order.OrderType == payment.OrderTypeBalance {
+		var err error
+		bonusRevoked, err = s.rechargeBonusRepo.RevokeForRefund(
+			ctx, p.OrderID, p.Order.UserID, p.RefundAmount, p.Order.Amount, time.Now().UTC(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("revoke recharge bonus for refund: %w", err)
+		}
+		if bonusRevoked > 0 && s.billingCacheService != nil {
+			if err := s.billingCacheService.InvalidateUserBalance(ctx, p.Order.UserID); err != nil {
+				slog.Warn("invalidate balance cache after refund bonus revocation failed", "orderID", p.OrderID, "userID", p.Order.UserID, "error", err)
+			}
+		}
+	}
 	fs := OrderStatusRefunded
 	if p.RefundAmount < p.Order.Amount {
 		fs = OrderStatusPartiallyRefunded
@@ -615,7 +630,7 @@ func (s *PaymentService) markRefundOk(ctx context.Context, p *RefundPlan) (*Refu
 	if err != nil {
 		return nil, fmt.Errorf("mark refund: %w", err)
 	}
-	s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "force": p.Force})
+	s.writeAuditLog(ctx, p.OrderID, "REFUND_SUCCESS", "admin", map[string]any{"refundAmount": p.RefundAmount, "reason": p.Reason, "balanceDeducted": p.BalanceToDeduct, "bonusRevoked": bonusRevoked, "force": p.Force})
 	return &RefundResult{Success: true, BalanceDeducted: p.BalanceToDeduct, SubDaysDeducted: p.SubDaysToDeduct}, nil
 }
 

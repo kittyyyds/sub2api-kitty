@@ -24,6 +24,44 @@ type userGroupRateRepoHotpathStub struct {
 	calls atomic.Int64
 }
 
+func TestGetAvailableModels_HidesGrokMediaCompatibilityAliases(t *testing.T) {
+	groupID := int64(91)
+	repo := &modelsListAccountRepoStub{
+		byGroup: map[int64][]Account{
+			groupID: {
+				{ID: 1, Platform: PlatformGrok},
+				{
+					ID:       2,
+					Platform: PlatformGrok,
+					Credentials: map[string]any{
+						"model_mapping": map[string]any{
+							"customer-video":    "grok-imagine-video-1.5",
+							"grok-imagine-edit": "vendor-image-edit",
+						},
+					},
+				},
+			},
+		},
+	}
+	svc := &GatewayService{accountRepo: repo}
+
+	models := svc.GetAvailableModels(context.Background(), &groupID, PlatformGrok)
+
+	require.Contains(t, models, "customer-video")
+	require.Contains(t, models, "grok-imagine-image")
+	require.Contains(t, models, "grok-imagine-image-quality")
+	require.Contains(t, models, "grok-imagine-video")
+	require.Contains(t, models, "grok-imagine-video-1.5")
+	for _, alias := range []string{
+		"grok-imagine",
+		"grok-imagine-edit",
+		"grok-imagine-image-pro",
+		"grok-imagine-video-1.5-preview",
+	} {
+		require.NotContains(t, models, alias)
+	}
+}
+
 func (s *userGroupRateRepoHotpathStub) GetByUserAndGroup(ctx context.Context, userID, groupID int64) (*float64, error) {
 	s.calls.Add(1)
 	if s.wait != nil {

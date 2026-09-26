@@ -39,6 +39,8 @@ describe('getVisibleMethods', () => {
       wxpay: methodLimit({ single_max: 100 }),
       stripe: methodLimit({ fee_rate: 3 }),
       airwallex: methodLimit({ single_min: 10 }),
+      dujiaopay: methodLimit({ single_min: 5 }),
+      paypal: methodLimit({ single_min: 3 }),
     })
 
     expect(visible).toEqual({
@@ -46,6 +48,8 @@ describe('getVisibleMethods', () => {
       wxpay: methodLimit({ single_max: 100 }),
       stripe: methodLimit({ fee_rate: 3 }),
       airwallex: methodLimit({ single_min: 10 }),
+      dujiaopay: methodLimit({ single_min: 5 }),
+      paypal: methodLimit({ single_min: 3 }),
     })
   })
 
@@ -158,6 +162,41 @@ describe('decidePaymentLaunch', () => {
     expect(decision.recovery.paymentMode).toBe('popup')
     expect(decision.recovery.outTradeNo).toBe('sub2_abc')
     expect(decision.recovery.resumeToken).toBe('resume-2')
+  })
+
+  it('opens DujiaoPay hosted checkout as a redirect flow', () => {
+    const decision = decidePaymentLaunch(createOrderResult({
+      pay_url: 'https://www.dujiaopay.com/checkout/ct_once',
+      currency: 'CNY',
+      out_trade_no: 'sub2_djp_1',
+    }), {
+      visibleMethod: 'dujiaopay',
+      orderType: 'balance',
+      isMobile: false,
+    })
+
+    expect(decision.kind).toBe('redirect_waiting')
+    expect(decision.paymentState.paymentType).toBe('dujiaopay')
+    expect(decision.paymentState.payUrl).toBe('https://www.dujiaopay.com/checkout/ct_once')
+    expect(decision.paymentState.currency).toBe('CNY')
+  })
+
+  it('opens PayPal hosted checkout as a recoverable redirect flow', () => {
+    const decision = decidePaymentLaunch(createOrderResult({
+      pay_url: 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-1',
+      currency: 'USD',
+      resume_token: 'resume-paypal-1',
+      out_trade_no: 'sub2_paypal_1',
+    }), {
+      visibleMethod: 'paypal',
+      orderType: 'balance',
+      isMobile: false,
+    })
+
+    expect(decision.kind).toBe('redirect_waiting')
+    expect(decision.paymentState.paymentType).toBe('paypal')
+    expect(decision.paymentState.currency).toBe('USD')
+    expect(decision.recovery.resumeToken).toBe('resume-paypal-1')
   })
 
   it('prefers redirect on mobile when both pay_url and qr_code are present', () => {

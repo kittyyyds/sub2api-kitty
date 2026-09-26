@@ -133,6 +133,13 @@
     @apply dark:hover:bg-[#62d9ad];
   }
 
+  .btn-paypal {
+    @apply bg-[#0070BA] text-white shadow-md shadow-[#0070BA]/25;
+    @apply hover:bg-[#005EA6] hover:shadow-lg hover:shadow-[#0070BA]/30;
+    @apply active:bg-[#004C8C] dark:bg-[#169BD7] dark:shadow-[#169BD7]/20;
+    @apply dark:hover:bg-[#0070BA];
+  }
+
   .btn-alipay {
     @apply bg-[#00AEEF] text-white shadow-md shadow-[#00AEEF]/25;
     @apply hover:bg-[#009dd6] hover:shadow-lg hover:shadow-[#00AEEF]/30;

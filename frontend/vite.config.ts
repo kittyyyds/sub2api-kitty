@@ -42,6 +42,10 @@ function injectBranding(html: string, config: { site_name?: string; site_logo?: 
       /<link\s+rel=["']icon["'][^>]*>/i,
       `<link rel="icon" href="${escapeHtml(siteLogo)}" />`,
     )
+    brandedHtml = brandedHtml.replace(
+      /<link\s+rel=["']apple-touch-icon["'][^>]*>/i,
+      `<link rel="apple-touch-icon" href="${escapeHtml(siteLogo)}" />`,
+    )
   }
   return brandedHtml
 }

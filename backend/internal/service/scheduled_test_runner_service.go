@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"sync"
 	"time"
 
@@ -88,10 +89,16 @@ func (s *ScheduledTestRunnerService) Stop() {
 }
 
 func (s *ScheduledTestRunnerService) runScheduled() {
+	parent, managedDone, managedAllowed := managedinstance.Begin(context.Background())
+	if !managedAllowed {
+		return
+	}
+	defer managedDone()
+
 	// Delay 10s so execution lands at ~:10 of each minute instead of :00.
 	time.Sleep(10 * time.Second)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 12*time.Minute)
 	defer cancel()
 
 	now := time.Now()

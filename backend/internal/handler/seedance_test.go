@@ -89,9 +89,25 @@ func TestSeedanceHandlerLifecycleAndOwnership(t *testing.T) {
 			require.Equal(t, "doubao-seedance", billed.BillingModel)
 			require.Equal(t, 12345, billed.Usage.OutputTokens)
 			require.Zero(t, billed.VideoCount)
+			require.Nil(t, billed.VideoPriceSnapshot, "Ark completion tokens must not receive the dedicated video tariff")
 		} else {
 			require.Nil(t, billed)
 		}
 	}
 	require.Len(t, bindings.billed, 1)
+}
+
+func TestSeedanceRejectsDedicatedVideoGroupBeforeUpstream(t *testing.T) {
+	h, slots, _, upstream := newGrokMediaSlotHandler(t, false, false, service.PlatformOpenAI)
+	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+		c, w := grokMediaSlotContext(context.Background(), method == http.MethodPost)
+		key, _ := middleware.GetAPIKeyFromContext(c)
+		key.Group.Platform = service.PlatformVideo
+		c.Request = httptest.NewRequest(method, "/api/v3/contents/generations/tasks", strings.NewReader(`{"model":"doubao-seedance","content":[{"type":"text","text":"waves"}]}`))
+		c.Params = gin.Params{{Key: "task_id", Value: "task-ark"}}
+		h.SeedanceTasks(c)
+		require.Equal(t, http.StatusForbidden, w.Code, method+": "+w.Body.String())
+		require.Zero(t, upstream.calls, "a dedicated video key cannot fall through to Ark billing")
+		slots.assertReleased(t)
+	}
 }

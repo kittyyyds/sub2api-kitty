@@ -1,17 +1,21 @@
 <template>
-  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
-    <div class="flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
+  <header
+    class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50"
+    data-console-header
+  >
+    <div class="app-header-shell px-2 sm:px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex shrink-0 items-center gap-2 sm:gap-4">
         <button
           @click="toggleMobileSidebar"
+          data-mobile-menu-toggle
           class="btn-ghost btn-icon lg:hidden"
           :aria-label="t('common.toggleMenu')"
         >
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden lg:block">
+        <div class="hidden min-w-0 xl:block">
           <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
             {{ pageTitle }}
           </h1>
@@ -21,26 +25,26 @@
         </div>
       </div>
 
-      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex min-w-0 items-center gap-1 sm:gap-3">
-        <!-- Announcement Bell -->
-        <AnnouncementBell v-if="user" />
+      <!-- Right: Docs + Language + Subscriptions + Balance + User Dropdown -->
+      <div class="app-header-controls flex min-w-0 items-center justify-end gap-2 2xl:gap-3" data-console-header-actions>
+        <div v-if="user && !isCustomer" class="customer-header-primary-actions">
+          <AnnouncementBell />
+        </div>
 
-        <!-- Docs Link -->
         <a
-          v-if="docUrl"
+          v-if="!isCustomer && docUrl"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
+          class="hidden items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white sm:flex"
         >
           <Icon name="book" size="sm" />
-          <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
+          <span class="hidden 2xl:inline">{{ t('nav.docs') }}</span>
         </a>
 
-        <!-- Model Plaza Entry (icon only below sm) -->
+        <!-- Customers already have a pricing shortcut in their toolbar. -->
         <router-link
-          v-if="user && modelPlazaEnabled"
+          v-if="user && !isCustomer && modelPlazaEnabled"
           :to="{ path: '/model-plaza', query: { embedded: '1' } }"
           :title="t('nav.modelPlaza')"
           :aria-label="t('nav.modelPlaza')"
@@ -49,6 +53,14 @@
           <Icon name="grid" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
         </router-link>
+
+        <div v-if="isCustomer" class="console-header-tools">
+          <AnnouncementBell />
+          <router-link to="/custom/billing-rules" class="btn-secondary console-intelligence-button">
+            <Icon name="dollar" size="sm" />
+            <span>{{ t('nav.billingRules') }}</span>
+          </router-link>
+        </div>
 
         <!-- Language Switcher -->
         <LocaleSwitcher />
@@ -110,7 +122,7 @@
             class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
             :aria-label="t('common.userMenu')"
           >
-            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
+            <div class="console-user-avatar flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
               <img
                 v-if="avatarUrl"
                 :src="avatarUrl"
@@ -119,7 +131,7 @@
               >
               <span v-else>{{ userInitials }}</span>
             </div>
-            <div class="hidden text-left md:block">
+            <div class="hidden text-left" :class="isCustomer ? 'xl:block' : 'md:block'">
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ displayName }}
               </div>
@@ -262,6 +274,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
+import { getNativeFeature } from '@/features/customer-console/nativeFeatureRegistry'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveRouteMetaKeys } from '@/router/title'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
@@ -275,23 +288,24 @@ const adminSettingsStore = useAdminSettingsStore()
 const onboardingStore = useOnboardingStore()
 
 const user = computed(() => authStore.user)
+const isCustomer = computed(() => user.value?.role === 'user')
+const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
-const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const availableBalance = computed(() => Number(user.value?.balance || 0))
 const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))
 const totalBalance = computed(() => availableBalance.value + frozenBalance.value)
-const balanceAvailableText = computed(() => t('common.availableBalance') === 'common.availableBalance' ? '可用余额' : t('common.availableBalance'))
-const balanceFrozenText = computed(() => t('common.frozenBalance') === 'common.frozenBalance' ? '冻结金额' : t('common.frozenBalance'))
-const balanceTotalText = computed(() => t('common.totalBalance') === 'common.totalBalance' ? '总余额' : t('common.totalBalance'))
+const balanceAvailableText = computed(() => t('common.availableBalance'))
+const balanceFrozenText = computed(() => t('common.frozenBalance'))
+const balanceTotalText = computed(() => t('common.totalBalance'))
 const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHeaderMoney(frozenBalance.value)}`)
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
-  return !authStore.isSimpleMode && user.value?.role === 'admin'
+  return !authStore.isSimpleMode && authStore.isAdmin
 })
 
 const userInitials = computed(() => {
@@ -313,6 +327,9 @@ const displayName = computed(() => {
   return user.value.username || user.value.email?.split('@')[0] || ''
 })
 
+const nativeFeature = computed(() => (
+  route.name === 'CustomPage' ? getNativeFeature(route.params.id) : null
+))
 // 订阅功能关闭时不挂载顶栏订阅徽章（组件 onMounted 会拉取订阅接口）。
 const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
 
@@ -322,6 +339,12 @@ const routeMetaKeys = computed(() => resolveRouteMetaKeys(route, {
 }))
 
 const pageTitle = computed(() => {
+  if (nativeFeature.value) {
+    const translated = t(nativeFeature.value.labelKey)
+    return translated === nativeFeature.value.labelKey
+      ? nativeFeature.value.fallbackLabel
+      : translated
+  }
   // For custom pages, use the menu item's label instead of generic "自定义页面"
   if (route.name === 'CustomPage') {
     const id = route.params.id as string
@@ -338,6 +361,7 @@ const pageTitle = computed(() => {
 })
 
 const pageDescription = computed(() => {
+  if (nativeFeature.value) return t(nativeFeature.value.descriptionKey)
   const descKey = routeMetaKeys.value.descriptionKey
   if (descKey) {
     return t(descKey)
@@ -394,6 +418,111 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.app-header-shell {
+  display: flex;
+  min-height: 3.625rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-header-customer-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  margin-left: auto;
+}
+
+.app-header-controls {
+  margin-left: auto;
+}
+
+.app-header-customer-toolbar + .app-header-controls {
+  margin-left: 0;
+}
+
+.customer-header-primary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.app-header-getting-started {
+  display: inline-flex;
+  min-height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 1px solid #087f8c;
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 0 0.7rem;
+  color: #075e68;
+  background: rgba(8, 127, 140, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 0 14px rgba(8, 127, 140, 0.12);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.app-header-getting-started:hover,
+.app-header-getting-started:focus-visible {
+  color: #075e68;
+  background: rgba(8, 127, 140, 0.17);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32), 0 5px 16px rgba(8, 127, 140, 0.14);
+  transform: translateY(-1px);
+}
+
+.app-header-getting-started:focus-visible {
+  outline: 2px solid rgba(8, 127, 140, 0.45);
+  outline-offset: 2px;
+}
+
+:global(.dark) .app-header-getting-started {
+  color: #65cbd5;
+  background: rgba(8, 127, 140, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 0 15px rgba(8, 127, 140, 0.12);
+}
+
+@media (max-width: 1199px) {
+  .app-header-shell {
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .app-header-customer-toolbar {
+    order: 3;
+    flex: 0 0 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  .app-header-controls,
+  .app-header-customer-toolbar + .app-header-controls {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-header-customer-toolbar {
+    align-items: flex-start;
+  }
+
+  .app-header-controls {
+    gap: 0.375rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header-getting-started {
+    transition: none;
+  }
+}
+
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.2s ease;

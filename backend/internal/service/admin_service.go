@@ -237,17 +237,20 @@ type AdminBoundAuthIdentityChannel struct {
 }
 
 type CreateGroupInput struct {
-	Name                      string
-	Description               string
-	Platform                  string
-	RateMultiplier            float64
-	IsExclusive               bool
-	SubscriptionType          string   // standard/subscription
-	DailyLimitUSD             *float64 // 日限额 (USD)
-	WeeklyLimitUSD            *float64 // 周限额 (USD)
-	MonthlyLimitUSD           *float64 // 月限额 (USD)
-	LongContextPricingEnabled bool
-	ModelPricing              []ChannelModelPricing
+	SecurityPolicyEnabled      bool
+	SecurityPolicyMode         string
+	SecurityPolicyEmailEnabled *bool
+	Name                       string
+	Description                string
+	Platform                   string
+	RateMultiplier             float64
+	IsExclusive                bool
+	SubscriptionType           string   // standard/subscription
+	DailyLimitUSD              *float64 // 日限额 (USD)
+	WeeklyLimitUSD             *float64 // 周限额 (USD)
+	MonthlyLimitUSD            *float64 // 月限额 (USD)
+	LongContextPricingEnabled  bool
+	ModelPricing               []ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool
 	AllowBatchImageGeneration    bool
@@ -265,10 +268,12 @@ type CreateGroupInput struct {
 	ImagePrice1K       *float64
 	ImagePrice2K       *float64
 	ImagePrice4K       *float64
-	VideoPrice480P     *float64
-	VideoPrice720P     *float64
-	VideoPrice1080P    *float64
-	// VideoModelPrices 可选按模型族×分辨率覆盖视频每秒单价。
+	// ImageModelPrices 可选按模型×分辨率覆盖图片单张价格。
+	ImageModelPrices map[string]map[string]float64
+	VideoPrice480P   *float64
+	VideoPrice720P   *float64
+	VideoPrice1080P  *float64
+	// VideoModelPrices 可选按模型族×分辨率设置客户最终每秒价格。
 	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；nil/负数按默认价 0.01 处理
 	WebSearchPricePerCall *float64
@@ -309,6 +314,7 @@ type CreateGroupInput struct {
 	MaxReasoningEffortOverLimit string
 	// ReasoningEffortMappings Anthropic/OpenAI 推理强度映射，可按模型精确名、前缀或后缀限定。
 	ReasoningEffortMappings []ReasoningEffortMapping
+
 	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数，nil 按 0 处理）
 	ProfitControlEnabled bool
 	ProfitMinMargin      *float64
@@ -318,18 +324,21 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
-	Name                      string
-	Description               *string
-	Platform                  string
-	RateMultiplier            *float64 // 使用指针以支持设置为0
-	IsExclusive               *bool
-	Status                    string
-	SubscriptionType          string   // standard/subscription
-	DailyLimitUSD             *float64 // 日限额 (USD)
-	WeeklyLimitUSD            *float64 // 周限额 (USD)
-	MonthlyLimitUSD           *float64 // 月限额 (USD)
-	LongContextPricingEnabled *bool
-	ModelPricing              *[]ChannelModelPricing
+	SecurityPolicyEnabled      *bool
+	SecurityPolicyMode         *string
+	SecurityPolicyEmailEnabled *bool
+	Name                       string
+	Description                *string
+	Platform                   string
+	RateMultiplier             *float64 // 使用指针以支持设置为0
+	IsExclusive                *bool
+	Status                     string
+	SubscriptionType           string   // standard/subscription
+	DailyLimitUSD              *float64 // 日限额 (USD)
+	WeeklyLimitUSD             *float64 // 周限额 (USD)
+	MonthlyLimitUSD            *float64 // 月限额 (USD)
+	LongContextPricingEnabled  *bool
+	ModelPricing               *[]ChannelModelPricing
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         *bool
 	AllowBatchImageGeneration    *bool
@@ -347,10 +356,12 @@ type UpdateGroupInput struct {
 	ImagePrice1K       *float64
 	ImagePrice2K       *float64
 	ImagePrice4K       *float64
-	VideoPrice480P     *float64
-	VideoPrice720P     *float64
-	VideoPrice1080P    *float64
-	// VideoModelPrices 可选按模型族×分辨率覆盖；nil 表示不修改，空 map 表示清除。
+	// ImageModelPrices 可选按模型×分辨率覆盖；nil 表示不修改，空 map 表示清除。
+	ImageModelPrices map[string]map[string]float64
+	VideoPrice480P   *float64
+	VideoPrice720P   *float64
+	VideoPrice1080P  *float64
+	// VideoModelPrices 可选按模型族×分辨率设置最终单视频价；nil 表示不修改，空 map 表示清除。
 	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次）；nil 表示不修改，负数表示清除回默认价 0.01
 	WebSearchPricePerCall *float64
@@ -391,6 +402,7 @@ type UpdateGroupInput struct {
 	MaxReasoningEffortOverLimit *string
 	// ReasoningEffortMappings nil 表示不修改，空数组表示清空，非空数组表示替换。
 	ReasoningEffortMappings *[]ReasoningEffortMapping
+
 	// 分组利润控制（nil 表示不修改；margin/buffer 为小数）
 	ProfitControlEnabled *bool
 	ProfitMinMargin      *float64
@@ -593,6 +605,7 @@ type ProxyTestResult struct {
 	Region      string `json:"region,omitempty"`
 	Country     string `json:"country,omitempty"`
 	CountryCode string `json:"country_code,omitempty"`
+	Timezone    string `json:"timezone,omitempty"`
 }
 
 type ProxyQualityCheckResult struct {
@@ -628,6 +641,7 @@ type ProxyExitInfo struct {
 	Region      string
 	Country     string
 	CountryCode string
+	Timezone    string
 }
 
 // ProxyExitInfoProber tests proxy connectivity and retrieves exit information

@@ -38,6 +38,12 @@ const (
 	FieldPeakRateMultiplier = "peak_rate_multiplier"
 	// FieldIsExclusive holds the string denoting the is_exclusive field in the database.
 	FieldIsExclusive = "is_exclusive"
+	// FieldSecurityPolicyEnabled holds the string denoting the security_policy_enabled field in the database.
+	FieldSecurityPolicyEnabled = "security_policy_enabled"
+	// FieldSecurityPolicyMode holds the string denoting the security_policy_mode field in the database.
+	FieldSecurityPolicyMode = "security_policy_mode"
+	// FieldSecurityPolicyEmailEnabled holds the string denoting the security_policy_email_enabled field in the database.
+	FieldSecurityPolicyEmailEnabled = "security_policy_email_enabled"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldDuplicateOperationID holds the string denoting the duplicate_operation_id field in the database.
@@ -68,6 +74,8 @@ const (
 	FieldImagePrice2k = "image_price_2k"
 	// FieldImagePrice4k holds the string denoting the image_price_4k field in the database.
 	FieldImagePrice4k = "image_price_4k"
+	// FieldImageModelPrices holds the string denoting the image_model_prices field in the database.
+	FieldImageModelPrices = "image_model_prices"
 	// FieldBatchImageDiscountMultiplier holds the string denoting the batch_image_discount_multiplier field in the database.
 	FieldBatchImageDiscountMultiplier = "batch_image_discount_multiplier"
 	// FieldBatchImageHoldMultiplier holds the string denoting the batch_image_hold_multiplier field in the database.
@@ -144,6 +152,12 @@ const (
 	FieldMaxReasoningEffortOverLimit = "max_reasoning_effort_over_limit"
 	// FieldReasoningEffortMappings holds the string denoting the reasoning_effort_mappings field in the database.
 	FieldReasoningEffortMappings = "reasoning_effort_mappings"
+	// FieldGrokPromptEnabled holds the string denoting the grok_prompt_enabled field in the database.
+	FieldGrokPromptEnabled = "grok_prompt_enabled"
+	// FieldGrokPromptMode holds the string denoting the grok_prompt_mode field in the database.
+	FieldGrokPromptMode = "grok_prompt_mode"
+	// FieldGrokPromptContent holds the string denoting the grok_prompt_content field in the database.
+	FieldGrokPromptContent = "grok_prompt_content"
 	// FieldProfitControlEnabled holds the string denoting the profit_control_enabled field in the database.
 	FieldProfitControlEnabled = "profit_control_enabled"
 	// FieldProfitMinMargin holds the string denoting the profit_min_margin field in the database.
@@ -236,6 +250,9 @@ var Columns = []string{
 	FieldPeakEnd,
 	FieldPeakRateMultiplier,
 	FieldIsExclusive,
+	FieldSecurityPolicyEnabled,
+	FieldSecurityPolicyMode,
+	FieldSecurityPolicyEmailEnabled,
 	FieldStatus,
 	FieldDuplicateOperationID,
 	FieldPlatform,
@@ -251,6 +268,7 @@ var Columns = []string{
 	FieldImagePrice1k,
 	FieldImagePrice2k,
 	FieldImagePrice4k,
+	FieldImageModelPrices,
 	FieldBatchImageDiscountMultiplier,
 	FieldBatchImageHoldMultiplier,
 	FieldVideoRateIndependent,
@@ -289,6 +307,9 @@ var Columns = []string{
 	FieldMaxReasoningEffort,
 	FieldMaxReasoningEffortOverLimit,
 	FieldReasoningEffortMappings,
+	FieldGrokPromptEnabled,
+	FieldGrokPromptMode,
+	FieldGrokPromptContent,
 	FieldProfitControlEnabled,
 	FieldProfitMinMargin,
 	FieldProfitSafetyBuffer,
@@ -345,6 +366,14 @@ var (
 	DefaultPeakRateMultiplier float64
 	// DefaultIsExclusive holds the default value on creation for the "is_exclusive" field.
 	DefaultIsExclusive bool
+	// DefaultSecurityPolicyEnabled holds the default value on creation for the "security_policy_enabled" field.
+	DefaultSecurityPolicyEnabled bool
+	// DefaultSecurityPolicyMode holds the default value on creation for the "security_policy_mode" field.
+	DefaultSecurityPolicyMode string
+	// SecurityPolicyModeValidator is a validator for the "security_policy_mode" field. It is called by the builders before save.
+	SecurityPolicyModeValidator func(string) error
+	// DefaultSecurityPolicyEmailEnabled holds the default value on creation for the "security_policy_email_enabled" field.
+	DefaultSecurityPolicyEmailEnabled bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -433,6 +462,14 @@ var (
 	MaxReasoningEffortOverLimitValidator func(string) error
 	// DefaultReasoningEffortMappings holds the default value on creation for the "reasoning_effort_mappings" field.
 	DefaultReasoningEffortMappings []domain.ReasoningEffortMapping
+	// DefaultGrokPromptEnabled holds the default value on creation for the "grok_prompt_enabled" field.
+	DefaultGrokPromptEnabled bool
+	// DefaultGrokPromptMode holds the default value on creation for the "grok_prompt_mode" field.
+	DefaultGrokPromptMode string
+	// GrokPromptModeValidator is a validator for the "grok_prompt_mode" field. It is called by the builders before save.
+	GrokPromptModeValidator func(string) error
+	// DefaultGrokPromptContent holds the default value on creation for the "grok_prompt_content" field.
+	DefaultGrokPromptContent string
 	// DefaultProfitControlEnabled holds the default value on creation for the "profit_control_enabled" field.
 	DefaultProfitControlEnabled bool
 	// DefaultProfitMinMargin holds the default value on creation for the "profit_min_margin" field.
@@ -502,6 +539,21 @@ func ByPeakRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByIsExclusive orders the results by the is_exclusive field.
 func ByIsExclusive(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsExclusive, opts...).ToFunc()
+}
+
+// BySecurityPolicyEnabled orders the results by the security_policy_enabled field.
+func BySecurityPolicyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSecurityPolicyEnabled, opts...).ToFunc()
+}
+
+// BySecurityPolicyMode orders the results by the security_policy_mode field.
+func BySecurityPolicyMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSecurityPolicyMode, opts...).ToFunc()
+}
+
+// BySecurityPolicyEmailEnabled orders the results by the security_policy_email_enabled field.
+func BySecurityPolicyEmailEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSecurityPolicyEmailEnabled, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.
@@ -727,6 +779,21 @@ func ByMaxReasoningEffort(opts ...sql.OrderTermOption) OrderOption {
 // ByMaxReasoningEffortOverLimit orders the results by the max_reasoning_effort_over_limit field.
 func ByMaxReasoningEffortOverLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMaxReasoningEffortOverLimit, opts...).ToFunc()
+}
+
+// ByGrokPromptEnabled orders the results by the grok_prompt_enabled field.
+func ByGrokPromptEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrokPromptEnabled, opts...).ToFunc()
+}
+
+// ByGrokPromptMode orders the results by the grok_prompt_mode field.
+func ByGrokPromptMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrokPromptMode, opts...).ToFunc()
+}
+
+// ByGrokPromptContent orders the results by the grok_prompt_content field.
+func ByGrokPromptContent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGrokPromptContent, opts...).ToFunc()
 }
 
 // ByProfitControlEnabled orders the results by the profit_control_enabled field.

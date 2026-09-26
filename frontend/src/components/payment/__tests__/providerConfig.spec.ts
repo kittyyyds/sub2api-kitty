@@ -58,6 +58,38 @@ describe('PROVIDER_CONFIG_FIELDS.stripe', () => {
   })
 })
 
+describe('PROVIDER_CONFIG_FIELDS.dujiaopay', () => {
+  it('uses the official API origin and CNY defaults', () => {
+    expect(findField('dujiaopay', 'apiBase')?.defaultValue).toBe('https://www.dujiaopay.com')
+    expect(findField('dujiaopay', 'currency')?.defaultValue).toBe('CNY')
+    expect(findField('dujiaopay', 'currency')?.options).toBe(PAYMENT_CURRENCY_OPTIONS)
+  })
+
+  it('requires API credentials while allowing webhook setup after deployment', () => {
+    expect(findField('dujiaopay', 'keyId')?.optional).toBeFalsy()
+    expect(findField('dujiaopay', 'apiSecret')?.sensitive).toBe(true)
+    expect(findField('dujiaopay', 'webhookSecret')?.optional).toBe(true)
+    expect(findField('dujiaopay', 'webhookSecret')?.sensitive).toBe(true)
+  })
+})
+
+describe('PROVIDER_CONFIG_FIELDS.paypal', () => {
+  it('defaults to PayPal Sandbox with USD settlement', () => {
+    expect(findField('paypal', 'environment')?.defaultValue).toBe('sandbox')
+    expect(findField('paypal', 'environment')?.options?.map(option => option.value)).toEqual(['sandbox', 'live'])
+    expect(findField('paypal', 'currency')?.defaultValue).toBe('USD')
+    expect(findField('paypal', 'currency')?.options).toBe(PAYMENT_CURRENCY_OPTIONS)
+  })
+
+  it('protects the client secret and requires webhook verification identity', () => {
+    expect(findField('paypal', 'clientId')?.optional).toBeFalsy()
+    expect(findField('paypal', 'clientSecret')?.sensitive).toBe(true)
+    expect(findField('paypal', 'webhookId')?.optional).toBeFalsy()
+    expect(findField('paypal', 'brandName')?.optional).toBe(true)
+    expect(findField('paypal', 'brandName')?.clearable).toBe(true)
+  })
+})
+
 describe('EasyPay custom methods config', () => {
   it('parses customMethods from the JSON string stored in provider config', () => {
     expect(parseEasyPayCustomMethods(

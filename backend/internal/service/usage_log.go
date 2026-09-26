@@ -208,6 +208,10 @@ type UsageLog struct {
 	VideoResolution      *string
 	VideoDurationSeconds *int
 
+	// UsageAudit stores compact evidence and independent token comparison data.
+	// It deliberately excludes request and response content.
+	UsageAudit *UsageAudit
+
 	CreatedAt time.Time
 
 	User         *User

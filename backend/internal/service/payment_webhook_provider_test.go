@@ -18,6 +18,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestWebhookProviderNeedsEnabledCandidates(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, webhookProviderNeedsEnabledCandidates(payment.TypeWxpay))
+	require.True(t, webhookProviderNeedsEnabledCandidates(payment.TypeDujiaoPay))
+	require.True(t, webhookProviderNeedsEnabledCandidates(payment.TypePayPal))
+	require.False(t, webhookProviderNeedsEnabledCandidates(payment.TypeStripe))
+}
+
 const webhookProviderTestEncryptionKey = "0123456789abcdef0123456789abcdef"
 
 type webhookProviderTestDouble struct {

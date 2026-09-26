@@ -141,13 +141,18 @@
 
         <template #cell-billing_mode="{ row }">
           <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getBillingModeBadgeClass(getDisplayBillingMode(row))">
-            {{ getBillingModeLabel(getDisplayBillingMode(row), t) }}
+              {{ isVideoUsage(row) && !row.billing_mode ? t('usage.videoBillingUnknown') : getBillingModeLabel(getDisplayBillingMode(row), t) }}
           </span>
         </template>
 
         <template #cell-tokens="{ row }">
+          <div v-if="isVideoUsage(row)" data-testid="video-usage-units" class="flex flex-wrap items-center gap-1.5 text-sm">
+            <span class="font-medium text-gray-900 dark:text-white">{{ row.video_count > 0 ? `${row.video_count}${t('usage.videoUnit')}` : t('usage.videoGeneration') }}</span>
+            <span class="text-gray-500">{{ row.video_duration_seconds > 0 ? `${row.video_duration_seconds}${t('usage.videoSeconds')}` : t('usage.videoDurationUnknown') }}</span>
+            <span class="text-gray-500">{{ row.video_resolution || t('usage.videoResolutionUnknown') }}</span>
+          </div>
           <!-- 图片生成请求（仅按次计费时显示图片格式） -->
-          <div v-if="isImageUsage(row)" class="flex items-center gap-1.5">
+          <div v-else-if="isImageUsage(row)" class="flex items-center gap-1.5">
             <svg class="h-4 w-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
@@ -202,6 +207,28 @@
                 <Icon name="infoCircle" size="xs" class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400" />
               </div>
             </div>
+          </div>
+        </template>
+
+        <template #cell-cache_hit_rate="{ row }">
+          <div
+            v-if="showCacheHitRate"
+            data-testid="cache-hit-rate"
+            class="inline-flex min-w-16 flex-col items-start gap-0.5"
+            :title="cacheHitRateTitle(row)"
+          >
+            <span
+              class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ring-1 ring-inset"
+              :class="cacheHitRateClass(row)"
+            >
+              {{ formatCacheHitRate(row) }}
+            </span>
+            <span
+              v-if="getCacheHitRate(row) != null"
+              class="text-[10px] tabular-nums text-gray-400 dark:text-gray-500"
+            >
+              {{ formatCacheTokens(row.cache_read_tokens) }} / {{ formatCacheTokens(getPromptTokenCount(row)) }}
+            </span>
           </div>
         </template>
 
@@ -432,8 +459,28 @@
               <span class="text-gray-400">{{ t('usage.imageOutputCost') }}</span>
               <span class="font-medium text-pink-300">${{ tooltipData.image_output_cost.toFixed(8) }}</span>
             </div>
-            <!-- Token billing: show unit prices per 1M tokens -->
-            <template v-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
+            <!-- Use the receipt's own units; historical gaps stay explicit. -->
+            <template v-if="tooltipData && isVideoUsage(tooltipData)">
+              <div data-testid="video-cost-details" class="space-y-1.5">
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoCount') }}</span>
+                  <span>{{ tooltipData.video_count && tooltipData.video_count > 0 ? tooltipData.video_count : t('usage.videoNotRecorded') }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoDuration') }}</span>
+                  <span>{{ tooltipData.video_duration_seconds && tooltipData.video_duration_seconds > 0 ? `${tooltipData.video_duration_seconds}${t('usage.videoSeconds')}` : t('usage.videoNotRecorded') }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoResolution') }}</span>
+                  <span>{{ tooltipData.video_resolution || t('usage.videoNotRecorded') }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoEffectiveUnitPrice') }}</span>
+                  <span data-testid="video-unit-price" class="text-sky-300">{{ videoUnitPrice(tooltipData) == null ? t('usage.videoNotRecorded') : `$${videoUnitPrice(tooltipData)!.toFixed(8)} ${t(tooltipData.billing_mode === 'video' ? 'usage.videoPerSecond' : 'usage.videoPerItem')}` }}</span>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
               <div v-if="tooltipData && textInputTokens(tooltipData) > 0" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
                 <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, textInputTokens(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
@@ -505,7 +552,7 @@
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span>
+            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier ?? 1) }}x</span>
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.original') }}</span>
@@ -548,8 +595,14 @@ import { useAppStore } from '@/stores/app'
 import { formatDateTime, formatReasoningEffort, reasoningEffortValuesEqual } from '@/utils/format'
 import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
+import { isVideoUsage, videoUnitPrice } from '@/utils/videoUsage'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
+import {
+  formatCacheHitRate,
+  getCacheHitRate,
+  getPromptTokenCount,
+} from '@/utils/usageCacheHitRate'
 import {
   LATENCY_BAR_FROM_CLASSES,
   LATENCY_BAR_TO_CLASSES,
@@ -608,6 +661,8 @@ interface Props {
   showAccountBilling?: boolean
   enableTimingDetails?: boolean
   showUpstreamEndpoint?: boolean
+  /** 管理员用量明细专用；客户前台保持关闭 */
+  showCacheHitRate?: boolean
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }
@@ -622,6 +677,7 @@ const props = withDefaults(defineProps<Props>(), {
   showAccountBilling: true,
   enableTimingDetails: false,
   showUpstreamEndpoint: true,
+  showCacheHitRate: false,
   flat: false
 })
 const emit = defineEmits<{
@@ -634,6 +690,7 @@ const appStore = useAppStore()
 const copiedRequestId = ref<string | null>(null)
 const showAccountBilling = props.showAccountBilling
 const showUpstreamEndpoint = props.showUpstreamEndpoint
+const showCacheHitRate = props.showCacheHitRate
 const ipGeoBatchLoading = ref(false)
 
 // 长上下文计费 x2 徽标展示开关（公开设置，默认开启；未加载/缺失时按开启处理）
@@ -667,6 +724,34 @@ const modelAuditTitle = (row: AdminUsageLog): string => [
   `${t('usage.sentUpstreamModel')}: ${sentUpstreamModel(row) || '-'}`,
   `${t('usage.upstreamResponseModel')}: ${row.upstream_response_model || '-'}`,
 ].join('\n')
+
+const cacheHitRateTitle = (row: AdminUsageLog): string => {
+  const rate = getCacheHitRate(row)
+  if (rate == null) return t('admin.usage.cacheHitRateUnavailable')
+
+  return t('admin.usage.cacheHitRateTooltip', {
+    cacheRead: Math.max(0, Number(row.cache_read_tokens) || 0).toLocaleString(),
+    promptTokens: getPromptTokenCount(row).toLocaleString(),
+    rate: rate.toFixed(1),
+  })
+}
+
+const cacheHitRateClass = (row: AdminUsageLog): string => {
+  const rate = getCacheHitRate(row)
+  if (rate == null) {
+    return 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-700/60 dark:text-gray-400 dark:ring-gray-600'
+  }
+  if (rate >= 80) {
+    return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
+  }
+  if (rate >= 50) {
+    return 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30'
+  }
+  if (rate > 0) {
+    return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30'
+  }
+  return 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-gray-700/60 dark:text-gray-300 dark:ring-gray-600'
+}
 
 const currentPageIps = computed(() =>
   Array.from(new Set(props.data.map((row) => row.ip_address).filter((ip): ip is string => Boolean(ip))))

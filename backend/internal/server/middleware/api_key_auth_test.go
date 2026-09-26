@@ -1283,6 +1283,83 @@ func TestAPIKeyAuthBillingInfoSkipsBillingAndSideEffects(t *testing.T) {
 	require.Zero(t, touchCalls)
 }
 
+func TestAPIKeyAuthVideoReadsSkipExhaustedBilling(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name      string
+		path      string
+		balance   float64
+		keyStatus string
+		quota     float64
+		quotaUsed float64
+	}{
+		{
+			name:      "status remains readable with zero balance",
+			path:      "/v1/videos/request-1",
+			balance:   0,
+			keyStatus: service.StatusActive,
+		},
+		{
+			name:      "content remains readable with exhausted key quota",
+			path:      "/videos/request-1/content",
+			balance:   10,
+			keyStatus: service.StatusAPIKeyQuotaExhausted,
+			quota:     1,
+			quotaUsed: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := &service.User{ID: 7, Role: service.RoleUser, Status: service.StatusActive, Balance: tt.balance}
+			apiKey := &service.APIKey{
+				ID: 100, UserID: user.ID, Key: "video-read-auth-only", Status: tt.keyStatus,
+				User: user, Quota: tt.quota, QuotaUsed: tt.quotaUsed,
+			}
+			apiKeyRepo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
+				clone := *apiKey
+				userClone := *user
+				clone.User = &userClone
+				return &clone, nil
+			}}
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			router := newAuthTestRouter(service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg), nil, cfg)
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set("x-api-key", apiKey.Key)
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusOK, w.Code)
+		})
+	}
+}
+
+func TestIsVideoTaskRead(t *testing.T) {
+	tests := []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{method: http.MethodGet, path: "/v1/videos/request-1", want: true},
+		{method: http.MethodGet, path: "/v1/videos/request-1/content", want: true},
+		{method: http.MethodGet, path: "/videos/request-1", want: true},
+		{method: http.MethodGet, path: "/videos/request-1/content", want: true},
+		{method: http.MethodGet, path: "/openai/v1/videos/request-1/content", want: true},
+		{method: http.MethodPost, path: "/v1/videos/request-1", want: false},
+		{method: http.MethodGet, path: "/v1/videos/generations", want: false},
+		{method: http.MethodGet, path: "/v1/videos/request-1/other", want: false},
+		{method: http.MethodGet, path: "/v1/videos", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			require.Equal(t, tt.want, isVideoTaskRead(tt.method, tt.path))
+		})
+	}
+}
+
 func TestAPIKeyAuthBillingInfoSkipsLastUsedInSimpleMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -1510,6 +1587,11 @@ func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService
 	router.POST("/v1/messages", ok)
 	router.GET("/v1/usage", ok)
 	router.GET("/v1/sub2api/billing", ok)
+	router.POST("/v1/videos/generations", ok)
+	router.GET("/v1/videos/:request_id", ok)
+	router.GET("/v1/videos/:request_id/content", ok)
+	router.GET("/videos/:request_id", ok)
+	router.GET("/videos/:request_id/content", ok)
 	return router
 }
 

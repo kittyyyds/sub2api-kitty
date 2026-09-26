@@ -24,6 +24,8 @@ func RegisterUserRoutes(
 	authenticated.Use(panelRateLimiter.Global())
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
 	authenticated.Use(gin.HandlerFunc(auditLog))
+	authenticated.GET("/video-tasks", h.OpenAIGateway.ListMyVideoTasks)
+	authenticated.GET("/video-tasks/stats", h.OpenAIGateway.MyVideoTaskStats)
 	{
 		// 用户接口
 		user := authenticated.Group("/user")
@@ -95,6 +97,13 @@ func RegisterUserRoutes(
 			channels.GET("/available", h.AvailableChannel.List)
 		}
 
+		// 计费目录与预估（与正式扣费共用 BillingService）
+		billing := authenticated.Group("/billing")
+		{
+			billing.GET("/catalog", h.BillingPreview.Catalog)
+			billing.POST("/preview", h.BillingPreview.Preview)
+		}
+
 		// 使用记录（聚合统计属重查询，叠加更严格的按用户限流）
 		usage := authenticated.Group("/usage")
 		usage.Use(panelRateLimiter.Heavy())
@@ -117,6 +126,36 @@ func RegisterUserRoutes(
 		{
 			announcements.GET("", h.Announcement.List)
 			announcements.POST("/:id/read", h.Announcement.MarkRead)
+		}
+
+		// 应用中心：目录、运行历史和客户端执行工作流。
+		apps := authenticated.Group("/apps")
+		{
+			apps.GET("", h.ApplicationCenter.ListApplications)
+			apps.GET("/runs", h.ApplicationCenter.ListRuns)
+			apps.GET("/runs/:run_id", h.ApplicationCenter.GetRun)
+			apps.POST("/:slug/runs", h.ApplicationCenter.StartRun)
+			apps.POST("/runs/:run_id/steps/:step_key/complete", h.ApplicationCenter.CompleteStep)
+			apps.POST("/runs/:run_id/steps/:step_key/checkpoint", h.ApplicationCenter.CheckpointStep)
+			apps.POST("/runs/:run_id/steps/:step_key/fail", h.ApplicationCenter.FailStep)
+			apps.POST("/runs/:run_id/cancel", h.ApplicationCenter.CancelRun)
+			apps.POST("/runs/:run_id/retry", h.ApplicationCenter.RetryRun)
+		}
+		// 工单
+		tickets := authenticated.Group("/tickets")
+		{
+			tickets.GET("", h.Admin.Ticket.ListMine)
+			tickets.POST("", h.Admin.Ticket.Create)
+			tickets.GET("/:id", h.Admin.Ticket.GetMine)
+			tickets.POST("/:id/replies", h.Admin.Ticket.ReplyMine)
+			tickets.POST("/:id/close", h.Admin.Ticket.CloseMine)
+		}
+
+		// 账单：月账单与用量导出
+		billingReports := authenticated.Group("/billing")
+		{
+			billingReports.GET("/statement", h.Admin.BillingExport.Statement)
+			billingReports.GET("/export", h.Admin.BillingExport.Export)
 		}
 
 		// 卡密兑换

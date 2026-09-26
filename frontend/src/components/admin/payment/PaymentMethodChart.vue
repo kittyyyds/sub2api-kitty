@@ -58,6 +58,9 @@ const colorMap: Record<string, string> = {
   alipay_direct: 'bg-blue-400',
   wxpay_direct: 'bg-green-400',
   stripe: 'bg-purple-500',
+  airwallex: 'bg-orange-500',
+  dujiaopay: 'bg-emerald-500',
+  paypal: 'bg-blue-700',
 }
 
 const barColorMap: Record<string, string> = {
@@ -66,6 +69,9 @@ const barColorMap: Record<string, string> = {
   alipay_direct: 'bg-blue-400',
   wxpay_direct: 'bg-green-400',
   stripe: 'bg-purple-500',
+  airwallex: 'bg-orange-500',
+  dujiaopay: 'bg-emerald-500',
+  paypal: 'bg-blue-700',
 }
 
 const maxAmounts = computed<CurrencyAmounts>(() => {

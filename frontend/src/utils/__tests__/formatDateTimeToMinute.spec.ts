@@ -12,4 +12,10 @@ describe('formatDateTimeToMinute', () => {
   it('returns an empty string for an invalid date', () => {
     expect(formatDateTimeToMinute(new Date('invalid'), 'en-GB')).toBe('')
   })
+
+  it('formats the value in the requested IANA timezone', () => {
+    expect(formatDateTimeToMinute('2026-07-19T12:30:45Z', 'en-GB', 'Asia/Shanghai')).toBe(
+      '19/07/2026, 20:30',
+    )
+  })
 })

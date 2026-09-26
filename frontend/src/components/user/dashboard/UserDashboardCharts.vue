@@ -1,7 +1,7 @@
 <template>
-  <div class="space-y-6">
+  <div class="dashboard-charts-section">
     <!-- Date Range Filter -->
-    <div class="card p-4">
+    <div class="card dashboard-filter-bar" data-dashboard-filter-bar>
       <div class="flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('dashboard.timeRange') }}:</span>
@@ -20,9 +20,9 @@
     </div>
 
     <!-- Charts Grid -->
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div class="dashboard-charts-grid">
       <!-- Model Distribution Chart -->
-      <div class="card relative overflow-hidden p-4">
+      <div class="card dashboard-chart-panel relative overflow-hidden p-4" data-dashboard-chart="model-distribution">
         <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-sm dark:bg-dark-800/50">
           <LoadingSpinner size="md" />
         </div>
@@ -58,7 +58,7 @@
       </div>
 
       <!-- Token Usage Trend Chart -->
-      <TokenUsageTrend :trend-data="trend" :loading="loading" />
+      <TokenUsageTrend :trend-data="trend" :loading="loading" variant="customer" data-dashboard-chart="token-trend" />
     </div>
   </div>
 </template>
@@ -69,6 +69,8 @@ import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
+import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
+import { detectConsolePerformanceMode } from '@/utils/consolePerformance'
 import { Doughnut } from 'vue-chartjs'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import type { TrendDataPoint, ModelStat } from '@/types'
@@ -80,17 +82,29 @@ const props = defineProps<{ loading: boolean, startDate: string, endDate: string
 defineEmits(['update:startDate', 'update:endDate', 'update:granularity', 'dateRangeChange', 'granularityChange', 'refresh'])
 const { t } = useI18n()
 
+const { isDarkMode } = useDocumentDarkMode()
+const performanceMode = detectConsolePerformanceMode()
+const modelChartPalette = computed(() =>
+  isDarkMode.value
+    ? ['#8eeaff', '#ffad68', '#84d9b0', '#a2b2b6', '#5dbfd0', '#d28b50', '#6fbf9e', '#7f9298']
+    : ['#0a7f90', '#9c641f', '#28765f', '#60757d', '#177d9a', '#b07631', '#438b73', '#829399']
+)
+
 const modelData = computed(() => !props.models?.length ? null : {
   labels: props.models.map((m: ModelStat) => m.model),
   datasets: [{
     data: props.models.map((m: ModelStat) => m.total_tokens),
-    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+    backgroundColor: modelChartPalette.value,
+    borderColor: isDarkMode.value ? '#061014' : '#f8fbfc',
+    borderWidth: 2
   }]
 })
 
 const doughnutOptions = {
   responsive: true,
   maintainAspectRatio: false,
+  animation: performanceMode === 'lite' ? false : { duration: 420 },
+  cutout: '68%',
   plugins: {
     legend: { display: false },
     tooltip: {

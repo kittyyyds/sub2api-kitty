@@ -161,6 +161,7 @@ type UpdateSettingsRequest struct {
 	SiteLogo                    string                `json:"site_logo"`
 	SiteSubtitle                string                `json:"site_subtitle"`
 	APIBaseURL                  string                `json:"api_base_url"`
+	APIBaseURLDescription       *string               `json:"api_base_url_description"`
 	ContactInfo                 string                `json:"contact_info"`
 	DocURL                      string                `json:"doc_url"`
 	HomeContent                 string                `json:"home_content"`
@@ -241,7 +242,8 @@ type UpdateSettingsRequest struct {
 	MaxClaudeCodeVersion string `json:"max_claude_code_version"`
 
 	// 分组隔离
-	AllowUngroupedKeyScheduling bool `json:"allow_ungrouped_key_scheduling"`
+	AllowUngroupedKeyScheduling bool  `json:"allow_ungrouped_key_scheduling"`
+	AccountGroupPriorityEnabled *bool `json:"account_group_priority_enabled"`
 
 	// Backend Mode
 	BackendModeEnabled bool `json:"backend_mode_enabled"`
@@ -1403,8 +1405,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	)
 
 	customEndpointsJSON := previousSettings.CustomEndpoints
+	apiBaseURLDescription, err := resolveAPIBaseURLDescription(previousSettings.APIBaseURLDescription, req.APIBaseURLDescription)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	if req.CustomEndpoints != nil {
-		endpoints := *req.CustomEndpoints
+		endpoints := preserveEndpointRecommendations(dto.ParseCustomEndpoints(previousSettings.CustomEndpoints), *req.CustomEndpoints)
 		if len(endpoints) > maxCustomEndpoints {
 			response.BadRequest(c, "Too many custom endpoints (max 10)")
 			return
@@ -1678,6 +1685,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SiteLogo:                               req.SiteLogo,
 		SiteSubtitle:                           req.SiteSubtitle,
 		APIBaseURL:                             req.APIBaseURL,
+		APIBaseURLDescription:                  apiBaseURLDescription,
 		ContactInfo:                            req.ContactInfo,
 		DocURL:                                 req.DocURL,
 		HomeContent:                            req.HomeContent,
@@ -1708,6 +1716,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		MinClaudeCodeVersion:                   req.MinClaudeCodeVersion,
 		MaxClaudeCodeVersion:                   req.MaxClaudeCodeVersion,
 		AllowUngroupedKeyScheduling:            req.AllowUngroupedKeyScheduling,
+		AccountGroupPriorityEnabled: func() bool {
+			if req.AccountGroupPriorityEnabled != nil {
+				return *req.AccountGroupPriorityEnabled
+			}
+			return previousSettings.AccountGroupPriorityEnabled
+		}(),
 		BackendModeEnabled:                     req.BackendModeEnabled,
 		RequestCaptureEnabled: func() bool {
 			if req.RequestCaptureEnabled != nil {
@@ -2457,6 +2471,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SiteLogo:                                               updatedSettings.SiteLogo,
 		SiteSubtitle:                                           updatedSettings.SiteSubtitle,
 		APIBaseURL:                                             updatedSettings.APIBaseURL,
+		APIBaseURLDescription:                                  updatedSettings.APIBaseURLDescription,
 		ContactInfo:                                            updatedSettings.ContactInfo,
 		DocURL:                                                 updatedSettings.DocURL,
 		HomeContent:                                            updatedSettings.HomeContent,
@@ -2491,6 +2506,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		MinClaudeCodeVersion:                                   updatedSettings.MinClaudeCodeVersion,
 		MaxClaudeCodeVersion:                                   updatedSettings.MaxClaudeCodeVersion,
 		AllowUngroupedKeyScheduling:                            updatedSettings.AllowUngroupedKeyScheduling,
+		AccountGroupPriorityEnabled:                            updatedSettings.AccountGroupPriorityEnabled,
 		BackendModeEnabled:                                     updatedSettings.BackendModeEnabled,
 		EnableFingerprintUnification:                           updatedSettings.EnableFingerprintUnification,
 		EnableMetadataPassthrough:                              updatedSettings.EnableMetadataPassthrough,

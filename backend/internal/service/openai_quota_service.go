@@ -500,14 +500,19 @@ func (s *OpenAIQuotaService) prepareUpstreamCall(ctx context.Context, accountID 
 	// when Proxy isn't pre-populated (defensive — e.g. callers that built
 	// the Account by hand).
 	if account.ProxyID != nil {
+		var proxy *Proxy
 		switch {
 		case account.Proxy != nil:
-			proxyURL = account.Proxy.URL()
+			proxy = account.Proxy
 		case s.proxyRepo != nil:
-			if proxy, perr := s.proxyRepo.GetByID(ctx, *account.ProxyID); perr == nil && proxy != nil {
-				proxyURL = proxy.URL()
+			if resolved, perr := s.proxyRepo.GetByID(ctx, *account.ProxyID); perr == nil {
+				proxy = resolved
 			}
 		}
+		if proxy == nil {
+			return "", "", "", false, infraerrors.New(http.StatusServiceUnavailable, "OPENAI_QUOTA_PROXY_UNAVAILABLE", "configured proxy is unavailable")
+		}
+		proxyURL = proxy.URL()
 	}
 
 	return accessToken, chatGPTAccountID, proxyURL, fedRAMP, nil

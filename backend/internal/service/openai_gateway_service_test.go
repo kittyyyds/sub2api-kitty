@@ -747,6 +747,7 @@ func (c stubConcurrencyCache) GetAccountWaitingCount(ctx context.Context, accoun
 
 type stubGatewayCache struct {
 	sessionBindings map[string]int64
+	sessionTTLs     map[string]time.Duration
 	deletedSessions map[string]int
 }
 
@@ -771,14 +772,18 @@ func (c *stubGatewayCache) GetSessionAccountID(ctx context.Context, groupID int6
 	if id, ok := c.sessionBindings[sessionHash]; ok {
 		return id, nil
 	}
-	return 0, errors.New("not found")
+	return 0, ErrStickySessionNotFound
 }
 
 func (c *stubGatewayCache) SetSessionAccountID(ctx context.Context, groupID int64, sessionHash string, accountID int64, ttl time.Duration) error {
 	if c.sessionBindings == nil {
 		c.sessionBindings = make(map[string]int64)
 	}
+	if c.sessionTTLs == nil {
+		c.sessionTTLs = make(map[string]time.Duration)
+	}
 	c.sessionBindings[sessionHash] = accountID
+	c.sessionTTLs[sessionHash] = ttl
 	return nil
 }
 

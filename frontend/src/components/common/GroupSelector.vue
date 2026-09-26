@@ -97,6 +97,9 @@ const filteredGroups = computed(() => {
     ? props.groups.filter((g) => g.platform !== 'composite')
     : props.groups
   if (props.platform) {
+    if (props.platform === 'video') {
+      result = result.filter((g) => g.platform === 'video')
+    } else
     // antigravity 账户启用混合调度后，可选择 anthropic/gemini 分组
     if (props.platform === 'antigravity' && props.mixedScheduling) {
       result = result.filter(

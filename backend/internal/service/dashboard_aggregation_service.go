@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"log/slog"
 	"sync/atomic"
 	"time"
@@ -187,6 +188,12 @@ func (s *DashboardAggregationService) TriggerRecomputeRange(start, end time.Time
 }
 
 func (s *DashboardAggregationService) recomputeRecentDays() {
+	managedParent, managedDone, managedAllowed := managedinstance.Begin(context.Background())
+	if !managedAllowed {
+		return
+	}
+	defer managedDone()
+
 	days := s.cfg.RecomputeDays
 	if days <= 0 {
 		return
@@ -194,7 +201,7 @@ func (s *DashboardAggregationService) recomputeRecentDays() {
 	now := time.Now().UTC()
 	start := now.AddDate(0, 0, -days)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultDashboardAggregationBackfillTimeout)
+	ctx, cancel := context.WithTimeout(managedParent, defaultDashboardAggregationBackfillTimeout)
 	defer cancel()
 	if err := s.backfillRange(ctx, start, now); err != nil {
 		logger.LegacyPrintf("service.dashboard_aggregation", "[DashboardAggregation] 启动重算失败: %v", err)
@@ -221,13 +228,19 @@ func (s *DashboardAggregationService) recomputeRange(ctx context.Context, start,
 }
 
 func (s *DashboardAggregationService) runScheduledAggregation() {
+	managedParent, managedDone, managedAllowed := managedinstance.Begin(context.Background())
+	if !managedAllowed {
+		return
+	}
+	defer managedDone()
+
 	if !atomic.CompareAndSwapInt32(&s.running, 0, 1) {
 		return
 	}
 	defer atomic.StoreInt32(&s.running, 0)
 
 	jobStart := time.Now().UTC()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultDashboardAggregationTimeout)
+	ctx, cancel := context.WithTimeout(managedParent, defaultDashboardAggregationTimeout)
 	defer cancel()
 
 	// Multi-instance guard: only the leader runs the periodic aggregation; peers
@@ -287,7 +300,13 @@ func (s *DashboardAggregationService) runScheduledGroupUsageSync() {
 }
 
 func (s *DashboardAggregationService) runStartupGroupUsageSync() {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultDashboardAggregationBackfillTimeout)
+	managedParent, managedDone, managedAllowed := managedinstance.Begin(context.Background())
+	if !managedAllowed {
+		return
+	}
+	defer managedDone()
+
+	ctx, cancel := context.WithTimeout(managedParent, defaultDashboardAggregationBackfillTimeout)
 	defer cancel()
 	release, ok := tryAcquireSingletonLeaderLock(ctx, s.lockCache, s.db, dashboardAggregationGroupUsageBackfillLeaderLockKey, s.instanceID, dashboardAggregationGroupUsageBackfillLeaderLockTTL)
 	if !ok {

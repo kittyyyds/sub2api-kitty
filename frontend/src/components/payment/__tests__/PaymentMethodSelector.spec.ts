@@ -32,7 +32,7 @@ describe('PaymentMethodSelector', () => {
     expect(buttons).toHaveLength(methods.length)
     expect(buttons.every(button => button.classes().includes('min-w-0'))).toBe(true)
     expect(buttons.every((button, index) => button.attributes('title') === methods[index].display_name)).toBe(true)
-    expect(wrapper.findAll('[data-testid="payment-method-label"]').every(label => label.classes().includes('truncate'))).toBe(true)
+    expect(wrapper.findAll('[data-testid="payment-method-label"]').every(label => !label.classes().includes('truncate'))).toBe(true)
   })
 
   it('shows the configured display name for custom EasyPay methods', () => {
@@ -59,5 +59,19 @@ describe('PaymentMethodSelector', () => {
     const button = wrapper.get('button')
     expect(button.classes()).toContain('border-primary-500')
     expect(button.classes()).not.toContain('border-[#02A9F1]')
+  })
+
+  it('uses the PayPal brand icon and selected style', () => {
+    const wrapper = mount(PaymentMethodSelector, {
+      props: {
+        selected: 'paypal',
+        methods: [{ type: 'paypal', display_name: 'PayPal', fee_rate: 0, available: true }],
+      },
+    })
+
+    const button = wrapper.get('button')
+    expect(button.classes()).toContain('border-[#0070BA]')
+    expect(wrapper.get('img').attributes('src')).toContain('paypal.svg')
+    expect(wrapper.text()).toContain('PayPal')
   })
 })

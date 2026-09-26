@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"os"
 	"time"
 
@@ -103,7 +104,7 @@ func ProvideBatchImageModelPricingResolver(resolver *ModelPricingResolver) *Batc
 
 func ProvideBatchImageCleanupService(repo BatchImageRepository, accountRepo AccountRepository, cfg *config.Config) *BatchImageCleanupService {
 	svc := NewBatchImageCleanupService(repo, accountRepo, cfg)
-	svc.Start()
+	managedinstance.Register("BatchImageCleanupService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -143,7 +144,7 @@ func ProvideTokenRefreshService(
 	// 调用侧显式注入后台刷新策略，避免策略漂移
 	svc.SetRefreshPolicy(DefaultBackgroundRefreshPolicy())
 	svc.SetAccountRuntimeBlocker(runtimeBlocker)
-	svc.Start()
+	managedinstance.Register("TokenRefreshService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -217,7 +218,7 @@ func ProvideOpenAIQuotaAutoResetService(
 		settingService,
 		leaderLock,
 	)
-	service.Start()
+	managedinstance.Register("OpenAIQuotaAutoResetService", service.Start, service.Stop)
 	return service
 }
 
@@ -252,7 +253,11 @@ func ProvideAccountUsageService(
 	return service
 }
 
+// ProvidePluginManager binds the official account-directory capability at
+// construction time so regenerating Wire cannot silently remove it.
+
 func ProvideAccountTestService(
+	concurrencyService *ConcurrencyService,
 	accountRepo AccountRepository,
 	geminiTokenProvider *GeminiTokenProvider,
 	claudeTokenProvider *ClaudeTokenProvider,
@@ -275,6 +280,7 @@ func ProvideAccountTestService(
 		cfg,
 		tlsFPProfileService,
 	)
+	service.concurrencyService = concurrencyService
 	service.agentIdentityWS = openAIGatewayService
 	service.SetOpenAIGatewayService(openAIGatewayService)
 	service.SetSettingService(settingService)
@@ -331,7 +337,7 @@ func ProvideCNProviderBalanceCheckService(
 		minutes = cfg.Gateway.CNProviders.BalanceCheckIntervalMinutes
 	}
 	svc := NewCNProviderBalanceCheckService(accountRepo, balanceService, quotaService, cfg, time.Duration(minutes)*time.Minute)
-	svc.Start()
+	managedinstance.Register("CNProviderBalanceCheckService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -386,21 +392,21 @@ func ProvideDashboardAggregationService(repo DashboardAggregationRepository, tim
 	svc := NewDashboardAggregationService(repo, timingWheel, cfg)
 	svc.settingRepo = settingRepo
 	svc.SetLeaderLock(lockCache, db)
-	svc.Start()
+	managedinstance.Register("DashboardAggregationService", svc.Start, nil)
 	return svc
 }
 
 // ProvideUsageCleanupService 创建并启动使用记录清理任务服务
 func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
 	svc := NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
-	svc.Start()
+	managedinstance.Register("UsageCleanupService", svc.Start, svc.Stop)
 	return svc
 }
 
 // ProvideAccountExpiryService creates and starts AccountExpiryService.
 func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpiryService {
 	svc := NewAccountExpiryService(accountRepo, time.Minute)
-	svc.Start()
+	managedinstance.Register("AccountExpiryService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -412,7 +418,7 @@ func ProvideOpenAICodexVersionSyncService(
 	githubClient GitHubReleaseClient,
 ) *OpenAICodexVersionSyncService {
 	svc := NewOpenAICodexVersionSyncService(settingRepo, settingService, githubClient, openAICodexVersionSyncInterval)
-	svc.Start()
+	managedinstance.Register("OpenAICodexVersionSyncService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -428,10 +434,13 @@ func ProvideClaudeCodeVersionSyncService(
 	return svc
 }
 
+// ProvideClaudeCodeVersionSyncService creates and starts ClaudeCodeVersionSyncService.
+// 出站 Claude Code 身份的版本号靠它跟随官方发布，无需为了跟版本而发新版本；面板可关闭。
+
 // ProvideProxyExpiryService creates and starts ProxyExpiryService.
 func ProvideProxyExpiryService(proxyRepo ProxyRepository) *ProxyExpiryService {
 	svc := NewProxyExpiryService(proxyRepo, time.Minute)
-	svc.Start()
+	managedinstance.Register("ProxyExpiryService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -441,7 +450,7 @@ func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, se
 	svc.SetSettingRepository(settingRepo)
 	svc.SetNotificationEmailService(notificationEmailService)
 	svc.SetLeaderLock(lockCache, db)
-	svc.Start()
+	managedinstance.Register("SubscriptionExpiryService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -548,7 +557,7 @@ func ProvideOpsAggregationService(
 	cfg *config.Config,
 ) *OpsAggregationService {
 	svc := NewOpsAggregationService(opsRepo, settingRepo, db, redisClient, cfg)
-	svc.Start()
+	managedinstance.Register("OpsAggregationService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -562,7 +571,7 @@ func ProvideOpsAlertEvaluatorService(
 	proxyRepo ProxyRepository,
 ) *OpsAlertEvaluatorService {
 	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg, proxyRepo)
-	svc.Start()
+	managedinstance.Register("OpsAlertEvaluatorService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -581,7 +590,7 @@ func ProvideOpsCleanupService(
 	opsService *OpsService,
 ) *OpsCleanupService {
 	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg, channelMonitorSvc, settingRepo)
-	svc.Start()
+	managedinstance.Register("OpsCleanupService", svc.Start, svc.Stop)
 	if opsService != nil {
 		opsService.SetCleanupReloader(svc)
 	}
@@ -638,7 +647,7 @@ func ProvideSystemOperationLockService(repo IdempotencyRepository, cfg *config.C
 
 func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
 	svc := NewIdempotencyCleanupService(repo, cfg)
-	svc.Start()
+	managedinstance.Register("IdempotencyCleanupService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -664,7 +673,9 @@ func ProvideScheduledTestRunnerService(
 ) *ScheduledTestRunnerService {
 	svc := NewScheduledTestRunnerService(planRepo, scheduledSvc, accountTestSvc, rateLimitSvc, cfg)
 	svc.judgeQuality = judge.Judge
-	svc.Start()
+	if os.Getenv("KITTY_DEPLOYMENT_HANDOFF") != "true" {
+		managedinstance.Register("ScheduledTestRunnerService", svc.Start, svc.Stop)
+	}
 	return svc
 }
 
@@ -677,7 +688,7 @@ func ProvideOpsScheduledReportService(
 	cfg *config.Config,
 ) *OpsScheduledReportService {
 	svc := NewOpsScheduledReportService(opsService, userService, emailService, redisClient, cfg)
-	svc.Start()
+	managedinstance.Register("OpsScheduledReportService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -729,7 +740,7 @@ func ProvideBackupService(
 ) *BackupService {
 	svc := NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
 	svc.SetLeaderLock(lockCache, db)
-	svc.Start()
+	managedinstance.Register("BackupService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -799,14 +810,16 @@ func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupReposit
 	if err := svc.LoadForwardedClientIPSettings(context.Background()); err != nil {
 		logger.LegacyPrintf("service.setting", "Warning: load forwarded client IP settings failed: %v", err)
 	}
-	if err := svc.MigrateOpenAIAllowClaudeCodeCodexPluginSetting(context.Background()); err != nil {
-		logger.LegacyPrintf("service.setting", "Warning: migrate openai allow Claude Code Codex plugin setting failed: %v", err)
-	}
-	if err := svc.MigrateCodexBodyFingerprintToSignals(context.Background()); err != nil {
-		logger.LegacyPrintf("service.setting", "Warning: migrate codex body fingerprint to signals failed: %v", err)
-	}
-	if err := svc.MigrateGrokDefaultTextModel(context.Background()); err != nil {
-		logger.LegacyPrintf("service.setting", "Warning: migrate Grok default text model failed: %v", err)
+	if !managedinstance.Enabled() {
+		if err := svc.MigrateOpenAIAllowClaudeCodeCodexPluginSetting(context.Background()); err != nil {
+			logger.LegacyPrintf("service.setting", "Warning: migrate openai allow Claude Code Codex plugin setting failed: %v", err)
+		}
+		if err := svc.MigrateCodexBodyFingerprintToSignals(context.Background()); err != nil {
+			logger.LegacyPrintf("service.setting", "Warning: migrate codex body fingerprint to signals failed: %v", err)
+		}
+		if err := svc.MigrateGrokDefaultTextModel(context.Background()); err != nil {
+			logger.LegacyPrintf("service.setting", "Warning: migrate Grok default text model failed: %v", err)
+		}
 	}
 	antigravity.SetUserAgentVersionResolver(svc.GetAntigravityUserAgentVersion)
 	// enforceCodexIdentityHeaders 是所有 Codex 出站路径共用的纯函数收口点，拿不到 ctx，
@@ -856,6 +869,7 @@ func ProvideAPIKeyService(
 
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
+	NewUserCleanupService,
 	ProvideRequestCaptureManager,
 	// Core services
 	ProvideAuthService,
@@ -871,6 +885,7 @@ var ProviderSet = wire.NewSet(
 	NewRedeemService,
 	NewPromoService,
 	NewUsageService,
+	NewApplicationCenterService,
 	NewDashboardService,
 	ProvidePricingService,
 	NewBillingService,
@@ -977,13 +992,22 @@ var ProviderSet = wire.NewSet(
 	NewGroupCapacityService,
 	NewChannelService,
 	wire.Bind(new(ChannelCacheInvalidator), new(*ChannelService)),
-	NewModelPricingResolver,
+	NewModelPricingResolverWithGlobal,
+	NewBillingPreviewService,
 	NewModelPlazaService,
 	NewContentModerationService,
+	wire.Bind(new(SecurityPolicyModelReviewer), new(*ContentModerationService)),
+	NewSecurityPolicyService,
+	NewGlobalModelPricingService,
+	NewTieredRoutingService,
+	ProvideSpendGuardService,
+	NewTicketService,
+	NewBillingExportService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
+	ProvideRechargeBonusExpiryService,
 	ProvideBalanceNotifyService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
@@ -1015,8 +1039,10 @@ func ProvideBalanceNotifyService(emailService *EmailService, settingRepo Setting
 }
 
 // ProvidePaymentService creates PaymentService and attaches notification email delivery.
-func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService, notificationEmailService *NotificationEmailService) *PaymentService {
+func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository, affiliateService *AffiliateService, rechargeBonusRepo RechargeBonusRepository, billingCacheService *BillingCacheService, notificationEmailService *NotificationEmailService) *PaymentService {
 	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionSvc, configService, userRepo, groupRepo, affiliateService)
+	svc.SetRechargeBonusRepository(rechargeBonusRepo)
+	svc.SetBillingCacheService(billingCacheService)
 	svc.SetNotificationEmailService(notificationEmailService)
 	return svc
 }
@@ -1025,7 +1051,13 @@ func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, 
 func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache LeaderLockCache, db *sql.DB) *PaymentOrderExpiryService {
 	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
 	svc.SetLeaderLock(lockCache, db)
-	svc.Start()
+	managedinstance.Register("PaymentOrderExpiryService", svc.Start, svc.Stop)
+	return svc
+}
+
+func ProvideRechargeBonusExpiryService(repo RechargeBonusRepository, balanceCache *BillingCacheService) *RechargeBonusExpiryService {
+	svc := NewRechargeBonusExpiryService(repo, balanceCache, time.Minute)
+	managedinstance.Register("RechargeBonusExpiryService", svc.Start, svc.Stop)
 	return svc
 }
 
@@ -1061,7 +1093,11 @@ func ProvideChannelMonitorRunner(
 		svc.SetScheduler(r)
 		svc.SetQuotaFetcher(quotaFetcher)
 	}
-	r.Start()
+	if os.Getenv("KITTY_DEPLOYMENT_HANDOFF") != "true" {
+		managedinstance.Register("ChannelMonitorRunner", r.Start, r.Stop)
+	} else {
+		logger.LegacyPrintf("service.channel_monitor_runner", "[ChannelMonitorRunner] paused for deployment handoff")
+	}
 	return r
 }
 
@@ -1081,7 +1117,7 @@ func ProvideChannelMonitorV2Aggregator(repo ChannelMonitorV2Repository, db *sql.
 	if os.Getenv("CHANNEL_MONITOR_V2_DISABLE_AGGREGATOR") == "1" {
 		return aggregator
 	}
-	aggregator.Start()
+	managedinstance.Register("ChannelMonitorV2Aggregator", aggregator.Start, aggregator.Stop)
 	return aggregator
 }
 

@@ -225,11 +225,13 @@
         </div>
 
         <!-- Image/video mode -->
-        <div v-else-if="entry.billing_mode === 'image' || entry.billing_mode === 'video'">
+        <div v-else-if="entry.billing_mode === 'image' || (entry.billing_mode === 'video' && props.allowVideoBilling)">
           <!-- Default image price (per-request, same as per_request mode) -->
           <label class="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
             {{ entry.billing_mode === 'video' ? t('admin.channels.form.defaultVideoPrice') : t('admin.channels.form.defaultImagePrice') }}
-            <span class="ml-1 font-normal text-gray-400">$</span>
+            <span class="ml-1 font-normal text-gray-400">
+              {{ entry.billing_mode === 'video' ? t('admin.channels.form.perSecondUnit') : '$' }}
+            </span>
           </label>
           <div class="mt-1 w-48">
             <input :value="entry.per_request_price" @input="emitField('per_request_price', ($event.target as HTMLInputElement).value)"
@@ -299,7 +301,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -317,10 +319,13 @@ const { t } = useI18n()
 const props = withDefaults(defineProps<{
   entry: PricingFormEntry
   platform?: string
+  allowVideoBilling?: boolean
   hideTokenIntervals?: boolean
   enableTimePricing?: boolean
   enableTierMultipliers?: boolean
 }>(), {
+  platform: '',
+  allowVideoBilling: false,
   hideTokenIntervals: false,
   enableTimePricing: false,
   enableTierMultipliers: false,
@@ -332,14 +337,19 @@ const emit = defineEmits<{
 }>()
 
 // Collapse state: entries with existing models default to collapsed
-const collapsed = ref(props.entry.models.length > 0)
+const collapsed = shallowRef(props.entry.models.length > 0)
 
-const billingModeOptions = computed(() => [
-  { value: 'token', label: t('admin.channels.billingMode.token') },
-  { value: 'per_request', label: t('admin.channels.billingMode.perRequest') },
-  { value: 'image', label: t('admin.channels.billingMode.image') },
-  { value: 'video', label: t('admin.channels.billingMode.video') }
-])
+const billingModeOptions = computed(() => {
+  const options = [
+    { value: 'token', label: t('admin.channels.billingMode.token') },
+    { value: 'per_request', label: t('admin.channels.billingMode.perRequest') },
+    { value: 'image', label: t('admin.channels.billingMode.image') }
+  ]
+  if (props.allowVideoBilling) {
+    options.push({ value: 'video', label: t('admin.channels.billingMode.video') })
+  }
+  return options
+})
 
 const billingModeLabel = computed(() => {
   const opt = billingModeOptions.value.find(o => o.value === props.entry.billing_mode)

@@ -138,6 +138,7 @@ func normalizeGrokAccountTestMode(mode string) string {
 
 // AccountTestService handles account testing operations
 type AccountTestService struct {
+	concurrencyService        *ConcurrencyService
 	accountRepo               AccountRepository
 	geminiTokenProvider       *GeminiTokenProvider
 	claudeTokenProvider       *ClaudeTokenProvider
@@ -369,6 +370,18 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Account not found")
 	}
+	if err := accountTestCooldown(ctx, account, resolveAccountTestModel(account, modelID), time.Now()); err != nil {
+		var wait *TestAdmissionWaitError
+		if errors.As(err, &wait) {
+			return s.sendErrorAndEnd(c, fmt.Sprintf("%s；请在 %s 后重新测试", wait.Reason, wait.Until.Local().Format("2006-01-02 15:04:05")))
+		}
+		return s.sendErrorAndEnd(c, err.Error())
+	}
+	release, err := s.acquireTestAccountSlot(ctx, account)
+	if err != nil {
+		return s.sendErrorAndEnd(c, err.Error())
+	}
+	defer release()
 
 	// Synthetic UI load-test accounts exercise the real SSE parsing and modal
 	// interactions, but intentionally do not send their placeholder credentials
@@ -384,6 +397,15 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		return nil
 	}
 
+	return s.testAccountConnectionForAccount(c, account, modelID, prompt, mode, testOpts)
+}
+
+// testAccountConnectionForAccount invokes the provider adapter after the
+// account has passed cooldown and shared-capacity admission.
+func (s *AccountTestService) testAccountConnectionForAccount(c *gin.Context, account *Account, modelID, prompt, mode string, testOpts AccountTestOptions) error {
+	if account.IsVideo() {
+		return s.sendErrorAndEnd(c, "请在视频工作台提交视频测试，以保存任务和计费记录。")
+	}
 	// Route to platform-specific test method
 	if account.IsCNProvider() {
 		switch account.GetAPIProtocol() {
@@ -552,6 +574,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
+
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event
@@ -630,6 +653,7 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
+
 	payloadBytes, _ := json.Marshal(payload)
 	vertexBody, err := buildVertexAnthropicRequestBody(payloadBytes)
 	if err != nil {
@@ -714,6 +738,7 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 		"max_tokens":  256,
 		"temperature": 1,
 	}
+
 	bedrockBody, _ := json.Marshal(bedrockPayload)
 
 	// Use non-streaming endpoint (response is standard Claude JSON)
@@ -887,7 +912,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// upstream and must apply the same model normalization as real forwarding.
 	upstreamTestModelID := testModelID
 	if isOAuth {
-		upstreamTestModelID = normalizeOpenAIModelForUpstream(credentialAccount, testModelID)
+		upstreamTestModelID = normalizeOpenAIModelForUpstream(credentialAccount, resolveAccountTestModel(credentialAccount, testModelID))
 	}
 	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth)
 	if options, ok := pelicanTestOptionsFromContext(ctx); ok {
@@ -898,7 +923,9 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// Send test_start event once. A task-invalid Agent Identity response may
 	// restart this probe after registering a replacement task.
 	if !agentIdentityTaskRecoveryWasTried(ctx) {
-		s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
+		// Report the model sent to the upstream, not a display alias that the
+		// ChatGPT/Codex endpoint cannot accept.
+		s.sendEvent(c, TestEvent{Type: "test_start", Model: upstreamTestModelID})
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(payloadBytes))
@@ -942,6 +969,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		// 与真实转发一致：账号级自定义 UA 同样作为管理员显式配置传入，否则测试用的身份
 		// 与该账号真实出站的身份不是同一个（issue #3901 的配对不变式由收口保证）。
 		enforceCodexIdentityHeadersWithUA(req.Header, credentialAccount.GetOpenAIUserAgent())
+
 	}
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
@@ -1506,6 +1534,7 @@ func (s *AccountTestService) testGrokVideoGeneration(c *gin.Context, ctx context
 		payload["image"] = grokMediaImageObject(normalized)
 		s.sendEvent(c, TestEvent{Type: "content", Text: "using uploaded first-frame / reference image\n"})
 	}
+
 	payloadBytes, _ := json.Marshal(payload)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(payloadBytes))
@@ -1672,6 +1701,7 @@ User query:
 		"store":   false,
 		"stream":  false,
 	}
+
 	payloadBytes, _ := json.Marshal(payload)
 
 	apiURL, err := buildGrokResponsesURL(account, s.cfg, s.settingService)
@@ -1759,6 +1789,7 @@ func (s *AccountTestService) testGrokTTS(c *gin.Context, ctx context.Context, ac
 	var lastBody string
 	var lastCode int
 	for _, payload := range payloads {
+
 		payloadBytes, _ := json.Marshal(payload)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(payloadBytes))
 		if err != nil {
@@ -1884,6 +1915,7 @@ func (s *AccountTestService) testGrokSTT(c *gin.Context, ctx context.Context, ac
 // It does not run a full audio session — success is WS handshake, optionally
 // enriched with the first server event type when one arrives quickly.
 func (s *AccountTestService) testGrokRealtime(c *gin.Context, ctx context.Context, account *Account, authToken, modelID string) error {
+
 	model := strings.TrimSpace(modelID)
 	if model == "" {
 		model = defaultGrokRealtimeTestModel
@@ -3022,6 +3054,7 @@ func (s *AccountTestService) processOpenAIChatCompletionsStream(c *gin.Context, 
 func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
 	seenCompleted := false
+	seenText := false
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -3061,9 +3094,28 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 		case "response.output_text.delta":
 			// OpenAI Responses API uses "delta" field for text content
 			if delta, ok := data["delta"].(string); ok && delta != "" {
+				seenText = true
 				s.sendEvent(c, TestEvent{Type: "content", Text: delta})
 			}
 		case "response.completed", "response.done":
+			if !seenText {
+				response, _ := data["response"].(map[string]any)
+				if output, ok := response["output"].([]any); ok {
+					for _, raw := range output {
+						if item, ok := raw.(map[string]any); ok {
+							if content, ok := item["content"].([]any); ok {
+								for _, part := range content {
+									if text, ok := part.(map[string]any); ok && text["type"] == "output_text" {
+										if value, ok := text["text"].(string); ok && value != "" {
+											s.sendEvent(c, TestEvent{Type: "content", Text: value})
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 			return nil
 		case "response.failed":
@@ -3120,6 +3172,7 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 		"n":               1,
 		"response_format": "b64_json",
 	}
+
 	payloadBytes, _ := json.Marshal(payload)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(payloadBytes))
