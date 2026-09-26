@@ -30,11 +30,7 @@ func RegisterAdminRoutes(
 	admin.Use(panelRateLimiter.Global())
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
 	admin.Use(gin.HandlerFunc(auditLog))
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 	admin.Use(middleware.UserHierarchyGuard(userService))
-=======
-	admin.Use(h.Admin.Account.AuthorizeObserver)
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	admin.GET("/video-tasks", h.OpenAIGateway.ListAdminVideoTasks)
 	admin.GET("/video-tasks/stats", h.OpenAIGateway.AdminVideoTaskStats)
@@ -422,13 +418,9 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 	accounts := admin.Group("/accounts")
 	{
 		accounts.GET("", h.Admin.Account.List)
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 		accounts.GET("/openai-request-timezones", h.Admin.Account.GetOpenAIRequestTimezones)
 		// Keep the registry route ahead of the dynamic /:id routes so clients can
 		// always discover the available strategy profiles without ambiguity.
-=======
-		accounts.GET("/management-capabilities", h.Admin.Setting.GetAccountManagementCapabilities)
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 		accounts.GET("/upstream-billing-rates", h.Admin.Account.GetUpstreamBillingRates)
 		accounts.GET("/upstream-billing-probe/settings", h.Admin.Account.GetUpstreamBillingProbeSettings)
 		accounts.PUT("/upstream-billing-probe/settings", h.Admin.Account.UpdateUpstreamBillingProbeSettings)
@@ -823,7 +815,6 @@ func registerScheduledTestRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.POST("/account-quality-plans/:id/run", h.Admin.ScheduledTest.TriggerQuality)
 	admin.GET("/pelican-test-results", h.Admin.ScheduledTest.ListPelicanHistory)
 	plans := admin.Group("/scheduled-test-plans")
-	plans.Use(h.Admin.ScheduledTest.ObserverGuard(h.Admin.Account))
 	{
 		plans.POST("", h.Admin.ScheduledTest.Create)
 		plans.PUT("/:id", h.Admin.ScheduledTest.Update)

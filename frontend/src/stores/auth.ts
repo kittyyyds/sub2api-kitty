@@ -96,12 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.role === 'admin' || user.value?.role === 'super_admin'
   })
 
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
   const isSuperAdmin = computed(() => user.value?.role === 'super_admin')
-=======
-  const isObserver = computed(() => user.value?.role === 'observer')
-  const canManageAccounts = computed(() => isAdmin.value || isObserver.value)
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
@@ -505,12 +500,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     isAdmin,
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
     isSuperAdmin,
-=======
-    isObserver,
-    canManageAccounts,
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
     isSimpleMode,
     hasPendingAuthSession,
 

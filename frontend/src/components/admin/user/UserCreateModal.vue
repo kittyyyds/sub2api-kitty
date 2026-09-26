@@ -29,16 +29,10 @@
         <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
         <select v-model="form.role" class="input" :disabled="!authStore.isSuperAdmin">
           <option value="user">{{ t('admin.users.roles.user') }}</option>
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
           <option v-if="authStore.isSuperAdmin" value="super_admin">超级管理员</option>
           <option v-if="authStore.isSuperAdmin" value="admin">{{ t('admin.users.roles.admin') }}</option>
-=======
-          <option value="observer">{{ t('admin.users.roles.observer') }}</option>
-          <option value="admin">{{ t('admin.users.roles.admin') }}</option>
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
         </select>
       </div>
-      <ObserverGroupSelector v-if="form.role === 'observer'" v-model="form.observer_group_ids" />
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="input-label">{{ t('admin.users.columns.balance') }}</label>
@@ -80,11 +74,7 @@
 import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'; import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 import { useAuthStore } from '@/stores/auth'
-=======
-import ObserverGroupSelector from './ObserverGroupSelector.vue'
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
@@ -95,11 +85,7 @@ const emit = defineEmits(['close', 'success']); const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin' | 'super_admin', balance: '', concurrency: 1, rpm_limit: 0 })
-=======
-const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin' | 'observer', observer_group_ids: [] as number[], balance: '', concurrency: 1, rpm_limit: 0 })
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 
 const stepUp = useStepUp()
 const loading = ref(false)
@@ -133,7 +119,7 @@ const submit = async () => {
   } finally { loading.value = false }
 }
 
-watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', password: '', username: '', notes: '', role: 'user', observer_group_ids: [], balance: '', concurrency: 1, rpm_limit: 0 }) })
+watch(() => props.show, (v) => { if(v) Object.assign(form, { email: '', password: '', username: '', notes: '', role: 'user', balance: '', concurrency: 1, rpm_limit: 0 }) })
 
 const generateRandomPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'

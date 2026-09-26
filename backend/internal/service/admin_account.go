@@ -306,16 +306,6 @@ func (s *adminServiceImpl) DuplicateAccount(ctx context.Context, id int64, actor
 	}
 	autoPauseOnExpired := source.AutoPauseOnExpired
 	groups, groupIDs := duplicateAccountGroups(source)
-	if _, scoped := ObserverGroupIDs(ctx); scoped {
-		groupIDs = ObserverVisibleGroups(ctx, groupIDs)
-		filtered := make([]AccountGroup, 0, len(groups))
-		for _, group := range groups {
-			if ObserverCanManageGroup(ctx, group.GroupID) {
-				filtered = append(filtered, group)
-			}
-		}
-		groups = filtered
-	}
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
@@ -606,9 +596,6 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 }
 
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
-	if err := ValidateObserverGroupBindings(ctx, input.GroupIDs); err != nil {
-		return nil, err
-	}
 	accountExtra, err := normalizeOpenAILongContextBillingExtra(input.Platform, input.Extra)
 	if err != nil {
 		return nil, err
@@ -663,13 +650,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
-
-=======
 	if err := s.validateExcelBPS403GroupSettings(ctx, account); err != nil {
 		return nil, err
 	}
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
@@ -1094,7 +1077,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 	for key := range updates {
 		if isOpenAIRequestTimezoneKey(key) {
 			account, err := s.accountRepo.GetByID(ctx, id)
@@ -1105,7 +1087,7 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 				return err
 			}
 			break
-=======
+	}
 	_, moveChanged := updates[ExcelBPSAutoMoveOn403Key]
 	_, targetChanged := updates[ExcelBPS403TargetGroupIDKey]
 	if moveChanged || targetChanged {
@@ -1119,7 +1101,6 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 		maps.Copy(merged.Extra, updates)
 		if err := s.validateExcelBPS403GroupSettings(ctx, &merged); err != nil {
 			return err
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 		}
 	}
 	updates = MergeOpenAICodexTicketExtra(updates, nil)
@@ -1179,24 +1160,6 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			return nil, err
 		}
 		input.AccountIDs = accountIDs
-	}
-
-	if _, scoped := ObserverGroupIDs(ctx); scoped {
-		accounts, err := s.accountRepo.GetByIDs(ctx, input.AccountIDs)
-		if err != nil {
-			return nil, err
-		}
-		allowed := map[int64]bool{}
-		for _, a := range accounts {
-			if a != nil && ObserverCanManageAccount(ctx, a) {
-				allowed[a.ID] = true
-			}
-		}
-		for _, id := range input.AccountIDs {
-			if !allowed[id] {
-				return nil, ErrObserverScope
-			}
-		}
 	}
 
 	result := &BulkUpdateAccountsResult{
@@ -1737,7 +1700,7 @@ func (s *adminServiceImpl) CreateShadow(ctx context.Context, parentID int64, opt
 			}
 		}
 	} else if len(parent.GroupIDs) > 0 {
-		groupIDs = ObserverVisibleGroups(ctx, parent.GroupIDs)
+		groupIDs = append([]int64(nil), parent.GroupIDs...)
 	} else if s.groupRepo != nil {
 		defaultGroupName := PlatformOpenAI + "-default"
 		if groups, gerr := s.groupRepo.ListActiveByPlatform(ctx, PlatformOpenAI); gerr == nil {
@@ -1927,9 +1890,6 @@ func (s *adminServiceImpl) validateGroupIDsExist(ctx context.Context, groupIDs [
 // ValidateAccountGroupBindings is the shared fail-closed policy boundary for
 // every account path that accepts explicit group bindings.
 func (s *adminServiceImpl) ValidateAccountGroupBindings(ctx context.Context, groupIDs []int64) error {
-	if err := ValidateObserverGroupBindings(ctx, groupIDs); err != nil {
-		return err
-	}
 	if len(groupIDs) == 0 || s.cfg == nil || s.cfg.RunMode != config.RunModeSimple {
 		return nil
 	}

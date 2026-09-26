@@ -1662,7 +1662,7 @@
         </div>
       </div>
 
-      <div v-if="!isSparkShadow && !authStore.isObserver">
+      <div v-if="!isSparkShadow">
         <div class="mb-1 flex items-center gap-2">
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
@@ -3965,8 +3965,8 @@ const {
 } = useQuotaNotifyState()
 
 // Load global feature states once
-adminAPI.accounts.getManagementCapabilities().then(cfg => {
-  webSearchGlobalEnabled.value = cfg?.web_search_enabled === true
+adminAPI.settings.getWebSearchEmulationConfig().then(cfg => {
+  webSearchGlobalEnabled.value = cfg?.enabled === true && (cfg?.providers?.length ?? 0) > 0
 }).catch(() => { webSearchGlobalEnabled.value = false })
 
 loadQuotaNotifyGlobal()
@@ -5441,9 +5441,6 @@ const handleSubmit = async () => {
 
   const updatePayload: Record<string, unknown> = { ...form }
   try {
-    if (authStore.isObserver) {
-      delete updatePayload.proxy_id
-    }
     // 后端期望 proxy_id: 0 表示清除代理，而不是 null
     if (updatePayload.proxy_id === null) {
       updatePayload.proxy_id = 0

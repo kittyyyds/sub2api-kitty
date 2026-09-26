@@ -31,7 +31,6 @@ vi.mock('@/stores/auth', () => ({
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
-      getManagementCapabilities: vi.fn().mockResolvedValue({ web_search_enabled: false, account_quota_notify_enabled: false }),
       bulkUpdate: vi.fn(),
       checkMixedChannelRisk: vi.fn()
     }

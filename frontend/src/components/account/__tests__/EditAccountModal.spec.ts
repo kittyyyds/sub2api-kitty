@@ -29,7 +29,6 @@ vi.mock('@/stores/auth', () => ({
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
-      getManagementCapabilities: vi.fn().mockResolvedValue({ web_search_enabled: false, account_quota_notify_enabled: false }),
       update: updateAccountMock,
       getOpenAIRequestTimezones: vi.fn().mockResolvedValue({ default: 'Asia/Singapore', timezones: ['Asia/Singapore', 'America/New_York'] }),
       checkMixedChannelRisk: checkMixedChannelRiskMock
@@ -364,7 +363,6 @@ describe('EditAccountModal', () => {
 
   afterEach(() => vi.useRealTimers())
 
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 
 
 
@@ -468,7 +466,7 @@ describe('EditAccountModal', () => {
     expect(credentials).toMatchObject({ base_url: 'https://video.example.test', api_key: 'video-fixture-key' })
     expect(credentials).not.toHaveProperty('grok_media_provider')
     wrapper.unmount()
-=======
+  })
   it('persists the BPS session proxy toggle and clears it when BPS is disabled', async () => {
     const account = buildAccount()
     account.type = 'oauth'
@@ -517,7 +515,6 @@ describe('EditAccountModal', () => {
     await flushPromises()
     expect(updateAccountMock.mock.calls[1]?.[1]?.extra?.openai_excel_bps_proxy_source).toBeUndefined()
     restored.unmount()
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
   })
 
   it('saves and restores Excel BPS independently of existing OAuth settings', async () => {
@@ -2198,8 +2195,8 @@ describe('EditAccountModal', () => {
       'antigravity_project_id'
     )
   })
-})
 
+})
 describe('EditAccountModal OpenAI 自动使用重置卡', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true

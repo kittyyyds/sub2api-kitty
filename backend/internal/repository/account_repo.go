@@ -276,7 +276,7 @@ func (r *accountRepository) CreateWithAccountGroups(ctx context.Context, account
 }
 
 func (r *accountRepository) GetByID(ctx context.Context, id int64) (*service.Account, error) {
-	m, err := observerAccountQuery(ctx, r.client.Account.Query()).Where(dbaccount.IDEQ(id)).Only(ctx)
+	m, err := r.client.Account.Query().Where(dbaccount.IDEQ(id)).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrAccountNotFound, nil)
 	}
@@ -313,7 +313,8 @@ func (r *accountRepository) GetByIDs(ctx context.Context, ids []int64) ([]*servi
 		return []*service.Account{}, nil
 	}
 
-	entAccounts, err := observerAccountQuery(ctx, r.client.Account.Query()).
+	entAccounts, err := r.client.Account.
+		Query().
 		Where(dbaccount.IDIn(uniqueIDs...)).
 		WithProxy().
 		All(ctx)
@@ -1130,7 +1131,6 @@ func (r *accountRepository) accountListFilteredQuery(platform, accountType, stat
 }
 
 func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 	return r.listWithFilters(ctx, params, platform, accountType, status, search, groupID, privacyMode, false)
 }
 
@@ -1140,9 +1140,6 @@ func (r *accountRepository) ListWithFiltersUsingGroupPriority(ctx context.Contex
 
 func (r *accountRepository) listWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string, useGroupPriority bool) ([]service.Account, *pagination.PaginationResult, error) {
 	q := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)
-=======
-	q := observerAccountQuery(ctx, r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode))
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 	// Clone before Count so interceptor-appended predicates (SoftDeleteMixin's
 	// deleted_at IS NULL) don't accumulate on the shared builder and pollute the
 	// subsequent list query. Same pattern used in group_repo/promo_code_repo/user_repo
@@ -1172,7 +1169,7 @@ func (r *accountRepository) listWithFilters(ctx context.Context, params paginati
 }
 
 func (r *accountRepository) ListAllWithFilters(ctx context.Context, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, error) {
-	accounts, err := observerAccountQuery(ctx, r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode)).All(ctx)
+	accounts, err := r.accountListFilteredQuery(platform, accountType, status, search, groupID, privacyMode).All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1981,9 +1978,6 @@ func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]s
 }
 
 func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
-	if err := service.ValidateObserverGroupBindings(ctx, groupIDs); err != nil {
-		return err
-	}
 	existingGroupIDs, err := r.loadAccountGroupIDs(ctx, accountID)
 	if err != nil {
 		return err
@@ -2015,11 +2009,7 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 		return err
 	}
 
-	deleteGroups := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID))
-	if allowed, scoped := service.ObserverGroupIDs(ctx); scoped {
-		deleteGroups.Where(dbaccountgroup.GroupIDIn(allowed...))
-	}
-	if _, err := deleteGroups.Exec(ctx); err != nil {
+	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
 		return err
 	}
 
@@ -2085,9 +2075,6 @@ func (r *accountRepository) SetGroupAllowedModels(ctx context.Context, accountID
 	changedGroupIDs := make([]int64, 0, len(entries))
 	for _, entry := range entries {
 		groupID := entry.GroupID
-		if !service.ObserverCanManageGroup(ctx, groupID) {
-			continue
-		}
 		next := service.NormalizeGroupAllowedModels(allowed[groupID])
 		if slices.Equal(next, service.NormalizeGroupAllowedModels(entry.AllowedModels)) {
 			continue
@@ -4265,12 +4252,4 @@ func (r *accountRepository) ListShadowsByParent(ctx context.Context, parentID in
 		out = append(out, accountEntityToService(m))
 	}
 	return out, nil
-}
-
-// Apply the same predicate before COUNT, pagination and filter-based bulk/export.
-func observerAccountQuery(ctx context.Context, query *dbent.AccountQuery) *dbent.AccountQuery {
-	if ids, scoped := service.ObserverGroupIDs(ctx); scoped {
-		query = query.Where(dbaccount.HasAccountGroupsWith(dbaccountgroup.GroupIDIn(ids...)))
-	}
-	return query
 }

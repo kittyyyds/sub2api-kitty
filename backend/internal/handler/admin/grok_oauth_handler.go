@@ -215,7 +215,7 @@ func (h *GrokOAuthHandler) RefreshAccountToken(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, dto.AccountForObserver(c.Request.Context(), dto.AccountFromService(updatedAccount)))
+	response.Success(c, dto.AccountFromService(updatedAccount))
 }
 
 type GrokOAuthReconcileRequest struct {
@@ -314,7 +314,7 @@ func (h *GrokOAuthHandler) CreateAccountFromOAuth(c *gin.Context) {
 		return
 	}
 	h.scheduleGrokImportProbe(account)
-	response.Success(c, dto.AccountForObserver(c.Request.Context(), dto.AccountFromService(account)))
+	response.Success(c, dto.AccountFromService(account))
 }
 
 type GrokSSOToOAuthRequest struct {
@@ -458,7 +458,7 @@ func (h *GrokOAuthHandler) createAccountFromSSOToken(ctx context.Context, req Gr
 			Index:   index,
 			Name:    name,
 			Email:   tokenInfo.Email,
-			Account: dto.AccountForObserver(ctx, dto.AccountFromService(account)),
+			Account: dto.AccountFromService(account),
 		},
 	}
 }

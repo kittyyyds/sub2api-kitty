@@ -18,11 +18,7 @@ declare module 'vue-router' {
      * @default false
      */
     requiresAdmin?: boolean
-<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
     requiresSuperAdmin?: boolean
-=======
-    requiresAccountManagement?: boolean
->>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
     requiresRequestCapture?: boolean
 
     /**
