@@ -2,6 +2,7 @@
 package dto
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ func UserFromServiceShallow(u *service.User) *User {
 		Concurrency:                u.Concurrency,
 		Status:                     u.Status,
 		AllowedGroups:              u.AllowedGroups,
+		ObserverGroupIDs:           u.ObserverGroupIDs,
 		LastActiveAt:               u.LastActiveAt,
 		CreatedAt:                  u.CreatedAt,
 		UpdatedAt:                  u.UpdatedAt,
@@ -986,6 +988,7 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 	}
 }
 
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 // SecurityPolicyKeywordFromService converts a service keyword to admin DTO.
 func SecurityPolicyKeywordFromService(w *service.SecurityPolicyKeyword) *SecurityPolicyKeyword {
 	if w == nil {
@@ -1020,3 +1023,28 @@ func SecurityPolicyKeywordSeedFromService(seed service.SecurityPolicyKeywordSeed
 
 // ProxyWithAccountCountFromServiceAdmin converts a service ProxyWithAccountCount to AdminProxyWithAccountCount DTO.
 // It includes the password field - user-facing endpoints must not use this.
+=======
+// AccountForObserver filters only the freshly allocated response DTO. Never
+// mutate service accounts: they also feed credential refresh and scheduler caches.
+func AccountForObserver(ctx context.Context, account *Account) *Account {
+	if _, scoped := service.ObserverGroupIDs(ctx); !scoped || account == nil {
+		return account
+	}
+	account.GroupIDs = service.ObserverVisibleGroups(ctx, account.GroupIDs)
+	groups := account.Groups[:0]
+	for _, group := range account.Groups {
+		if group != nil && service.ObserverCanManageGroup(ctx, group.ID) {
+			groups = append(groups, group)
+		}
+	}
+	account.Groups = groups
+	links := account.AccountGroups[:0]
+	for _, link := range account.AccountGroups {
+		if service.ObserverCanManageGroup(ctx, link.GroupID) {
+			links = append(links, link)
+		}
+	}
+	account.AccountGroups = links
+	return account
+}
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66

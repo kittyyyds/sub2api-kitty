@@ -7,22 +7,23 @@ import (
 )
 
 type User struct {
-	ID             int64
-	Email          string
-	Username       string
-	Notes          string
-	AvatarURL      string
-	AvatarSource   string
-	AvatarMIME     string
-	AvatarByteSize int
-	AvatarSHA256   string
-	PasswordHash   string
-	Role           string
-	Balance        float64
-	FrozenBalance  float64
-	Concurrency    int
-	Status         string
-	AllowedGroups  []int64
+	ID               int64
+	Email            string
+	Username         string
+	Notes            string
+	AvatarURL        string
+	AvatarSource     string
+	AvatarMIME       string
+	AvatarByteSize   int
+	AvatarSHA256     string
+	PasswordHash     string
+	Role             string
+	Balance          float64
+	FrozenBalance    float64
+	Concurrency      int
+	Status           string
+	AllowedGroups    []int64
+	ObserverGroupIDs []int64
 	// RestrictPublicGroups narrows the public groups this user may bind to the
 	// ones listed in AllowedGroups. False keeps the default, where every public
 	// group is bindable.
@@ -76,8 +77,14 @@ func (u *User) IsAdmin() bool {
 	return u != nil && IsAdminRole(u.Role)
 }
 
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 func IsAdminRole(role string) bool { return role == RoleAdmin || role == RoleSuperAdmin }
 func (u *User) IsSuperAdmin() bool { return u != nil && u.Role == RoleSuperAdmin }
+=======
+func (u *User) IsObserver() bool {
+	return u.Role == RoleObserver
+}
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 
 func (u *User) IsActive() bool {
 	return u.Status == StatusActive

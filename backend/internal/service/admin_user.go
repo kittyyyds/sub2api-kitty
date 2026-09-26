@@ -111,8 +111,13 @@ func normalizeUserRole(role, fallback string) (string, error) {
 	if role == "" {
 		return fallback, nil
 	}
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 	if !IsAdminRole(role) && role != RoleUser {
 		return "", fmt.Errorf("invalid role: %q (must be %s, %s or %s)", role, RoleSuperAdmin, RoleAdmin, RoleUser)
+=======
+	if role != RoleAdmin && role != RoleUser && role != RoleObserver {
+		return "", fmt.Errorf("invalid role: %q (must be %s, %s or %s)", role, RoleAdmin, RoleUser, RoleObserver)
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 	}
 	return role, nil
 }
@@ -131,19 +136,29 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		return nil, err
 	}
 
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 	if err := s.authorizeUserRoleChange(ctx, input.ActorAdminID, nil, role); err != nil {
 		return nil, err
 	}
+=======
+	if err := s.validateGroupIDsExist(ctx, input.ObserverGroupIDs); err != nil {
+		return nil, err
+	}
+	if role != RoleObserver {
+		input.ObserverGroupIDs = []int64{}
+	}
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 	user := &User{
-		Email:         input.Email,
-		Username:      input.Username,
-		Notes:         input.Notes,
-		Role:          role,
-		Balance:       balance,
-		Concurrency:   input.Concurrency,
-		RPMLimit:      input.RPMLimit,
-		Status:        StatusActive,
-		AllowedGroups: input.AllowedGroups,
+		Email:            input.Email,
+		Username:         input.Username,
+		Notes:            input.Notes,
+		Role:             role,
+		Balance:          balance,
+		Concurrency:      input.Concurrency,
+		RPMLimit:         input.RPMLimit,
+		Status:           StatusActive,
+		AllowedGroups:    input.AllowedGroups,
+		ObserverGroupIDs: input.ObserverGroupIDs,
 
 		RestrictPublicGroups: input.RestrictPublicGroups,
 	}
@@ -216,9 +231,20 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		}
 	}
 
+	originalCtx := ctx
+	ctx, setupTx, err := s.beginObserverSetup(ctx, id, input)
+	if err != nil {
+		return nil, err
+	}
+	if setupTx != nil {
+		defer func() { _ = setupTx.Rollback() }()
+	}
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if setupTx != nil && user.Role == RoleObserver {
+		return nil, infraerrors.Conflict("OBSERVER_SETUP_ALREADY_APPLIED", "Observer setup can only run when changing a non-observer user to observer")
 	}
 
 	if err := s.authorizeUserRoleChange(ctx, input.ActorAdminID, user, input.Role); err != nil {
@@ -272,12 +298,16 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		}
 		// 防锁死保护：不允许降级系统中最后一个管理员（自我降级已在 handler 层拦截，
 		// 此处兜底覆盖跨管理员互降导致零 admin 的场景）。
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 		if user.Role == RoleSuperAdmin && role != RoleSuperAdmin {
 			if err := s.ensureNotLastSuperAdmin(ctx); err != nil {
 				return nil, err
 			}
 		}
 		if user.Role == RoleAdmin && role == RoleUser {
+=======
+		if user.Role == RoleAdmin && role != RoleAdmin {
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 			if err := s.ensureNotLastAdmin(ctx); err != nil {
 				return nil, err
 			}
@@ -301,14 +331,64 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		fields.AllowedGroups = true
 	}
 
+	if input.ObserverGroupIDs != nil {
+		if err := s.validateGroupIDsExist(ctx, *input.ObserverGroupIDs); err != nil {
+			return nil, err
+		}
+		user.ObserverGroupIDs = *input.ObserverGroupIDs
+		fields.ObserverGroupIDs = true
+	}
+	if user.Role != RoleObserver && (fields.Role || fields.ObserverGroupIDs) {
+		user.ObserverGroupIDs = []int64{}
+		fields.ObserverGroupIDs = true
+	}
+
 	oldRestrictPublicGroups := user.RestrictPublicGroups
 	if input.RestrictPublicGroups != nil {
 		user.RestrictPublicGroups = *input.RestrictPublicGroups
 		fields.RestrictPublicGroups = true
 	}
+	var dedicatedGroupID int64
+	if setupTx != nil {
+		dedicatedGroupID, err = s.applyObserverSetup(ctx, user, &fields, input.ObserverSetup)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if err := s.userRepo.Update(WithUserManagementActor(ctx, input.ActorAdminID), user, fields); err != nil {
 		return nil, err
+	}
+	concurrencyDiff := user.Concurrency - oldConcurrency
+	if setupTx != nil {
+		if input.ObserverSetup.GrantResources {
+			change, err := s.userRepo.AdjustBalance(ctx, user.ID, observerSetupBalanceGrant)
+			if err != nil {
+				return nil, err
+			}
+			user.Balance = change.New
+			if err := s.recordObserverAdjustment(ctx, user.ID, input.ActorAdminID, AdjustmentTypeAdminBalance, observerSetupBalanceGrant); err != nil {
+				return nil, err
+			}
+		}
+		if concurrencyDiff != 0 {
+			if err := s.recordObserverAdjustment(ctx, user.ID, input.ActorAdminID, AdjustmentTypeAdminConcurrency, float64(concurrencyDiff)); err != nil {
+				return nil, err
+			}
+		}
+		if err := setupTx.Commit(); err != nil {
+			return nil, err
+		}
+		ctx = originalCtx
+		logger.LegacyPrintf("service.admin", "audit: observer setup actor_admin_id=%d target_user_id=%d dedicated_group_id=%d revoke_public_groups=%t grant_resources=%t",
+			input.ActorAdminID, user.ID, dedicatedGroupID, input.ObserverSetup.RevokePublicGroups, input.ObserverSetup.GrantResources)
+		if input.ObserverSetup.GrantResources && s.billingCacheService != nil {
+			cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			if err := s.billingCacheService.InvalidateUserBalance(cacheCtx, user.ID); err != nil {
+				logger.LegacyPrintf("service.admin", "invalidate observer balance cache failed: user_id=%d err=%v", user.ID, err)
+			}
+		}
 	}
 
 	// 角色变更属权限敏感操作，落审计日志（含操作者），便于事后追溯。
@@ -332,8 +412,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		}
 	}
 
-	concurrencyDiff := user.Concurrency - oldConcurrency
-	if concurrencyDiff != 0 {
+	if concurrencyDiff != 0 && setupTx == nil {
 		code, err := GenerateRedeemCode()
 		if err != nil {
 			logger.LegacyPrintf("service.admin", "failed to generate adjustment redeem code: %v", err)

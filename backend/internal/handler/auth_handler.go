@@ -153,17 +153,17 @@ func (h *AuthHandler) ensureBackendModeAllowsUser(ctx context.Context, user *ser
 	if user == nil {
 		return infraerrors.Unauthorized("INVALID_USER", "user not found")
 	}
-	if h == nil || !h.isBackendModeEnabled(ctx) || user.IsAdmin() {
+	if h == nil || !h.isBackendModeEnabled(ctx) || user.IsAdmin() || user.IsObserver() {
 		return nil
 	}
-	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin login is allowed.")
+	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin or observer login is allowed.")
 }
 
 func (h *AuthHandler) ensureBackendModeAllowsNewUserLogin(ctx context.Context) error {
 	if h == nil || !h.isBackendModeEnabled(ctx) {
 		return nil
 	}
-	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin login is allowed.")
+	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin or observer login is allowed.")
 }
 
 func (h *AuthHandler) isBackendModeEnabled(ctx context.Context) bool {
@@ -698,9 +698,15 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
 	// Backend mode: block non-admin token refresh
 	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && !service.IsAdminRole(result.UserRole) {
 		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
+=======
+	// Backend mode: allow administrators and observers to keep their panel sessions.
+	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && result.UserRole != service.RoleAdmin && result.UserRole != service.RoleObserver {
+		response.Forbidden(c, "Backend mode is active. Only admin or observer login is allowed.")
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
 		return
 	}
 

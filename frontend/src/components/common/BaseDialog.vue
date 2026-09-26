@@ -14,7 +14,11 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
         <div ref="dialogRef" :class="['modal-content', widthClasses, { 'drawer-content': placement === 'right', 'modal-fullscreen': fullscreen }]" tabindex="-1" @click.stop>
+=======
+        <div ref="dialogRef" :class="['modal-content', widthClasses, contentClass, { 'drawer-content': placement === 'right', 'modal-fullscreen': fullscreen }]" @click.stop>
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -32,7 +36,7 @@
           </div>
 
           <!-- Body -->
-          <div ref="modalBodyRef" class="modal-body">
+          <div ref="modalBodyRef" class="modal-body" :class="bodyClass">
             <slot></slot>
           </div>
 
@@ -71,6 +75,9 @@ interface Props {
   showCloseButton?: boolean
   zIndex?: number
   fullscreen?: boolean
+  /** Optional per-dialog layout overrides; native defaults stay unchanged. */
+  contentClass?: string
+  bodyClass?: string
 }
 
 interface Emits {

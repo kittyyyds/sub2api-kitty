@@ -84,12 +84,17 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
   role: 'super_admin' | 'admin' | 'user' // User role for authorization
+=======
+  role: 'admin' | 'user' | 'observer' // User role for authorization
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
   rpm_limit?: number // User-level RPM cap (0 = unlimited); effective as fallback when group has no rpm_limit
   status: 'active' | 'disabled' // Account status
+  observer_group_ids?: number[] | null
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
   balance_notify_enabled: boolean
   balance_notify_threshold: number | null
@@ -2332,18 +2337,30 @@ export interface ApiKeyUsageTrendPoint {
 
 // ==================== Admin User Management ====================
 
+export interface ObserverSetupOptions {
+  create_dedicated_group: boolean
+  revoke_public_groups: boolean
+  grant_resources: boolean
+}
+
 export interface UpdateUserRequest {
   email?: string
   password?: string
   username?: string
   notes?: string
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
   role?: 'super_admin' | 'admin' | 'user'
+=======
+  role?: 'admin' | 'user' | 'observer'
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
   balance?: number
   concurrency?: number
   rpm_limit?: number
   status?: 'active' | 'disabled'
+  observer_group_ids?: number[] | null
   allowed_groups?: number[] | null
   restrict_public_groups?: boolean
+  observer_setup?: ObserverSetupOptions
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
   // null 表示删除该分组的专属倍率
   group_rates?: Record<number, number | null>

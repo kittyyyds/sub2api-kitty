@@ -32,6 +32,22 @@
 
     <!-- Navigation -->
     <nav ref="sidebarNavRef" class="sidebar-nav scrollbar-hide">
+      <div v-if="authStore.isObserver" class="sidebar-section">
+        <router-link to="/admin/accounts" class="sidebar-link mb-1"
+          :class="{ 'sidebar-link-active': isActive('/admin/accounts'), 'sidebar-link-collapsed': sidebarCollapsed }"
+          :title="sidebarCollapsed ? t('nav.accounts') : undefined"
+          @click="handleMenuItemClick('/admin/accounts')">
+          <GlobeIcon class="h-5 w-5 flex-shrink-0" />
+          <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }">{{ t('nav.accounts') }}</span>
+        </router-link>
+        <router-link v-if="appStore.backendModeEnabled" to="/usage" class="sidebar-link mb-1"
+          :class="{ 'sidebar-link-active': isActive('/usage'), 'sidebar-link-collapsed': sidebarCollapsed }"
+          :title="sidebarCollapsed ? t('nav.usage') : undefined"
+          @click="handleMenuItemClick('/usage')">
+          <ChartIcon class="h-5 w-5 flex-shrink-0" />
+          <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }">{{ t('nav.usage') }}</span>
+        </router-link>
+      </div>
       <!-- Admin View: Admin menu first, then personal menu -->
       <template v-if="isAdmin">
         <!-- Admin Section -->
@@ -292,7 +308,9 @@ async function openContact(tab: 'service' | 'after-sales') {
   contactOpen.value = true
 }
 
-const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
+const homePath = computed(() => (
+  isAdmin.value ? '/admin/dashboard' : authStore.isObserver ? '/admin/accounts' : '/dashboard'
+))
 
 // Per-group expand/collapse overrides. A group with no entry follows the
 // automatic behavior (expanded while the active route is one of its children);
@@ -826,6 +844,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/chat', label: t('nav.onlineChat'), icon: ChatIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
+<<<<<<< 6e3949df120b57ee87b7d1362596a0a40d242e40
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     {
       path: '/apps',
@@ -839,6 +858,9 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     },
     { path: '/creative-canvas', label: '无限画布', icon: FolderIcon },
     { path: '/video-tasks', label: '视频任务', icon: OrderIcon, hideInSimpleMode: true },
+=======
+    { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: !authStore.isObserver },
+>>>>>>> 4f084496971c8a40d28936b6e9dc955137b75c66
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
     { path: '/billing', label: t('nav.billing'), icon: CreditCardIcon, hideInSimpleMode: true },
