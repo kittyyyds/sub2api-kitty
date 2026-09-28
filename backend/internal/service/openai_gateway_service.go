@@ -78,6 +78,7 @@ var openaiAllowedHeaders = map[string]bool{
 	"accept-language":         true,
 	"content-type":            true,
 	"conversation_id":         true,
+	"openai-beta":             true,
 	"user-agent":              true,
 	"originator":              true,
 	"session_id":              true,
@@ -454,14 +455,26 @@ var ErrNoAvailableCompactAccounts = errors.New("no available accounts support /r
 
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
-	videoTaskWorkerMu      sync.Mutex
-	videoTaskWorkerCancel  context.CancelFunc
-	videoTaskWorkerDone    chan struct{}
+	videoTaskWorkerMu     sync.Mutex
+	videoTaskWorkerCancel context.CancelFunc
+	videoTaskWorkerDone   chan struct{}
+
+	priorityScheduling      prioritySchedulingState
+	excelBPSRecoveryMu      sync.Mutex
+	excelBPSRecoveryCancel  context.CancelFunc
+	excelBPSRecoveryDone    chan struct{}
+	excelBPSRecoveryStopped bool
+
+	excelBPSWarmMu         sync.Mutex
+	excelBPSWarmCancel     context.CancelFunc
+	excelBPSWarmDone       chan struct{}
+	excelBPSWarmStopped    bool
 	excelBPSImagesMu       sync.Mutex
 	excelBPSImages         *basispoints.ImageRelay
 	excelBPSAttachments    basispoints.AttachmentCache
 	excelBPSIPPoolMu       sync.Mutex
 	excelBPSIPPoolSyncedAt time.Time
+	excelBPSCooldownUntil  sync.Map // key: int64(accountID), value: time.Time
 	harvestIPPoolMu        sync.Mutex
 	harvestIPPoolExits     []harvestIPPoolExit
 	harvestIPPoolSyncedAt  time.Time
@@ -474,6 +487,7 @@ type OpenAIGatewayService struct {
 	userRepo               UserRepository
 	userSubRepo            UserSubscriptionRepository
 	cache                  GatewayCache
+	rpmCache               RPMCache
 	cfg                    *config.Config
 	codexDetector          CodexClientRestrictionDetector
 	schedulerSnapshot      *SchedulerSnapshotService
@@ -553,6 +567,11 @@ type OpenAIGatewayService struct {
 }
 
 type OpenAIGatewayOption func(*OpenAIGatewayService)
+
+// WithOpenAIRPMCache enables strict RPM accounting for OpenAI OAuth accounts.
+func WithOpenAIRPMCache(cache RPMCache) OpenAIGatewayOption {
+	return func(s *OpenAIGatewayService) { s.rpmCache = cache }
+}
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
 func NewOpenAIGatewayService(

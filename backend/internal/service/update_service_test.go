@@ -34,6 +34,7 @@ type updateServiceGitHubClientStub struct {
 	recentReleases []*GitHubRelease
 	recentErr      error
 	latestRepo     string
+	recentRepo     string
 	descriptors    map[string][]byte
 	latestErr      error
 	downloadErr    error
@@ -46,7 +47,8 @@ func (s *updateServiceGitHubClientStub) FetchLatestRelease(_ context.Context, re
 	return s.release, s.latestErr
 }
 
-func (s *updateServiceGitHubClientStub) FetchRecentReleases(context.Context, string, int) ([]*GitHubRelease, error) {
+func (s *updateServiceGitHubClientStub) FetchRecentReleases(_ context.Context, repo string, _ int) ([]*GitHubRelease, error) {
+	s.recentRepo = repo
 	return s.recentReleases, s.recentErr
 }
 
@@ -91,6 +93,8 @@ func TestUpdateServicePerformUpdateNoUpdateReturnsSentinel(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, errors.Is(err, ErrNoUpdateAvailable))
 	require.ErrorIs(t, err, ErrNoUpdateAvailable)
+	githubRepo, repoErr := releaseRepository()
+	require.NoError(t, repoErr)
 	require.Equal(t, githubRepo, githubClient.latestRepo)
 }
 

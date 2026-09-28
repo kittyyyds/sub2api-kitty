@@ -66,8 +66,8 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "pelican_showcase_items", "generated_at", "timestamp with time zone", 0, false)
 	requireIndex(t, tx, "pelican_showcase_items", "idx_pelican_showcase_items_group_generated")
 
-	// api_keys: key length should be 128
-	requireColumn(t, tx, "api_keys", "key", "character varying", 128, false)
+	// Migration 244 retains legacy hash-only keys, so plaintext key is nullable.
+	requireColumn(t, tx, "api_keys", "key", "character varying", 128, true)
 
 	// redeem_codes: subscription fields
 	requireColumn(t, tx, "redeem_codes", "group_id", "bigint", 0, true)

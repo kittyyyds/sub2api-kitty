@@ -67,10 +67,10 @@ export interface ModelPlazaGroup {
   /** 'standard' | 'subscription' */
   subscription_type: string
   rate_multiplier: number
-  /** 图片模型是否使用独立倍率。 */
+  /** 非最终价图片档位使用独立倍率；不取分组/用户专属倍率。 */
   image_rate_independent: boolean
   image_rate_multiplier: number
-  /** 视频模型是否使用独立倍率。 */
+  /** 非最终价视频档位使用独立倍率；video 平台配置的最终余额价不叠加倍率。 */
   video_rate_independent: boolean
   video_rate_multiplier: number
   /** 登录且管理员为该用户配了专属倍率时返回；生效倍率 = user_rate ?? rate_multiplier。 */
@@ -80,7 +80,6 @@ export interface ModelPlazaGroup {
   peak_end: string
   peak_rate_multiplier: number
   is_exclusive: boolean
-  /** 生图独立倍率：true 时图片计费模型的实付倍率取 image_rate_multiplier，不取分组/专属倍率。 */
   /** 分组是否启用长上下文阶梯计费；false 时实付列只展示最低档，官方阶梯仅供参考。 */
   long_context_pricing_enabled: boolean
   models: PlazaModel[]

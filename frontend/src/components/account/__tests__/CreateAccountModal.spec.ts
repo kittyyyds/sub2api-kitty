@@ -11,6 +11,7 @@ const {
   showWarningMock,
   importCodexSessionMock,
   createOpenAICodexPATMock,
+  createCredentialOperationsMock,
   authIsSimpleMode,
 } = vi.hoisted(() => ({
   createAccountMock: vi.fn(),
@@ -19,6 +20,7 @@ const {
   showWarningMock: vi.fn(),
   importCodexSessionMock: vi.fn(),
   createOpenAICodexPATMock: vi.fn(),
+  createCredentialOperationsMock: vi.fn(),
   authIsSimpleMode: { value: true },
 }))
 
@@ -63,6 +65,10 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('@/api/admin/accountTokenGuardV2', () => ({
+  createTokenGuardV2Account: createCredentialOperationsMock,
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -72,6 +78,7 @@ vi.mock('vue-i18n', async () => {
 })
 
 import CreateAccountModal from '../CreateAccountModal.vue'
+import OpenAITwoFAImport from '../OpenAITwoFAImport.vue'
 
 const BaseDialogStub = defineComponent({
   name: 'BaseDialog',
@@ -212,7 +219,9 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
       failed: 0,
       errors: [],
       warnings: [],
+      items: [{ action: 'created', account_id: 42 }],
     })
+    createCredentialOperationsMock.mockReset().mockResolvedValue({ account_id: 42 })
     createOpenAICodexPATMock.mockReset().mockResolvedValue({})
   })
 
@@ -247,6 +256,58 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     await flushPromises()
     expect(createAccountMock).not.toHaveBeenCalled()
     wrapper.unmount()
+  })
+
+  it('offers 2FA initial login with optional name and imports through Session deduplication', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
+    await wrapper.get('[data-testid="request-timezone-search"]').setValue(true)
+    const tier = wrapper.getComponent({ name: 'AccountTierRoutingFields' })
+    tier.vm.$emit('update:enabled', true)
+    tier.vm.$emit('update:pool', 'premium')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-testid="openai-two-fa"]').trigger('click')
+    expect(wrapper.get('[data-tour="account-form-name"]').attributes('required')).toBeUndefined()
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    const importer = wrapper.getComponent(OpenAITwoFAImport)
+    expect(wrapper.findComponent(OAuthAuthorizationFlowStub).exists()).toBe(false)
+    const credential = { access_token: 'test-access', refresh_token: 'test-refresh', account_id: 'test-workspace' }
+    const login = { email: 'user@example.com', password: 'test-password', mfa_secret: 'test-secret' }
+    await expect(importer.props('importCredential')(credential, login.email, login)).resolves.toBe('created')
+    expect(importCodexSessionMock).toHaveBeenCalledWith(expect.objectContaining({
+      content: JSON.stringify(credential), name: 'user@example.com', update_existing: false, skip_existing: true,
+      concurrency: 10, group_ids: [], proxy_id: null,
+      extra: expect.objectContaining({
+        tiered_routing_enabled: true, pool: 'premium', openai_request_timezone_enabled: true,
+        openai_request_timezone: 'Asia/Singapore', openai_request_timezone_sync_search: true,
+      }),
+    }))
+    expect(wrapper.emitted('created')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(createCredentialOperationsMock).toHaveBeenCalledWith({
+      account_id: 42, login_email: login.email, password: login.password, totp_secret: login.mfa_secret,
+      credential_mode: 'password_totp', proxy_source: 'account', enabled: true, auto_relogin_enabled: true,
+    })
+  })
+
+  it('retries operations enrollment for an already imported identity without reporting premature success', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('[data-testid="openai-two-fa"]').trigger('click')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    const importer = wrapper.getComponent(OpenAITwoFAImport)
+    const credential = { access_token: 'test-access', refresh_token: 'test-refresh' }
+    const login = { email: 'user@example.com', password: 'test-password', mfa_secret: 'test-secret' }
+    createCredentialOperationsMock.mockRejectedValueOnce(new Error('encryption unavailable'))
+    await expect(importer.props('importCredential')(credential, login.email, login)).rejects.toThrow()
+    expect(wrapper.emitted('created')).toBeUndefined()
+    importCodexSessionMock.mockResolvedValue({ created: 0, updated: 0, skipped: 1, failed: 0, items: [{ action: 'skipped', account_id: 42 }] })
+    await expect(importer.props('importCredential')(credential, login.email, login)).resolves.toBe('skipped')
+    expect(createCredentialOperationsMock).toHaveBeenCalledTimes(2)
+    expect(createCredentialOperationsMock.mock.calls[1]?.[0]).toMatchObject({
+      account_id: 42, password: login.password, totp_secret: login.mfa_secret, enabled: true, auto_relogin_enabled: true,
+    })
   })
 
   it('sets month and year expiry presets without submitting the account form', async () => {

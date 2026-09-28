@@ -239,7 +239,7 @@ export default {
         urlTitle: 'Choose the correct Base URL', urlBody: 'Claude Code uses the root domain. Codex and OpenAI-compatible tools use /v1.',
         restartTitle: 'Restart the terminal', restartBody: 'Restart the tool after setting environment variables so the current process receives the new configuration.',
       },
-      endpoints: { title: 'Base URLs', description: 'The two URLs serve different protocols. Confirm the current tool before copying.' },
+      endpoints: { title: 'Base URLs', description: 'The two URLs serve different protocols. Confirm the current tool before copying.', domestic: 'China endpoint (append /v1 for OpenAI)' },
       workbench: {
         title: 'Integration workbench', description: 'Choose a tool, then an operating system or SDK. The copy button always matches the code currently shown.',
         toolAria: 'Integration tool', osAria: 'Operating system', sdkAria: 'SDK example',

@@ -34,6 +34,70 @@ function mountTable(models: PlazaModel[], props: Record<string, unknown> = {}) {
 }
 
 describe('PlazaModelPricingTable customer pricing ledger', () => {
+  it.each([
+    { enabled: true, multiplier: 1, userRate: 0.05, expectedPrice: '¥14.00' },
+    { enabled: true, multiplier: 0.5, userRate: null, expectedPrice: '¥7.00' },
+    { enabled: true, multiplier: 0, userRate: 0.05, expectedPrice: '¥0.00' },
+    { enabled: true, multiplier: -1, userRate: null, expectedPrice: '¥0.00' },
+    { enabled: false, multiplier: 1, userRate: 0.05, expectedPrice: '¥0.70' },
+    { enabled: false, multiplier: 1, userRate: null, expectedPrice: '¥2.10' }
+  ])('shows $expectedPrice for non-final video pricing when independent=$enabled', (tc) => {
+    const video = model('video-test', 'video')
+    video.pricing!.per_request_price = 2
+    const wrapper = mountTable([video], {
+      rateMultiplier: 0.15,
+      userRateMultiplier: tc.userRate,
+      imageRateIndependent: true,
+      imageRateMultiplier: 9,
+      videoRateIndependent: tc.enabled,
+      videoRateMultiplier: tc.multiplier
+    })
+    try {
+      expect(wrapper.get('tbody tr .customer-price').text()).toBe(tc.expectedPrice)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('applies the video independent rate to non-final resolution tiers', () => {
+    const video = model('video-tier-test', 'video')
+    video.pricing!.intervals = [{
+      min_tokens: 0, max_tokens: null, tier_label: '720p',
+      input_price: null, output_price: null, cache_write_price: null,
+      cache_read_price: null, per_request_price: 2
+    }]
+    const wrapper = mountTable([video], {
+      rateMultiplier: 0.15,
+      userRateMultiplier: 0.05,
+      videoRateIndependent: true,
+      videoRateMultiplier: 0.5
+    })
+    try {
+      expect(wrapper.get('tbody tr .tier-value').text()).toBe('720p')
+      expect(wrapper.get('tbody tr .customer-price').text()).toBe('¥7.00')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it.each(['image', 'video'] as const)('defaults a null independent %s multiplier to one', (billingMode) => {
+    const media = model('media-test', billingMode)
+    media.pricing!.per_request_price = 2
+    const wrapper = mountTable([media], {
+      rateMultiplier: 0.15,
+      userRateMultiplier: 0.05,
+      imageRateIndependent: true,
+      imageRateMultiplier: null,
+      videoRateIndependent: true,
+      videoRateMultiplier: null
+    })
+    try {
+      expect(wrapper.get('tbody tr .customer-price').text()).toBe('¥14.00')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it.each(['video', 'per_request'] as const)('shows video-platform %s balance prices without multipliers or currency conversion', (billingMode) => {
     const video = { ...model('特价/官方h3-2k', billingMode), platform: 'video' }
     video.pricing!.per_request_price = 0.25

@@ -23,6 +23,10 @@ import (
 )
 
 func addCompatibleTestReleases(client *updateServiceGitHubClientStub, releases []*GitHubRelease) {
+	githubRepo, err := releaseRepository()
+	if err != nil {
+		panic(err)
+	}
 	client.descriptors = map[string][]byte{}
 	for _, r := range releases {
 		if r == nil {
@@ -87,6 +91,8 @@ func TestCompatiblePackageChecksVersionAndMigrationChecksum(t *testing.T) {
 }
 
 func TestCompatiblePackageURLStaysInReleaseRepository(t *testing.T) {
+	githubRepo, err := releaseRepository()
+	require.NoError(t, err)
 	valid := "https://github.com/" + githubRepo + "/releases/download/v2.8.15-kitty.1/" + compatibilityAsset
 	require.NoError(t, validatePackageAssetURL(valid))
 	for _, invalid := range []string{strings.Replace(valid, "https:", "http:", 1), strings.Replace(valid, githubRepo, "ranxi2001/sub2api", 1), strings.Replace(valid, "github.com", "github.com.evil.example", 1), valid + "?redirect=other"} {

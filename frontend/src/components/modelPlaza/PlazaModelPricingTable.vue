@@ -23,10 +23,17 @@ const props = withDefaults(defineProps<{
   platform?: string
   rateMultiplier: number
   userRateMultiplier?: number | null
+  /** 非最终价图片档位使用独立倍率，不取分组/用户专属倍率。 */
   imageRateIndependent?: boolean
-  imageRateMultiplier?: number
+  imageRateMultiplier?: number | null
+  /** 非最终价视频档位使用独立倍率；video 平台始终显示配置的最终余额价。 */
   videoRateIndependent?: boolean
-  videoRateMultiplier?: number
+  videoRateMultiplier?: number | null
+  /**
+   * 高峰窗口描述(含倍率与服务器时区标注),空串/缺省 = 分组未启用高峰。
+   * 表格所有价格均为不含高峰因子的口径,该窗口仅用于分时时段行的 tooltip 披露:
+   * 与高峰重叠的部分实付还会再乘高峰倍率。
+   */
   peakWindow?: string
   peakRateMultiplier?: number | null
 }>(), {
@@ -93,10 +100,10 @@ function isFinalVideoPrice(model: PlazaModel): boolean {
 function effectiveRate(model: PlazaModel): number {
   switch (billingMode(model)) {
     case BILLING_MODE_IMAGE:
-      if (props.imageRateIndependent) return props.imageRateMultiplier
+      if (props.imageRateIndependent) return props.imageRateMultiplier ?? 1
       break
     case BILLING_MODE_VIDEO:
-      if (props.videoRateIndependent) return props.videoRateMultiplier
+      if (props.videoRateIndependent) return Math.max(0, props.videoRateMultiplier ?? 1)
       break
   }
   return props.userRateMultiplier ?? props.rateMultiplier

@@ -84,6 +84,11 @@ function injectPublicSettings(backendUrl: string): Plugin {
 export default defineConfig(({ mode }) => {
   // 加载环境变量
   const env = loadEnv(mode, process.cwd(), '')
+  // Fail at build startup if a deployment has a misspelled site selector.
+  const site = env.VITE_KITTY_SITE?.trim() || 'kittyyyds'
+  if (site !== 'kittyapi' && site !== 'kittyyyds') {
+    throw new Error(`Invalid VITE_KITTY_SITE "${site}"; expected kittyapi or kittyyyds`)
+  }
   const backendUrl = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080'
   const devPort = Number(env.VITE_DEV_PORT || 3000)
 

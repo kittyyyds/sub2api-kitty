@@ -217,7 +217,7 @@ export default {
         urlTitle: '选择正确 Base URL', urlBody: 'Claude Code 用根域名；Codex 和 OpenAI 兼容工具使用 /v1。',
         restartTitle: '重启终端', restartBody: '设置环境变量后重新启动工具，确保新配置被当前进程读取。',
       },
-      endpoints: { title: '基础地址', description: '两个地址用途不同，复制前先确认当前工具的协议。' },
+      endpoints: { title: '基础地址', description: '两个地址用途不同，复制前先确认当前工具的协议。', domestic: '国内入口（OpenAI 协议需添加 /v1）' },
       workbench: {
         title: '接入工作台', description: '先选工具，再选操作系统或 SDK；复制按钮始终对应当前可见代码。',
         toolAria: '接入工具', osAria: '操作系统', sdkAria: 'SDK 示例',

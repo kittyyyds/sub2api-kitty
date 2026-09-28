@@ -32,11 +32,6 @@ var (
 const (
 	updateCacheKey = "update_check_cache"
 	updateCacheTTL = 1200 // 20 minutes
-	// Releases are maintained on the owner-controlled production fork. Keep the
-	// updater independent from the upstream repository so production installs
-	// see our release stream and can update to our fork's assets.
-	githubRepo = "kittyyyds/sub2api-kittyyyds"
-
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"
 	allowedAssetHost    = "objects.githubusercontent.com"
@@ -140,6 +135,9 @@ type GitHubAsset struct {
 
 // CheckUpdate checks for available updates
 func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInfo, error) {
+	if _, err := releaseRepository(); err != nil {
+		return nil, err
+	}
 	// Try cache first
 	if !force {
 		if cached, err := s.getFromCache(ctx); err == nil && cached != nil {
@@ -372,7 +370,11 @@ func (s *UpdateService) RollbackToVersion(ctx context.Context, version string) e
 // fetchRollbackCandidates fetches recent releases and keeps the newest
 // maxRollbackVersions entries strictly older than the current version.
 func (s *UpdateService) fetchRollbackCandidates(ctx context.Context) ([]*GitHubRelease, error) {
-	releases, err := s.githubClient.FetchRecentReleases(ctx, githubRepo, rollbackFetchPageSize)
+	repository, err := releaseRepository()
+	if err != nil {
+		return nil, err
+	}
+	releases, err := s.githubClient.FetchRecentReleases(ctx, repository, rollbackFetchPageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +419,11 @@ func (s *UpdateService) fetchRollbackCandidates(ctx context.Context) ([]*GitHubR
 }
 
 func (s *UpdateService) fetchLatestRelease(ctx context.Context) (*UpdateInfo, error) {
-	release, err := s.githubClient.FetchLatestRelease(ctx, githubRepo)
+	repository, err := releaseRepository()
+	if err != nil {
+		return nil, err
+	}
+	release, err := s.githubClient.FetchLatestRelease(ctx, repository)
 	if err != nil {
 		return nil, err
 	}
@@ -659,12 +665,16 @@ func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {
 	}
 
 	var cached struct {
+		SiteID      string       `json:"site_id"`
 		Latest      string       `json:"latest"`
 		ReleaseInfo *ReleaseInfo `json:"release_info"`
 		Timestamp   int64        `json:"timestamp"`
 	}
 	if err := json.Unmarshal([]byte(data), &cached); err != nil {
 		return nil, err
+	}
+	if cached.SiteID != releaseSiteID {
+		return nil, fmt.Errorf("cached release belongs to another or unknown site")
 	}
 
 	age := time.Now().Unix() - cached.Timestamp
@@ -699,10 +709,12 @@ func (s *UpdateService) saveToCache(ctx context.Context, info *UpdateInfo) {
 		return
 	}
 	cacheData := struct {
+		SiteID      string       `json:"site_id"`
 		Latest      string       `json:"latest"`
 		ReleaseInfo *ReleaseInfo `json:"release_info"`
 		Timestamp   int64        `json:"timestamp"`
 	}{
+		SiteID:      releaseSiteID,
 		Latest:      info.LatestVersion,
 		ReleaseInfo: info.ReleaseInfo,
 		Timestamp:   time.Now().Unix(),

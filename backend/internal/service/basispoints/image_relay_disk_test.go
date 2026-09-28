@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -29,10 +30,16 @@ func TestImageRelayStoresPrivateFilesAndRemovesExpiredImages(t *testing.T) {
 	require.Equal(t, data, actual)
 	info, err := os.Stat(img.path)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	// Windows exposes only a synthesized writable/read-only mode through
+	// os.Stat; POSIX owner/group bits are enforced and checked on Unix hosts.
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	}
 	info, err = os.Stat(r.dir)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0700), info.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0700), info.Mode().Perm())
+	}
 	require.Zero(t, r.reservedBytes)
 	require.Zero(t, r.reservedEntries)
 	img.expires = time.Now().Add(-time.Second)

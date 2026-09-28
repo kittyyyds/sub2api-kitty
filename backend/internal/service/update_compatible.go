@@ -24,6 +24,22 @@ import (
 const compatibilityAsset = "kitty-compatibility.json"
 const compatibilityFamily = "kitty-ranxi-console"
 
+// Inject with -X github.com/Wei-Shaw/sub2api/internal/service.releaseSiteID=kittyapi
+// for KittyAPI. The default preserves existing KittyYYDS source builds; neither
+// environment settings nor an incoming release may change this identity.
+var releaseSiteID = "kittyyyds"
+
+func releaseRepository() (string, error) {
+	switch releaseSiteID {
+	case "kittyyyds":
+		return "kittyyyds/sub2api-kittyyyds", nil
+	case "kittyapi":
+		return "kittyyyds/sub2api-kitty", nil
+	default:
+		return "", fmt.Errorf("unknown compiled release site identity; updates are disabled")
+	}
+}
+
 var compatibleVersionPattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-kitty\.([1-9][0-9]*)$`)
 
 func isCompatibleVersion(version string) bool {
@@ -47,6 +63,7 @@ var requiredUpdateCapabilities = []string{
 type compatiblePackage struct {
 	Schema       int               `json:"schema"`
 	Family       string            `json:"family"`
+	SiteID       string            `json:"site_id"`
 	Version      string            `json:"version"`
 	Capabilities []string          `json:"capabilities"`
 	Migrations   map[string]string `json:"migrations"`
@@ -56,6 +73,9 @@ type compatiblePackage struct {
 }
 
 func currentPackageContract(version string) (*compatiblePackage, error) {
+	if _, err := releaseRepository(); err != nil {
+		return nil, err
+	}
 	files, err := fs.Glob(migrations.FS, "*.sql")
 	if err != nil {
 		return nil, err
@@ -69,7 +89,7 @@ func currentPackageContract(version string) (*compatiblePackage, error) {
 		sum := sha256.Sum256([]byte(strings.TrimSpace(string(body))))
 		rows[name] = hex.EncodeToString(sum[:])
 	}
-	return &compatiblePackage{Schema: 1, Family: compatibilityFamily, Version: version,
+	return &compatiblePackage{Schema: 1, Family: compatibilityFamily, SiteID: releaseSiteID, Version: version,
 		Capabilities: append([]string(nil), requiredUpdateCapabilities...), Migrations: rows}, nil
 }
 
@@ -78,6 +98,16 @@ func (p *compatiblePackage) validate(expectedVersion string) error {
 		!isCompatibleVersion(p.Version) || !isCompatibleVersion(expectedVersion) ||
 		strings.TrimPrefix(p.Version, "v") != strings.TrimPrefix(expectedVersion, "v") {
 		return fmt.Errorf("release is not a compatible Kitty package")
+	}
+	if _, err := releaseRepository(); err != nil {
+		return err
+	}
+	// Only the verified pre-binding KittyYYDS release may lack a site label.
+	// Existing migration/capability/hash checks still apply to that release.
+	legacyYYDS := releaseSiteID == "kittyyyds" && p.SiteID == "" &&
+		strings.TrimPrefix(p.Version, "v") == "2.8.18-kitty.4"
+	if p.SiteID != releaseSiteID && !legacyYYDS {
+		return fmt.Errorf("release site identity does not match this site")
 	}
 	have := make(map[string]bool, len(p.Capabilities))
 	for _, capability := range p.Capabilities {
@@ -112,12 +142,16 @@ func packageAssets(release *GitHubRelease) []Asset {
 }
 
 func validatePackageAssetURL(raw string) error {
+	repository, err := releaseRepository()
+	if err != nil {
+		return err
+	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Host != "github.com" || u.User != nil ||
-		u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || !strings.HasPrefix(u.Path, "/"+githubRepo+"/releases/download/") {
+		u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || !strings.HasPrefix(u.Path, "/"+repository+"/releases/download/") {
 		return fmt.Errorf("compatible package must come from the configured release repository")
 	}
-	parts := strings.Split(strings.TrimPrefix(u.Path, "/"+githubRepo+"/releases/download/"), "/")
+	parts := strings.Split(strings.TrimPrefix(u.Path, "/"+repository+"/releases/download/"), "/")
 	if len(parts) != 2 || !isCompatibleVersion(parts[0]) || parts[1] == "" ||
 		strings.ContainsAny(parts[1], `\\`) || parts[1] == "." || parts[1] == ".." {
 		return fmt.Errorf("invalid compatible release asset path")
@@ -130,7 +164,8 @@ func validatePackageReleaseAsset(asset Asset, version, tag string) (string, erro
 		return "", err
 	}
 	u, _ := url.Parse(asset.DownloadURL)
-	parts := strings.Split(strings.TrimPrefix(u.Path, "/"+githubRepo+"/releases/download/"), "/")
+	repository, _ := releaseRepository() // already checked by validatePackageAssetURL
+	parts := strings.Split(strings.TrimPrefix(u.Path, "/"+repository+"/releases/download/"), "/")
 	if parts[1] != asset.Name || strings.TrimPrefix(parts[0], "v") != strings.TrimPrefix(version, "v") ||
 		(tag != "" && parts[0] != tag) {
 		return "", fmt.Errorf("release asset does not match its version, tag or filename")

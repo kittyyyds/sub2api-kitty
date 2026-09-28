@@ -73,12 +73,13 @@ type modelPlazaModel struct {
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
-	ID                        int64             `json:"id"`
-	Name                      string            `json:"name"`
-	Description               string            `json:"description"`
-	Platform                  string            `json:"platform"`
-	SubscriptionType          string            `json:"subscription_type"`
-	RateMultiplier            float64           `json:"rate_multiplier"`
+	ID               int64   `json:"id"`
+	Name             string  `json:"name"`
+	Description      string  `json:"description"`
+	Platform         string  `json:"platform"`
+	SubscriptionType string  `json:"subscription_type"`
+	RateMultiplier   float64 `json:"rate_multiplier"`
+	// 独立媒体倍率只作用于非最终价档位，最终价标记随模型条目传递。
 	ImageRateIndependent      bool              `json:"image_rate_independent"`
 	ImageRateMultiplier       float64           `json:"image_rate_multiplier"`
 	VideoRateIndependent      bool              `json:"video_rate_independent"`
