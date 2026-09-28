@@ -25,6 +25,9 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
 	startTime := time.Now()
+	if account.IsPrismEnabledForModel(gjson.GetBytes(body, "model").String()) {
+		return prismFailure(c, 400, "prism_embeddings_unsupported", "Prism pilot supports text requests only")
+	}
 
 	originalModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
 	if originalModel == "" {

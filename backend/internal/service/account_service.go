@@ -246,6 +246,9 @@ func NewAccountService(accountRepo AccountRepository, groupRepo GroupRepository)
 
 // Create 创建账号
 func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (*Account, error) {
+	if err := rejectPrismBulkFields(req.Credentials, req.Extra); err != nil {
+		return nil, err
+	}
 	if err := ValidateVideoAccount(req.Platform, req.Type, req.Credentials); err != nil {
 		return nil, err
 	}
@@ -359,9 +362,24 @@ func (s *AccountService) ListByGroup(ctx context.Context, groupID int64) ([]Acco
 
 // Update 更新账号
 func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccountRequest) (*Account, error) {
+	var prismCredentials, prismExtra map[string]any
+	if req.Credentials != nil {
+		prismCredentials = *req.Credentials
+	}
+	if req.Extra != nil {
+		prismExtra = *req.Extra
+	}
+	if err := rejectPrismBulkFields(prismCredentials, prismExtra); err != nil {
+		return nil, err
+	}
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get account: %w", err)
+	}
+	// This legacy service has no configured secret cipher or Prism route
+	// validation. Bound accounts must use the administrative editor path.
+	if account.IsPrismEnabled() || account.GetPrismCookieCiphertext() != "" {
+		return nil, fmt.Errorf("Prism-bound accounts must be updated through the account editor")
 	}
 
 	// 更新字段

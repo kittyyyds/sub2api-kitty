@@ -2521,7 +2521,7 @@ func (s *OpenAIGatewayService) isOpenAIAccountTransportCompatible(account *Accou
 	if s == nil || account == nil {
 		return false
 	}
-	if len(requestedModels) > 0 && account.IsExcelBPSEnabledForModel(requestedModels[0]) {
+	if len(requestedModels) > 0 && (account.IsExcelBPSEnabledForModel(requestedModels[0]) || account.IsPrismEnabledForModel(requestedModels[0])) {
 		return false
 	}
 	if requiredTransport == OpenAIUpstreamTransportResponsesWebsocketV2Ingress {

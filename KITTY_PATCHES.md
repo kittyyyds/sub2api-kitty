@@ -1,5 +1,20 @@
 # Kitty Custom Patches
 
+## 2.8.18-kitty.4 Prism manual Cookie experiment — 2026-09-28
+
+来源：codex。Incrementally integrates the confirmed local Prism adapter into
+production `2.8.18-kitty.3` while preserving its non-observer fixes and every
+existing migration file. Prism is disabled globally and per account by default.
+Administrators may manually bind a Prism Cookie to an existing OpenAI OAuth
+parent account and explicitly select its model scope. The existing SUB customer
+API key, grouping, account scheduling and billing paths remain in use.
+
+This is an experimental text-only adapter with buffered SSE after completion.
+It does not provide Prism Bearer authentication, automatic login/binding, browser
+helpers, or changes to workspace/model eligibility. Local tests and builds do
+not establish real Prism workspace authentication, model access, inference, or
+billing correctness. See `docs/PRISM_RELEASE_20260928.md` for the release boundary.
+
 ## 0.2.8-kittyyyds.3 timezone and model diagnostics — 2026-09-24
 
 Selectively adapted from MACOS-DO/sub4api v1.1.4, commit

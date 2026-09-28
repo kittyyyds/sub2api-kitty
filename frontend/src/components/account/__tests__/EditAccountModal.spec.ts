@@ -859,6 +859,130 @@ describe('EditAccountModal', () => {
     expect(mountModal(buildAccount()).find('[data-testid="excel-bps-toggle"]').exists()).toBe(false)
   })
 
+  it('requires a Prism binding and an explicit model scope before enabling it', async () => {
+    const account = buildOpenAIOAuthParentAccount()
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="prism-toggle"]').trigger('click')
+    expect(wrapper.get('[data-testid="prism-model-selection"]').text()).not.toContain('gpt-6-astra')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="prism-cookie"]').setValue('fixture-only-session=offline')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="prism-all-models"]').setValue(true)
+    await wrapper.get('[data-testid="prism-user-id"]').setValue('fixture-user')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    const payload = updateAccountMock.mock.calls[0][1]
+    expect(payload.extra.openai_prism).toBe(true)
+    expect(payload.extra).not.toHaveProperty('openai_prism_models')
+    expect(payload.credentials).toMatchObject({ prism_cookie: 'fixture-only-session=offline', prism_user_id: 'fixture-user' })
+    expect(payload.credentials).not.toHaveProperty('prism_project_id')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="prism-cookie"]').element.value).toBe('')
+  })
+
+  it('keeps manual Prism settings without an automatic binding entry or command', () => {
+    const wrapper = mountModal({ ...buildOpenAIOAuthParentAccount(), extra: { openai_prism: true, openai_prism_models: ['gpt-6-astra'] } })
+    expect(wrapper.find('[data-testid="prism-auto-bind"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="prism-bind-command"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="prism-cookie"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="prism-user-id"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="prism-all-models"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="prism-model-selection"]').exists()).toBe(true)
+  })
+
+  it('preserves an encrypted Prism binding without echoing or resubmitting a Cookie', async () => {
+    const account = {
+      ...buildOpenAIOAuthParentAccount(),
+      credentials: { model_mapping: { 'gpt-6-astra': 'gpt-6-astra' }, prism_cookie: 'legacy-response-must-not-be-echoed', prism_user_id: 'saved-user' },
+      credentials_status: { has_prism_cookie_encrypted: true },
+      extra: { openai_prism: true, openai_prism_models: ['gpt-6-astra'], unrelated: 'keep' }
+    }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="prism-cookie"]').element.value).toBe('')
+    expect(wrapper.html()).not.toContain('legacy-response-must-not-be-echoed')
+    expect(wrapper.get('[data-testid="prism-binding-status"]').text()).toBe('admin.accounts.openai.prismCookieBound')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = updateAccountMock.mock.calls[0][1]
+    expect(payload.credentials).not.toHaveProperty('prism_cookie')
+    expect(payload.credentials.prism_user_id).toBe('saved-user')
+    expect(payload.extra).toMatchObject({ openai_prism: true, openai_prism_models: ['gpt-6-astra'], unrelated: 'keep' })
+  })
+
+  it('requires explicitly turning off Excel before selecting Prism', async () => {
+    const account = {
+      ...buildOpenAIOAuthParentAccount(),
+      credentials_status: { has_prism_cookie_encrypted: true },
+      extra: { openai_excel_bps: true, openai_excel_bps_models: ['gpt-6-astra'], unrelated: 'keep' }
+    }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    expect(wrapper.get('[data-testid="prism-toggle"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="prism-toggle"]').trigger('click')
+    expect(wrapper.get('[data-testid="excel-bps-toggle"]').attributes('aria-checked')).toBe('true')
+    expect(wrapper.get('[data-testid="prism-toggle"]').attributes('aria-checked')).toBe('false')
+    await wrapper.get('[data-testid="excel-bps-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="prism-toggle"]').trigger('click')
+    expect(wrapper.get('[data-testid="excel-bps-toggle"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="prism-model-selection"] [data-testid="rewrite-to-snapshot"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = updateAccountMock.mock.calls[0][1]
+    expect(payload.extra).toMatchObject({ openai_prism: true, openai_prism_models: ['gpt-5.2-2025-12-11'], unrelated: 'keep' })
+    expect(payload.extra).not.toHaveProperty('openai_excel_bps')
+    expect(payload.credentials).not.toHaveProperty('prism_cookie')
+  })
+
+  it('disables Prism explicitly without deleting its stored binding or model scope', async () => {
+    const account = {
+      ...buildOpenAIOAuthParentAccount(),
+      credentials: { prism_user_id: 'saved-user' },
+      credentials_status: { has_prism_cookie_encrypted: true },
+      extra: { openai_prism: true, openai_prism_models: ['gpt-6-astra'] }
+    }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="prism-cookie"]').setValue('unsaved-fixture-cookie')
+    await wrapper.get('[data-testid="prism-user-id"]').setValue('unsaved-user-change')
+    await wrapper.get('[data-testid="prism-toggle"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = updateAccountMock.mock.calls[0][1]
+    expect(payload.extra).toMatchObject({ openai_prism: false, openai_prism_models: ['gpt-6-astra'] })
+    expect(payload.credentials).not.toHaveProperty('prism_cookie')
+    expect(payload.credentials.prism_user_id).toBe('saved-user')
+  })
+
+  it('does not offer Prism for API keys, other platforms or Spark shadow accounts', () => {
+    for (const account of [buildAccount(), { ...buildOpenAIOAuthParentAccount(), platform: 'anthropic' }, buildOpenAISparkShadowAccount()]) {
+      const wrapper = mountModal(account)
+      expect(wrapper.find('[data-testid="prism-settings"]').exists()).toBe(false)
+      wrapper.unmount()
+    }
+  })
+
+  it('clears an unsaved Prism Cookie when switching accounts or closing the dialog', async () => {
+    const account = { ...buildOpenAIOAuthParentAccount(), extra: { openai_prism: true } }
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="prism-cookie"]').setValue('fixture-secret-one')
+    await wrapper.setProps({ account: { ...account, id: 99 } })
+    expect(wrapper.get<HTMLInputElement>('[data-testid="prism-cookie"]').element.value).toBe('')
+    await wrapper.get('[data-testid="prism-cookie"]').setValue('fixture-secret-two')
+    await wrapper.setProps({ show: false })
+    await wrapper.setProps({ show: true })
+    expect(wrapper.get<HTMLInputElement>('[data-testid="prism-cookie"]').element.value).toBe('')
+  })
+
   it('loads and removes Copilot SDK mode without dropping unrelated extra', async () => {
     const account = buildAccount()
     account.extra = { openai_copilot_sdk: true, unrelated_setting: 'keep' }

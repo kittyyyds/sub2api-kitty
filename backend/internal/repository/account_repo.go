@@ -452,7 +452,7 @@ func (r *accountRepository) ListCRSAccountIDs(ctx context.Context) (map[string]i
 }
 
 func (r *accountRepository) Update(ctx context.Context, account *service.Account) error {
-	return r.updateAccount(ctx, account, nil, nil, account.RateMultiplier)
+	return r.updateAccount(ctx, account, nil, nil, account.RateMultiplier, nil)
 }
 
 // UpdateWithAccountBillingSettings applies an admin account edit while
@@ -465,7 +465,12 @@ func (r *accountRepository) UpdateWithAccountBillingSettings(
 	rateSyncEnabled *bool,
 	rateMultiplier *float64,
 ) error {
-	return r.updateAccount(ctx, account, probeEnabled, rateSyncEnabled, rateMultiplier)
+	return r.updateAccount(ctx, account, probeEnabled, rateSyncEnabled, rateMultiplier, nil)
+}
+
+func (r *accountRepository) UpdateWithPrismAccountSettings(ctx context.Context, account *service.Account,
+	credentials service.PrismCredentialsUpdate, probeEnabled, rateSyncEnabled *bool, rateMultiplier *float64) error {
+	return r.updateAccount(ctx, account, probeEnabled, rateSyncEnabled, rateMultiplier, &credentials)
 }
 
 func (r *accountRepository) updateAccount(
@@ -474,6 +479,7 @@ func (r *accountRepository) updateAccount(
 	explicitProbeEnabled *bool,
 	explicitRateSyncEnabled *bool,
 	explicitRateMultiplier *float64,
+	prismCredentials *service.PrismCredentialsUpdate,
 ) error {
 	if account == nil {
 		return nil
@@ -498,6 +504,11 @@ func (r *accountRepository) updateAccount(
 		}
 	}
 
+	if prismCredentials != nil {
+		if err := lockAndMergePrismCredentials(ctx, client, account, *prismCredentials); err != nil {
+			return err
+		}
+	}
 	updated, err := r.updateLockedAccount(
 		ctx,
 		client,
@@ -897,7 +908,16 @@ func (r *accountRepository) UpdateCredentials(ctx context.Context, id int64, cre
 	result, err := client.ExecContext(ctx, `
 		UPDATE accounts
 		SET
-			credentials = $1::jsonb,
+			-- OAuth refresh owns token fields, never the independently bound Prism
+			-- session. Read these keys from the current locked row so an old refresh
+			-- snapshot cannot overwrite a concurrent rebind or resurrect an unlink.
+			credentials = ($1::jsonb - 'prism_cookie' - 'prism_cookie_encrypted' - 'prism_user_id')
+				|| CASE WHEN credentials ? 'prism_cookie_encrypted'
+					THEN jsonb_build_object('prism_cookie_encrypted', credentials -> 'prism_cookie_encrypted')
+					ELSE '{}'::jsonb END
+				|| CASE WHEN credentials ? 'prism_user_id'
+					THEN jsonb_build_object('prism_user_id', credentials -> 'prism_user_id')
+					ELSE '{}'::jsonb END,
 			extra = CASE
 				-- 正确性依赖（非防御）：OpenCode 分支必须先于 Ollama 分支求值。两分支
 				-- 的 WHEN 并不互斥：Ollama 分支的守卫是宽谓词——NOT(ollamaMatch(old)

@@ -145,6 +145,9 @@ docs/*
 !docs/BATCH_IMAGE_MVP.md
 !docs/COMPOSITE_GROUPS.md
 !docs/PLUGIN_DEVELOPMENT.md
+!docs/PRISM_LOCAL_PILOT.md
+!docs/PRISM_COOKIE_BINDING.md
+!docs/PRISM_RELEASE_20260928.md
 !docs/channel-monitor-v2-safe-defaults.md
 !docs/codex-credits.md
 !docs/cyber-session-blocking.md

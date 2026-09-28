@@ -87,7 +87,6 @@ func (h *AccountHandler) SetCodexTicketSettings(settings *service.SettingService
 	h.codexTicketSettings = settings
 }
 
-
 func (h *AccountHandler) SetOpenCodeGoUsageService(usage *service.OpenCodeGoUsageService) {
 	h.opencodeGoUsage = usage
 }

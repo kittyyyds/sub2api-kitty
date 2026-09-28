@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 )
 
@@ -23,7 +24,28 @@ func persistAccountCredentials(ctx context.Context, repo AccountRepository, acco
 		return nil
 	}
 
-	account.Credentials = shallowCopyMap(credentials)
+	credentials = shallowCopyMap(credentials)
+	if _, raw := credentials[PrismCookieKey]; raw {
+		return errors.New("Prism session must be encrypted through the account editor")
+	}
+	// OAuth refresh owns OAuth tokens, not the independently bound Prism session.
+	if _, supplied := credentials[PrismCookieEncryptedKey]; !supplied {
+		if encrypted, present := account.Credentials[PrismCookieEncryptedKey]; present {
+			if credentials == nil {
+				credentials = make(map[string]any)
+			}
+			credentials[PrismCookieEncryptedKey] = encrypted
+		}
+	}
+	if _, supplied := credentials[PrismUserIDKey]; !supplied {
+		if userID, present := account.Credentials[PrismUserIDKey]; present {
+			if credentials == nil {
+				credentials = make(map[string]any)
+			}
+			credentials[PrismUserIDKey] = userID
+		}
+	}
+	account.Credentials = credentials
 	if updater, ok := any(repo).(accountCredentialsUpdater); ok {
 		return updater.UpdateCredentials(ctx, account.ID, account.Credentials)
 	}

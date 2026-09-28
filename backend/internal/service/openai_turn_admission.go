@@ -164,6 +164,7 @@ func openAITurnRouteFingerprint(a *Account) [32]byte {
 	}
 	routeExtra := make(map[string]any)
 	for _, key := range []string{
+		PrismEnabledExtraKey, PrismModelsExtraKey,
 		codexFingerprintSeedExtraKey, codexFingerprintModeExtraKey,
 		"openai_passthrough", "openai_oauth_passthrough", "openai_excel_bps", "openai_excel_bps_models", "openai_excel_bps_mihomo",
 		"openai_oauth_responses_websockets_v2_mode", "openai_apikey_responses_websockets_v2_mode",
@@ -371,6 +372,9 @@ func (s *OpenAIGatewayService) bindOpenAIWSHandshake(account *Account, model str
 }
 
 func (s *OpenAIGatewayService) checkOpenAIWSBinding(account *Account, model string, b *openAIWSTurnBinding) error {
+	if account.isPrismUpstreamModelEnabled(model) {
+		return denyOpenAITurn("prism_requires_http")
+	}
 	if account.isExcelBPSUpstreamModelEnabled(model) {
 		return denyOpenAITurn("excel_bps_requires_http")
 	}
