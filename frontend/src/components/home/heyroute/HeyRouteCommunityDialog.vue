@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { afterSalesGroupContact, telegramGroupContact } from '@/config/customerContact'
+import { communityGroupContact, telegramGroupContact } from '@/config/customerContact'
 
 import HeyRouteContactDialog, { type HeyRouteContactPlatform } from './HeyRouteContactDialog.vue'
 import type { HeyRouteCopy } from './heyRouteCopy'
@@ -23,12 +23,16 @@ const platforms = computed<HeyRouteContactPlatform[]>(() => [
     icon: 'chat',
     title: props.copy.communityDialogQqTitle,
     description: props.copy.communityDialogQqDescription,
-    valueLabel: props.copy.communityDialogGroupLink,
-    value: afterSalesGroupContact.href,
-    copyLabel: props.copy.communityDialogCopyLink,
+    valueLabel: communityGroupContact.valueKind === 'number'
+      ? props.copy.communityDialogGroupNumber
+      : props.copy.communityDialogGroupLink,
+    value: communityGroupContact.value,
+    copyLabel: communityGroupContact.valueKind === 'number'
+      ? props.copy.communityDialogCopy
+      : props.copy.communityDialogCopyLink,
     externalLabel: props.copy.communityDialogOpenQq,
-    externalUrl: afterSalesGroupContact.href,
-    qrSrc: afterSalesGroupContact.qrSrc,
+    externalUrl: communityGroupContact.href,
+    qrSrc: communityGroupContact.qrSrc,
     qrAlt: props.copy.communityDialogQqQrAlt,
     qrBackground: '#060b10',
   },

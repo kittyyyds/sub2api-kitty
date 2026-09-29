@@ -29,6 +29,21 @@ export const afterSalesGroupContact = {
   qrSrc: `${kittySite.assetPrefix}/qq-group-qr.png`,
 } as const satisfies CustomerGroupContact
 
+// A's homepage community and after-sales groups have different original identities.
+// Keep B's existing homepage and after-sales group shared.
+export const communityGroupContact = kittySite.id === 'kittyapi'
+  ? {
+      href: 'https://qm.qq.com/q/aP8eapBPpu',
+      qrSrc: `${kittySite.assetPrefix}/images/heyroute/community/qq-qr.png`,
+      value: '494038',
+      valueKind: 'number',
+    } as const
+  : {
+      ...afterSalesGroupContact,
+      value: afterSalesGroupContact.href,
+      valueKind: 'link',
+    } as const
+
 export const telegramGroupContact = {
   href: 'https://t.me/kittyapi1',
   qrSrc: `${kittySite.assetPrefix}/images/heyroute/community/telegram-qr.png`,

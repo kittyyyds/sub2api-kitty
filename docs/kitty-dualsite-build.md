@@ -29,8 +29,8 @@ POSIX shell 对应命令为 `VITE_KITTY_SITE=kittyapi pnpm build` 或 `VITE_KITT
 
 新手页面优先嵌入后台有效的 HTTP(S) `doc_url`。未配置时直接显示本地接入文档，包含本站主入口及国内入口，不再默认跳转 `tb.kittyyyds.xyz`。`/docs` 和 `/custom/docs` 均保留现有路由。
 
-客服 QQ `1722345668`（https://qm.qq.com/q/rU9mJYhImA）、微信 `ALe990411` 和 Telegram `https://t.me/kittyapi1` 沿用原配置。首页社区弹窗和控制台售后入口共同引用本站售后群配置。A 旧首页孤立的历史群入口不再作为当前售后入口，但其原始二维码仍保留。
+客服 QQ `1722345668`（https://qm.qq.com/q/rU9mJYhImA）、微信 `ALe990411` 和 Telegram `https://t.me/kittyapi1` 沿用原配置。A 首页社区 QQ 群与控制台售后群独立：社区弹窗保留原群号文字、复制群号、原群链接和 `/sites/kittyapi/images/heyroute/community/qq-qr.png`；售后入口继续使用本站售后群和 `/sites/kittyapi/qq-group-qr.png`。B 首页社区和售后入口继续共同引用 B 售后群配置，语义不变。
 
-A 的 5 张原图从旧 A 源码 `bb27f883a99b7c5ebcba91bc23a5bf659a6d4907` 逐字节复制至 `frontend/public/sites/kittyapi/`，保持原相对路径。B 原图及现有公开路径不变，来源 B 源码 `63a41ef3c1d259f7fe8f7c16ccd8a0e0bfd11cf1`。`src/config/__tests__/siteIdentity.spec.ts` 固定检查两套客服、售后群、历史社区 QQ 和 Telegram 图片的原始 SHA-256。
+A 的 5 张原图从旧 A 源码 `bb27f883a99b7c5ebcba91bc23a5bf659a6d4907` 逐字节复制至 `frontend/public/sites/kittyapi/`，保持原相对路径。B 原图及现有公开路径不变，来源 B 源码 `63a41ef3c1d259f7fe8f7c16ccd8a0e0bfd11cf1`。`src/config/__tests__/siteIdentity.spec.ts` 固定检查两套客服、售后群、首页社区 QQ 和 Telegram 图片的原始 SHA-256。
 
 此配置不改写 `api.kittyyyds.xyz` 的运行时含义，不迁移数据库配置，不执行 DNS 或线上部署。
