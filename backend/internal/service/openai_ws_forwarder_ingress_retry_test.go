@@ -305,6 +305,9 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_TurnRetryForcesF
 	staleConnB := newOpenAIWSConn(pool.nextConnID(account.ID), account.ID, staleB, nil)
 	staleConnB.handshakeCompatibility = openAIWSAcquireCompatibility(*lastAcquire)
 	staleConnB.routingAffinity = normalizeOpenAIWSRoutingAffinity(lastAcquire.Headers)
+	// Mirror the real pool handshake, including Kitty's per-turn authorization
+	// binding. This fixture models an authorized socket with a dead transport.
+	staleConnB.turnBinding = lastAcquire.BindHandshake(lastAcquire.Headers)
 	ap.mu.Lock()
 	ap.conns[staleConnB.id] = staleConnB
 	idleConns := len(ap.conns)

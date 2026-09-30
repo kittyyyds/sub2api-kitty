@@ -1,9 +1,10 @@
 package service
 
 import (
+	"reflect"
+
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
-	"reflect"
 )
 
 // Global timers require both a full node and, during managed handoff, ownership

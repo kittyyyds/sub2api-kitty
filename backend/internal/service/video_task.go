@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 )
@@ -119,10 +120,23 @@ func (s *OpenAIGatewayService) BeginVideoTask(ctx context.Context, apiKey *APIKe
 		sid := subscription.ID
 		task.SubscriptionID = &sid
 	}
-	if _, err := calculateVideoPriceSnapshotCost(task.Pending.PriceSnapshot, 1); err != nil {
+	cost, err := calculateVideoPriceSnapshotCost(task.Pending.PriceSnapshot, 1)
+	if err != nil {
 		return nil, err
 	}
+	reservation, err := s.billingCacheService.ReserveInflight(ctx, apiKey.User, apiKey.Group, subscription, cost.ActualCost)
+	if err != nil {
+		return nil, err
+	}
+	if reservation != nil {
+		task.Pending.InflightReservation, err = reservation.transferToVideo(videoInflightReservationTTL)
+		if err != nil {
+			reservation.Release()
+			return nil, err
+		}
+	}
 	if err := repo.CreateVideoTask(ctx, task); err != nil {
+		reservation.Release()
 		return nil, err
 	}
 	return task, nil
@@ -191,7 +205,7 @@ func (s *OpenAIGatewayService) SettleVideoTask(ctx context.Context, task *VideoT
 			return err
 		}
 		if recorded {
-			return repo.SetVideoTaskState(ctx, task.ID, "done", "")
+			return s.finishVideoTask(ctx, task, "done", "")
 		}
 		if task.Pending.PriceSnapshot == nil {
 			return s.markVideoUsageNeedsReview(ctx, task, ErrVideoUsageEvidenceMissing)
@@ -252,7 +266,7 @@ func (s *OpenAIGatewayService) SettleVideoTask(ctx context.Context, task *VideoT
 		}
 		return err
 	}
-	return repo.SetVideoTaskState(ctx, task.ID, "done", "")
+	return s.finishVideoTask(ctx, task, "done", "")
 }
 
 func (s *OpenAIGatewayService) markVideoUsageNeedsReview(ctx context.Context, task *VideoTask, cause error) error {
@@ -283,26 +297,37 @@ func (s *OpenAIGatewayService) StartVideoTaskWorker(keys *APIKeyService) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				tasks, err := s.videoTaskRepository().LeaseVideoTasks(ctx, 5)
-				if err != nil {
-					slog.Warn("video task recovery scan failed")
-					continue
-				}
-				for _, task := range tasks {
-					if ctx.Err() != nil {
-						return
-					}
-					pollCtx, stop := context.WithTimeout(ctx, 20*time.Second)
-					err := s.pollVideoTask(pollCtx, task, keys)
-					stop()
-					if err != nil {
-						// Keep retrying pending jobs. HTTP errors never prove terminal failure.
-						slog.Warn("video task recovery will retry", "task_id", task.ID)
-					}
-				}
+				s.runVideoTaskCycle(ctx, keys)
 			}
 		}
 	}()
+}
+
+func (s *OpenAIGatewayService) runVideoTaskCycle(ctx context.Context, keys *APIKeyService) {
+	// Keep an admitted settlement batch alive while managed handoff drains.
+	// Only periodic scans need leadership; customer status lookups remain usable.
+	ctx, release, ok := managedinstance.Begin(ctx)
+	if !ok {
+		return
+	}
+	defer release()
+	tasks, err := s.videoTaskRepository().LeaseVideoTasks(ctx, 5)
+	if err != nil {
+		slog.Warn("video task recovery scan failed")
+		return
+	}
+	for _, task := range tasks {
+		if ctx.Err() != nil {
+			return
+		}
+		pollCtx, stop := context.WithTimeout(ctx, 20*time.Second)
+		err := s.pollVideoTask(pollCtx, task, keys)
+		stop()
+		if err != nil {
+			// Status polling is safe to repeat; paid submissions are never retried here.
+			slog.Warn("video task recovery will retry", "task_id", task.ID)
+		}
+	}
 }
 
 func (s *OpenAIGatewayService) StopVideoTaskWorker() {
@@ -386,7 +411,7 @@ func (s *OpenAIGatewayService) pollVideoTask(ctx context.Context, task *VideoTas
 	}
 	switch strings.ToLower(gjson.GetBytes(body, "status").String()) {
 	case "failed", "expired", "cancelled", "canceled":
-		return repo.SetVideoTaskState(ctx, task.ID, "failed", "supplier returned terminal failure; no charge")
+		return s.finishVideoTask(ctx, task, "failed", "supplier returned terminal failure; no charge")
 	}
 	return nil
 }
