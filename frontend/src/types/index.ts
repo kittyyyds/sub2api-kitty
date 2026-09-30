@@ -987,75 +987,12 @@ export interface SecurityPolicyKeywordSeed {
   category: string
 }
 
-// ==================== Global Model Pricing Types ====================
-
-export type GlobalPricingBillingMode = 'token' | 'per_request' | 'image' | 'video'
-
-export interface GlobalModelPrice {
-  id: number
-  model_pattern: string
-  billing_mode: GlobalPricingBillingMode
-  input_price?: number | null
-  output_price?: number | null
-  cache_write_price?: number | null
-  cache_write_1h_price?: number | null
-  cache_read_price?: number | null
-  per_request_price?: number | null
-  enabled: boolean
-  created_at?: string
-  updated_at?: string
-}
-
-export interface GlobalModelPriceInput {
-  model_pattern: string
-  billing_mode?: GlobalPricingBillingMode | ''
-  input_price?: number | null
-  output_price?: number | null
-  cache_write_price?: number | null
-  cache_write_1h_price?: number | null
-  cache_read_price?: number | null
-  per_request_price?: number | null
-  enabled?: boolean
-}
-
 // ==================== Tiered Routing Types ====================
 
 export interface TieredRoutingSettings {
   enabled: boolean
   premium_user_ids: number[]
   min_balance_for_premium: number
-}
-
-// ==================== Spend Guard Types ====================
-
-export interface SpendGuardOffender {
-  api_key_id: number
-  name: string
-  user_id: number
-  status: string
-  requests: number
-  tokens: number
-  tokens_per_min: number
-  errors: number
-  err_rate: number
-  frozen: boolean
-}
-
-export interface SpendGuardSettings {
-  enabled: boolean
-  window_minutes: number
-  tokens_per_minute: number
-  min_requests: number
-  max_error_rate: number
-  interval_seconds: number
-}
-
-export interface SpendGuardEvent {
-  at: string
-  api_key_id: number
-  name: string
-  action: string
-  reason: string
 }
 
 // ==================== Support Ticket Types ====================

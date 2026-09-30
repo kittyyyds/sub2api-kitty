@@ -113,21 +113,15 @@ func TestVideoGroupDistinctExactIDsRemainDistinct(t *testing.T) {
 	require.Equal(t, 1.0, *display.PerRequestPrice)
 }
 
-func TestVideoGroupPriceIgnoresGlobalAndLegacyMatrices(t *testing.T) {
+func TestVideoGroupPriceIgnoresLegacyMatrices(t *testing.T) {
 	group := videoTestGroup(BillingModePerRequest, 4)
 	group.VideoModelPrices = map[string]map[string]float64{"exact-video": {"720p": 900}}
-	global := NewGlobalModelPricingService(&stubGlobalPricingRepo{rows: []GlobalModelPrice{{
-		ID: 1, ModelPattern: "exact-video", BillingMode: BillingModeVideo, PerRequestPrice: fptr(800), Enabled: true,
-	}}})
-	resolver := NewModelPricingResolverWithGlobal(nil, &BillingService{}, global)
+	resolver := NewModelPricingResolver(nil, &BillingService{})
 	resolved := resolver.Resolve(context.Background(), PricingInput{Model: "exact-video", Group: group})
 	require.Equal(t, PricingSourceGroup, resolved.Source)
 	require.Equal(t, BillingModePerRequest, resolved.Mode)
 	require.Equal(t, 4.0, resolved.DefaultPerRequestPrice)
 	require.Nil(t, resolver.Resolve(context.Background(), PricingInput{Model: "missing-video", Group: group}))
-	group.Platform = PlatformGrok
-	resolved = resolver.Resolve(context.Background(), PricingInput{Model: "exact-video", Group: group})
-	require.Equal(t, PricingSourceGlobal, resolved.Source)
 }
 
 func TestVideoGroupSubmissionReloadsCurrentPrice(t *testing.T) {

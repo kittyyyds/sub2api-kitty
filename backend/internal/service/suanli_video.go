@@ -433,7 +433,7 @@ func (s *OpenAIGatewayService) ValidateSuanliVideoPricing(ctx context.Context, a
 		return nil
 	}
 	resolved := s.resolveOpenAIChannelPricing(ctx, model, apiKey)
-	if resolved != nil && (resolved.Source == PricingSourceGlobal || resolved.Source == PricingSourceGroup || resolved.Source == PricingSourceChannel) &&
+	if resolved != nil && (resolved.Source == PricingSourceGroup || resolved.Source == PricingSourceChannel) &&
 		(resolved.Mode == BillingModeVideo || resolved.Mode == BillingModePerRequest) {
 		return nil
 	}

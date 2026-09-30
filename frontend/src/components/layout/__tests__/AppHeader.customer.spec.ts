@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AppHeader from '../AppHeader.vue'
 
-const shortcutSource = readFileSync(resolve(__dirname, '../CustomerHeaderShortcuts.vue'), 'utf8')
 const contactSource = readFileSync(resolve(__dirname, '../CustomerContactActions.vue'), 'utf8')
 const announcementSource = readFileSync(resolve(__dirname, '../../common/AnnouncementBell.vue'), 'utf8')
 
@@ -59,7 +58,6 @@ vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   const messages: Record<string, string> = {
     'nav.gettingStartedHeader': '新手必看',
-    'nav.resetRadar': 'GPT智力测评',
     'nav.modelPlaza': '模型价格',
     'nav.customerShortcuts': '快捷功能'
   }
@@ -78,7 +76,6 @@ function createTestRouter() {
       { path: '/dashboard', component: { template: '<div />' } },
       { path: '/custom/billing-rules', component: { template: '<div />' } },
       { path: '/custom/docs', component: { template: '<div />' } },
-      { path: '/custom/reset-radar', component: { template: '<div />' } },
       { path: '/model-plaza', component: { template: '<div />' } }
     ]
   })
@@ -182,7 +179,6 @@ describe('AppHeader customer shortcuts', () => {
   })
 
   it('never hides customer action labels at narrower desktop widths', () => {
-    expect(shortcutSource).not.toMatch(/customer-header-shortcut__label\s*\{[^}]*display:\s*none/s)
     expect(contactSource).not.toMatch(/customer-contact-action__label\s*\{[^}]*display:\s*none/s)
     expect(announcementSource).not.toMatch(/announcement-header-button__label\s*\{[^}]*display:\s*none/s)
   })

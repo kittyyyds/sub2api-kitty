@@ -463,8 +463,10 @@ const routes: RouteRecordRaw[] = [
     redirect: '/apps'
   },
   {
-    path: '/reset-radar',
-    redirect: '/custom/reset-radar'
+    // Retired feature: old bookmarks return to the dashboard.
+    path: '/custom/reset-radar',
+    alias: '/reset-radar',
+    redirect: '/dashboard'
   },
   {
     path: '/billing-rules',
@@ -579,18 +581,7 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.channels.description'
     }
   },
-  {
-    path: '/admin/global-pricing',
-    name: 'AdminGlobalPricing',
-    component: () => import('@/views/admin/GlobalPricingView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Global Model Pricing',
-      titleKey: 'admin.globalPricing.title',
-      descriptionKey: 'admin.globalPricing.description'
-    }
-  },
+
   {
     path: '/admin/tiered-routing',
     name: 'AdminTieredRouting',
@@ -603,18 +594,7 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.tieredRouting.description'
     }
   },
-  {
-    path: '/admin/spend-guard',
-    name: 'AdminSpendGuard',
-    component: () => import('@/views/admin/SpendGuardView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Spend Guard',
-      titleKey: 'admin.spendGuard.title',
-      descriptionKey: 'admin.spendGuard.description'
-    }
-  },
+
   {
     path: '/admin/channels/monitor',
     name: 'AdminChannelMonitor',

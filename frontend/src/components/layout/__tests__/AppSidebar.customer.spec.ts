@@ -130,6 +130,7 @@ describe('AppSidebar customer grouped navigation', () => {
     appStore.sidebarCollapsed = false
     appStore.cachedPublicSettings = {
       custom_menu_items: [
+        { id: 'reset-radar', label: 'Retired radar', icon_svg: '', url: 'https://legacy.example.test/radar', visibility: 'user', sort_order: 0 },
         {
           id: 'image-generator',
           label: 'Kitty媒体',

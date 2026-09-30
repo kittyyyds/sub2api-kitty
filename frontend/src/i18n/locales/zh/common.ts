@@ -180,7 +180,6 @@ export default {
     onlineChat: '在线聊天',
     redeem: '兑换',
     affiliate: '邀请返利',
-    resetRadar: 'GPT智力测评',
     billingRules: '计费规则',
     gettingStarted: '文档 / 新手必看',
     gettingStartedHeader: '新手必看',
@@ -266,9 +265,7 @@ export default {
     billing: '账单',
     tickets: '工单',
     securityPolicy: '安全策略',
-    globalPricing: '全站定价',
     tieredRouting: '分级路由',
-    spendGuard: '烧钱防护',
     ticketsAdmin: '工单管理',
   },
 

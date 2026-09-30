@@ -22,18 +22,17 @@ func TestSecurityPolicyAuthSnapshotRoundTrip(t *testing.T) {
 	require.False(t, accepted, "old cache entries omit security policy and must be reloaded")
 }
 
-func TestGlobalPricingOverridesGroupImagePriceInBothGateways(t *testing.T) {
+func TestGroupImagePriceRemainsInBothGateways(t *testing.T) {
 	ctx := context.Background()
 	billing := &BillingService{}
-	global := NewGlobalModelPricingService(&stubGlobalPricingRepo{rows: []GlobalModelPrice{{
-		ID: 1, ModelPattern: "test-image", BillingMode: BillingModeImage, PerRequestPrice: fptr(0.2), Enabled: true,
-	}}})
-	resolver := NewModelPricingResolverWithGlobal(nil, billing, global)
-	key := &APIKey{Group: &Group{ID: 3, ImagePrice1K: fptr(99)}}
+	resolver := NewModelPricingResolver(nil, billing)
+	key := &APIKey{Group: &Group{ID: 3, ImagePrice1K: fptr(0.06)}}
 	gateway := &GatewayService{billingService: billing, resolver: resolver}
 	cost := gateway.calculateImageCost(ctx, &ForwardResult{ImageCount: 2, ImageSize: "1K"}, key, "test-image", "test-image", 1)
-	require.InDelta(t, 0.4, cost.ActualCost, 1e-9)
+	require.InDelta(t, 0.12, cost.ActualCost, 1e-9)
 	openAI := &OpenAIGatewayService{billingService: billing, resolver: resolver}
 	cost = openAI.calculateOpenAIImageCost(ctx, "test-image", "test-image", key, &OpenAIForwardResult{ImageCount: 2, ImageSize: "1K"}, 1)
-	require.InDelta(t, 0.4, cost.ActualCost, 1e-9)
+	require.InDelta(t, 0.12, cost.ActualCost, 1e-9)
 }
+
+func fptr(v float64) *float64 { return &v }

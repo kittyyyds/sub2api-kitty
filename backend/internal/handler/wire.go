@@ -50,9 +50,7 @@ func ProvideAdminHandlers(
 	channelMonitorTemplateHandler *admin.ChannelMonitorRequestTemplateHandler,
 	contentModerationHandler *admin.ContentModerationHandler,
 	securityPolicyHandler *admin.SecurityPolicyHandler,
-	globalPricingHandler *admin.GlobalPricingHandler,
 	tieredRoutingHandler *admin.TieredRoutingHandler,
-	spendGuardHandler *admin.SpendGuardHandler,
 	ticketHandler *admin.TicketHandler,
 	billingExportHandler *admin.BillingExportHandler,
 	promptAuditHandler *securityaudit.PromptAdminHandler,
@@ -113,9 +111,7 @@ func ProvideAdminHandlers(
 		ChannelMonitorTemplate: channelMonitorTemplateHandler,
 		ContentModeration:      contentModerationHandler,
 		SecurityPolicy:         securityPolicyHandler,
-		GlobalPricing:          globalPricingHandler,
 		TieredRouting:          tieredRoutingHandler,
-		SpendGuard:             spendGuardHandler,
 		Ticket:                 ticketHandler,
 		BillingExport:          billingExportHandler,
 		PromptAudit:            promptAuditHandler,
@@ -214,7 +210,6 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
-	aiIntelligenceHandler *AIIntelligenceHandler,
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
 	apiKeyHandler *APIKeyHandler,
@@ -244,7 +239,6 @@ func ProvideHandlers(
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
 	return &Handlers{
-		AIIntelligence:    aiIntelligenceHandler,
 		Auth:              authHandler,
 		User:              userHandler,
 		APIKey:            apiKeyHandler,
@@ -277,7 +271,6 @@ var ProviderSet = wire.NewSet(
 	admin.NewUserCleanupHandler,
 	// Top-level handlers
 	NewAuthHandler,
-	NewAIIntelligenceHandler,
 	NewUserHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
@@ -339,9 +332,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewChannelMonitorRequestTemplateHandler,
 	admin.NewContentModerationHandler,
 	admin.NewSecurityPolicyHandler,
-	admin.NewGlobalPricingHandler,
 	admin.NewTieredRoutingHandler,
-	admin.NewSpendGuardHandler,
 	admin.NewTicketHandler,
 	admin.NewBillingExportHandler,
 	admin.NewPaymentHandler,

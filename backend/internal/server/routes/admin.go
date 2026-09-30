@@ -154,18 +154,12 @@ func RegisterAdminRoutes(
 
 		// 分组安全策略（自定义词包 + 会话解封）
 
-		// 全站模型定价覆盖
-		registerGlobalPricingRoutes(admin, h)
-
 		// 账号健康分
 
 		// 毛利看板与熔断
 
 		// 分级路由
 		registerTieredRoutingRoutes(admin, h)
-
-		// 烧钱防护
-		registerSpendGuardRoutes(admin, h)
 
 		// 工单系统
 		registerTicketAdminRoutes(admin, h)
@@ -923,33 +917,11 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 	}
 }
 
-func registerGlobalPricingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	pricing := admin.Group("/global-pricing")
-	{
-		pricing.GET("", h.Admin.GlobalPricing.List)
-		pricing.POST("", h.Admin.GlobalPricing.Create)
-		pricing.PUT("/:id", h.Admin.GlobalPricing.Update)
-		pricing.DELETE("/:id", h.Admin.GlobalPricing.Delete)
-		pricing.POST("/:id/enable", h.Admin.GlobalPricing.SetEnabled)
-	}
-}
-
 func registerTieredRoutingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	routing := admin.Group("/tiered-routing")
 	{
 		routing.GET("/settings", h.Admin.TieredRouting.GetSettings)
 		routing.PUT("/settings", h.Admin.TieredRouting.UpdateSettings)
-	}
-}
-
-func registerSpendGuardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	guard := admin.Group("/spend-guard")
-	{
-		guard.GET("", h.Admin.SpendGuard.Offenders)
-		guard.GET("/settings", h.Admin.SpendGuard.GetSettings)
-		guard.PUT("/settings", h.Admin.SpendGuard.UpdateSettings)
-		guard.GET("/events", h.Admin.SpendGuard.Events)
-		guard.POST("/keys/:id/unfreeze", h.Admin.SpendGuard.Unfreeze)
 	}
 }
 

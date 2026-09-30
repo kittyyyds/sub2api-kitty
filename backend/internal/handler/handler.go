@@ -46,9 +46,7 @@ type AdminHandlers struct {
 	ChannelMonitorTemplate *admin.ChannelMonitorRequestTemplateHandler
 	ContentModeration      *admin.ContentModerationHandler
 	SecurityPolicy         *admin.SecurityPolicyHandler
-	GlobalPricing          *admin.GlobalPricingHandler
 	TieredRouting          *admin.TieredRoutingHandler
-	SpendGuard             *admin.SpendGuardHandler
 	Ticket                 *admin.TicketHandler
 	BillingExport          *admin.BillingExportHandler
 	PromptAudit            *securityaudit.PromptAdminHandler
@@ -60,7 +58,6 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	AIIntelligence    *AIIntelligenceHandler
 	Auth              *AuthHandler
 	User              *UserHandler
 	APIKey            *APIKeyHandler

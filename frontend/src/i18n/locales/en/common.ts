@@ -180,7 +180,6 @@ export default {
     onlineChat: 'Online Chat',
     redeem: 'Redeem',
     affiliate: 'Affiliate Rebates',
-    resetRadar: 'GPT Intelligence Test',
     billingRules: 'Billing Rules',
     gettingStarted: 'Docs / Getting Started',
     gettingStartedHeader: 'Getting Started',
@@ -266,9 +265,7 @@ export default {
     billing: 'Billing',
     tickets: 'Tickets',
     securityPolicy: 'Security Policy',
-    globalPricing: 'Global Pricing',
     tieredRouting: 'Tiered Routing',
-    spendGuard: 'Spend Guard',
     ticketsAdmin: 'Ticket Management',
   },
 

@@ -806,7 +806,6 @@ const flagAdminPayment = () => adminSettingsStore.paymentEnabled
 const flagBatchImageAccess = () => canUseBatchImage.value
 
 const nativeFeatureIcons: Record<NativeCustomFeatureId, unknown> = {
-  'reset-radar': ChartIcon,
   'billing-rules': PriceTagIcon,
   docs: OrderListIcon
 }
@@ -906,7 +905,6 @@ const customerNavSections = computed(() => {
   const items = [...userNavItems.value,
     { path: '/model-plaza?embedded=1', label: t('nav.modelPricing'), icon: CurrencyDollarIcon, featureFlag: makeSidebarFlag(FeatureFlags.modelPlaza) },
     { ...buildNativeFeatureNavItem('docs'), label: t('nav.usageDocs') },
-    buildNativeFeatureNavItem('reset-radar'),
   ].filter(item => !item.featureFlag || item.featureFlag() !== false)
   const definitions = [
     { id: 'overview', label: '', icon: DashboardIcon, paths: ['/dashboard'] },
@@ -1018,9 +1016,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/video-tasks', label: '视频任务', icon: OrderIcon },
-    { path: '/admin/global-pricing', label: t('nav.globalPricing'), icon: PriceTagIcon },
     { path: '/admin/tiered-routing', label: t('nav.tieredRouting'), icon: SignalIcon },
-    { path: '/admin/spend-guard', label: t('nav.spendGuard'), icon: ShieldIcon },
     { path: '/admin/tickets', label: t('nav.ticketsAdmin'), icon: TicketIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]

@@ -1112,7 +1112,7 @@ func (s *GatewayService) resolveChannelPricing(ctx context.Context, billingModel
 	}
 	gid := apiKey.Group.ID
 	resolved := s.resolver.Resolve(ctx, PricingInput{Model: billingModel, GroupID: &gid, Group: apiKey.Group})
-	if resolved.Source == PricingSourceGlobal || resolved.Source == PricingSourceGroup || resolved.Source == PricingSourceChannel {
+	if resolved.Source == PricingSourceGroup || resolved.Source == PricingSourceChannel {
 		return resolved
 	}
 	return nil
@@ -1133,7 +1133,7 @@ func (s *GatewayService) calculateImageCost(
 		return s.billingService.CalculateImageCost(model, sizeTier, result.ImageCount, groupConfig, multiplier)
 	}
 	resolved := s.resolveChannelPricing(ctx, billingModel, apiKey)
-	if resolved != nil && (resolved.Source == PricingSourceGlobal || resolved.Source == PricingSourceGroup) {
+	if resolved != nil && (resolved.Source == PricingSourceGroup) {
 		gid := apiKey.Group.ID
 		cost, err := s.billingService.CalculateCostUnified(CostInput{
 			Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
@@ -1148,7 +1148,7 @@ func (s *GatewayService) calculateImageCost(
 	if apiKeyHasConfiguredImagePrice(apiKey, sizeTier) {
 		return s.billingService.CalculateImageCost(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
 	}
-	if resolved != nil && (resolved.Source == PricingSourceGlobal || resolved.Source == PricingSourceChannel) {
+	if resolved != nil && (resolved.Source == PricingSourceChannel) {
 		tokens := UsageTokens{
 			InputTokens:       result.Usage.InputTokens,
 			OutputTokens:      result.Usage.OutputTokens,
