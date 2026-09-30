@@ -25,6 +25,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/mihomo"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
+	"github.com/Wei-Shaw/sub2api/internal/server"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
@@ -196,7 +197,7 @@ func runSetupServer() {
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           r,
+		Handler:           server.SetupHandler(r),
 		ReadHeaderTimeout: 30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		Protocols:         protocols,
@@ -227,6 +228,9 @@ func runMainServer() {
 
 	if err := managedinstance.ConfigureFromEnv(); err != nil {
 		log.Fatalf("Managed instance configuration failed: %v", err)
+	}
+	if managedinstance.Enabled() && !cfg.RunsBackgroundJobs() {
+		log.Fatal("managed handoff requires runtime.role=full; gateway replicas use the standard lifecycle")
 	}
 	app, err := initializeApplication(buildInfo)
 	if err != nil {
@@ -281,7 +285,11 @@ func runMainServer() {
 
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	app.Lifecycle.BeginDrain()
+	if delay := time.Duration(cfg.Server.ShutdownDrainDelay) * time.Second; delay > 0 {
+		time.Sleep(delay)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout())
 	defer cancel()
 	if instance := managedinstance.Current(); instance != nil {
 		instance.Drain()
@@ -294,6 +302,12 @@ func runMainServer() {
 
 	if instance := managedinstance.Current(); instance != nil {
 		_ = instance.WaitDrained(context.Background()) // includes hijacked WebSockets
+	}
+	if err := app.Lifecycle.Wait(ctx); err != nil {
+		log.Printf("Active request drain deadline reached: %v", err)
+	}
+	if err := app.Server.Close(); err != nil {
+		log.Printf("Closing server connections: %v", err)
 	}
 	log.Println("Server exited")
 	mihomo.CloseAll()

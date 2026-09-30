@@ -104,7 +104,7 @@ func ProvideBatchImageModelPricingResolver(resolver *ModelPricingResolver) *Batc
 
 func ProvideBatchImageCleanupService(repo BatchImageRepository, accountRepo AccountRepository, cfg *config.Config) *BatchImageCleanupService {
 	svc := NewBatchImageCleanupService(repo, accountRepo, cfg)
-	managedinstance.Register("BatchImageCleanupService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -126,13 +126,18 @@ func ProvideOpenAIOAuthReauthService(
 	adminService AdminService,
 	accountRepo AccountRepository,
 	openaiOAuthService *OpenAIOAuthService,
-	secretEncryptor SecretEncryptor,
+	secretEncryptor OpenAICredentialEncryptor,
 	cfg *config.Config,
 	tokenCacheInvalidator TokenCacheInvalidator,
 	runtimeBlocker AccountRuntimeBlocker,
+	buildInfo BuildInfo,
+	settings SettingRepository,
 ) *OpenAIOAuthReauthService {
 	credentialUpdater, _ := accountRepo.(OpenAIOAuthReauthCredentialUpdater)
-	return NewOpenAIOAuthReauthService(repo, adminService, credentialUpdater, openaiOAuthService, secretEncryptor, cfg != nil && cfg.Totp.EncryptionKeyConfigured, tokenCacheInvalidator, runtimeBlocker)
+	svc := NewOpenAIOAuthReauthService(repo, adminService, credentialUpdater, openaiOAuthService, secretEncryptor, cfg != nil && cfg.Totp.EncryptionKeyConfigured, tokenCacheInvalidator, runtimeBlocker)
+	svc.settings = settings
+	svc.configureWorker(cfg, buildInfo)
+	return svc
 }
 
 // ProvideTokenRefreshService creates and starts TokenRefreshService
@@ -160,7 +165,7 @@ func ProvideTokenRefreshService(
 	// 调用侧显式注入后台刷新策略，避免策略漂移
 	svc.SetRefreshPolicy(DefaultBackgroundRefreshPolicy())
 	svc.SetAccountRuntimeBlocker(runtimeBlocker)
-	managedinstance.Register("TokenRefreshService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -224,6 +229,7 @@ func ProvideOpenAIQuotaAutoResetService(
 	audit *AuditLogService,
 	settingService *SettingService,
 	leaderLock LeaderLockCache,
+	cfg *config.Config,
 ) *OpenAIQuotaAutoResetService {
 	service := NewOpenAIQuotaAutoResetService(
 		accountRepo,
@@ -234,7 +240,7 @@ func ProvideOpenAIQuotaAutoResetService(
 		settingService,
 		leaderLock,
 	)
-	managedinstance.Register("OpenAIQuotaAutoResetService", service.Start, service.Stop)
+	startBackgroundService(cfg, service)
 	return service
 }
 
@@ -353,7 +359,7 @@ func ProvideCNProviderBalanceCheckService(
 		minutes = cfg.Gateway.CNProviders.BalanceCheckIntervalMinutes
 	}
 	svc := NewCNProviderBalanceCheckService(accountRepo, balanceService, quotaService, cfg, time.Duration(minutes)*time.Minute)
-	managedinstance.Register("CNProviderBalanceCheckService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -408,21 +414,21 @@ func ProvideDashboardAggregationService(repo DashboardAggregationRepository, tim
 	svc := NewDashboardAggregationService(repo, timingWheel, cfg)
 	svc.settingRepo = settingRepo
 	svc.SetLeaderLock(lockCache, db)
-	managedinstance.Register("DashboardAggregationService", svc.Start, nil)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
 // ProvideUsageCleanupService 创建并启动使用记录清理任务服务
 func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
 	svc := NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
-	managedinstance.Register("UsageCleanupService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
 // ProvideAccountExpiryService creates and starts AccountExpiryService.
-func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpiryService {
+func ProvideAccountExpiryService(accountRepo AccountRepository, cfg *config.Config) *AccountExpiryService {
 	svc := NewAccountExpiryService(accountRepo, time.Minute)
-	managedinstance.Register("AccountExpiryService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -432,9 +438,10 @@ func ProvideOpenAICodexVersionSyncService(
 	settingRepo SettingRepository,
 	settingService *SettingService,
 	githubClient GitHubReleaseClient,
+	cfg *config.Config,
 ) *OpenAICodexVersionSyncService {
 	svc := NewOpenAICodexVersionSyncService(settingRepo, settingService, githubClient, openAICodexVersionSyncInterval)
-	managedinstance.Register("OpenAICodexVersionSyncService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -444,9 +451,10 @@ func ProvideClaudeCodeVersionSyncService(
 	settingRepo SettingRepository,
 	settingService *SettingService,
 	githubClient GitHubReleaseClient,
+	cfg *config.Config,
 ) *ClaudeCodeVersionSyncService {
 	svc := NewClaudeCodeVersionSyncService(settingRepo, settingService, githubClient, claudeCodeVersionSyncInterval)
-	svc.Start()
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -454,19 +462,19 @@ func ProvideClaudeCodeVersionSyncService(
 // 出站 Claude Code 身份的版本号靠它跟随官方发布，无需为了跟版本而发新版本；面板可关闭。
 
 // ProvideProxyExpiryService creates and starts ProxyExpiryService.
-func ProvideProxyExpiryService(proxyRepo ProxyRepository) *ProxyExpiryService {
+func ProvideProxyExpiryService(proxyRepo ProxyRepository, cfg *config.Config) *ProxyExpiryService {
 	svc := NewProxyExpiryService(proxyRepo, time.Minute)
-	managedinstance.Register("ProxyExpiryService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
 // ProvideSubscriptionExpiryService creates and starts SubscriptionExpiryService.
-func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, settingRepo SettingRepository, notificationEmailService *NotificationEmailService, lockCache LeaderLockCache, db *sql.DB) *SubscriptionExpiryService {
+func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, settingRepo SettingRepository, notificationEmailService *NotificationEmailService, lockCache LeaderLockCache, db *sql.DB, cfg *config.Config) *SubscriptionExpiryService {
 	svc := NewSubscriptionExpiryService(userSubRepo, time.Minute)
 	svc.SetSettingRepository(settingRepo)
 	svc.SetNotificationEmailService(notificationEmailService)
 	svc.SetLeaderLock(lockCache, db)
-	managedinstance.Register("SubscriptionExpiryService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -573,7 +581,7 @@ func ProvideOpsAggregationService(
 	cfg *config.Config,
 ) *OpsAggregationService {
 	svc := NewOpsAggregationService(opsRepo, settingRepo, db, redisClient, cfg)
-	managedinstance.Register("OpsAggregationService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -587,7 +595,7 @@ func ProvideOpsAlertEvaluatorService(
 	proxyRepo ProxyRepository,
 ) *OpsAlertEvaluatorService {
 	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg, proxyRepo)
-	managedinstance.Register("OpsAlertEvaluatorService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -606,8 +614,8 @@ func ProvideOpsCleanupService(
 	opsService *OpsService,
 ) *OpsCleanupService {
 	svc := NewOpsCleanupService(opsRepo, db, redisClient, cfg, channelMonitorSvc, settingRepo)
-	managedinstance.Register("OpsCleanupService", svc.Start, svc.Stop)
-	if opsService != nil {
+	startBackgroundService(cfg, svc)
+	if opsService != nil && cfg.RunsBackgroundJobs() {
 		opsService.SetCleanupReloader(svc)
 	}
 	return svc
@@ -663,7 +671,7 @@ func ProvideSystemOperationLockService(repo IdempotencyRepository, cfg *config.C
 
 func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
 	svc := NewIdempotencyCleanupService(repo, cfg)
-	managedinstance.Register("IdempotencyCleanupService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -671,8 +679,11 @@ func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Co
 func ProvideScheduledTestService(
 	planRepo ScheduledTestPlanRepository,
 	resultRepo ScheduledTestResultRepository,
+	templateRepo QualityRuleTemplateRepository,
 ) *ScheduledTestService {
-	return NewScheduledTestService(planRepo, resultRepo)
+	svc := NewScheduledTestService(planRepo, resultRepo)
+	svc.templateRepo = templateRepo
+	return svc
 }
 
 // ProvideScheduledTestRunnerService creates and starts ScheduledTestRunnerService.
@@ -691,7 +702,7 @@ func ProvideScheduledTestRunnerService(
 	svc.groupTests = groupTests
 	svc.candyMonitor = monitor.candy
 	if os.Getenv("KITTY_DEPLOYMENT_HANDOFF") != "true" {
-		managedinstance.Register("ScheduledTestRunnerService", svc.Start, svc.Stop)
+		startBackgroundService(cfg, svc)
 	}
 	return svc
 }
@@ -705,7 +716,7 @@ func ProvideOpsScheduledReportService(
 	cfg *config.Config,
 ) *OpsScheduledReportService {
 	svc := NewOpsScheduledReportService(opsService, userService, emailService, redisClient, cfg)
-	managedinstance.Register("OpsScheduledReportService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -757,7 +768,7 @@ func ProvideBackupService(
 ) *BackupService {
 	svc := NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
 	svc.SetLeaderLock(lockCache, db)
-	managedinstance.Register("BackupService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -1068,16 +1079,16 @@ func ProvidePaymentService(entClient *dbent.Client, registry *payment.Registry, 
 }
 
 // ProvidePaymentOrderExpiryService creates and starts PaymentOrderExpiryService.
-func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache LeaderLockCache, db *sql.DB) *PaymentOrderExpiryService {
+func ProvidePaymentOrderExpiryService(paymentSvc *PaymentService, lockCache LeaderLockCache, db *sql.DB, cfg *config.Config) *PaymentOrderExpiryService {
 	svc := NewPaymentOrderExpiryService(paymentSvc, 60*time.Second)
 	svc.SetLeaderLock(lockCache, db)
-	managedinstance.Register("PaymentOrderExpiryService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
-func ProvideRechargeBonusExpiryService(repo RechargeBonusRepository, balanceCache *BillingCacheService) *RechargeBonusExpiryService {
+func ProvideRechargeBonusExpiryService(repo RechargeBonusRepository, balanceCache *BillingCacheService, cfg *config.Config) *RechargeBonusExpiryService {
 	svc := NewRechargeBonusExpiryService(repo, balanceCache, time.Minute)
-	managedinstance.Register("RechargeBonusExpiryService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -1104,6 +1115,7 @@ func ProvideChannelMonitorRunner(
 	svc *ChannelMonitorService,
 	settingService *SettingService,
 	quotaFetcher *ChannelMonitorQuotaFetcher,
+	cfg *config.Config,
 ) *ChannelMonitorRunner {
 	r := NewChannelMonitorRunner(svc, settingService)
 	if svc != nil {
@@ -1114,7 +1126,7 @@ func ProvideChannelMonitorRunner(
 		svc.SetQuotaFetcher(quotaFetcher)
 	}
 	if os.Getenv("KITTY_DEPLOYMENT_HANDOFF") != "true" {
-		managedinstance.Register("ChannelMonitorRunner", r.Start, r.Stop)
+		startBackgroundService(cfg, r)
 	} else {
 		logger.LegacyPrintf("service.channel_monitor_runner", "[ChannelMonitorRunner] paused for deployment handoff")
 	}
@@ -1133,35 +1145,39 @@ func ProvideChannelMonitorV2Service(repo ChannelMonitorV2Repository, settingServ
 // ProvideChannelMonitorV2Aggregator starts the passive minute-rollup worker.
 // Aggregation only runs when channel_monitor_enabled=true and mode=v2 (and V2 config enabled).
 // Set CHANNEL_MONITOR_V2_DISABLE_AGGREGATOR=1 to skip Start (local demo with seeded facts).
-func ProvideChannelMonitorV2Aggregator(repo ChannelMonitorV2Repository, db *sql.DB, settingService *SettingService) *ChannelMonitorV2Aggregator {
+func ProvideChannelMonitorV2Aggregator(repo ChannelMonitorV2Repository, db *sql.DB, settingService *SettingService, cfg *config.Config) *ChannelMonitorV2Aggregator {
 	aggregator := NewChannelMonitorV2Aggregator(repo, db, settingService)
 	if os.Getenv("CHANNEL_MONITOR_V2_DISABLE_AGGREGATOR") == "1" {
 		return aggregator
 	}
-	managedinstance.Register("ChannelMonitorV2Aggregator", aggregator.Start, aggregator.Stop)
+	startBackgroundService(cfg, aggregator)
 	return aggregator
 }
 
-func ProvideAccountOpsService(settings SettingRepository, repo AccountOpsRepository, email *EmailService, accounts AccountRepository, groups GroupRepository) *AccountOpsService {
+func ProvideAccountOpsService(settings SettingRepository, repo AccountOpsRepository, email *EmailService, accounts AccountRepository, groups GroupRepository, cfg *config.Config) *AccountOpsService {
 	svc := NewAccountOpsService(settings, repo, email)
 	svc.autoAccounts, _ = accounts.(AccountConcurrencyRepository)
 	svc.autoGroups = groups
-	managedinstance.Register("AccountOpsService", svc.Start, svc.Stop)
+	managedinstance.Register("AccountOpsService", func() { svc.start(cfg.RunsBackgroundJobs()) }, svc.Stop)
 	return svc
 }
 
 // ProvideAccountTokenGuardService 创建并启动「凭证守护」后台巡检（智能运维子页面）。
 func ProvideAccountTokenGuardService(settings SettingRepository, repo AccountTokenGuardRepository,
-	accounts AccountRepository, admin AdminService, invalidator TokenCacheInvalidator) *AccountTokenGuardService {
+	accounts AccountRepository, admin AdminService, invalidator TokenCacheInvalidator,
+	cfg *config.Config,
+) *AccountTokenGuardService {
 	svc := NewAccountTokenGuardService(settings, repo, accounts, admin, invalidator)
-	managedinstance.Register("AccountTokenGuardService", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
 func ProvideAccountTokenGuardV2Service(repo AccountTokenGuardV2Repository, settings SettingRepository, admin AdminService,
-	openAIGateway *OpenAIGatewayService, reauth *OpenAIOAuthReauthService) *AccountTokenGuardV2Service {
+	openAIGateway *OpenAIGatewayService, reauth *OpenAIOAuthReauthService,
+	cfg *config.Config,
+) *AccountTokenGuardV2Service {
 	svc := NewAccountTokenGuardV2Service(repo, settings, admin, openAIGateway, reauth)
-	managedinstance.Register("AccountTokenGuardV2Service", svc.Start, svc.Stop)
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
