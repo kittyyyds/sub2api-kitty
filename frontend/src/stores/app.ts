@@ -7,6 +7,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Toast, ToastType, PublicSettings } from '@/types'
 import { i18n } from '@/i18n'
+import { localizeClientErrorMessage } from '@/utils/clientErrorMessage'
 import {
   checkUpdates as checkUpdatesAPI,
   type VersionInfo,
@@ -145,7 +146,11 @@ export const useAppStore = defineStore('app', () => {
    * @param duration - Auto-dismiss duration in ms (default: 5000)
    */
   function showError(message: string, duration: number = 5000): string {
-    return showToast('error', message, duration)
+    const translatedKey = i18n.global.t(message)
+    const localized = translatedKey !== message
+      ? translatedKey
+      : localizeClientErrorMessage(message)
+    return showToast('error', localized, duration)
   }
 
   /**

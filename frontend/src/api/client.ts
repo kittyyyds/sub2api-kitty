@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
+import { localizeClientErrorMessage } from '@/utils/clientErrorMessage'
 import {
   ADMIN_UI_REQUEST_HEADER,
   USER_UI_REQUEST_HEADER,
@@ -92,7 +93,7 @@ apiClient.interceptors.response.use(
         return Promise.reject({
           status: response.status,
           code: apiResponse.code,
-          message: apiResponse.message || 'Unknown error',
+          message: localizeClientErrorMessage(apiResponse.message, { code: apiResponse.code }),
           reason: resp.reason,
           metadata: resp.metadata,
         })
@@ -138,7 +139,7 @@ apiClient.interceptors.response.use(
         return Promise.reject({
           status,
           code: 'OPS_DISABLED',
-          message: apiData.message || error.message,
+          message: localizeClientErrorMessage(apiData.message || error.message, { code: apiData.code, status }),
           url
         })
       }
@@ -155,7 +156,7 @@ apiClient.interceptors.response.use(
         return Promise.reject({
           status,
           code: apiData.code,
-          message: apiData.message || error.message,
+          message: localizeClientErrorMessage(apiData.message || error.message, { code: apiData.code, status }),
           metadata: apiData.metadata,
         })
       }
@@ -196,7 +197,7 @@ apiClient.interceptors.response.use(
               return Promise.reject({
                 status: 401,
                 code: 'AUTH_SESSION_CHANGED',
-                message: 'Authentication session changed while refreshing.'
+                message: localizeClientErrorMessage('Authentication session changed while refreshing.')
               })
             }
 
@@ -206,7 +207,7 @@ apiClient.interceptors.response.use(
                 return Promise.reject({
                   status: refreshStatus,
                   code: 'TOKEN_REFRESH_UNAVAILABLE',
-                  message: refreshError.response?.data?.message || refreshError.message
+                  message: localizeClientErrorMessage(refreshError.response?.data?.message || refreshError.message, { status: refreshStatus })
                 })
               }
             }
@@ -225,7 +226,7 @@ apiClient.interceptors.response.use(
             return Promise.reject({
               status: 401,
               code: 'TOKEN_REFRESH_FAILED',
-              message: 'Session expired. Please log in again.'
+              message: localizeClientErrorMessage('Session expired. Please log in again.')
             })
           }
         }
@@ -260,7 +261,7 @@ apiClient.interceptors.response.use(
         code: apiData.code,
         reason: apiData.reason,
         error: apiData.error,
-        message: apiData.message || apiData.detail || error.message,
+        message: localizeClientErrorMessage(apiData.message || apiData.detail || error.message, { code: apiData.code, status }),
         metadata: apiData.metadata,
       })
     }
@@ -269,7 +270,7 @@ apiClient.interceptors.response.use(
     return Promise.reject({
       status: 0,
       code: error.code || 'ERR_NETWORK',
-      message: 'Network error. Please check your connection.'
+      message: localizeClientErrorMessage('Network error. Please check your connection.')
     })
   }
 )
