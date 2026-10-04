@@ -139,6 +139,12 @@ func normalizeGrokAccountTestMode(mode string) string {
 // AccountTestService handles account testing operations
 type AccountTestService struct {
 	concurrencyService        *ConcurrencyService
+	astraGatewayActionMu      sync.Mutex
+	astraSetupMu              sync.Mutex
+	astraSetupCancel          context.CancelFunc
+	astraSetupStatus          AstraSetupStatus
+	astraGatewayTestMu        sync.Mutex
+	astraGatewayLastTest      *AstraGatewayTestResult
 	accountRepo               AccountRepository
 	geminiTokenProvider       *GeminiTokenProvider
 	claudeTokenProvider       *ClaudeTokenProvider
@@ -433,6 +439,12 @@ func (s *AccountTestService) testAccountConnectionForAccount(c *gin.Context, acc
 	}
 
 	if account.IsOpenAI() {
+		if account.IsPrismBrowserEnabledForModel(modelID) {
+			if normalizeAccountTestMode(mode) != AccountTestModeDefault || testOpts.ImageDataURL != "" || testOpts.AudioDataURL != "" {
+				return s.sendErrorAndEnd(c, "Prism supports the default text test only")
+			}
+			return s.testPrismBrowserConnection(c, account, modelID, prompt)
+		}
 		return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
 	}
 
@@ -452,7 +464,50 @@ func (s *AccountTestService) testAccountConnectionForAccount(c *gin.Context, acc
 		return s.testOpenCodeGoAccountConnection(c, account, modelID, prompt)
 	}
 
+	if account.IsTypeSafe() {
+		return s.testTypeSafeAccountConnection(c, account, prompt)
+	}
+
 	return s.testClaudeAccountConnection(c, account, modelID)
+}
+
+func (s *AccountTestService) testPrismBrowserConnection(c *gin.Context, account *Account, modelID, prompt string) error {
+	if s.openaiGatewayService == nil {
+		return s.sendErrorAndEnd(c, "Prism gateway service is unavailable")
+	}
+	modelID = strings.TrimSpace(modelID)
+	if modelID == "" {
+		modelID = "gpt-5.6-sol"
+	}
+	modelID = account.GetMappedModel(modelID)
+	if prompt == "" {
+		prompt = "hi"
+	}
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	s.sendEvent(c, TestEvent{Type: "test_start", Model: modelID})
+	body, err := json.Marshal(map[string]any{"model": modelID, "input": prompt, "stream": false})
+	if err != nil {
+		return s.sendErrorAndEnd(c, "Invalid Prism test request")
+	}
+	response, _, status, err := s.openaiGatewayService.callPrismBrowser(c.Request.Context(), account, body)
+	if err != nil {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Prism adapter request failed: %s", err.Error()))
+	}
+	if status != http.StatusOK {
+		return s.sendErrorAndEnd(c, prismBrowserAdapterErrorMessage(status, response))
+	}
+	if !gjson.ValidBytes(response) || gjson.GetBytes(response, "status").String() != "completed" {
+		return s.sendErrorAndEnd(c, "Prism adapter returned no completed response")
+	}
+	answer := gjson.GetBytes(response, "output.0.content.0.text").String()
+	if answer == "" {
+		return s.sendErrorAndEnd(c, "Prism adapter returned no text")
+	}
+	s.sendEvent(c, TestEvent{Type: "content", Text: answer})
+	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+	return nil
 }
 
 // testOpenCodeGoAccountConnection probes the native endpoint for the selected
@@ -581,7 +636,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	// Create Claude Code style payload (same for all account types)
 	payload, err := createTestPayload(testModelID)
 	if options, ok := pelicanTestOptionsFromContext(ctx); ok {
-		payload, err = createPelicanClaudePayload(testModelID, options.prompt)
+		payload, err = createPelicanClaudePayload(testModelID, options.prompt, options.reasoningEffort)
 	}
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
@@ -662,6 +717,9 @@ func (s *AccountTestService) testClaudeVertexServiceAccountConnection(c *gin.Con
 	c.Writer.Flush()
 
 	payload, err := createTestPayload(testModelID)
+	if options, ok := pelicanTestOptionsFromContext(ctx); ok {
+		payload, err = createPelicanClaudePayload(testModelID, options.prompt, options.reasoningEffort)
+	}
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create test payload")
 	}
@@ -987,6 +1045,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	}
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
+	applyOpenAIAPIKeyIdentityHeaders(req.Header, credentialAccount, credentialAccount.GetOpenAIUserAgent())
 	credentialAccount.ApplyHeaderOverrides(req.Header)
 
 	// Get proxy URL
@@ -2281,6 +2340,8 @@ func (s *AccountTestService) testOpenAIChatCompletionsConnection(
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+authToken)
 
+	applyOpenAIAPIKeyIdentityHeaders(req.Header, account, account.GetOpenAIUserAgent())
+
 	// 官方 OpenCode / Command Code 上游收敛为规范客户端 UA，与真实转发路径一致。
 	applyOpenCodeUpstreamUserAgent(account, apiURL, req.Header)
 
@@ -2419,6 +2480,7 @@ func (s *AccountTestService) testOpenAICompactConnection(c *gin.Context, account
 	}
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
+	applyOpenAIAPIKeyIdentityHeaders(req.Header, credentialAccount, credentialAccount.GetOpenAIUserAgent())
 	account.ApplyHeaderOverrides(req.Header)
 
 	proxyURL := ""
@@ -2958,13 +3020,25 @@ func createOpenAIChatCompletionsTestPayload(modelID string, prompt string) map[s
 func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
 	usage := startPelicanTestStream(c, "anthropic")
+	// The connection probe only proves the account answers; a Pelican answer
+	// that stopped early is reported with the reason instead of as a success.
+	pelican := pelicanTestRequested(c)
+	stopReason, refusalCategory := "", ""
+	complete := func() error {
+		if pelican {
+			if failure := pelicanClaudeStopFailure(stopReason, refusalCategory); failure != "" {
+				return s.sendErrorAndEnd(c, failure)
+			}
+		}
+		s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+		return nil
+	}
 
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
-				s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
-				return nil
+				return complete()
 			}
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", err.Error()))
 		}
@@ -2977,8 +3051,7 @@ func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader)
 		jsonStr := sseDataPrefix.ReplaceAllString(line, "")
 		usage.read(jsonStr)
 		if jsonStr == "[DONE]" {
-			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
-			return nil
+			return complete()
 		}
 
 		var data map[string]any
@@ -2995,9 +3068,17 @@ func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader)
 					s.sendEvent(c, TestEvent{Type: "content", Text: text})
 				}
 			}
+		case "message_delta":
+			if delta, ok := data["delta"].(map[string]any); ok {
+				if reason, ok := delta["stop_reason"].(string); ok {
+					stopReason = reason
+				}
+				if details, ok := delta["stop_details"].(map[string]any); ok {
+					refusalCategory, _ = details["category"].(string)
+				}
+			}
 		case "message_stop":
-			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
-			return nil
+			return complete()
 		case "error":
 			errorMsg := "Unknown error"
 			if errData, ok := data["error"].(map[string]any); ok {
@@ -3224,6 +3305,7 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 	req.Header.Set("Authorization", "Bearer "+authToken)
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
+	applyOpenAIAPIKeyIdentityHeaders(req.Header, account, account.GetOpenAIUserAgent())
 	account.ApplyHeaderOverrides(req.Header)
 
 	proxyURL := ""

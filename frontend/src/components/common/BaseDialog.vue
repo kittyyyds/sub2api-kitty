@@ -140,7 +140,7 @@ const handleEscape = (event: KeyboardEvent) => {
     event.stopImmediatePropagation()
     emit('close')
   } else if (event.key === 'Tab' && dialogRef.value) {
-    const focusable = Array.from(dialogRef.value.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+    const focusable = Array.from(dialogRef.value.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not(:disabled):not([tabindex="-1"]), select:not(:disabled):not([tabindex="-1"]), textarea:not(:disabled):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])'))
       .filter(element => !element.closest('[hidden], [inert], [style*="display: none"]'))
     const first = focusable[0], last = focusable.at(-1)
     if (!first) { event.preventDefault(); dialogRef.value.focus() }

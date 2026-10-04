@@ -477,6 +477,33 @@ describe('PaymentView checkout credit breakdown', () => {
     wrapper.unmount()
   })
 
+  it.each(['bonus', 'discount'] as const)('does not stack an exact permanent package with upstream %s tiers', async (mode) => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
+      recharge_bonus_rules: [{ id: 1, recharge_amount: 30, bonus_amount: 1, validity_days: 0 }],
+      recharge_bonus_tiers: [{ min_amount: 10, bonus_percent: 50 }],
+      recharge_bonus_mode: mode,
+    }))
+    const wrapper = await mountRecharge()
+    expect(wrapper.get('[data-testid="total-credit"]').text()).toBe('$31.00')
+    expect(wrapper.get('.checkout-summary__total').text()).toContain(formatPaymentAmount(30, 'CNY'))
+    wrapper.unmount()
+  })
+
+  it.each([
+    { mode: 'bonus' as const, total: '$45.00', pay: 30 },
+    { mode: 'discount' as const, total: '$30.00', pay: 15 },
+  ])('uses upstream $mode pricing when no exact site package matches', async ({ mode, total, pay }) => {
+    getCheckoutInfo.mockResolvedValue(checkoutInfoFixture({
+      recharge_bonus_rules: [],
+      recharge_bonus_tiers: [{ min_amount: 10, bonus_percent: 50 }],
+      recharge_bonus_mode: mode,
+    }))
+    const wrapper = await mountRecharge()
+    expect(wrapper.get('[data-testid="total-credit"]').text()).toBe(total)
+    expect(wrapper.get('.checkout-summary__total').text()).toContain(formatPaymentAmount(pay, 'CNY'))
+    wrapper.unmount()
+  })
+
   it('refreshes account balance after checkout has expired old grants', async () => {
     refreshUser.mockImplementation(async () => { authUser.balance = 3; return authUser })
     const wrapper = await mountRecharge()

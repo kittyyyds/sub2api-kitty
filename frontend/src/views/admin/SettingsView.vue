@@ -51,7 +51,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-admin-api-key" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.adminApiKey.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -203,12 +203,13 @@
 
         <!-- Tab: Gateway -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
+          <ServerlessSettings v-if="activeTab === 'gateway'" />
           <!-- Overload Cooldown (529) Settings -->
           <div class="card">
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-overload-cooldown" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.overloadCooldown.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -309,7 +310,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-rate-limit429cooldown" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.rateLimit429Cooldown.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -416,7 +417,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-stream-timeout" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.streamTimeout.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -596,7 +597,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-rectifier" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.rectifier.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -795,7 +796,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-beta-policy" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.betaPolicy.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -1074,7 +1075,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-openai-fast-policy" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.openaiFastPolicy.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -1428,7 +1429,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-registration" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.registration.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -1760,7 +1761,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-api-key-acl" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.apiKeyAcl.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -1853,7 +1854,7 @@
                   size="md"
                   class="text-primary-500"
                 />
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                <h2 id="settings-section-panel-rate-limit" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                   {{ t("admin.settings.panelRateLimit.title") }}
                 </h2>
               </div>
@@ -2038,7 +2039,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-captcha" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.captcha.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -2442,7 +2443,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-linuxdo" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.linuxdo.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -2560,7 +2561,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-email-oauth" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ localText("邮箱快捷登录", "Email OAuth Sign-in") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -2786,7 +2787,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-wechat-connect" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.wechatConnect.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -3128,7 +3129,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-dingtalk" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.dingtalk.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -3416,7 +3417,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-oidc" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.oidc.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -3829,7 +3830,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-defaults" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.defaults.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -4055,7 +4056,7 @@
                       </tr>
                     </thead>
                     <tbody class="space-y-2">
-                      <tr v-for="p in (['anthropic', 'openai', 'gemini', 'antigravity', 'grok'] as const)" :key="p" class="align-top">
+                      <tr v-for="p in (['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'typesafe'] as const)" :key="p" class="align-top">
                         <td class="pr-4 py-1">
                           <span class="font-mono text-xs text-gray-700 dark:text-gray-300">{{ p }}</span>
                         </td>
@@ -4102,7 +4103,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-auth-source-defaults" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.authSourceDefaults.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -4390,7 +4391,7 @@
                             </tr>
                           </thead>
                           <tbody>
-                            <tr v-for="p in (['anthropic', 'openai', 'gemini', 'antigravity', 'grok'] as const)" :key="`${authSource.source}-pq-${p}`" class="align-top">
+                            <tr v-for="p in (['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'typesafe'] as const)" :key="`${authSource.source}-pq-${p}`" class="align-top">
                               <td class="pr-4 py-1">
                                 <span class="font-mono text-xs text-gray-700 dark:text-gray-300">{{ p }}</span>
                               </td>
@@ -4445,7 +4446,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-claude-code" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.claudeCode.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -4497,7 +4498,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-gateway-forwarding-codex-hardening-title" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.gatewayForwarding.codexHardeningTitle") }}
               </h2>
             </div>
@@ -4923,7 +4924,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-upstream-billing-probe" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.upstreamBillingProbe.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -5007,7 +5008,7 @@
           <!-- Ollama Cloud Usage Settings -->
           <div class="card" data-testid="ollama-cloud-usage-global-settings">
             <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-ollama-cloud-usage" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.ollamaCloudUsage.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -5091,7 +5092,7 @@
           <!-- OpenCode Go Usage Settings -->
           <div class="card" data-testid="opencode-go-usage-global-settings">
             <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-opencode-go-usage" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.opencodeGoUsage.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -5177,7 +5178,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-scheduling" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.scheduling.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -5471,7 +5472,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-gateway-forwarding" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.gatewayForwarding.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -6115,7 +6116,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-web-search-emulation" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.webSearchEmulation.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -6549,7 +6550,7 @@
         <!-- Usage Records Settings -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-usage-records" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.usageRecords.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -6600,7 +6601,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-site" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.site.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -6994,7 +6995,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-custom-menu" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.customMenu.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7199,7 +7200,7 @@
 	            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
 	              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 	                <div>
-	                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+	                  <h2 id="settings-section-login-agreement" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
 	                    {{ localText("登录条款确认", "Login agreement") }}
 	                  </h2>
 	                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7399,7 +7400,7 @@
         <div v-show="activeTab === 'features'" class="space-y-6">
         <div class="card" data-testid="request-capture-settings">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.requestCapture.title') }}</h2>
+            <h2 id="settings-section-request-capture" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.requestCapture.title') }}</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.requestCapture.description') }}</p>
           </div>
           <div class="space-y-5 p-6">
@@ -7417,7 +7418,7 @@
         </div>
         <div class="card" data-testid="excel-bps-image-settings">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-excel-bps-images" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.excelBpsImages.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7540,7 +7541,7 @@
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-channel-monitor" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.channelMonitor.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7671,7 +7672,7 @@
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-available-channels" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.availableChannels.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7705,7 +7706,7 @@
         <!-- The Pelican showcase is configured with its group tests under Smart Ops. -->
         <div class="card" data-testid="pelican-showcase-moved">
           <div class="px-6 py-4">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-pelican-showcase" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.pelicanShowcase.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7723,7 +7724,7 @@
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-model-plaza" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.modelPlaza.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7773,7 +7774,7 @@
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-site-billing-mode" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.siteBillingMode.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7803,7 +7804,7 @@
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-plugin-management" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.pluginManagement.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7827,7 +7828,7 @@
 
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-risk-control" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.riskControl.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -7915,7 +7916,7 @@
         <!-- Affiliate (邀请返利) feature card -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="settings-section-features-affiliate" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.features.affiliate.title') }}
             </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -8334,7 +8335,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-payment" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.payment.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -8860,6 +8861,14 @@
             </div>
           </div>
 
+          <!-- 充值优惠阶梯（独立卡片，与服务商管理同级） -->
+          <RechargeBonusTierEditor
+            v-if="form.payment_enabled"
+            v-model="form.payment_recharge_bonus_tiers"
+            v-model:mode="form.payment_recharge_bonus_mode"
+            v-model:notice="form.payment_recharge_bonus_notice"
+          />
+
           <!-- Provider Management -->
           <PaymentProviderList
             v-if="form.payment_enabled"
@@ -8907,7 +8916,7 @@
               class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
               <div>
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                <h2 id="settings-section-smtp" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                   {{ t("admin.settings.smtp.title") }}
                 </h2>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -9069,7 +9078,7 @@
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 id="settings-section-test-email" tabindex="-1" class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ t("admin.settings.testEmail.title") }}
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -9382,6 +9391,8 @@
 import { excelBPSImageLimits } from "@/utils/excelBPSImageLimits";
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useSettingsNavigation } from "@/composables/useSettingsNavigation";
+import type { SettingsTab } from "@/utils/settingsSearch";
 import { adminAPI } from "@/api";
 import {
   appendAuthSourceDefaultsToUpdateRequest,
@@ -9435,7 +9446,16 @@ import Toggle from "@/components/common/Toggle.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
+import ServerlessSettings from "@/components/settings/ServerlessSettings.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
+import RechargeBonusTierEditor from "@/components/admin/settings/RechargeBonusTierEditor.vue";
+import {
+  normalizeRechargeBonusMode,
+  normalizeRechargeBonusTiers,
+  sanitizeRechargeBonusTiersForSubmit,
+  type RechargeBonusMode,
+  type RechargeBonusTierDraft,
+} from "@/utils/rechargeBonus";
 import OpenAIFastPolicyUserSelector from "@/views/admin/settings/OpenAIFastPolicyUserSelector.vue";
 import MihomoProxySelector from "@/views/admin/settings/MihomoProxySelector.vue";
 import { useClipboard } from "@/composables/useClipboard";
@@ -9489,17 +9509,9 @@ const paymentMethodsHref = computed(() =>
     : "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md#supported-payment-methods",
 );
 
-type SettingsTab =
-  | "general"
-  | "agreement"
-  | "features"
-  | "security"
-  | "users"
-  | "gateway"
-  | "payment"
-  | "email"
-  | "backup";
-const activeTab = ref<SettingsTab>("general");
+const loading = ref(true);
+const loadFailed = ref(false);
+const { activeTab, selectSettingsTab } = useSettingsNavigation(loading, loadFailed);
 const settingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
@@ -9520,10 +9532,6 @@ const settingsTabKeyboardActions = {
   Home: "first",
   End: "last",
 } as const;
-
-function selectSettingsTab(tab: SettingsTab): void {
-  activeTab.value = tab;
-}
 
 function focusSettingsTab(tab: SettingsTab): void {
   window.requestAnimationFrame(() => {
@@ -9564,8 +9572,6 @@ function handleSettingsTabKeydown(event: KeyboardEvent, tab: SettingsTab): void 
 
 const { copyToClipboard } = useClipboard();
 
-const loading = ref(true);
-const loadFailed = ref(false);
 const saving = ref(false);
 const testingSmtp = ref(false);
 const sendingTestEmail = ref(false);
@@ -10169,6 +10175,10 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_weight_upstream_cost: string;
   openai_advanced_scheduler_weight_previous_response: string;
   openai_advanced_scheduler_weight_session_sticky: string;
+  // 充值赠送阶梯编辑态：允许留空的行，提交时清洗为 RechargeBonusTier[]
+  payment_recharge_bonus_tiers: RechargeBonusTierDraft[];
+  payment_recharge_bonus_mode: RechargeBonusMode;
+  payment_recharge_bonus_notice: string;
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
   account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
@@ -10235,6 +10245,9 @@ const form = reactive<SettingsForm>({
   payment_balance_recharge_multiplier: 1,
   payment_subscription_usd_to_cny_rate: 0,
   payment_recharge_fee_rate: 0,
+  payment_recharge_bonus_tiers: [],
+  payment_recharge_bonus_mode: "bonus",
+  payment_recharge_bonus_notice: "",
   payment_enabled_types: [],
   payment_help_image_url: "",
   payment_help_text: "",
@@ -10486,8 +10499,8 @@ const form = reactive<SettingsForm>({
   request_capture_enabled: false,
   request_capture_quota_mib: 1024,
   request_capture_retention_days: 7,
-  excel_bps_image_mode: 'relay' as 'relay' | 'native',
-  excel_bps_image_relay_enabled: false,
+  excel_bps_image_mode: 'native' as 'relay' | 'native',
+  excel_bps_image_relay_enabled: true,
   excel_bps_image_base_url: '',
   excel_bps_image_body_limit_mib: 64,
   excel_bps_image_budget_mib: 1024,
@@ -11586,6 +11599,13 @@ async function loadSettings() {
           }))
         : defaultLoginAgreementDocuments();
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(settings));
+    form.payment_recharge_bonus_tiers = normalizeRechargeBonusTiers(
+      settings.payment_recharge_bonus_tiers,
+    );
+    form.payment_recharge_bonus_mode = normalizeRechargeBonusMode(
+      settings.payment_recharge_bonus_mode,
+    );
+    form.payment_recharge_bonus_notice = settings.payment_recharge_bonus_notice || "";
     form.default_platform_quotas = normalizePlatformQuotasMap(settings.default_platform_quotas);
     form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(
       settings.account_scheduling_thresholds,
@@ -12263,6 +12283,11 @@ async function saveSettings() {
       payment_subscription_usd_to_cny_rate:
         Number(form.payment_subscription_usd_to_cny_rate) || 0,
       payment_recharge_fee_rate: Number(form.payment_recharge_fee_rate) || 0,
+      payment_recharge_bonus_tiers: sanitizeRechargeBonusTiersForSubmit(
+        form.payment_recharge_bonus_tiers,
+      ),
+      payment_recharge_bonus_mode: form.payment_recharge_bonus_mode,
+      payment_recharge_bonus_notice: form.payment_recharge_bonus_notice,
       payment_enabled_types: form.payment_enabled_types,
       payment_load_balance_strategy: form.payment_load_balance_strategy,
       payment_product_name_prefix: form.payment_product_name_prefix,
@@ -13868,6 +13893,15 @@ watch(
 </script>
 
 <style scoped>
+h2[id^="settings-section-"] {
+  scroll-margin-top: 6rem;
+}
+h2[id^="settings-section-"]:target {
+  outline: 2px solid var(--color-primary-500, #6366f1);
+  outline-offset: 6px;
+  border-radius: 2px;
+}
+
 .default-sub-group-select :deep(.select-trigger) {
   @apply h-[42px];
 }

@@ -1,17 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { RechargeBonusRule } from '@/types/payment'
+import type { RechargeBonusRule, RechargeBonusTier } from '@/types/payment'
 import Icon from '@/components/icons/Icon.vue'
-import { currencySymbol } from './currency'
-const props = defineProps<{ amounts: number[]; bonusRules: RechargeBonusRule[]; rechargeMultiplier: number; min: number; max: number; currency: string; balance: number | null }>()
+import { currencySymbol, formatPaymentAmount } from './currency'
+import { quoteRechargeBonus, type RechargeBonusMode } from '@/utils/rechargeBonus'
+const props = defineProps<{ amounts: number[]; bonusRules: RechargeBonusRule[]; bonusTiers?: RechargeBonusTier[]; bonusMode?: RechargeBonusMode; rechargeMultiplier: number; min: number; max: number; currency: string; balance: number | null }>()
 const emit = defineEmits<{ select: [amount: number] }>()
 const { t } = useI18n()
 const rules = computed(() => new Map(props.bonusRules.map(rule => [rule.recharge_amount, rule])))
 const highestBonus = computed(() => Math.max(0, ...props.amounts.filter(allowed).map(amount => rules.value.get(amount)?.bonus_amount ?? 0)))
 function allowed(amount: number) { return (props.min <= 0 || amount >= props.min) && (props.max <= 0 || amount <= props.max) }
 function credit(amount: number) { return Math.round(amount * props.rechargeMultiplier * 100) / 100 }
-function total(amount: number) { return (Math.round((credit(amount) + (rules.value.get(amount)?.bonus_amount ?? 0)) * 100) / 100).toFixed(2) }
+function quote(amount: number) {
+  let digits = 2
+  try { digits = new Intl.NumberFormat(undefined, { style: 'currency', currency: props.currency }).resolvedOptions().maximumFractionDigits ?? 2 } catch { /* default precision */ }
+  return quoteRechargeBonus(rules.value.has(amount) ? [] : (props.bonusTiers ?? []), amount, { multiplier: props.rechargeMultiplier, mode: props.bonusMode, currencyDigits: digits })
+}
+function total(amount: number) { return (Math.round((quote(amount).credited + (rules.value.get(amount)?.bonus_amount ?? 0)) * 100) / 100).toFixed(2) }
 </script>
 
 <template>
@@ -24,9 +30,10 @@ function total(amount: number) { return (Math.round((credit(amount) + (rules.val
         <h3>{{ t(`payment.packages.names.${index}`) }}</h3><p class="package-description">{{ t(`payment.packages.descriptions.${index}`) }}</p>
         <div class="package-price"><span><small>{{ currencySymbol(currency) }}</small><strong>{{ amount }}</strong></span><span v-if="rules.get(amount)" class="package-bonus-badge">{{ t('payment.packages.extra', { amount: rules.get(amount)!.bonus_amount }) }}</span></div>
         <p class="package-credit">{{ t('payment.packages.receive') }} <del v-if="rules.get(amount)">${{ credit(amount).toFixed(2) }}</del> <strong>${{ total(amount) }}</strong> {{ t('payment.packages.creditUnit') }}</p>
+        <p v-if="quote(amount).mode === 'discount' && quote(amount).percent > 0" class="package-credit">{{ t('payment.rechargeBonus.payShort', { amount: formatPaymentAmount(quote(amount).payBase, currency) }) }}</p>
         <ul>
           <li><Icon name="check" size="sm" />{{ t('payment.baseCreditPreview', { amount: credit(amount).toFixed(2) }) }}</li>
-          <li><Icon name="check" size="sm" /><span v-if="rules.get(amount)">{{ t(rules.get(amount)!.validity_days === 0 ? 'payment.permanentTierBonus' : 'payment.tierBonus', { amount: rules.get(amount)!.bonus_amount.toFixed(2), days: rules.get(amount)!.validity_days }) }}</span><span v-else>{{ t('payment.noTierBonus') }}</span></li>
+          <li><Icon name="check" size="sm" /><span v-if="rules.get(amount)">{{ t(rules.get(amount)!.validity_days === 0 ? 'payment.permanentTierBonus' : 'payment.tierBonus', { amount: rules.get(amount)!.bonus_amount.toFixed(2), days: rules.get(amount)!.validity_days }) }}</span><span v-else-if="quote(amount).percent > 0">{{ quote(amount).mode === 'discount' ? t('payment.rechargeBonus.discountLabelWithPercent', { percent: quote(amount).percent }) : t('payment.permanentTierBonus', { amount: quote(amount).bonus.toFixed(2) }) }}</span><span v-else>{{ t('payment.noTierBonus') }}</span></li>
           <li><Icon name="check" size="sm" />{{ t('payment.packages.usage') }}</li>
         </ul>
         <button type="button" :disabled="!allowed(amount)" :aria-label="`${t('payment.packages.choose')} ${currencySymbol(currency)}${amount}`" @click="emit('select', amount)">{{ t(allowed(amount) ? 'payment.packages.charge' : 'payment.packages.unavailable') }}</button>

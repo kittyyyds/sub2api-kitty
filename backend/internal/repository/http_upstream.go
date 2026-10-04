@@ -34,6 +34,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/upstreamroute"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/Wei-Shaw/sub2api/internal/util/transportdiag"
@@ -169,9 +170,11 @@ type openAIHTTP2FallbackState struct {
 // 7. 代理变更时清空旧连接池，避免复用错误代理
 // 8. 账号并发数与连接池上限对应（账号隔离策略下）
 type httpUpstreamService struct {
-	cfg     *config.Config                  // 全局配置
-	mu      sync.RWMutex                    // 保护 clients map 的读写锁
-	clients map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
+	upstreamRoutes    *upstreamroute.Router
+	upstreamRoutesErr error
+	cfg               *config.Config                  // 全局配置
+	mu                sync.RWMutex                    // 保护 clients map 的读写锁
+	clients           map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
 	// OpenAI 走 HTTP/HTTPS 代理时的 H2->H1 回退状态（key=标准化 proxyKey）
 	openAIHTTP2Fallbacks sync.Map
 	// BPS fallback state is isolated from Codex and contains only hashed proxy keys.
@@ -187,10 +190,17 @@ type httpUpstreamService struct {
 // 返回:
 //   - service.HTTPUpstream 接口实现
 func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
-	return &httpUpstreamService{
+	s := &httpUpstreamService{
 		cfg:     cfg,
 		clients: make(map[string]*upstreamClientEntry),
 	}
+	if cfg != nil {
+		s.upstreamRoutes, s.upstreamRoutesErr = upstreamroute.New(cfg.Gateway.UpstreamRouting)
+	}
+	if cfg != nil && (cfg.HasAstraRoutingLoader() || cfg.Gateway.CodexGatewayPin.Enabled) {
+		return &astraRoutingUpstream{delegate: s, cfg: cfg}
+	}
+	return s
 }
 
 // Do 执行 HTTP 请求
@@ -227,6 +237,9 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 	}
 
 	// 获取或创建对应的客户端，并标记请求占用
+	if s.useRegionalEgress(proxyURL, accountID, profile) {
+		return s.doRegionalEgress(req, accountID, accountConcurrency, profile, nil)
+	}
 	entry, err := s.acquireClientWithProfile(proxyURL, accountID, accountConcurrency, profile)
 	if err != nil {
 		requestcapture.FromContext(req.Context()).SelectionFailed(accountID, 0, nil, nil, err)
@@ -299,11 +312,7 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 	}
 	proxyInfo := "direct"
 	if proxyURL != "" {
-		if parsed, parseErr := url.Parse(proxyURL); parseErr == nil {
-			proxyInfo = parsed.Redacted()
-		} else {
-			proxyInfo = "configured"
-		}
+		proxyInfo = safeUpstreamPoolID(proxyURL)
 	}
 	slog.Debug("tls_fingerprint_enabled", "account_id", accountID, "target", targetHost, "proxy", proxyInfo, "profile", profile.Name)
 
@@ -314,6 +323,9 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 		return nil, err
 	}
 
+	if s.useRegionalEgress(proxyURL, accountID, upstreamProfile) {
+		return s.doRegionalEgress(req, accountID, accountConcurrency, upstreamProfile, profile)
+	}
 	entry, err := s.acquireClientWithTLS(proxyURL, accountID, accountConcurrency, profile, upstreamProfile)
 	if err != nil {
 		requestcapture.FromContext(req.Context()).SelectionFailed(accountID, 0, nil, nil, err)
@@ -514,6 +526,8 @@ func newGrokOfficialAPIFallbackRequest(req *http.Request) (*http.Request, error)
 	for _, header := range []string{
 		"X-XAI-Token-Auth",
 		"X-Grok-Client-Version",
+		"X-Grok-Client-Mode",
+		"X-Authenticateresponse",
 		"X-Grok-Client-Surface",
 		"X-UserID",
 		"X-Email",
@@ -579,6 +593,8 @@ func applyGrokCLIProxyHeaders(req *http.Request) {
 	req.Header.Set("X-XAI-Token-Auth", xai.CLITokenAuth)
 	req.Header.Set("x-grok-client-version", version)
 	req.Header.Set("x-grok-client-identifier", xai.CLIClientIdentifier)
+	req.Header.Set("x-grok-client-mode", xai.CLIClientMode)
+	req.Header.Set("x-authenticateresponse", "authenticate-response")
 	req.Header.Set("User-Agent", xai.CLIUserAgent(version))
 }
 
@@ -620,7 +636,7 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 			atomic.AddInt64(&entry.inFlight, 1)
 		}
 		s.mu.RUnlock()
-		slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", cacheKey)
+		slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", safeUpstreamPoolID(cacheKey))
 		return entry, nil
 	}
 	s.mu.RUnlock()
@@ -634,12 +650,12 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 				atomic.AddInt64(&entry.inFlight, 1)
 			}
 			s.mu.Unlock()
-			slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", cacheKey)
+			slog.Debug("tls_fingerprint_reusing_client", "account_id", accountID, "cache_key", safeUpstreamPoolID(cacheKey))
 			return entry, nil
 		}
 		slog.Debug("tls_fingerprint_evicting_stale_client",
 			"account_id", accountID,
-			"cache_key", cacheKey,
+			"cache_key", safeUpstreamPoolID(cacheKey),
 			"proxy_changed", entry.proxyKey != proxyKey,
 			"pool_changed", entry.poolKey != poolKey)
 		s.removeClientLocked(cacheKey, entry)
@@ -657,7 +673,7 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 	}
 
 	// 创建带 TLS 指纹的 Transport
-	slog.Debug("tls_fingerprint_creating_new_client", "account_id", accountID, "cache_key", cacheKey)
+	slog.Debug("tls_fingerprint_creating_new_client", "account_id", accountID, "cache_key", safeUpstreamPoolID(cacheKey), "proxy", safeUpstreamPoolID(proxyKey))
 	transport, err := buildUpstreamTransportWithTLSFingerprint(settings, parsedProxy, profile)
 	if err != nil {
 		s.mu.Unlock()
@@ -1238,9 +1254,8 @@ func (s *httpUpstreamService) recordOpenAIHTTP2Failure(profile service.HTTPUpstr
 	state := s.getOrCreateOpenAIHTTP2FallbackState(proxyKey)
 	activated, until := state.recordFailure(time.Now(), settings.fallbackErrorThreshold, settings.fallbackWindow, settings.fallbackTTL)
 	if activated {
-		proxyDigest := sha256.Sum256([]byte(proxyKey))
 		slog.Warn("openai_http2_proxy_fallback_activated",
-			"proxy_key_hash", fmt.Sprintf("%x", proxyDigest[:12]),
+			"proxy", safeUpstreamPoolID(proxyKey),
 			"fallback_until", until.Format(time.RFC3339))
 	}
 }
@@ -1675,3 +1690,6 @@ func (d *decompressedBody) Close() error {
 	}
 	return d.closer.Close()
 }
+
+// Pool keys can contain proxy credentials; log only an irreversible identifier.
+func safeUpstreamPoolID(key string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(key)))[:16] }

@@ -29,14 +29,14 @@ type openAIWSPassthroughHandlerHarness struct {
 	apiKey         *service.APIKey
 }
 
-func newOpenAIWSPassthroughHandlerHarness(t *testing.T, upstreamURL string, overrides ...map[string]string) *openAIWSPassthroughHandlerHarness {
-	combined := make(map[string]string)
-	for _, values := range overrides {
-		for key, value := range values {
-			combined[key] = value
+func newOpenAIWSPassthroughHandlerHarness(t *testing.T, upstreamURL string, settings ...map[string]string) *openAIWSPassthroughHandlerHarness {
+	extraSettings := map[string]string{}
+	for _, overrides := range settings {
+		for key, value := range overrides {
+			extraSettings[key] = value
 		}
 	}
-	return newOpenAIWSPassthroughHandlerHarnessWithOptions(t, upstreamURL, http.Header{"Session_id": []string{"ws-test-session"}}, combined)
+	return newOpenAIWSPassthroughHandlerHarnessWithOptions(t, upstreamURL, http.Header{"Session_id": []string{"ws-test-session"}}, extraSettings)
 }
 
 func newOpenAIWSPassthroughHandlerHarnessWithOptions(t *testing.T, upstreamURL string, clientHeaders http.Header, extraSettings map[string]string) *openAIWSPassthroughHandlerHarness {

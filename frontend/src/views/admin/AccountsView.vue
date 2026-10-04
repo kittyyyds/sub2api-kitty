@@ -385,12 +385,11 @@
             />
           </template>
           <template #cell-priority="{ row }">
-            <span
-              class="text-sm text-gray-700 dark:text-gray-300"
-              :title="accountPriorityDisplay(row).title"
-            >
-              {{ accountPriorityDisplay(row).text }}
-            </span>
+            <AccountPriorityCell
+              :account="row"
+              @updated="handleAccountUpdated"
+              @error="(message: string) => appStore.showError(message)"
+            />
           </template>
           <template #header-scheduler_score="{ column }">
             <div class="flex items-center">
@@ -535,6 +534,7 @@ import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
 import ExcelBPS403Badge from '@/components/account/ExcelBPS403Badge.vue'
 import UpstreamBillingRateCell from '@/components/account/UpstreamBillingRateCell.vue'
+import AccountPriorityCell from '@/components/account/AccountPriorityCell.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
@@ -1133,55 +1133,6 @@ const {
     sort_order: sortState.sort_order
   }
 })
-
-type AccountPriorityDisplay = { text: string; title: string }
-
-const accountPriorityDisplay = (account: AccountListItem): AccountPriorityDisplay => {
-  const globalPriority = account.priority
-  const globalDisplay = {
-    text: String(globalPriority),
-    title: t('admin.accounts.accountPriorityLabel', { priority: globalPriority })
-  }
-
-  if (!accountGroupPriorityEnabled.value) {
-    return globalDisplay
-  }
-
-  const memberships = accountGroupMembershipsForRow(account).filter((membership) =>
-    Number.isFinite(membership.group_id) && Number.isFinite(membership.priority)
-  )
-  if (memberships.length === 0) return globalDisplay
-
-  const selectedGroup = String(params.group || '').trim()
-  if (selectedGroup && selectedGroup !== 'ungrouped') {
-    const selectedGroupID = Number(selectedGroup)
-    if (Number.isFinite(selectedGroupID)) {
-      const membership = memberships.find((item) => item.group_id === selectedGroupID)
-      if (membership) {
-        return {
-          text: `P${membership.priority}`,
-          title: t('admin.accounts.groupPriorityLabel', { priority: membership.priority })
-        }
-      }
-    }
-    return globalDisplay
-  }
-
-  const priorities = memberships.map((membership) => membership.priority)
-  if (priorities.length === 1) {
-    return {
-      text: `P${priorities[0]}`,
-      title: t('admin.accounts.groupPriorityLabel', { priority: priorities[0] })
-    }
-  }
-
-  return {
-    text: priorities.map((priority) => `P${priority}`).join(' / '),
-    title: priorities
-      .map((priority) => t('admin.accounts.groupPriorityLabel', { priority }))
-      .join(', ')
-  }
-}
 
 const {
   selectedSet,

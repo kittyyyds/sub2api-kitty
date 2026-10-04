@@ -98,6 +98,12 @@ export default {
       schedulableEnabled: 'Scheduling enabled',
       schedulableDisabled: 'Scheduling disabled',
       failedToToggleSchedulable: 'Failed to toggle scheduling status',
+      priorityQuick: {
+        raise: 'Raise priority (value -1)',
+        lower: 'Lower priority (value +1)',
+        editHint: 'Click to type a value; lower is used first',
+        failed: 'Failed to update priority'
+      },
       groupCountTotal: '{count} groups total',
       groupPriorityLabel: 'Group priority P{priority}',
       accountPriorityLabel: 'Account-wide priority {priority}',
@@ -113,6 +119,7 @@ export default {
         deepseek: 'DeepSeek',
         minimax: 'MiniMax',
         opencode_go: 'OpenCode',
+        typesafe: 'TypeSafe / Jev',
       },
       cnProviders: {
         accountMode: {
@@ -654,13 +661,17 @@ export default {
       // OpenAI specific hints
       openai: {
         baseUrlHint: 'Leave default for official OpenAI API',
+        prismBrowser: 'Use Prism browser protocol automatically',
+        prismBrowserDesc: 'Uses this OpenAI OAuth account with the server-managed Prism adapter. No separate credentials are needed. Supports text for these four models and client function/custom tools for 6.1 Sol.',
+        prismBrowserModels: 'Models to route through Prism',
+        prismBrowserModelsHint: 'Matches model names after account mapping. Only selected models use Prism; others keep their Codex / Excel routing. Selecting none disables Prism routing. Availability depends on the upstream account.',
+        prismBrowserManagedEndpoint: 'Selected models use HTTP/SSE. Tool requests require an updated server adapter. Hosted tools such as web search and image generation are unsupported.',
+        prismBrowserConcurrencyHint: 'Prism also has adapter concurrency limits; its requests do not affect this tier’s progress.',
         apiKeyHint: 'Your OpenAI API Key',
         oauthPassthrough: 'Auto passthrough (auth only)',
         excelBPS: 'Excel / BPS protocol',
         excelBPSOmitUnsupportedTools: 'Keep BPS and omit unsupported hosted tools',
         excelBPSOmitUnsupportedToolsDesc: 'Off by default: declarations for live web search (external_web_access=true), high search context or image generation use native Codex, even with tool_choice=auto before any tool executes. Enable to keep BPS, omit hosted tools unsupported by the bridge and tell the model they are unavailable. This does not add search or image generation support; client function tools are unaffected. Forced tool choices return 400; tool_choice=none does not trigger tool fallback. Fallback reasons appear in response headers and excel_bps.native_fallback diagnostic logs.',
-        excelBPSIgnoreImages: 'Ignore image inputs when image support is disabled',
-        excelBPSIgnoreImagesDesc: 'Disabled by default. Only applies while Excel / BPS image support is off in system settings. Replaces every image in current and historical messages and tool results with an unavailable notice before forwarding, preserving text and tool call pairing so old screenshots cannot repeatedly block the conversation. Even mixed text/image results tell the model it cannot see the image and should not retry view_image or other image-reading tools while image support is disabled. Enabling image support restores normal image handling.',
         excelBPSCacheCreationAsInput: 'Bill cache creation as regular input',
         excelBPSMihomo: 'BPS session proxy (use with caution)',
         excelBPSProxySource: 'Exit source',
@@ -1711,7 +1722,7 @@ export default {
         promptLabel: 'Test message',
         promptHint: 'The same prompt is sent unchanged to every parallel run.',
         model: 'Model',
-        modelHint: 'Defaults to gpt-6-astra; adjust it for the account when needed.',
+        modelHint: 'Defaults to {model}; adjust it for the account when needed.',
         reasoning: 'Reasoning effort',
         reasoningLow: 'Low',
         reasoningMedium: 'Medium',

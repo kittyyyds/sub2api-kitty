@@ -111,7 +111,7 @@ describe('AccountStatusIndicator', () => {
     await wrapper.setProps({ account: { ...account, current_rpm: 0, rpm_paused: false, rpm_reset_at: undefined } })
     expect(wrapper.text()).not.toContain('admin.accounts.status.rpmPaused')
   })
-  it('Claude 5 模型限流时显示 Opus 和 Sonnet 的短别名', () => {
+  it('Claude 5 系列模型限流时显示 Opus 和 Sonnet 的短别名', () => {
     const wrapper = mount(AccountStatusIndicator, {
       props: {
         account: makeAccount({

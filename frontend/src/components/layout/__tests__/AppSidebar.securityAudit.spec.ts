@@ -37,7 +37,7 @@ vi.mock('@/composables/useBatchImageAccess', () => ({
 }))
 vi.mock('vue-i18n', async () => ({
   ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'),
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({ t: (key: string) => key, locale: ref('zh') }),
 }))
 
 const auditPaths = ['/admin/risk-control', '/admin/prompt-audit', '/admin/security-policy']

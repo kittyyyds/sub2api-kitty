@@ -3,6 +3,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/serverless"
 	"log"
 	"log/slog"
 	"net/http"
@@ -45,6 +47,7 @@ func ProvideRouter(
 	userService *service.UserService,
 	compositeResolver *service.CompositeRouteResolver,
 	redisClient *redis.Client,
+	lifecycle *Lifecycle,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -90,6 +93,20 @@ func ProvideRouter(
 		service.SetWebSearchManager(websearch.NewManager(configs, redisClient))
 	})
 
+	manager, err := serverless.New(serverless.Runtime{ID: cfg.Runtime.ServerlessID, Endpoint: cfg.Runtime.ServerlessEndpoint, Region: cfg.Runtime.ServerlessRegion, Secret: cfg.Runtime.ServerlessSecret, Gateway: cfg.Runtime.Role == config.RuntimeRoleGateway, Version: settingService.ServerlessVersion()}, redisClient, settingService.ServerlessStore())
+	if err != nil {
+		panic(err)
+	}
+	settingService.Serverless = manager
+	manager.Start(func(ctx context.Context) error {
+		if lifecycle.isDraining() {
+			return fmt.Errorf("draining")
+		}
+		return lifecycle.checkWithinBudget(ctx)
+	})
+	lifecycle.onDrain = append(lifecycle.onDrain, manager.Stop)
+	r.Use(manager.Ingress())
+	r.GET("/internal/serverless/probe", manager.ProbeHandler)
 	return SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, userService, compositeResolver, cfg, redisClient)
 }
 

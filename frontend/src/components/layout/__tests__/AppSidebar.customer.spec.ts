@@ -76,7 +76,7 @@ vi.mock('vue-i18n', async () => {
   }
   return {
     ...actual,
-    useI18n: () => ({ t: (key: string) => messages[key] ?? key })
+    useI18n: () => ({ t: (key: string) => messages[key] ?? key, locale: ref('zh') })
   }
 })
 
@@ -193,7 +193,7 @@ describe('AppSidebar customer grouped navigation', () => {
     })
 
     expect(wrapper.find('a[href="/admin/profit-analysis"]').exists()).toBe(false)
-    expect(wrapper.find('a[href="/admin/harvest-flow"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/admin/harvest-flow"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/admin/candy-test"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/candy-test"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/admin/model-capability"]').exists()).toBe(false)
@@ -204,7 +204,7 @@ describe('AppSidebar customer grouped navigation', () => {
     expect(smartOpsGroup).toBeDefined()
     expect(wrapper.find('a[href="/admin/account-quality"]').exists()).toBe(false)
     await smartOpsGroup!.trigger('click')
-    for (const path of ['/admin/account-quality', '/admin/account-ops', '/admin/token-guard']) {
+    for (const path of ['/admin/account-quality', '/admin/account-ops', '/admin/token-guard', '/admin/harvest-flow']) {
       expect(wrapper.find(`a[href="${path}"]`).exists()).toBe(true)
     }
 

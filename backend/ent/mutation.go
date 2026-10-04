@@ -110,53 +110,55 @@ const (
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	key_hash           *string
-	key_prefix         *string
-	name               *string
-	status             *string
-	last_used_at       *time.Time
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	quota              *float64
-	addquota           *float64
-	quota_used         *float64
-	addquota_used      *float64
-	expires_at         *time.Time
-	rate_limit_5h      *float64
-	addrate_limit_5h   *float64
-	rate_limit_1d      *float64
-	addrate_limit_1d   *float64
-	rate_limit_7d      *float64
-	addrate_limit_7d   *float64
-	usage_5h           *float64
-	addusage_5h        *float64
-	usage_1d           *float64
-	addusage_1d        *float64
-	usage_7d           *float64
-	addusage_7d        *float64
-	window_5h_start    *time.Time
-	window_1d_start    *time.Time
-	window_7d_start    *time.Time
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                   Op
+	typ                  string
+	id                   *int64
+	created_at           *time.Time
+	updated_at           *time.Time
+	deleted_at           *time.Time
+	concurrency_limit    *int
+	addconcurrency_limit *int
+	key                  *string
+	key_hash             *string
+	key_prefix           *string
+	name                 *string
+	status               *string
+	last_used_at         *time.Time
+	ip_whitelist         *[]string
+	appendip_whitelist   []string
+	ip_blacklist         *[]string
+	appendip_blacklist   []string
+	quota                *float64
+	addquota             *float64
+	quota_used           *float64
+	addquota_used        *float64
+	expires_at           *time.Time
+	rate_limit_5h        *float64
+	addrate_limit_5h     *float64
+	rate_limit_1d        *float64
+	addrate_limit_1d     *float64
+	rate_limit_7d        *float64
+	addrate_limit_7d     *float64
+	usage_5h             *float64
+	addusage_5h          *float64
+	usage_1d             *float64
+	addusage_1d          *float64
+	usage_7d             *float64
+	addusage_7d          *float64
+	window_5h_start      *time.Time
+	window_1d_start      *time.Time
+	window_7d_start      *time.Time
+	clearedFields        map[string]struct{}
+	user                 *int64
+	cleareduser          bool
+	group                *int64
+	clearedgroup         bool
+	usage_logs           map[int64]struct{}
+	removedusage_logs    map[int64]struct{}
+	clearedusage_logs    bool
+	done                 bool
+	oldValue             func(context.Context) (*APIKey, error)
+	predicates           []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -412,6 +414,62 @@ func (m *APIKeyMutation) OldUserID(ctx context.Context) (v int64, err error) {
 // ResetUserID resets all changes to the "user_id" field.
 func (m *APIKeyMutation) ResetUserID() {
 	m.user = nil
+}
+
+// SetConcurrencyLimit sets the "concurrency_limit" field.
+func (m *APIKeyMutation) SetConcurrencyLimit(i int) {
+	m.concurrency_limit = &i
+	m.addconcurrency_limit = nil
+}
+
+// ConcurrencyLimit returns the value of the "concurrency_limit" field in the mutation.
+func (m *APIKeyMutation) ConcurrencyLimit() (r int, exists bool) {
+	v := m.concurrency_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConcurrencyLimit returns the old "concurrency_limit" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldConcurrencyLimit(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConcurrencyLimit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConcurrencyLimit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConcurrencyLimit: %w", err)
+	}
+	return oldValue.ConcurrencyLimit, nil
+}
+
+// AddConcurrencyLimit adds i to the "concurrency_limit" field.
+func (m *APIKeyMutation) AddConcurrencyLimit(i int) {
+	if m.addconcurrency_limit != nil {
+		*m.addconcurrency_limit += i
+	} else {
+		m.addconcurrency_limit = &i
+	}
+}
+
+// AddedConcurrencyLimit returns the value that was added to the "concurrency_limit" field in this mutation.
+func (m *APIKeyMutation) AddedConcurrencyLimit() (r int, exists bool) {
+	v := m.addconcurrency_limit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetConcurrencyLimit resets all changes to the "concurrency_limit" field.
+func (m *APIKeyMutation) ResetConcurrencyLimit() {
+	m.concurrency_limit = nil
+	m.addconcurrency_limit = nil
 }
 
 // SetKey sets the "key" field.
@@ -1647,7 +1705,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1659,6 +1717,9 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.user != nil {
 		fields = append(fields, apikey.FieldUserID)
+	}
+	if m.concurrency_limit != nil {
+		fields = append(fields, apikey.FieldConcurrencyLimit)
 	}
 	if m.key != nil {
 		fields = append(fields, apikey.FieldKey)
@@ -1739,6 +1800,8 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.DeletedAt()
 	case apikey.FieldUserID:
 		return m.UserID()
+	case apikey.FieldConcurrencyLimit:
+		return m.ConcurrencyLimit()
 	case apikey.FieldKey:
 		return m.Key()
 	case apikey.FieldKeyHash:
@@ -1798,6 +1861,8 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldDeletedAt(ctx)
 	case apikey.FieldUserID:
 		return m.OldUserID(ctx)
+	case apikey.FieldConcurrencyLimit:
+		return m.OldConcurrencyLimit(ctx)
 	case apikey.FieldKey:
 		return m.OldKey(ctx)
 	case apikey.FieldKeyHash:
@@ -1876,6 +1941,13 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUserID(v)
+		return nil
+	case apikey.FieldConcurrencyLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConcurrencyLimit(v)
 		return nil
 	case apikey.FieldKey:
 		v, ok := value.(string)
@@ -2032,6 +2104,9 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *APIKeyMutation) AddedFields() []string {
 	var fields []string
+	if m.addconcurrency_limit != nil {
+		fields = append(fields, apikey.FieldConcurrencyLimit)
+	}
 	if m.addquota != nil {
 		fields = append(fields, apikey.FieldQuota)
 	}
@@ -2064,6 +2139,8 @@ func (m *APIKeyMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case apikey.FieldConcurrencyLimit:
+		return m.AddedConcurrencyLimit()
 	case apikey.FieldQuota:
 		return m.AddedQuota()
 	case apikey.FieldQuotaUsed:
@@ -2089,6 +2166,13 @@ func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *APIKeyMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case apikey.FieldConcurrencyLimit:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddConcurrencyLimit(v)
+		return nil
 	case apikey.FieldQuota:
 		v, ok := value.(float64)
 		if !ok {
@@ -2258,6 +2342,9 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldUserID:
 		m.ResetUserID()
+		return nil
+	case apikey.FieldConcurrencyLimit:
+		m.ResetConcurrencyLimit()
 		return nil
 	case apikey.FieldKey:
 		m.ResetKey()
@@ -30892,6 +30979,8 @@ type PaymentOrderMutation struct {
 	addpay_amount            *float64
 	fee_rate                 *float64
 	addfee_rate              *float64
+	bonus_amount             *float64
+	addbonus_amount          *float64
 	recharge_code            *string
 	out_trade_no             *string
 	payment_type             *string
@@ -31357,6 +31446,62 @@ func (m *PaymentOrderMutation) AddedFeeRate() (r float64, exists bool) {
 func (m *PaymentOrderMutation) ResetFeeRate() {
 	m.fee_rate = nil
 	m.addfee_rate = nil
+}
+
+// SetBonusAmount sets the "bonus_amount" field.
+func (m *PaymentOrderMutation) SetBonusAmount(f float64) {
+	m.bonus_amount = &f
+	m.addbonus_amount = nil
+}
+
+// BonusAmount returns the value of the "bonus_amount" field in the mutation.
+func (m *PaymentOrderMutation) BonusAmount() (r float64, exists bool) {
+	v := m.bonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBonusAmount returns the old "bonus_amount" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldBonusAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBonusAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBonusAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBonusAmount: %w", err)
+	}
+	return oldValue.BonusAmount, nil
+}
+
+// AddBonusAmount adds f to the "bonus_amount" field.
+func (m *PaymentOrderMutation) AddBonusAmount(f float64) {
+	if m.addbonus_amount != nil {
+		*m.addbonus_amount += f
+	} else {
+		m.addbonus_amount = &f
+	}
+}
+
+// AddedBonusAmount returns the value that was added to the "bonus_amount" field in this mutation.
+func (m *PaymentOrderMutation) AddedBonusAmount() (r float64, exists bool) {
+	v := m.addbonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBonusAmount resets all changes to the "bonus_amount" field.
+func (m *PaymentOrderMutation) ResetBonusAmount() {
+	m.bonus_amount = nil
+	m.addbonus_amount = nil
 }
 
 // SetRechargeCode sets the "recharge_code" field.
@@ -32902,7 +33047,7 @@ func (m *PaymentOrderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentOrderMutation) Fields() []string {
-	fields := make([]string, 0, 39)
+	fields := make([]string, 0, 40)
 	if m.user != nil {
 		fields = append(fields, paymentorder.FieldUserID)
 	}
@@ -32923,6 +33068,9 @@ func (m *PaymentOrderMutation) Fields() []string {
 	}
 	if m.fee_rate != nil {
 		fields = append(fields, paymentorder.FieldFeeRate)
+	}
+	if m.bonus_amount != nil {
+		fields = append(fields, paymentorder.FieldBonusAmount)
 	}
 	if m.recharge_code != nil {
 		fields = append(fields, paymentorder.FieldRechargeCode)
@@ -33042,6 +33190,8 @@ func (m *PaymentOrderMutation) Field(name string) (ent.Value, bool) {
 		return m.PayAmount()
 	case paymentorder.FieldFeeRate:
 		return m.FeeRate()
+	case paymentorder.FieldBonusAmount:
+		return m.BonusAmount()
 	case paymentorder.FieldRechargeCode:
 		return m.RechargeCode()
 	case paymentorder.FieldOutTradeNo:
@@ -33129,6 +33279,8 @@ func (m *PaymentOrderMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPayAmount(ctx)
 	case paymentorder.FieldFeeRate:
 		return m.OldFeeRate(ctx)
+	case paymentorder.FieldBonusAmount:
+		return m.OldBonusAmount(ctx)
 	case paymentorder.FieldRechargeCode:
 		return m.OldRechargeCode(ctx)
 	case paymentorder.FieldOutTradeNo:
@@ -33250,6 +33402,13 @@ func (m *PaymentOrderMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFeeRate(v)
+		return nil
+	case paymentorder.FieldBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBonusAmount(v)
 		return nil
 	case paymentorder.FieldRechargeCode:
 		v, ok := value.(string)
@@ -33492,6 +33651,9 @@ func (m *PaymentOrderMutation) AddedFields() []string {
 	if m.addfee_rate != nil {
 		fields = append(fields, paymentorder.FieldFeeRate)
 	}
+	if m.addbonus_amount != nil {
+		fields = append(fields, paymentorder.FieldBonusAmount)
+	}
 	if m.addplan_id != nil {
 		fields = append(fields, paymentorder.FieldPlanID)
 	}
@@ -33518,6 +33680,8 @@ func (m *PaymentOrderMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPayAmount()
 	case paymentorder.FieldFeeRate:
 		return m.AddedFeeRate()
+	case paymentorder.FieldBonusAmount:
+		return m.AddedBonusAmount()
 	case paymentorder.FieldPlanID:
 		return m.AddedPlanID()
 	case paymentorder.FieldSubscriptionGroupID:
@@ -33555,6 +33719,13 @@ func (m *PaymentOrderMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddFeeRate(v)
+		return nil
+	case paymentorder.FieldBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBonusAmount(v)
 		return nil
 	case paymentorder.FieldPlanID:
 		v, ok := value.(int64)
@@ -33754,6 +33925,9 @@ func (m *PaymentOrderMutation) ResetField(name string) error {
 		return nil
 	case paymentorder.FieldFeeRate:
 		m.ResetFeeRate()
+		return nil
+	case paymentorder.FieldBonusAmount:
+		m.ResetBonusAmount()
 		return nil
 	case paymentorder.FieldRechargeCode:
 		m.ResetRechargeCode()
