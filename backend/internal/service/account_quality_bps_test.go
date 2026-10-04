@@ -170,8 +170,6 @@ func TestQualityBPSEligibleMatchesAccountRules(t *testing.T) {
 	require.False(t, QualityBPSEligible(&Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}))
 	require.False(t, QualityBPSEligible(&Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, ParentAccountID: &parent}))
 	require.False(t, QualityBPSEligible(&Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Credentials: map[string]any{openAIAuthModeCredentialKey: OpenAIAuthModeAgentIdentity}}))
-	require.False(t, QualityBPSEligible(&Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{PrismEnabledExtraKey: true}}))
-	require.True(t, QualityBPSEligible(&Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{PrismEnabledExtraKey: false}}))
 }
 
 // 「降智开 BPS」规则开启 BPS 后仍要探直连通道；普通探针遇到 BPS 模型照旧不适用。

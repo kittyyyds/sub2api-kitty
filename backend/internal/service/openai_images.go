@@ -623,9 +623,6 @@ func (s *OpenAIGatewayService) ForwardImages(
 		return nil, admissionErr
 	}
 	account = latest
-	if account.IsPrismEnabledForModel(requestModel) {
-		return prismFailure(c, 400, "prism_images_unsupported", "Prism pilot supports text requests only")
-	}
 	switch account.Type {
 	case AccountTypeAPIKey:
 		return s.forwardOpenAIImagesAPIKey(ctx, c, account, body, parsed, channelMappedModel)

@@ -1830,8 +1830,7 @@
         </div>
         <ExcelBPSModeSwitches :enabled="excelBPSEnabled" :mode="excelBPSMode"
           :loading="bpsDefaults.loading.value" :failed="bpsDefaults.failed.value" :applied="bpsDefaults.applied.value"
-          :available="authStore.isAdmin" :disabled="prismEnabled && !excelBPSEnabled" prefix="excel-bps" @toggle="mode => { if (!prismEnabled || excelBPSEnabled) bpsDefaults.toggle(mode) }" />
-        <p v-if="prismEnabled" class="mt-2 text-xs text-amber-600 dark:text-amber-400">{{ t('admin.accounts.openai.prismProtocolConflict') }}</p>
+          :available="authStore.isAdmin" prefix="excel-bps" @toggle="bpsDefaults.toggle" />
         <div v-if="excelBPSEnabled" class="mt-3 space-y-3">
           <label class="flex items-center gap-2 text-sm">
             <input v-model="excelBPSAllModels" type="checkbox" data-testid="excel-bps-all-models" />
@@ -1950,56 +1949,9 @@
         </div>
       </div>
 
-      <div v-if="account?.platform === 'openai' && account?.type === 'oauth' && !isSparkShadow"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600" data-testid="prism-settings">
-        <div class="flex items-center justify-between gap-4">
-          <div>
-            <label class="input-label mb-0">{{ t('admin.accounts.openai.prism') }}</label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.prismDesc') }}</p>
-          </div>
-          <button type="button" role="switch" :aria-checked="prismEnabled"
-            :aria-label="t('admin.accounts.openai.prism')" data-testid="prism-toggle"
-            :disabled="excelBPSEnabled && !prismEnabled"
-            @click="togglePrism"
-            :class="['relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50', prismEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600']">
-            <span :class="['pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition', prismEnabled ? 'translate-x-5' : 'translate-x-0']" />
-          </button>
-        </div>
-        <p v-if="excelBPSEnabled" class="mt-2 text-xs text-amber-600 dark:text-amber-400">{{ t('admin.accounts.openai.prismProtocolConflict') }}</p>
-        <div v-if="prismEnabled" class="mt-3 space-y-3">
-          <p class="text-xs text-amber-600 dark:text-amber-400">{{ t('admin.accounts.openai.prismNotice') }}</p>
-          <div>
-            <label for="prism-cookie" class="input-label">{{ t('admin.accounts.openai.prismCookie') }}</label>
-            <input id="prism-cookie" v-model="prismCookie" type="password" class="input"
-              autocomplete="new-password" spellcheck="false" data-testid="prism-cookie"
-              :placeholder="t(prismCookieBound ? 'admin.accounts.openai.prismCookieKeep' : 'admin.accounts.openai.prismCookieRequired')" />
-            <p class="input-hint" data-testid="prism-binding-status">{{ t(prismCookieBound ? 'admin.accounts.openai.prismCookieBound' : 'admin.accounts.openai.prismCookieUnbound') }}</p>
-          </div>
-          <div>
-            <label for="prism-user-id" class="input-label">{{ t('admin.accounts.openai.prismUserID') }}</label>
-            <input id="prism-user-id" v-model="prismUserID" type="text" class="input"
-              autocomplete="off" data-testid="prism-user-id" />
-          </div>
-          <label class="flex items-center gap-2 text-sm">
-            <input v-model="prismAllModels" type="checkbox" data-testid="prism-all-models" />
-            <span>{{ t('admin.accounts.openai.prismAllModels') }}</span>
-          </label>
-          <div v-if="!prismAllModels" data-testid="prism-model-selection">
-            <label class="input-label">{{ t('admin.accounts.openai.prismModels') }}</label>
-            <ModelWhitelistSelector v-model="prismModels" platform="openai" />
-          </div>
-          <p class="input-hint">{{ t('admin.accounts.openai.prismModelsHint') }}</p>
-        </div>
-      </div>
-
       <AccountAutoBPSSection v-if="autoBPSSupported" v-model:draft="autoBPS.draft.value" :groups="groups"
         :loading="autoBPS.loading.value" :load-error="autoBPS.loadError.value" :has-rule="!!autoBPS.rule.value"
         :conflicting-rule-id="autoBPS.conflictingRule.value?.id" />
-      <p v-if="autoBPSSupported && prismEnabled && (autoBPS.draft.value.enabled || autoBPS.rule.value?.enabled || autoBPS.conflictingRule.value?.enabled)"
-        class="text-xs text-amber-600 dark:text-amber-400" data-testid="prism-auto-bps-conflict">
-        {{ t('admin.accounts.openai.prismAutoBPSConflict') }}
-      </p>
-
       <!-- OpenAI 自动透传开关（OAuth/API Key） -->
       <div
         v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
@@ -4046,16 +3998,6 @@ const excelBPS403GroupOptions = computed(() => [
     .filter(group => group.platform === 'openai' || (!authStore.isSimpleMode && group.platform === 'composite'))
     .map(group => ({ value: group.id, label: group.name }))
 ])
-const prismEnabled = ref(false)
-const prismAllModels = ref(false)
-const prismModels = ref<string[]>([])
-const prismCookie = ref('')
-const prismUserID = ref('')
-const prismCookieBound = computed(() => props.account?.credentials_status?.has_prism_cookie_encrypted === true)
-const togglePrism = () => {
-  prismEnabled.value = !prismEnabled.value
-  if (!prismEnabled.value) prismCookie.value = ''
-}
 const copilotSDKEnabled = ref(false)
 const openaiPassthroughEnabled = ref(false)
 // OpenAI Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
@@ -4581,11 +4523,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   excelBPSIgnoreEncryptedContent.value = false
   excelBPSAutoMoveOn403.value = false
   excelBPS403TargetGroupID.value = ''
-  prismEnabled.value = false
-  prismAllModels.value = false
-  prismModels.value = []
-  prismCookie.value = ''
-  prismUserID.value = ''
   copilotSDKEnabled.value = false
   openaiPassthroughEnabled.value = false
   openaiFlattenNamespacesEnabled.value = false
@@ -4626,14 +4563,6 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     excelBPSAutoMoveOn403.value = newAccount.type === 'oauth' && extra?.openai_excel_bps_auto_move_on_403 === true
     const targetGroupID = extra?.openai_excel_bps_403_target_group_id
     excelBPS403TargetGroupID.value = typeof targetGroupID === 'number' && Number.isSafeInteger(targetGroupID) && targetGroupID >= 0 ? targetGroupID : ''
-    if (newAccount.type === 'oauth' && !newAccount.parent_account_id) {
-      prismEnabled.value = extra?.openai_prism === true
-      prismAllModels.value = prismEnabled.value && !Object.prototype.hasOwnProperty.call(extra ?? {}, 'openai_prism_models')
-      prismModels.value = Array.isArray(extra?.openai_prism_models)
-        ? extra.openai_prism_models.filter((model): model is string => typeof model === 'string')
-        : []
-      prismUserID.value = typeof newAccount.credentials?.prism_user_id === 'string' ? newAccount.credentials.prism_user_id : ''
-    }
     copilotSDKEnabled.value = newAccount.type === 'apikey' && extra?.openai_copilot_sdk === true
     openaiPassthroughEnabled.value = extra?.openai_passthrough === true || extra?.openai_oauth_passthrough === true
     openaiFlattenNamespacesEnabled.value =
@@ -5005,7 +4934,6 @@ watch(
   [() => props.show, () => props.account],
   ([show, newAccount], [wasShow, previousAccount]) => {
     if (!show || !newAccount) {
-      prismCookie.value = ''
       return
     }
     if (!wasShow || newAccount !== previousAccount) {
@@ -5520,7 +5448,6 @@ const parseDateTimeLocal = parseDateTimeLocalInput
 
 // Methods
 const handleClose = () => {
-  prismCookie.value = ''
   antigravityMixedChannelConfirmed.value = false
   clearMixedChannelDialog()
   emit('close')
@@ -5573,6 +5500,8 @@ const saveAutoBPSRule = async (accountID: number) => {
 }
 
 const submitUpdateAccount = async (accountID: number, updatePayload: Record<string, unknown>) => {
+  if (updatePayload.extra && typeof updatePayload.extra === 'object') {
+  }
   submitting.value = true
   try {
     let updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))
@@ -5618,25 +5547,6 @@ const handleSubmit = async () => {
   if (autoBPSError) {
     appStore.showError(t(autoBPSError))
     return
-  }
-
-  if (props.account.platform === 'openai' && props.account.type === 'oauth' && !isSparkShadow.value && prismEnabled.value) {
-    if (autoBPSSupported.value && (autoBPS.draft.value.enabled || autoBPS.rule.value?.enabled || autoBPS.conflictingRule.value?.enabled)) {
-      appStore.showError(t('admin.accounts.openai.prismAutoBPSConflict'))
-      return
-    }
-    if (excelBPSEnabled.value) {
-      appStore.showError(t('admin.accounts.openai.prismProtocolConflict'))
-      return
-    }
-    if (!prismCookieBound.value && !prismCookie.value.trim()) {
-      appStore.showError(t('admin.accounts.openai.prismCookieRequired'))
-      return
-    }
-    if (!prismAllModels.value && !prismModels.value.some(model => model.trim())) {
-      appStore.showError(t('admin.accounts.openai.prismModelsRequired'))
-      return
-    }
   }
 
   if (form.status !== 'active' && form.status !== 'inactive' && form.status !== 'error') {
@@ -5955,13 +5865,6 @@ const handleSubmit = async () => {
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
       if (props.account.platform === 'openai') {
         applyOpenAIModelMappingCredentials(newCredentials)
-        // Never copy a secret returned by an older server back into the edit payload.
-        delete newCredentials.prism_cookie
-        if (!isSparkShadow.value && prismEnabled.value) {
-          if (prismCookie.value.trim()) newCredentials.prism_cookie = prismCookie.value.trim()
-          const currentPrismUserID = typeof currentCredentials.prism_user_id === 'string' ? currentCredentials.prism_user_id : ''
-          if (prismUserID.value.trim() !== currentPrismUserID) newCredentials.prism_user_id = prismUserID.value.trim()
-        }
       } else {
         const modelMapping = buildModelRestrictionMapping()
         if (modelMapping) {
@@ -6183,15 +6086,6 @@ const handleSubmit = async () => {
         })
       }
       const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
-      if (props.account.type === 'oauth' && !isSparkShadow.value) {
-        if (prismEnabled.value) {
-          newExtra.openai_prism = true
-          if (prismAllModels.value) delete newExtra.openai_prism_models
-          else newExtra.openai_prism_models = [...new Set(prismModels.value.map(model => model.trim()).filter(Boolean))]
-        } else if (Object.prototype.hasOwnProperty.call(currentExtra, 'openai_prism')) {
-          newExtra.openai_prism = false
-        }
-      }
       if (props.account.type === 'oauth' && !isSparkShadow.value && excelBPSEnabled.value) {
         newExtra.openai_excel_bps = true
         newExtra.openai_excel_bps_config_mode = excelBPSMode.value

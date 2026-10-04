@@ -156,12 +156,10 @@ func QualityBPSExtra(b *QualityBPSPolicy) map[string]any {
 }
 
 // QualityBPSEligible limits automatic BPS changes to ordinary ChatGPT OAuth
-// parent accounts. Prism accounts keep their explicitly selected protocol;
-// background rules and 403 recovery must not enable BPS over that choice.
+// parent accounts.
 func QualityBPSEligible(account *Account) bool {
 	return account != nil && account.Platform == PlatformOpenAI && account.Type == AccountTypeOAuth &&
 		!account.IsShadow() && !account.IsOpenAIAgentIdentity() && !account.IsOpenAIPersonalAccessToken() &&
-		!account.IsPrismEnabled() &&
 		!strings.EqualFold(strings.TrimSpace(account.GetCredential("plan_type")), "free")
 }
 

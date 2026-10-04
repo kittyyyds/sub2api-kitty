@@ -113,7 +113,6 @@ func TestExcelBPS403RecoveryRestoresProtocolAndSchedulerAtomically(t *testing.T)
 
 func TestExcelBPS403RecoveryRejectsChangesDuringProbe(t *testing.T) {
 	for _, tc := range []struct{ name, mutation string }{
-		{"Prism enabled during probe", `extra=extra || '{"openai_prism":true}'::jsonb`},
 		{"interval changed", `extra=extra || '{"openai_excel_bps_403_recovery_interval_minutes":360}'::jsonb`},
 		{"opted out", `extra=extra || '{"openai_excel_bps_auto_recover_on_403":false}'::jsonb`},
 		{"auto shutdown off", `extra=extra || '{"openai_excel_bps_auto_disable_on_403":false}'::jsonb`},

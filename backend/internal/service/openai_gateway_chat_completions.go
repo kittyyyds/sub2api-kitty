@@ -108,10 +108,6 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		return nil, errors.New("codex_cli_only restriction: only codex official clients are allowed")
 	}
 
-	if account.IsPrismEnabledForModel(gjson.GetBytes(body, "model").String()) {
-		return s.forwardPrism(ctx, c, account, body, true, time.Now())
-	}
-
 	if account.Platform == PlatformGrok {
 		if account.IsGrokOAuth() {
 			if eligible, reason := grokChatResponsesBridgeEligibility(body); eligible {

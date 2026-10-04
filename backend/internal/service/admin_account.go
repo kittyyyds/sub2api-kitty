@@ -603,9 +603,6 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err := ValidateAccountCostMultiplierExtra(input.Extra); err != nil {
 		return nil, err
 	}
-	if err := validatePrismInputCredentials(input.Credentials); err != nil {
-		return nil, err
-	}
 	if err := s.ApplyOAuthAutoConfig(ctx, input); err != nil {
 		return nil, err
 	}
@@ -669,10 +666,6 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err := s.validateExcelBPS403GroupSettings(ctx, account); err != nil {
 		return nil, err
 	}
-	if err := preparePrismAccountForSave(account, nil, input.Credentials, s.cfg); err != nil {
-		return nil, err
-	}
-
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
@@ -724,20 +717,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if err != nil {
 		return nil, err
 	}
-	input.Credentials, err = prismCredentialsForUpdate(input.Credentials, account.Credentials)
-	if err != nil {
-		return nil, err
-	}
-	previousPrismAccount := *account
-	previousPrismAccount.Credentials, err = cloneAccountJSONMap(account.Credentials)
-	if err != nil {
-		return nil, err
-	}
-	// Rejecting a binding must not mutate a repository/cache-owned snapshot.
-	accountCopy := *account
-	accountCopy.Credentials = shallowCopyMap(account.Credentials)
-	accountCopy.Extra = shallowCopyMap(account.Extra)
-	account = &accountCopy
 
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
@@ -815,18 +794,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	} else if len(input.Credentials) > 0 {
 		// 敏感子键采用"incoming 没提供就保留"的合并语义：前端响应已脱敏，
 		// 全对象 PUT 编辑时不会再带回 token，避免覆盖时清空已有凭证。
-		if isPrismBindingOnlyCredentials(input.Credentials) {
-			// A Cookie/User ID-only edit owns just the binding, not OAuth expiry
-			// or the account's model/routing configuration.
-			if account.Credentials == nil {
-				account.Credentials = make(map[string]any)
-			}
-			for key, value := range input.Credentials {
-				account.Credentials[key] = value
-			}
-		} else {
-			account.Credentials = MergePreservingSensitiveCreds(account.Credentials, input.Credentials)
-		}
+		account.Credentials = MergePreservingSensitiveCreds(account.Credentials, input.Credentials)
 		if err := ValidateModelMappingMode(account.Credentials); err != nil {
 			return nil, err
 		}
@@ -913,9 +881,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	if input.Extra == nil {
 		account.Extra = prepareCodexFingerprintExtraForUpdate(account, account.Extra)
-	}
-	if err := preparePrismAccountForSave(account, &previousPrismAccount, input.Credentials, s.cfg); err != nil {
-		return nil, err
 	}
 	if requestedRateSyncEnabledUpdate != nil && *requestedRateSyncEnabledUpdate {
 		if requestedProbeEnabledUpdate != nil && !*requestedProbeEnabledUpdate {
@@ -1069,21 +1034,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		// AdminAccountRepository.
 		updater, _ = s.accountRepo.(AccountBillingSettingsRepository)
 	}
-	prismUpdate, err := prismCredentialsUpdate(&previousPrismAccount, account, input.Credentials)
-	if err != nil {
-		return nil, err
-	}
-	if prismUpdate != nil {
-		prismUpdater, ok := s.accountRepo.(AccountPrismSettingsRepository)
-		if !ok {
-			return nil, errors.New("Prism account editor requires atomic credential updates")
-		}
-		if err := prismUpdater.UpdateWithPrismAccountSettings(ctx, account, *prismUpdate,
-			requestedProbeEnabledUpdate, requestedRateSyncEnabledUpdate, input.RateMultiplier); err != nil {
-			return nil, err
-		}
-		billingSettingsAppliedAtomically = true
-	} else if updater != nil {
+	if updater != nil {
 		if err := updater.UpdateWithAccountBillingSettings(
 			ctx,
 			account,
@@ -1147,26 +1098,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
 // （如 model_rate_limits / passive_usage_* 等）。
 func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
-	if err := rejectPrismBulkFields(nil, updates); err != nil {
-		return err
-	}
-	if _, enabled := updates["openai_excel_bps"]; enabled || updates["openai_excel_bps_models"] != nil {
-		account, err := s.accountRepo.GetByID(ctx, id)
-		if err != nil {
-			return err
-		}
-		candidate := *account
-		candidate.Extra = shallowCopyMap(account.Extra)
-		if candidate.Extra == nil {
-			candidate.Extra = make(map[string]any)
-		}
-		for key, value := range updates {
-			candidate.Extra[key] = value
-		}
-		if err := validatePrismProtocolConflict(&candidate); err != nil {
-			return err
-		}
-	}
 	for key := range updates {
 		if isOpenAIRequestTimezoneKey(key) {
 			account, err := s.accountRepo.GetByID(ctx, id)
@@ -1231,9 +1162,6 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 // BulkUpdateAccounts updates multiple accounts in one request.
 // It merges credentials/extra keys instead of overwriting the whole object.
 func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error) {
-	if err := rejectPrismBulkFields(input.Credentials, input.Extra); err != nil {
-		return nil, err
-	}
 
 	if err := ValidateAccountCostMultiplierExtra(input.Extra); err != nil {
 		return nil, err
@@ -1319,22 +1247,6 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 				credentials = MergePreservingSensitiveCreds(credentials, input.Credentials)
 			}
 			if err := ValidateVideoAccount(account.Platform, account.Type, credentials); err != nil {
-				return nil, err
-			}
-			candidate := *account
-			candidate.Credentials = credentials
-			candidate.Extra = shallowCopyMap(account.Extra)
-			if candidate.Extra == nil {
-				candidate.Extra = make(map[string]any)
-			}
-			for key, value := range input.Extra {
-				if key == "openai_excel_bps_models" && value == nil {
-					delete(candidate.Extra, key)
-				} else {
-					candidate.Extra[key] = value
-				}
-			}
-			if err := preparePrismAccountForSave(&candidate, account, nil, s.cfg); err != nil {
 				return nil, err
 			}
 			targetsByID[account.ID] = account

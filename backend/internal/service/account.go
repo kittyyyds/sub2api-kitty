@@ -2360,94 +2360,6 @@ func (a *Account) IsExcelBPSAutoDisableOn403Enabled() bool {
 	return enabled
 }
 
-// Prism account routing keys.  Prism is a separate upstream protocol for an
-// OpenAI account; it must be selected before the normal Codex ticket/cookie
-// path is entered. Only the Prism Cookie uses a dedicated encrypted credential
-// value; the generic credential map is not itself encrypted.
-const (
-	PrismEnabledExtraKey    = "openai_prism"
-	PrismModelsExtraKey     = "openai_prism_models"
-	PrismCookieKey          = "prism_cookie"
-	PrismCookieEncryptedKey = "prism_cookie_encrypted"
-	PrismProjectIDKey       = "prism_project_id"
-	PrismUserIDKey          = "prism_user_id"
-	PrismBaseURLKey         = "prism_base_url"
-)
-
-// IsPrismEnabled reports whether this OpenAI account is explicitly routed to
-// the Prism adapter. It binds an independently obtained Prism session to an
-// existing ChatGPT OAuth account; it never converts OAuth credentials to Cookie.
-func (a *Account) IsPrismEnabled() bool {
-	if a == nil || a.Platform != PlatformOpenAI || a.Type != AccountTypeOAuth || a.IsShadow() || a.IsOpenAIAgentIdentity() || a.IsOpenAIPersonalAccessToken() {
-		return false
-	}
-	enabled, _ := a.Extra[PrismEnabledExtraKey].(bool)
-	return enabled
-}
-
-// IsPrismEnabledForModel selects Prism after the account's normal model
-// mapping.  An absent model list preserves the Excel/BPS-style all-model
-// behavior; once the list is present, only exact mapped names are selected.
-func (a *Account) IsPrismEnabledForModel(requestedModel string) bool {
-	if !a.IsPrismEnabled() {
-		return false
-	}
-	return a.isPrismUpstreamModelEnabled(a.GetMappedModel(requestedModel))
-}
-
-func (a *Account) isPrismAllModelsEnabled() bool {
-	if !a.IsPrismEnabled() {
-		return false
-	}
-	_, scoped := a.Extra[PrismModelsExtraKey]
-	return !scoped
-}
-
-func (a *Account) isPrismUpstreamModelEnabled(model string) bool {
-	if !a.IsPrismEnabled() {
-		return false
-	}
-	raw, scoped := a.Extra[PrismModelsExtraKey]
-	if !scoped {
-		return true
-	}
-	want := strings.TrimSpace(model)
-	if want == "" {
-		return false
-	}
-	switch models := raw.(type) {
-	case []string:
-		for _, model := range models {
-			if strings.TrimSpace(model) == want {
-				return true
-			}
-		}
-	case []any:
-		for _, rawModel := range models {
-			if model, ok := rawModel.(string); ok && strings.TrimSpace(model) == want {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (a *Account) GetPrismCookieCiphertext() string {
-	return a.GetCredential(PrismCookieEncryptedKey)
-}
-
-func (a *Account) GetPrismProjectID() string {
-	return a.GetCredential(PrismProjectIDKey)
-}
-
-func (a *Account) GetPrismUserID() string {
-	return a.GetCredential(PrismUserIDKey)
-}
-
-func (a *Account) GetPrismBaseURL() string {
-	return "https://prism.openai.com"
-}
-
 // isExcelBPSAllModelsEnabled preserves legacy account-wide routing. An explicit
 // list, including an empty or malformed list, never enables BPS for all models.
 func (a *Account) isExcelBPSAllModelsEnabled() bool {
@@ -2531,7 +2443,7 @@ func (a *Account) IsCopilotSDKEnabled() bool {
 // 1. 按账号类型读取分类型字段
 // 2. 分类型字段缺失时，回退兼容字段
 func (a *Account) IsOpenAIResponsesWebSocketV2Enabled() bool {
-	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() || a.isPrismAllModelsEnabled() {
+	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
 		return false
 	}
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
@@ -2602,7 +2514,7 @@ func normalizeOpenAIWSIngressDefaultMode(mode string) string {
 // 3. 兼容 enabled 旧字段（bool）
 // 4. defaultMode（非法时回退 ctx_pool）
 func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) string {
-	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() || a.isPrismAllModelsEnabled() {
+	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
 		return OpenAIWSIngressModeOff
 	}
 	resolvedDefault := normalizeOpenAIWSIngressDefaultMode(defaultMode)
@@ -2675,7 +2587,7 @@ func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) stri
 // IsOpenAIWSForceHTTPEnabled 返回账号级"强制 HTTP"开关。
 // 字段：accounts.extra.openai_ws_force_http。
 func (a *Account) IsOpenAIWSForceHTTPEnabled() bool {
-	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() || a.isPrismAllModelsEnabled() {
+	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
 		return true
 	}
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {

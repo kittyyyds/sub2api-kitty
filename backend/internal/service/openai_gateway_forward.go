@@ -82,9 +82,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	modelForBPS := gjson.GetBytes(body, "model").String()
-	if account.IsPrismEnabledForModel(modelForBPS) {
-		return s.forwardPrism(ctx, c, account, body, false, startTime)
-	}
 	if c.GetBool(bpsAccountProbeRequiredContextKey) &&
 		(!account.IsExcelBPSEnabledForModel(modelForBPS) || account.excelBPSNativeFallbackReason(body) != "") {
 		return nil, errors.New("bps probe path is unavailable")

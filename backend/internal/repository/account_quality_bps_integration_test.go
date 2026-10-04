@@ -180,21 +180,6 @@ func TestQualityEnableBPSLifecycle(t *testing.T) {
 	require.Zero(t, f.events(), "conflicts and blocked rounds leave the account untouched")
 }
 
-func TestQualityEnableBPSRejectsPrismEnabledAfterPlanCreation(t *testing.T) {
-	f := newQualityBPSFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{
-		Action: service.QualityActionEnableBPS,
-		BPS:    &service.QualityBPSPolicy{FailureThreshold: 1, AllModels: true},
-	})
-	// The account changes after the rule was created/leased. The transaction
-	// must check current account data, not the old rule's eligibility snapshot.
-	f.exec(`UPDATE accounts SET extra=extra || '{"openai_prism":true,"openai_prism_models":["gpt-6-astra"]}'::jsonb WHERE id=$1`)
-	before := f.extra()
-	_ = f.events()
-	require.Equal(t, "bps_unsupported", f.apply("failed"))
-	require.Equal(t, before, f.extra())
-	require.Equal(t, 0, f.events(), "rejecting automatic BPS must not publish an account mutation")
-}
-
 func TestQualityBPSObservationReleasesOwnershipWithoutTogglingBPS(t *testing.T) {
 	f := newQualityBPSFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{
 		Action: service.QualityActionEnableBPS, AutoRestore: true,

@@ -30,9 +30,6 @@ func (s *OpenAIGatewayService) ForwardAlphaSearch(ctx context.Context, c *gin.Co
 	if s == nil || c == nil || account == nil {
 		return nil, fmt.Errorf("service, context, and account are required")
 	}
-	if account.IsPrismEnabledForModel(gjson.GetBytes(body, "model").String()) {
-		return prismFailure(c, 400, "prism_search_unsupported", "Prism pilot supports text requests only")
-	}
 	if _, err := s.prepareCodexAccountIdentitySource(ctx, c, account); err != nil {
 		return nil, err
 	}

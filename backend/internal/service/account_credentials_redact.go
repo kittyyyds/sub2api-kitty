@@ -7,8 +7,8 @@ var SensitiveCredentialKeys = []string{
 	"access_token", "refresh_token", "id_token", "agent_private_key",
 	// API Key 类
 	"api_key", "session_key", "cookie",
-	// Prism input is transient; only its encrypted form is persisted.
-	PrismCookieKey, PrismCookieEncryptedKey,
+	// Retired session fields remain confidential in historical records.
+	"prism_cookie", "prism_cookie_encrypted",
 	// Grok Web SSO / password (must never persist or echo after Build OAuth)
 	"password", "sso_token", "sso", "sso-rw", "clearTextPassword",
 	// 云服务凭据
