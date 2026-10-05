@@ -4,10 +4,12 @@ import { mount } from '@vue/test-utils'
 
 const isV1 = vi.fn(() => false)
 const isV2 = vi.fn(() => true)
+const isV3 = vi.fn(() => false)
 
 vi.mock('@/utils/featureFlags', () => ({
   isChannelMonitorV1Mode: () => isV1(),
   isChannelMonitorV2Mode: () => isV2(),
+  isChannelMonitorV3Mode: () => isV3(),
 }))
 
 vi.mock('../ChannelStatusV1View.vue', () => ({
@@ -22,39 +24,36 @@ vi.mock('../ChannelStatusV3View.vue', () => ({
 
 import ChannelStatusView from '../ChannelStatusView.vue'
 
+const rendered = (wrapper: ReturnType<typeof mount>) =>
+  ['v1', 'v2', 'v3'].filter((mode) => wrapper.find(`[data-testid="${mode}"]`).exists())
+
 describe('ChannelStatusView mode switch', () => {
   beforeEach(() => {
     isV1.mockReset()
     isV2.mockReset()
+    isV3.mockReset()
+    isV1.mockReturnValue(false)
+    isV2.mockReturnValue(true)
+    isV3.mockReturnValue(false)
     window.history.replaceState({}, '', '/monitor')
   })
 
-  it('renders V3 by default when V2 passive mode is active', () => {
-    isV1.mockReturnValue(false)
-    isV2.mockReturnValue(true)
-    const wrapper = mount(ChannelStatusView)
-    expect(wrapper.find('[data-testid="v3"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="v1"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="v2"]').exists()).toBe(false)
+  it('keeps V3 as the default in V2/passive mode', () => {
+    expect(rendered(mount(ChannelStatusView))).toEqual(['v3'])
   })
 
   it('renders V1 when in v1 mode', () => {
     isV1.mockReturnValue(true)
-    isV2.mockReturnValue(false)
-    const wrapper = mount(ChannelStatusView)
-    expect(wrapper.find('[data-testid="v1"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="v2"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="v3"]').exists()).toBe(false)
+    expect(rendered(mount(ChannelStatusView))).toEqual(['v1'])
   })
 
-  it('keeps V2 available through the explicit rollback query', () => {
-    isV1.mockReturnValue(false)
-    isV2.mockReturnValue(true)
+  it('renders V3 when in v3 mode', () => {
+    isV3.mockReturnValue(true)
+    expect(rendered(mount(ChannelStatusView))).toEqual(['v3'])
+  })
+
+  it('keeps the explicit V2 rollback query', () => {
     window.history.replaceState({}, '', '/monitor?monitor_view=v2')
-
-    const wrapper = mount(ChannelStatusView)
-
-    expect(wrapper.find('[data-testid="v2"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="v3"]').exists()).toBe(false)
+    expect(rendered(mount(ChannelStatusView))).toEqual(['v2'])
   })
 })

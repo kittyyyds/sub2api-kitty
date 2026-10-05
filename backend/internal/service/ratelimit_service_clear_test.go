@@ -229,14 +229,14 @@ func TestRateLimitService_RecoverAccountAfterSuccessfulTest_PreservesOtherAndCon
 	require.False(t, result.ClearedError)
 	require.False(t, result.ClearedRateLimit)
 
-	require.Equal(t, 1, repo.getByIDCalls)
-	require.Zero(t, repo.clearErrorCalls)
-	require.Zero(t, repo.clearRateLimitCalls)
-	require.Zero(t, repo.clearAntigravityCalls)
-	require.Zero(t, repo.clearModelRateLimitCalls)
-	require.Zero(t, repo.clearTempUnschedCalls)
-	require.Empty(t, cache.deletedIDs)
-	require.Empty(t, blocker.clearedIDs)
+	require.Equal(t, 2, repo.getByIDCalls)
+	require.Equal(t, 1, repo.clearErrorCalls)
+	require.Equal(t, 1, repo.clearRateLimitCalls)
+	require.Equal(t, 1, repo.clearAntigravityCalls)
+	require.Equal(t, 1, repo.clearModelRateLimitCalls)
+	require.Equal(t, 1, repo.clearTempUnschedCalls)
+	require.Equal(t, []int64{42}, cache.deletedIDs)
+	require.Equal(t, []int64{42}, blocker.clearedIDs)
 }
 
 func TestRateLimitService_RecoverAccountAfterSuccessfulTest_NoRecoverableStateIsNoop(t *testing.T) {

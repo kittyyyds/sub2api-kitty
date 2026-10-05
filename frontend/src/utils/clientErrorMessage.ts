@@ -1,4 +1,17 @@
-import { getLocale } from '@/i18n'
+
+function activeLocale(): string {
+  if (typeof document !== 'undefined' && document.documentElement.lang) {
+    return document.documentElement.lang.toLowerCase()
+  }
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    return navigator.language.toLowerCase()
+  }
+  try {
+    return (localStorage.getItem('locale') || 'en').toLowerCase()
+  } catch {
+    return 'en'
+  }
+}
 
 type ErrorMessageOptions = {
   code?: unknown
@@ -141,7 +154,7 @@ export function localizeClientErrorMessage(
   options: ErrorMessageOptions = {},
 ): string {
   const raw = (message ?? '').trim()
-  if (getLocale() !== 'zh') return raw
+  if (!activeLocale().startsWith('zh')) return raw
 
   if (raw && hasChinese(raw)) return raw
 

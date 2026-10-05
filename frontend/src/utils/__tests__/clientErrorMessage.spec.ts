@@ -1,16 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const localeState = vi.hoisted(() => ({ value: 'zh' }))
-
-vi.mock('@/i18n', () => ({
-  getLocale: () => localeState.value,
-}))
-
 import { localizeClientErrorMessage } from '../clientErrorMessage'
 
 describe('localizeClientErrorMessage', () => {
   beforeEach(() => {
-    localeState.value = 'zh'
+    document.documentElement.lang = 'zh'
   })
 
   it('translates common backend errors into Chinese', () => {
@@ -42,7 +36,7 @@ describe('localizeClientErrorMessage', () => {
   it('keeps existing Chinese messages and keeps English when locale is English', () => {
     expect(localizeClientErrorMessage('余额不足，请充值')).toBe('余额不足，请充值')
 
-    localeState.value = 'en'
+    document.documentElement.lang = 'en'
     expect(localizeClientErrorMessage('Invalid credentials')).toBe('Invalid credentials')
   })
 })

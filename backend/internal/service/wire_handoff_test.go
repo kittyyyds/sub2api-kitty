@@ -43,7 +43,7 @@ func TestDeploymentHandoffProviderStartup(t *testing.T) {
 			monitorRunner := ProvideChannelMonitorRunner(svc, nil, nil, nil)
 			t.Cleanup(monitorRunner.Stop)
 			planRepo := &handoffScheduledPlanRepository{}
-			testRunner := ProvideScheduledTestRunnerService(planRepo, nil, nil, nil, nil, nil, nil, &ChannelMonitorV2Service{})
+			testRunner := ProvideScheduledTestRunnerService(planRepo, nil, nil, nil, nil, nil, nil, nil, &ChannelMonitorV2Service{})
 			t.Cleanup(testRunner.Stop)
 
 			if tc.started {

@@ -67,6 +67,7 @@ type Handlers struct {
 	Announcement      *AnnouncementHandler
 	ChannelMonitor    *ChannelMonitorUserHandler
 	ChannelMonitorV2  *ChannelMonitorV2Handler
+	ChannelMonitorV3  *ChannelMonitorV3Handler
 	Admin             *AdminHandlers
 	Gateway           *GatewayHandler
 	OpenAIGateway     *OpenAIGatewayHandler
@@ -77,11 +78,11 @@ type Handlers struct {
 	PaymentWebhook    *PaymentWebhookHandler
 	AvailableChannel  *AvailableChannelHandler
 	BillingPreview    *BillingPreviewHandler
+	PelicanShowcase   *PelicanShowcaseHandler
 	ModelPlaza        *ModelPlazaHandler
 	AsyncImage        *AsyncImageHandler
 	BatchImage        *BatchImageHandler
 	ApplicationCenter *ApplicationCenterHandler
-	PelicanShowcase   *PelicanShowcaseHandler
 }
 
 // BuildInfo contains build-time information

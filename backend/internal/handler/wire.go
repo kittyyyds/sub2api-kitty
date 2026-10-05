@@ -223,6 +223,7 @@ func ProvideHandlers(
 	announcementHandler *AnnouncementHandler,
 	channelMonitorUserHandler *ChannelMonitorUserHandler,
 	channelMonitorV2Handler *ChannelMonitorV2Handler,
+	channelMonitorV3Handler *ChannelMonitorV3Handler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
 	openaiGatewayHandler *OpenAIGatewayHandler,
@@ -242,7 +243,7 @@ func ProvideHandlers(
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
-	return &Handlers{
+		return &Handlers{
 		Auth:              authHandler,
 		User:              userHandler,
 		APIKey:            apiKeyHandler,
@@ -252,6 +253,7 @@ func ProvideHandlers(
 		Announcement:      announcementHandler,
 		ChannelMonitor:    channelMonitorUserHandler,
 		ChannelMonitorV2:  channelMonitorV2Handler,
+		ChannelMonitorV3:  channelMonitorV3Handler,
 		Admin:             adminHandlers,
 		Gateway:           gatewayHandler,
 		OpenAIGateway:     openaiGatewayHandler,
@@ -262,11 +264,11 @@ func ProvideHandlers(
 		PaymentWebhook:    paymentWebhookHandler,
 		AvailableChannel:  availableChannelHandler,
 		BillingPreview:    billingPreviewHandler,
+		PelicanShowcase:   pelicanShowcaseHandler,
 		ModelPlaza:        modelPlazaHandler,
 		AsyncImage:        asyncImageHandler,
 		BatchImage:        batchImageHandler,
 		ApplicationCenter: applicationCenterHandler,
-		PelicanShowcase:   pelicanShowcaseHandler,
 	}
 }
 
@@ -283,6 +285,7 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementHandler,
 	NewChannelMonitorUserHandler,
 	NewChannelMonitorV2Handler,
+	NewChannelMonitorV3Handler,
 	ProvideGatewayHandler,
 	ProvideOpenAIGatewayHandler,
 	NewTotpHandler,
