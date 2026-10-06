@@ -15,6 +15,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNormalizeVisibleMethods(t *testing.T) {
@@ -85,8 +86,8 @@ func TestCanonicalizeReturnURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalizeReturnURL returned error: %v", err)
 	}
-	if got != "https://example.com/payment/result?b=2" {
-		t.Fatalf("CanonicalizeReturnURL = %q, want %q", got, "https://example.com/payment/result?b=2")
+	if got != "https://example.com/payment/result" {
+		t.Fatalf("CanonicalizeReturnURL = %q, want %q", got, "https://example.com/payment/result")
 	}
 }
 
@@ -117,8 +118,8 @@ func TestCanonicalizeReturnURLAllowsConfiguredFrontendHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalizeReturnURL returned error: %v", err)
 	}
-	if got != "https://app.example.com/payment/result?from=checkout" {
-		t.Fatalf("CanonicalizeReturnURL = %q, want %q", got, "https://app.example.com/payment/result?from=checkout")
+	if got != "https://app.example.com/payment/result" {
+		t.Fatalf("CanonicalizeReturnURL = %q, want %q", got, "https://app.example.com/payment/result")
 	}
 }
 
@@ -146,8 +147,8 @@ func TestBuildPaymentReturnURL(t *testing.T) {
 		t.Fatalf("buildPaymentReturnURL should strip fragments, got %q", parsed.Fragment)
 	}
 	query := parsed.Query()
-	if query.Get("from") != "checkout" {
-		t.Fatalf("expected original query to be preserved, got %q", query.Get("from"))
+	if len(query) != 4 || query.Has("from") {
+		t.Fatalf("expected only server-generated query parameters, got %v", query)
 	}
 	if query.Get("order_id") != strconv.FormatInt(42, 10) {
 		t.Fatalf("order_id = %q", query.Get("order_id"))
@@ -197,6 +198,136 @@ func TestBuildPaymentReturnURLEmptyBase(t *testing.T) {
 	if got != "" {
 		t.Fatalf("buildPaymentReturnURL = %q, want empty string", got)
 	}
+}
+
+func TestPaymentReturnURLDiscardsAllUserQuery(t *testing.T) {
+	t.Parallel()
+
+	for _, suffix := range []string{
+		"?pid=attacker&money=1000.00&trade_status=TRADE_SUCCESS&sign=forged",
+		"?order_id=999&order_id=1000&out_trade_no=foreign&resume_token=forged&status=paid",
+		"?%6fut_trade_no=foreign&redirect=https%3A%2F%2Fevil.example&param=a%26money%3D1000.00",
+		"?invalid=%zz&unparsed=1;money=1000.00",
+		"?from=checkout#%61ttacker?money=1000.00",
+		"?",
+	} {
+		t.Run(suffix, func(t *testing.T) {
+			t.Parallel()
+			base := "https://app.example.com/payment/result" + suffix
+			canonical, err := CanonicalizeReturnURL(base, "app.example.com", "")
+			require.NoError(t, err)
+			require.Equal(t, "https://app.example.com/payment/result", canonical)
+
+			// The builder also sanitizes older stored bases that predate canonicalization.
+			built, err := buildPaymentReturnURL(base, 42, "sub2_42", "server-token")
+			require.NoError(t, err)
+			parsed, err := url.Parse(built)
+			require.NoError(t, err)
+			require.Nil(t, parsed.User)
+			require.Empty(t, parsed.Fragment)
+			require.Empty(t, parsed.RawFragment)
+			require.Equal(t, url.Values{
+				"order_id": {"42"}, "out_trade_no": {"sub2_42"},
+				"resume_token": {"server-token"}, "status": {"success"},
+			}, parsed.Query())
+
+			withoutResume, err := buildPaymentReturnURL(base, 0, "", "")
+			require.NoError(t, err)
+			require.Equal(t, "https://app.example.com/payment/result?status=success", withoutResume)
+		})
+	}
+}
+
+func TestPaymentReturnURLRejectsUnsafeBase(t *testing.T) {
+	t.Parallel()
+
+	for _, base := range []string{
+		"https://user:pass@app.example.com/payment/result",
+		"https://@app.example.com/payment/result",
+		"javascript://app.example.com/payment/result",
+		"https:app.example.com/payment/result",
+		"//app.example.com/payment/result",
+		"https://:443/payment/result",
+		"https://app.example.com/other",
+		"https://app.example.com/payment/result/../other",
+	} {
+		t.Run(base, func(t *testing.T) {
+			t.Parallel()
+			_, err := CanonicalizeReturnURL(base, "app.example.com", "")
+			require.Error(t, err)
+			_, err = buildPaymentReturnURL(base, 42, "sub2_42", "server-token")
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestCanonicalizeReturnURLCustomFrontendOrigin(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		base    string
+		referer string
+		wantErr bool
+	}{
+		{"custom frontend", "https://app.example.com/payment/result", "https://app.example.com/purchase", false},
+		{"default HTTPS port", "https://app.example.com:443/payment/result", "https://app.example.com/purchase", false},
+		{"explicit referer port", "https://app.example.com/payment/result", "https://app.example.com:443/purchase", false},
+		{"development frontend", "http://localhost:5173/payment/result", "http://localhost:5173/purchase", false},
+		{"IPv6 frontend", "http://[::1]:5173/payment/result", "http://[::1]:5173/purchase", false},
+		{"host case", "https://APP.example.com/payment/result", "https://app.example.com/purchase", false},
+		{"scheme downgrade", "http://app.example.com/payment/result", "https://app.example.com/purchase", true},
+		{"different port", "https://app.example.com:444/payment/result", "https://app.example.com/purchase", true},
+		{"host suffix", "https://app.example.com.evil.example/payment/result", "https://app.example.com/purchase", true},
+		{"userinfo referer", "https://app.example.com/payment/result", "https://user@app.example.com/purchase", true},
+		{"relative referer", "https://app.example.com/payment/result", "//app.example.com/purchase", true},
+		{"non HTTP referer", "https://app.example.com/payment/result", "ftp://app.example.com/purchase", true},
+		{"missing referer", "https://app.example.com/payment/result", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := CanonicalizeReturnURL(tt.base, "api.example.com", tt.referer)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.base, got)
+		})
+	}
+}
+
+func TestPaymentReturnURLResumeFlow(t *testing.T) {
+	t.Parallel()
+
+	canonical, err := CanonicalizeReturnURL(
+		"https://ui.example.com/payment/result?resume_token=forged&order_id=999&status=paid#spoof",
+		"api.example.com", "https://ui.example.com/purchase",
+	)
+	require.NoError(t, err)
+	resume := NewPaymentResumeService([]byte("test-only-payment-resume-signing-key"))
+	token, err := resume.CreateToken(ResumeTokenClaims{
+		OrderID: 42, UserID: 7, ProviderInstanceID: "19",
+		ProviderKey: payment.TypeEasyPay, PaymentType: payment.TypeAlipay,
+		CanonicalReturnURL: canonical,
+	})
+	require.NoError(t, err)
+	built, err := buildPaymentReturnURL(canonical, 42, "sub2_42", token)
+	require.NoError(t, err)
+	parsed, err := url.Parse(built)
+	require.NoError(t, err)
+	require.Equal(t, url.Values{
+		"order_id": {"42"}, "out_trade_no": {"sub2_42"},
+		"resume_token": {token}, "status": {"success"},
+	}, parsed.Query())
+	claims, err := resume.ParseToken(parsed.Query().Get("resume_token"))
+	require.NoError(t, err)
+	require.Equal(t, int64(42), claims.OrderID)
+	require.Equal(t, int64(7), claims.UserID)
+	require.Equal(t, "19", claims.ProviderInstanceID)
+	require.Equal(t, payment.TypeEasyPay, claims.ProviderKey)
+	require.Equal(t, "https://ui.example.com/payment/result", claims.CanonicalReturnURL)
 }
 
 func TestPaymentResumeTokenRoundTrip(t *testing.T) {

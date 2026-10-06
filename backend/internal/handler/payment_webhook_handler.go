@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -38,6 +39,7 @@ func NewPaymentWebhookHandler(paymentService *service.PaymentService, registry *
 }
 
 // EasyPayNotify handles EasyPay payment notifications.
+// GET /api/v1/payment/webhook/easypay
 // POST /api/v1/payment/webhook/easypay
 func (h *PaymentWebhookHandler) EasyPayNotify(c *gin.Context) {
 	h.handleNotify(c, payment.TypeEasyPay)
@@ -81,18 +83,16 @@ func (h *PaymentWebhookHandler) PayPalWebhook(c *gin.Context) {
 
 // handleNotify is the shared logic for all provider webhook handlers.
 func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string) {
-	var rawBody string
-	if c.Request.Method == http.MethodGet {
-		// GET callbacks (e.g. EasyPay) pass params as URL query string
-		rawBody = c.Request.URL.RawQuery
-	} else {
-		body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxWebhookBodySize))
-		if err != nil {
+	rawBody, status, err := readWebhookPayload(c.Request, providerKey)
+	if err != nil {
+		if providerKey != payment.TypeEasyPay {
 			slog.Error("[Payment Webhook] failed to read body", "provider", providerKey, "error", err)
 			c.String(http.StatusBadRequest, "failed to read body")
 			return
 		}
-		rawBody = string(body)
+		slog.Warn("[Payment Webhook] invalid request", "provider", providerKey, "error", err, "method", c.Request.Method)
+		c.String(status, "invalid notification")
+		return
 	}
 
 	// Extract out_trade_no to look up the order's specific provider instance.
@@ -117,12 +117,16 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 
 	resolvedProviderKey, notification, err := verifyNotificationWithProviders(c.Request.Context(), providers, rawBody, headers)
 	if err != nil {
-		truncatedBody := rawBody
-		if len(truncatedBody) > webhookLogTruncateLen {
-			truncatedBody = truncatedBody[:webhookLogTruncateLen] + "...(truncated)"
-		}
 		slog.Error("[Payment Webhook] verify failed", "provider", providerKey, "error", err, "method", c.Request.Method, "bodyLen", len(rawBody))
-		slog.Debug("[Payment Webhook] verify failed body", "provider", providerKey, "rawBody", truncatedBody)
+		// EasyPay form values may contain a complete signature or a legacy return
+		// URL with a resume token. Even a truncated body can expose those values.
+		if providerKey != payment.TypeEasyPay {
+			truncatedBody := rawBody
+			if len(truncatedBody) > webhookLogTruncateLen {
+				truncatedBody = truncatedBody[:webhookLogTruncateLen] + "...(truncated)"
+			}
+			slog.Debug("[Payment Webhook] verify failed body", "provider", providerKey, "rawBody", truncatedBody)
+		}
 		c.String(http.StatusBadRequest, "verify failed")
 		return
 	}
@@ -154,6 +158,70 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 	}
 
 	writeSuccessResponse(c, resolvedProviderKey)
+}
+
+// EasyPay accepts exactly one parameter source: GET query or POST form body.
+// Validate before using out_trade_no for instance lookup; never merge sources,
+// collapse duplicate keys, or verify a truncated payload. Provider validation
+// remains responsible for its field allowlist, value constraints and signature.
+func readWebhookPayload(req *http.Request, providerKey string) (string, int, error) {
+	if providerKey != payment.TypeEasyPay {
+		if req.Method == http.MethodGet {
+			return req.URL.RawQuery, 0, nil
+		}
+		body, err := io.ReadAll(io.LimitReader(req.Body, maxWebhookBodySize))
+		return string(body), http.StatusBadRequest, err
+	}
+
+	var raw string
+	switch req.Method {
+	case http.MethodGet:
+		if len(req.URL.RawQuery) > maxWebhookBodySize {
+			return "", http.StatusRequestEntityTooLarge, fmt.Errorf("notification query exceeds size limit")
+		}
+		if req.Body != nil {
+			body, err := io.ReadAll(io.LimitReader(req.Body, 1))
+			if err != nil || len(body) != 0 {
+				return "", http.StatusBadRequest, fmt.Errorf("GET notification must not contain a body")
+			}
+		}
+		raw = req.URL.RawQuery
+	case http.MethodPost:
+		if req.URL.RawQuery != "" {
+			return "", http.StatusBadRequest, fmt.Errorf("POST notification must not contain query parameters")
+		}
+		mediaType, _, err := mime.ParseMediaType(req.Header.Get("Content-Type"))
+		if err != nil || mediaType != "application/x-www-form-urlencoded" || len(req.Header.Values("Content-Type")) != 1 {
+			return "", http.StatusUnsupportedMediaType, fmt.Errorf("POST notification requires a form-urlencoded body")
+		}
+		if req.ContentLength > maxWebhookBodySize {
+			return "", http.StatusRequestEntityTooLarge, fmt.Errorf("notification body exceeds size limit")
+		}
+		if req.Body == nil {
+			return "", http.StatusBadRequest, fmt.Errorf("notification body is empty")
+		}
+		body, err := io.ReadAll(io.LimitReader(req.Body, maxWebhookBodySize+1))
+		if err != nil {
+			return "", http.StatusBadRequest, fmt.Errorf("failed to read notification body")
+		}
+		if len(body) > maxWebhookBodySize {
+			return "", http.StatusRequestEntityTooLarge, fmt.Errorf("notification body exceeds size limit")
+		}
+		raw = string(body)
+	default:
+		return "", http.StatusMethodNotAllowed, fmt.Errorf("notification requires GET or POST")
+	}
+
+	values, err := url.ParseQuery(raw)
+	if err != nil || len(values) == 0 {
+		return "", http.StatusBadRequest, fmt.Errorf("invalid notification form encoding")
+	}
+	for key, entries := range values {
+		if key == "" || len(entries) != 1 {
+			return "", http.StatusBadRequest, fmt.Errorf("notification contains an empty or duplicate parameter")
+		}
+	}
+	return raw, 0, nil
 }
 
 // extractOutTradeNo parses the webhook body to find the out_trade_no.

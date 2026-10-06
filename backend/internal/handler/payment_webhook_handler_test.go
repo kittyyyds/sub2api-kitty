@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
@@ -17,6 +19,200 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestReadWebhookPayloadEasyPayAcceptsGETAndPOST(t *testing.T) {
+	t.Parallel()
+	const payload = "pid=1&trade_no=trade42&out_trade_no=sub2_42&type=alipay&name=%E5%85%85%E5%80%BC+credit&money=12.50&trade_status=TRADE_SUCCESS&sign=test-signature&sign_type=MD5&param=checkout%26source%3Dweb"
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		t.Run(method, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(method, "/notify", nil)
+			if method == http.MethodGet {
+				req.URL.RawQuery = payload
+			} else {
+				req.Body = io.NopCloser(strings.NewReader(payload))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+			}
+			got, _, err := readWebhookPayload(req, payment.TypeEasyPay)
+			require.NoError(t, err)
+			require.Equal(t, payload, got, "signature verification must receive the original encoding")
+			require.Equal(t, "sub2_42", extractOutTradeNo(got, payment.TypeEasyPay))
+		})
+	}
+}
+
+func TestEasyPayNotifyRejectsInvalidRequestsBeforeProviderLookup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const formType = "application/x-www-form-urlencoded"
+	const payload = "out_trade_no=sub2_42&trade_no=trade42&sign=test-signature"
+	tests := []struct {
+		name        string
+		method      string
+		query       string
+		body        string
+		contentType string
+		status      int
+	}{
+		{"GET identical duplicates", http.MethodGet, payload + "&out_trade_no=sub2_42", "", "", http.StatusBadRequest},
+		{"GET conflicting duplicates", http.MethodGet, payload + "&out_trade_no=foreign", "", "", http.StatusBadRequest},
+		{"GET encoded duplicate key", http.MethodGet, payload + "&%6fut_trade_no=foreign", "", "", http.StatusBadRequest},
+		{"GET duplicate signature", http.MethodGet, payload + "&sign=test-signature", "", "", http.StatusBadRequest},
+		{"GET duplicate empty values", http.MethodGet, payload + "&param=&param=", "", "", http.StatusBadRequest},
+		{"GET invalid escaping", http.MethodGet, payload + "&param=%zz", "", "", http.StatusBadRequest},
+		{"GET invalid separator", http.MethodGet, payload + ";param=bad", "", "", http.StatusBadRequest},
+		{"GET empty key", http.MethodGet, payload + "&=bad", "", "", http.StatusBadRequest},
+		{"GET no parameters", http.MethodGet, "", "", "", http.StatusBadRequest},
+		{"GET repeated body parameters", http.MethodGet, payload, payload, formType, http.StatusBadRequest},
+		{"GET conflicting body", http.MethodGet, payload, "out_trade_no=foreign", formType, http.StatusBadRequest},
+		{"GET disjoint body", http.MethodGet, payload, "param=extra", formType, http.StatusBadRequest},
+		{"POST identical duplicates", http.MethodPost, "", payload + "&trade_no=trade42", formType, http.StatusBadRequest},
+		{"POST conflicting duplicates", http.MethodPost, "", payload + "&trade_no=other", formType, http.StatusBadRequest},
+		{"POST encoded duplicate key", http.MethodPost, "", payload + "&%73ign=other", formType, http.StatusBadRequest},
+		{"POST repeated query parameters", http.MethodPost, payload, payload, formType, http.StatusBadRequest},
+		{"POST conflicting query", http.MethodPost, "out_trade_no=foreign", payload, formType, http.StatusBadRequest},
+		{"POST disjoint query", http.MethodPost, "param=extra", payload, formType, http.StatusBadRequest},
+		{"POST query only", http.MethodPost, payload, "", formType, http.StatusBadRequest},
+		{"POST malformed query", http.MethodPost, "bad=%zz", payload, formType, http.StatusBadRequest},
+		{"POST malformed body", http.MethodPost, "", payload + "&param=%zz", formType, http.StatusBadRequest},
+		{"POST empty body", http.MethodPost, "", "", formType, http.StatusBadRequest},
+		{"POST JSON body", http.MethodPost, "", payload, "application/json", http.StatusUnsupportedMediaType},
+		{"POST multipart body", http.MethodPost, "", payload, "multipart/form-data; boundary=test", http.StatusUnsupportedMediaType},
+		{"POST missing content type", http.MethodPost, "", payload, "", http.StatusUnsupportedMediaType},
+		{"POST invalid content type", http.MethodPost, "", payload, formType + ";broken", http.StatusUnsupportedMediaType},
+		{"unsupported method", http.MethodPut, "", payload, formType, http.StatusMethodNotAllowed},
+		{"HEAD is not GET", http.MethodHead, payload, "", "", http.StatusMethodNotAllowed},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, "/notify", strings.NewReader(tt.body))
+			req.URL.RawQuery = tt.query
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
+			}
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+			// A nil service guarantees rejected input cannot reach provider lookup.
+			NewPaymentWebhookHandler(nil, nil).EasyPayNotify(c)
+			require.Equal(t, tt.status, w.Code)
+			require.Equal(t, "invalid notification", w.Body.String())
+		})
+	}
+}
+
+func TestReadWebhookPayloadEasyPaySizeLimits(t *testing.T) {
+	t.Parallel()
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		for _, size := range []int{maxWebhookBodySize, maxWebhookBodySize + 1} {
+			t.Run(fmt.Sprintf("%s/%d", method, size), func(t *testing.T) {
+				payload := "param=" + strings.Repeat("a", size-len("param="))
+				req := httptest.NewRequest(method, "/notify", nil)
+				if method == http.MethodGet {
+					req.URL.RawQuery = payload
+				} else {
+					req.Body = io.NopCloser(strings.NewReader(payload))
+					req.ContentLength = -1 // Exercise the streaming limit without a size header.
+					req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				}
+				got, status, err := readWebhookPayload(req, payment.TypeEasyPay)
+				if size > maxWebhookBodySize {
+					require.Error(t, err)
+					require.Equal(t, http.StatusRequestEntityTooLarge, status)
+					require.Empty(t, got, "never forward a truncated payload")
+					return
+				}
+				require.NoError(t, err)
+				require.Equal(t, payload, got)
+			})
+		}
+	}
+
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		t.Run(method+" bounded streaming read", func(t *testing.T) {
+			reader := &webhookCountingReader{reader: strings.NewReader(strings.Repeat("x", 3*maxWebhookBodySize))}
+			req := httptest.NewRequest(method, "/notify?out_trade_no=sub2_42", nil)
+			req.ContentLength = -1
+			req.Body = io.NopCloser(reader)
+			limit := 1
+			if method == http.MethodPost {
+				req.URL.RawQuery = ""
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				limit = maxWebhookBodySize + 1
+			}
+			got, _, err := readWebhookPayload(req, payment.TypeEasyPay)
+			require.Error(t, err)
+			require.Empty(t, got)
+			require.Equal(t, limit, reader.bytesRead)
+		})
+	}
+}
+
+func TestReadWebhookPayloadEasyPayRejectsBodyReadError(t *testing.T) {
+	t.Parallel()
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, "/notify", nil)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Body = io.NopCloser(webhookErrorReader{})
+			got, status, err := readWebhookPayload(req, payment.TypeEasyPay)
+			require.Error(t, err)
+			require.Empty(t, got)
+			require.Equal(t, http.StatusBadRequest, status)
+		})
+	}
+}
+
+func TestReadWebhookPayloadEasyPayRejectsAmbiguousContentType(t *testing.T) {
+	t.Parallel()
+	for _, extraType := range []string{"application/x-www-form-urlencoded", "application/json"} {
+		req := httptest.NewRequest(http.MethodPost, "/notify", strings.NewReader("out_trade_no=sub2_42"))
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Add("Content-Type", extraType)
+		got, status, err := readWebhookPayload(req, payment.TypeEasyPay)
+		require.Error(t, err)
+		require.Empty(t, got)
+		require.Equal(t, http.StatusUnsupportedMediaType, status)
+	}
+}
+
+func TestReadWebhookPayloadPreservesOtherProviders(t *testing.T) {
+	t.Parallel()
+	for _, providerKey := range []string{payment.TypeAlipay, payment.TypeWxpay, payment.TypeStripe, payment.TypeAirwallex, payment.TypeDujiaoPay, payment.TypePayPal} {
+		t.Run(providerKey, func(t *testing.T) {
+			t.Parallel()
+			const query = "out_trade_no=first&out_trade_no=second"
+			const body = `{"event":"payment","data":{"id":"test"}}`
+			for _, method := range []string{http.MethodGet, http.MethodPost} {
+				req := httptest.NewRequest(method, "/notify?"+query, strings.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				got, _, err := readWebhookPayload(req, providerKey)
+				require.NoError(t, err)
+				want := body
+				if method == http.MethodGet {
+					want = query
+				}
+				require.Equal(t, want, got)
+			}
+		})
+	}
+}
+
+type webhookCountingReader struct {
+	reader    io.Reader
+	bytesRead int
+}
+
+func (r *webhookCountingReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	r.bytesRead += n
+	return n, err
+}
+
+type webhookErrorReader struct{}
+
+func (webhookErrorReader) Read([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
 
 func TestWriteSuccessResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)

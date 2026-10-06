@@ -3,8 +3,10 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base32"
 	"encoding/hex"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"math/rand/v2"
 	"os"
@@ -54,11 +56,10 @@ const paymentResumeSigningKeyEnv = "PAYMENT_RESUME_SIGNING_KEY"
 // --- Types ---
 
 // generateOutTradeNo creates a unique external order ID for payment providers.
-// Format: sub2_20250409aB3kX9mQ (prefix + date + 8-char random)
+// A UUID prevents collisions across independent sites sharing a payment merchant.
 func generateOutTradeNo() string {
-	date := time.Now().Format("20060102")
-	rnd := generateRandomString(8)
-	return orderIDPrefix + date + rnd
+	id := uuid.New()
+	return orderIDPrefix + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(id[:])
 }
 
 func generateRandomString(n int) string {

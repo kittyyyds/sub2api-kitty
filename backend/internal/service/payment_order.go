@@ -485,7 +485,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, classifyCreatePaymentError(req, sel.ProviderKey, err)
 	}
 	sanitizeCreatePaymentResponseDetails(pr)
-	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).
+	_, err = s.entClient.PaymentOrder.Update().Where(paymentorder.IDEQ(order.ID), paymentorder.StatusEQ(OrderStatusPending)).
 		SetNillablePaymentTradeNo(psNilIfEmpty(pr.TradeNo)).
 		SetNillablePayURL(psNilIfEmpty(pr.PayURL)).
 		SetNillableQrCode(psNilIfEmpty(pr.QRCode)).
