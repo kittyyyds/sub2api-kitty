@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="dashboard-view-content" style="max-width: 1320px; margin-inline: auto">
+    <div class="dashboard-view-content">
       <header class="dashboard-home-header">
         <div>
           <div class="dashboard-home-tabs" role="tablist" :aria-label="t('homeOverview.overview')">
