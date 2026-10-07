@@ -29,7 +29,7 @@ func EvaluatePluginCompatibility(manifest PluginManifest, host PluginHostInfo) P
 		result.Message = "插件协议版本与当前 Sub2API 不兼容"
 		return result
 	}
-	if host.Version == "2.9.9-kitty.3" && isPinnedGatewayPrompt(manifest) {
+	if (host.Version == "2.9.9-kitty.3" || host.Version == "2.9.9-kitty.4") && isPinnedGatewayPrompt(manifest) {
 		result.Compatible = true
 		result.Tested = true
 		result.Status = "compatible"
