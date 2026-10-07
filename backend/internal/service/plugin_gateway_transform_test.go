@@ -41,11 +41,11 @@ func TestGatewayPromptMutationBoundary(t *testing.T) {
 func TestGatewayPromptPinnedCompatibilityAndManagedStartup(t *testing.T) {
 	var manifest PluginManifest
 	require.NoError(t, json.Unmarshal([]byte(gatewayPromptPinnedManifest), &manifest))
-	host := PluginHostInfo{Version: "2.9.9-kitty.4", BuildType: "release"}
-	for _, version := range []string{"2.9.9-kitty.3", "2.9.9-kitty.4"} {
+	host := PluginHostInfo{Version: "2.9.9-kitty.5", BuildType: "release"}
+	for _, version := range []string{"2.9.9-kitty.3", "2.9.9-kitty.4", "2.9.9-kitty.5"} {
 		require.True(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: version}).Tested)
 	}
-	require.False(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: "2.9.9-kitty.5"}).Compatible)
+	require.False(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: "2.9.9-kitty.6"}).Compatible)
 	require.False(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: "2.9.9-kitty.2"}).Compatible)
 	i := &PluginInstallation{Manifest: manifest, State: PluginStateEnabled, SignatureStatus: PluginSignatureTrusted, BinarySHA256: manifest.Files[manifest.Runtimes[manifest.RuntimeKey()].Path], Bindings: []PluginBinding{{Enabled: true, Capability: PluginCapabilityGatewayTransform, Platform: "gateway", AccountType: "any"}}}
 	m := &PluginManager{repo: managedPluginRepo{rows: []*PluginInstallation{i}}}
