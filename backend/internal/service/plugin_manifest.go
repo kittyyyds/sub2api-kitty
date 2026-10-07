@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	PluginCapabilityGatewayTransform    = "gateway.request_transform.v1"
 	PluginCapabilityOpenAIOAuthOutbound = "openai.oauth.outbound_transport.v1"
 	PluginStateDisabled                 = "disabled"
 	PluginStateStarting                 = "starting"
@@ -169,6 +170,9 @@ func (m PluginManifest) Validate() error {
 		return errors.New("插件必须声明至少一个能力")
 	}
 	for _, capability := range m.Capabilities {
+		if capability.ID == PluginCapabilityGatewayTransform && capability.Platform == "gateway" && capability.AccountType == "any" && len(m.Capabilities) == 1 {
+			continue
+		}
 		if capability.ID != PluginCapabilityOpenAIOAuthOutbound || capability.Platform != PlatformOpenAI || capability.AccountType != AccountTypeOAuth {
 			return fmt.Errorf("初期仅支持能力 %s", PluginCapabilityOpenAIOAuthOutbound)
 		}

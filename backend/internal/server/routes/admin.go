@@ -403,6 +403,7 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		groups.DELETE("/:id/composite-routes/:route_id", h.Admin.Group.DeleteCompositeRoute)
 		groups.GET("/:id", h.Admin.Group.GetByID)
 		groups.GET("/:id/model-allowlist-candidates", h.Admin.Group.GetGroupModelAllowlistCandidates)
+		groups.GET("/:id/available-models", h.Gateway.AdminGroupAvailableModels)
 		groups.POST("", h.Admin.Group.Create)
 		groups.POST("/:id/duplicate", h.Admin.Group.Duplicate)
 		groups.PUT("/:id", h.Admin.Group.Update)

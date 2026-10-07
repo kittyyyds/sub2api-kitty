@@ -270,6 +270,8 @@ type OpenAIWSIngressHooks struct {
 	// Codex image bridge injection) read the latest revalidation instead of the
 	// previous turn's holder value. Optional; nil keeps the previous behavior.
 	BeforePayloadParse func(turn int, raw []byte, effectiveModel string) error
+	// TransformPayload runs once per follow-up response.create, before upstream model mapping.
+	TransformPayload func(raw []byte, effectiveModel string) ([]byte, error)
 	// MapRequestModel resolves the current turn's client model to the model
 	// that must be written into the upstream response.create frame.
 	MapRequestModel func(turn int, originalModel string) (string, error)

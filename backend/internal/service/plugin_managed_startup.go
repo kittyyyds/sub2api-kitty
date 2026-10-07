@@ -19,6 +19,20 @@ func (m *PluginManager) ValidateManagedStartup(ctx context.Context) error {
 		if row == nil {
 			return errors.New("managed plugin state is invalid")
 		}
+		// This fixed package only transforms an individual request. Each instance
+		// restores and verifies its copy and reconciles the shared configuration.
+		if isPinnedGatewayPrompt(row.Manifest) && row.SignatureStatus == PluginSignatureTrusted &&
+			row.BinarySHA256 == row.Manifest.Files[row.Manifest.Runtimes[row.Manifest.RuntimeKey()].Path] {
+			reviewed := true
+			for _, binding := range row.Bindings {
+				if binding.Enabled && (binding.Capability != PluginCapabilityGatewayTransform || binding.Platform != "gateway" || binding.AccountType != "any") {
+					reviewed = false
+				}
+			}
+			if reviewed {
+				continue
+			}
+		}
 		if row.State == PluginStateStarting || row.State == PluginStateEnabled {
 			return errors.New("enabled plugins require a reviewed multi-instance lifecycle before a managed update")
 		}

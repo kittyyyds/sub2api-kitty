@@ -800,6 +800,17 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
 		}
 
+		if turn > 1 && hooks != nil && hooks.TransformPayload != nil {
+			model := strings.TrimSpace(gjson.GetBytes(trimmed, "model").String())
+			if model == "" {
+				model = ingressSessionOriginalModel
+			}
+			transformed, err := hooks.TransformPayload(trimmed, model)
+			if err != nil {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusInternalError, err.Error(), err)
+			}
+			trimmed = transformed
+		}
 		// Keep the client's per-frame window separate from handshake/account identity
 		// normalization. A handshake window can initialize the session, but must
 		// not turn a later omitted window into a rollover back to that old value.

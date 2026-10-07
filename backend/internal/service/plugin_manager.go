@@ -33,6 +33,7 @@ const (
 )
 
 type pluginRoute struct {
+	capability     string
 	pluginID       int64
 	runtime        *pluginRuntime
 	rolloutPercent int
@@ -60,6 +61,7 @@ type PluginManager struct {
 	reconcileCancel    context.CancelFunc
 	reconcileDone      chan struct{}
 	route              atomic.Pointer[pluginRoute]
+	transformRoute     atomic.Pointer[pluginRoute]
 }
 
 func NewPluginManager(repo PluginRepository, encryptor SecretEncryptor, cfg *config.Config, hostInfo PluginHostInfo, kvStore PluginKVStore) *PluginManager {
@@ -131,6 +133,7 @@ func (m *PluginManager) Stop() {
 	}
 	m.runtimes = make(map[int64]*pluginRuntime)
 	m.route.Store(nil)
+	m.transformRoute.Store(nil)
 	m.started = false
 	m.mu.Unlock()
 	m.operationMu.Unlock()
@@ -155,6 +158,7 @@ func (m *PluginManager) List(ctx context.Context) ([]*PluginInstallation, error)
 		} else if installation.State == PluginStateEnabled {
 			installation.RuntimeMessage = installation.LastError
 		}
+		route = m.routeSlot(pluginInstallationCapability(installation)).Load()
 		if route != nil && route.pluginID == installation.ID && route.runtime == nil {
 			installation.RuntimeMessage = route.unavailable
 		}
@@ -174,7 +178,7 @@ func (m *PluginManager) Get(ctx context.Context, id int64) (*PluginInstallation,
 	installation.RuntimeHealthy = runtime != nil && !runtime.client.Exited()
 	if installation.RuntimeHealthy {
 		installation.RuntimeMessage = "插件进程运行中"
-	} else if route := m.route.Load(); route != nil && route.pluginID == id {
+	} else if route := m.routeSlot(pluginInstallationCapability(installation)).Load(); route != nil && route.pluginID == id {
 		installation.RuntimeMessage = route.unavailable
 	}
 	return installation, nil
@@ -189,7 +193,7 @@ func (m *PluginManager) Install(ctx context.Context, reader io.Reader, installed
 	}
 	var previous *PluginInstallation
 	if existing, getErr := m.repo.GetByKey(ctx, packageInfo.PluginKey); getErr == nil {
-		if existing.State == PluginStateEnabled || hasEnabledOpenAIBinding(existing.Bindings) {
+		if existing.State == PluginStateEnabled || hasEnabledPluginBinding(existing.Bindings) {
 			cleanupErr := m.cleanupInstallationFiles(packageInfo)
 			return nil, errors.Join(errors.New("请先停用当前插件，再上传同 ID 的新版本"), cleanupErr)
 		}
@@ -272,23 +276,38 @@ func (m *PluginManager) reconcileOnce(ctx context.Context) error {
 	if err != nil {
 		// 无法读取权威绑定状态时不能假设插件未启用，否则会把 OAuth 请求静默回落到旧直连路径。
 		m.publishUnavailableRoute(0, 100, "插件启用状态暂时无法读取")
+		if m.transformRoute.Load() != nil {
+			m.publishCapabilityUnavailable(PluginCapabilityGatewayTransform, 0, 100, "插件启用状态暂时无法读取")
+		}
 		return fmt.Errorf("读取插件启用状态: %w", err)
 	}
 	m.cleanupStaleLocalInstallations(installations)
+	var result error
+	for _, capability := range []string{PluginCapabilityOpenAIOAuthOutbound, PluginCapabilityGatewayTransform} {
+		result = errors.Join(result, m.reconcileCapability(ctx, installations, capability))
+	}
+	return result
+}
+
+func (m *PluginManager) reconcileCapability(ctx context.Context, installations []*PluginInstallation, capability string) error {
+	slot := m.routeSlot(capability)
 	var enabled *PluginInstallation
 	for _, installation := range installations {
-		if !hasEnabledOpenAIBinding(installation.Bindings) {
+		if !hasEnabledCapability(installation.Bindings, capability) {
 			continue
 		}
 		if enabled != nil {
-			err := errors.New("检测到多个 OpenAI OAuth 出站插件同时启用")
-			m.publishUnavailableRoute(enabled.ID, 100, err.Error())
+			err := errors.New("检测到多个 同类插件同时启用")
+			m.publishCapabilityUnavailable(capability, enabled.ID, 100, err.Error())
 			return err
 		}
 		enabled = installation
 	}
 	if enabled == nil {
 		for _, installation := range installations {
+			if pluginInstallationCapability(installation) != capability {
+				continue
+			}
 			if installation.State != PluginStateStarting || !m.startingStateExpired(installation) {
 				continue
 			}
@@ -299,7 +318,7 @@ func (m *PluginManager) reconcileOnce(ctx context.Context) error {
 				return fmt.Errorf("恢复超时插件状态: %w", err)
 			}
 		}
-		runtimes := m.detachAllRuntimes()
+		runtimes := m.detachCapabilityRuntimes(capability)
 		for _, runtime := range runtimes {
 			runtime.drain(10 * time.Second)
 		}
@@ -307,7 +326,7 @@ func (m *PluginManager) reconcileOnce(ctx context.Context) error {
 	}
 
 	rollout := bindingRollout(enabled.Bindings)
-	current := m.route.Load()
+	current := slot.Load()
 	if current != nil && current.pluginID == enabled.ID && current.runtime != nil &&
 		!current.runtime.client.Exited() && current.rolloutPercent == rollout &&
 		current.runtime.installation.BinarySHA256 == enabled.BinarySHA256 &&
@@ -328,19 +347,19 @@ func (m *PluginManager) reconcileOnce(ctx context.Context) error {
 	}
 	if enabled.State == PluginStateStarting && !m.startingStateExpired(enabled) {
 		if current == nil {
-			m.route.Store(&pluginRoute{pluginID: enabled.ID, rolloutPercent: rollout, unavailable: "插件正在其他实例中启动"})
+			slot.Store(&pluginRoute{capability: capability, pluginID: enabled.ID, rolloutPercent: rollout, unavailable: "插件正在其他实例中启动"})
 		}
 		return nil
 	}
 
 	local, err := m.ensureLocalInstallation(ctx, enabled)
 	if err != nil {
-		m.publishUnavailableRoute(enabled.ID, rollout, err.Error())
+		m.publishCapabilityUnavailable(capability, enabled.ID, rollout, err.Error())
 		return err
 	}
 	runtime, err := m.prepareRuntime(ctx, local, true)
 	if err != nil {
-		m.publishUnavailableRoute(enabled.ID, rollout, err.Error())
+		m.publishCapabilityUnavailable(capability, enabled.ID, rollout, err.Error())
 		return err
 	}
 
@@ -350,7 +369,7 @@ func (m *PluginManager) reconcileOnce(ctx context.Context) error {
 		runtime.kill()
 		return err
 	}
-	if !hasEnabledOpenAIBinding(latest.Bindings) || latest.BinarySHA256 != enabled.BinarySHA256 ||
+	if !hasEnabledCapability(latest.Bindings, capability) || latest.BinarySHA256 != enabled.BinarySHA256 ||
 		latest.ConfigEncrypted != enabled.ConfigEncrypted || bindingRollout(latest.Bindings) != rollout {
 		runtime.kill()
 		return nil
@@ -370,6 +389,9 @@ func (m *PluginManager) reconcileOnce(ctx context.Context) error {
 	m.mu.Lock()
 	stale := make([]*pluginRuntime, 0, len(m.runtimes))
 	for id, candidate := range m.runtimes {
+		if pluginInstallationCapability(candidate.installation) != capability {
+			continue
+		}
 		if candidate != runtime {
 			candidate.draining.Store(true)
 			stale = append(stale, candidate)
@@ -379,7 +401,7 @@ func (m *PluginManager) reconcileOnce(ctx context.Context) error {
 		}
 	}
 	m.runtimes[enabled.ID] = runtime
-	m.route.Store(&pluginRoute{pluginID: enabled.ID, runtime: runtime, rolloutPercent: rollout})
+	slot.Store(&pluginRoute{capability: capability, pluginID: enabled.ID, runtime: runtime, rolloutPercent: rollout})
 	m.mu.Unlock()
 	for _, candidate := range stale {
 		candidate.drain(10 * time.Second)
@@ -403,27 +425,41 @@ func (m *PluginManager) startingStateExpired(installation *PluginInstallation) b
 }
 
 func (m *PluginManager) detachAllRuntimes() []*pluginRuntime {
+	return append(m.detachCapabilityRuntimes(PluginCapabilityOpenAIOAuthOutbound), m.detachCapabilityRuntimes(PluginCapabilityGatewayTransform)...)
+}
+
+func (m *PluginManager) detachCapabilityRuntimes(capability string) []*pluginRuntime {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	runtimes := make([]*pluginRuntime, 0, len(m.runtimes))
 	for id, runtime := range m.runtimes {
+		if pluginInstallationCapability(runtime.installation) != capability {
+			continue
+		}
 		runtime.draining.Store(true)
 		runtimes = append(runtimes, runtime)
 		delete(m.runtimes, id)
 	}
-	m.route.Store(nil)
+	m.routeSlot(capability).Store(nil)
 	return runtimes
 }
 
 func (m *PluginManager) publishUnavailableRoute(pluginID int64, rollout int, message string) {
+	m.publishCapabilityUnavailable(PluginCapabilityOpenAIOAuthOutbound, pluginID, rollout, message)
+}
+
+func (m *PluginManager) publishCapabilityUnavailable(capability string, pluginID int64, rollout int, message string) {
 	m.mu.Lock()
 	stale := make([]*pluginRuntime, 0, len(m.runtimes))
 	for id, runtime := range m.runtimes {
+		if pluginInstallationCapability(runtime.installation) != capability {
+			continue
+		}
 		runtime.draining.Store(true)
 		stale = append(stale, runtime)
 		delete(m.runtimes, id)
 	}
-	m.route.Store(&pluginRoute{pluginID: pluginID, rolloutPercent: rollout, unavailable: message})
+	m.routeSlot(capability).Store(&pluginRoute{capability: capability, pluginID: pluginID, rolloutPercent: rollout, unavailable: message})
 	m.mu.Unlock()
 	for _, runtime := range stale {
 		runtime.drain(10 * time.Second)
@@ -564,10 +600,11 @@ func (m *PluginManager) Enable(ctx context.Context, id int64, acceptUntested boo
 	if err != nil {
 		return nil, err
 	}
-	if active := m.route.Load(); active != nil && active.pluginID != id {
-		return nil, errors.New("OpenAI OAuth 出站能力已有启用插件，请先停用当前插件")
+	slot := m.routeSlot(pluginInstallationCapability(installation))
+	if active := slot.Load(); active != nil && active.pluginID != id {
+		return nil, errors.New("该插件能力已有启用插件，请先停用同类插件")
 	}
-	if installation.State == PluginStateEnabled && hasEnabledOpenAIBinding(installation.Bindings) {
+	if installation.State == PluginStateEnabled && hasEnabledPluginBinding(installation.Bindings) {
 		installation.Compatibility = EvaluatePluginCompatibility(installation.Manifest, m.hostInfo)
 		m.mu.Lock()
 		runtime := m.runtimes[id]
@@ -602,8 +639,8 @@ func (m *PluginManager) Enable(ctx context.Context, id int64, acceptUntested boo
 		stateCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		stateErr := m.repo.UpdateState(stateCtx, id, PluginStateError, err.Error(), nil, installation.BinarySHA256, PluginStateStarting)
 		cancel()
-		if hasEnabledOpenAIBinding(originalBindings) {
-			m.route.Store(&pluginRoute{pluginID: id, rolloutPercent: bindingRollout(originalBindings), unavailable: err.Error()})
+		if hasEnabledPluginBinding(originalBindings) {
+			slot.Store(&pluginRoute{capability: pluginInstallationCapability(installation), pluginID: id, rolloutPercent: bindingRollout(originalBindings), unavailable: err.Error()})
 		}
 		return nil, errors.Join(err, stateErr)
 	}
@@ -664,7 +701,7 @@ func (m *PluginManager) Delete(ctx context.Context, id int64) error {
 		m.mu.Unlock()
 		return err
 	}
-	if installation.State == PluginStateEnabled || hasEnabledOpenAIBinding(installation.Bindings) {
+	if installation.State == PluginStateEnabled || hasEnabledPluginBinding(installation.Bindings) {
 		m.mu.Unlock()
 		return errors.New("请先停用插件，再执行卸载")
 	}
@@ -772,7 +809,7 @@ func (m *PluginManager) restoreRuntimeConfig(id int64, runtime *pluginRuntime, p
 	rollbackCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := runtime.validateAndApplyConfig(rollbackCtx, previous); err != nil {
-		route := m.route.Load()
+		route := m.routeSlot(pluginInstallationCapability(runtime.installation)).Load()
 		if route != nil && route.pluginID == id && route.runtime == runtime {
 			stateErr := m.markRuntimeUnavailable(route, "插件配置回滚失败: "+err.Error())
 			return errors.Join(err, stateErr)
@@ -990,7 +1027,8 @@ func (m *PluginManager) ShouldRouteOpenAIOAuth(account *Account) bool {
 
 func (m *PluginManager) markRuntimeUnavailable(failedRoute *pluginRoute, message string) error {
 	m.mu.Lock()
-	current := m.route.Load()
+	slot := m.routeSlot(failedRoute.capability)
+	current := slot.Load()
 	if current != failedRoute {
 		m.mu.Unlock()
 		return nil
@@ -999,7 +1037,8 @@ func (m *PluginManager) markRuntimeUnavailable(failedRoute *pluginRoute, message
 		failedRoute.runtime.kill()
 	}
 	delete(m.runtimes, failedRoute.pluginID)
-	m.route.Store(&pluginRoute{
+	slot.Store(&pluginRoute{
+		capability:     failedRoute.capability,
 		pluginID:       failedRoute.pluginID,
 		rolloutPercent: failedRoute.rolloutPercent,
 		unavailable:    message,
@@ -1031,7 +1070,8 @@ func (m *PluginManager) publishRuntimeLocked(installation *PluginInstallation, r
 		old.kill()
 	}
 	m.runtimes[installation.ID] = runtime
-	m.route.Store(&pluginRoute{
+	m.routeSlot(pluginInstallationCapability(installation)).Store(&pluginRoute{
+		capability:     pluginInstallationCapability(installation),
 		pluginID:       installation.ID,
 		runtime:        runtime,
 		rolloutPercent: bindingRollout(installation.Bindings),
@@ -1098,8 +1138,10 @@ func pluginAccountScopeFromManifest(manifest PluginManifest) PluginAccountScope 
 func (m *PluginManager) removeRuntimeLocked(id int64) *pluginRuntime {
 	runtime := m.runtimes[id]
 	delete(m.runtimes, id)
-	if route := m.route.Load(); route != nil && route.pluginID == id {
-		m.route.Store(nil)
+	for _, slot := range []*atomic.Pointer[pluginRoute]{&m.route, &m.transformRoute} {
+		if route := slot.Load(); route != nil && route.pluginID == id {
+			slot.Store(nil)
+		}
 	}
 	return runtime
 }
@@ -1149,7 +1191,7 @@ func hasEnabledOpenAIBinding(bindings []PluginBinding) bool {
 
 func bindingRollout(bindings []PluginBinding) int {
 	for _, binding := range bindings {
-		if binding.Capability == PluginCapabilityOpenAIOAuthOutbound {
+		if binding.Capability == PluginCapabilityOpenAIOAuthOutbound || binding.Capability == PluginCapabilityGatewayTransform {
 			return binding.RolloutPercent
 		}
 	}

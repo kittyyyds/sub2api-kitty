@@ -1075,6 +1075,17 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					}
 				}()
 			}
+			if isResponseCreate && hooks != nil && hooks.TransformPayload != nil {
+				model := strings.TrimSpace(gjson.GetBytes(payload, "model").String())
+				if model == "" {
+					model, _ = usageMeta.turnModels("")
+				}
+				transformed, err := hooks.TransformPayload(payload, model)
+				if err != nil {
+					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusInternalError, err.Error(), err)
+				}
+				payload = transformed
+			}
 			responsesLite := isResponseCreate && isOpenAIResponsesLiteWebSocketPayload(payload)
 			if isResponseCreate {
 				payload = normalizeOpenAIRequestLocale(ctx, account, payload, "ws", time.Now())

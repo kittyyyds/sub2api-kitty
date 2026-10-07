@@ -15,7 +15,7 @@
             class="mt-3 flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-300"
           >
             <span class="rounded bg-gray-100 px-2 py-1 dark:bg-dark-700">{{
-              t("admin.plugins.onlyOpenAI")
+              t("admin.plugins.supportedCapabilities")
             }}</span>
             <span class="rounded bg-gray-100 px-2 py-1 dark:bg-dark-700">{{
               t("admin.plugins.noAccountCoupling")
@@ -358,6 +358,7 @@ interface PluginBridgeMessage {
   type?: string;
   request_id?: string;
   config?: unknown;
+  group_id?: unknown;
   height?: unknown;
   level?: unknown;
   message?: unknown;
@@ -440,7 +441,7 @@ async function handleFileSelected(event: Event): Promise<void> {
 function currentRollout(plugin: PluginInstallation): number {
   return (
     plugin.bindings.find(
-      (binding) => binding.capability === "openai.oauth.outbound_transport.v1",
+      (binding) => ["openai.oauth.outbound_transport.v1", "gateway.request_transform.v1"].includes(binding.capability),
     )?.rollout_percent || 100
   );
 }
@@ -612,7 +613,9 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
     message.type === "config.load" ||
     message.type === "config.save" ||
     message.type === "config.test" ||
-    message.type === "plugin.status";
+    message.type === "plugin.status" ||
+    message.type === "groups.list" ||
+    message.type === "groups.models";
   if (expectsResponse) {
     if (!requestID || pendingBridgeRequests.has(requestID)) return;
     registerBridgeRequest(requestID);
@@ -623,6 +626,22 @@ async function handleBridgeMessage(event: MessageEvent): Promise<void> {
       case "sub2api.plugin.ready":
         uiLoading.value = false;
         break;
+      case "groups.list":
+      case "groups.models": {
+        if (!configPlugin.value.manifest.capabilities.some(c => c.id === "gateway.request_transform.v1")) {
+          throw new Error("此插件没有分组查询权限");
+        }
+        if (message.type === "groups.list") {
+          const groups = await adminAPI.groups.getAllIncludingInactive();
+          postBridgeResult(message, { ok: true, groups: groups.map(g => ({id:g.id, name:g.name, status:g.status})) });
+        } else {
+          const id = Number(message.group_id);
+          if (!Number.isSafeInteger(id) || id <= 0) throw new Error("分组 ID 无效");
+          const models = await adminAPI.groups.getAvailableModels(id);
+          postBridgeResult(message, { ok: true, models });
+        }
+        break;
+      }
       case "config.load": {
         const config = await adminAPI.plugins.getConfig(configPlugin.value.id);
         postBridgeResult(message, { ok: true, config });

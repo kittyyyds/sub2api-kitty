@@ -33,6 +33,7 @@ type pluginRuntime struct {
 	draining     atomic.Bool
 	done         chan struct{}
 	doneOnce     sync.Once
+	promptNoop   atomic.Bool
 }
 
 func startPluginRuntime(ctx context.Context, installation *PluginInstallation, startTimeout time.Duration, socketDir string, hostServices pluginv1.HostServiceServer) (*pluginRuntime, error) {
@@ -191,6 +192,9 @@ func (r *pluginRuntime) validateAndApplyNormalizedConfig(ctx context.Context, co
 	}
 	if !applied.Applied {
 		return nil, fmt.Errorf("插件拒绝应用配置: %s", applied.Message)
+	}
+	if r.installation != nil && isPinnedGatewayPrompt(r.installation.Manifest) {
+		r.promptNoop.Store(gatewayPromptConfigEmpty(configJSON))
 	}
 	return configJSON, nil
 }

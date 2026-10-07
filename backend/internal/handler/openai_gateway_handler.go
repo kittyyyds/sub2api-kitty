@@ -36,6 +36,7 @@ import (
 
 // OpenAIGatewayHandler handles OpenAI API gateway requests
 type OpenAIGatewayHandler struct {
+	pluginManager              *service.PluginManager
 	compositeResolver          *service.CompositeRouteResolver
 	gatewayService             *service.OpenAIGatewayService
 	billingCacheService        *service.BillingCacheService
@@ -2787,6 +2788,13 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
+	if h.pluginManager != nil && apiKey.GroupID != nil {
+		firstMessage, err = h.pluginManager.TransformGatewayRequest(c.Request.Context(), *apiKey.GroupID, apiKey.ID, "responses", reqModel, firstMessage)
+		if err != nil {
+			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, err.Error())
+			return
+		}
+	}
 	// Start the connection's single frame reader after the temporary
 	// first-message reader has joined and before the first key queue wait, so a
 	// client that leaves during admission is observed instead of blocking the
@@ -3301,6 +3309,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			MaxReasoningEffortOverLimit: maxReasoningEffortOverLimit,
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
+			TransformPayload: func(raw []byte, effectiveModel string) ([]byte, error) {
+				if h.pluginManager == nil || apiKey.GroupID == nil {
+					return raw, nil
+				}
+				return h.pluginManager.TransformGatewayRequest(c.Request.Context(), *apiKey.GroupID, apiKey.ID, "responses", effectiveModel, raw)
+			},
 			BeforePayloadParse: func(turn int, raw []byte, effectiveModel string) error {
 				if turn <= 1 {
 					return nil

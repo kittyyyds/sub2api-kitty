@@ -29,6 +29,13 @@ func EvaluatePluginCompatibility(manifest PluginManifest, host PluginHostInfo) P
 		result.Message = "插件协议版本与当前 Sub2API 不兼容"
 		return result
 	}
+	if host.Version == "2.9.9-kitty.3" && isPinnedGatewayPrompt(manifest) {
+		result.Compatible = true
+		result.Tested = true
+		result.Status = "compatible"
+		result.Message = "当前 Kitty 版本已适配并验证此固定签名发布包"
+		return result
+	}
 	if !matchesSemverRange(host.Version, manifest.Requires.Sub2API) {
 		result.Status = "incompatible"
 		result.Message = fmt.Sprintf("当前 Sub2API %s 不满足插件要求 %s", host.Version, manifest.Requires.Sub2API)

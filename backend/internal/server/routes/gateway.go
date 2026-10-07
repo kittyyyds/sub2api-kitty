@@ -81,6 +81,7 @@ func RegisterGatewayRoutes(
 	groupModelAllowlist := middleware.GroupModelAllowlist()
 	// 分组「仅允许流式请求」准入：挂在模型白名单之后，同样早于合成路由改写与调度。
 	groupStreamOnly := middleware.GroupStreamOnly()
+	promptTransform := h.OpenAIGateway.GatewayPromptMiddleware()
 
 	isOpenAIResponsesCompatibleGatewayPlatform := func(c *gin.Context) bool {
 		switch getGroupPlatform(c) {
@@ -232,6 +233,7 @@ func RegisterGatewayRoutes(
 	gateway.Use(groupModelAllowlist)
 	gateway.Use(groupStreamOnly)
 	gateway.Use(podRoute)
+	gateway.Use(promptTransform)
 	gateway.Use(compositeTarget)
 	gateway.Use(requireGroupAnthropic)
 	{
@@ -411,7 +413,7 @@ func RegisterGatewayRoutes(
 	// 根路径别名共用中间件链：白名单准入在 apiKeyAuth 之后、compositeTarget
 	// 之前，避免逐条路由手工维护链导致漏挂。
 	rootRoute := func(method, path string, limit gin.HandlerFunc, handler gin.HandlerFunc) {
-		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, imageAdmission, groupModelAllowlist, groupStreamOnly, podRoute, compositeTarget, requireGroupAnthropic, handler)
+		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, imageAdmission, groupModelAllowlist, groupStreamOnly, podRoute, promptTransform, compositeTarget, requireGroupAnthropic, handler)
 	}
 	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
 		rootRoute(http.MethodPost, prefix+"/contents/generations/tasks", bodyLimit, h.OpenAIGateway.SeedanceTasks)
@@ -428,7 +430,7 @@ func RegisterGatewayRoutes(
 	rootRoute(http.MethodGet, "/models/:model", bodyLimit, h.Gateway.Models)
 	rootRoute(http.MethodPost, "/messages/count_tokens", bodyLimit, countTokensHandler)
 	codexDirect := r.Group("/backend-api/codex")
-	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, imageAdmission, groupModelAllowlist, groupStreamOnly, podRoute, compositeTarget, requireGroupAnthropic)
+	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, imageAdmission, groupModelAllowlist, groupStreamOnly, podRoute, promptTransform, compositeTarget, requireGroupAnthropic)
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
@@ -544,6 +546,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(captureTraffic)
 	antigravityV1.Use(groupModelAllowlist)
 	antigravityV1.Use(groupStreamOnly)
+	antigravityV1.Use(promptTransform)
 	antigravityV1.Use(requireGroupAnthropic)
 	{
 		antigravityV1.POST("/messages", h.Gateway.Messages)

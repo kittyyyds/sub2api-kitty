@@ -517,7 +517,13 @@ export async function getCapacitySummary(): Promise<
   return data
 }
 
+export async function getAvailableModels(id: number): Promise<string[]> {
+  const { data } = await apiClient.get<{models:string[]}>(`/admin/groups/${id}/available-models`)
+  return data.models || []
+}
+
 export const groupsAPI = {
+  getAvailableModels,
   list,
   getAll,
   getByPlatform,

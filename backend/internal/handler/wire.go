@@ -174,6 +174,7 @@ func ProvideOpenAIGatewayHandler(
 	h.securityAuditCoordinator = coordinator
 	h.securityPolicyService = securityPolicyService
 	h.grokMediaEligibilityProber = grokQuotaService
+	h.pluginManager = pluginManager
 	return h
 }
 
@@ -243,7 +244,7 @@ func ProvideHandlers(
 	_ *service.IdempotencyCleanupService,
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
-		return &Handlers{
+	return &Handlers{
 		Auth:              authHandler,
 		User:              userHandler,
 		APIKey:            apiKeyHandler,
