@@ -68,6 +68,7 @@ const props = defineProps<{
   intervalSeconds: number
   window: MonitorWindow
   loading: boolean
+  hasData?: boolean
   autoRefresh?: {
     enabled: { value: boolean }
     intervalSeconds: { value: number }
@@ -91,9 +92,10 @@ const windowOptions = computed<{ value: MonitorWindow; label: string }[]>(() => 
   { value: '30d', label: t('channelStatus.windowTab.30d') },
 ])
 
-const overallLabel = computed(() => t(`channelStatus.overall.${props.overallStatus}`))
+const overallLabel = computed(() => props.hasData === false ? t('common.noData') : t(`channelStatus.overall.${props.overallStatus}`))
 
 const overallChipClass = computed(() => {
+  if (props.hasData === false) return 'bg-gray-100 text-gray-500 dark:bg-dark-800 dark:text-gray-400'
   switch (props.overallStatus) {
     case 'operational':
       return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
@@ -104,6 +106,7 @@ const overallChipClass = computed(() => {
 })
 
 const overallDotClass = computed(() => {
+  if (props.hasData === false) return 'bg-gray-400'
   switch (props.overallStatus) {
     case 'operational':
       return 'bg-emerald-500 animate-pulse'

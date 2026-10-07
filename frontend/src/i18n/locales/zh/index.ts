@@ -1,3 +1,4 @@
+import { homeMessages } from '../../homeOverview'
 import priorityScheduling from './priorityScheduling'
 import qualityOps from './qualityOps'
 import accountOps from './accountOps'
@@ -20,6 +21,7 @@ import requestTiming from './requestTiming'
 import autoConfig from './autoConfig'
 
 export default {
+  homeOverview: homeMessages.zh,
   autoConfig,
   priorityScheduling,
   qualityOps,

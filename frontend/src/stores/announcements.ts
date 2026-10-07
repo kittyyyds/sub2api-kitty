@@ -9,6 +9,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   // State
   const announcements = ref<UserAnnouncement[]>([])
   const loading = ref(false)
+  const fetchError = ref(false)
   const lastFetchTime = ref(0)
   const popupQueue = ref<UserAnnouncement[]>([])
   const currentPopup = ref<UserAnnouncement | null>(null)
@@ -35,14 +36,16 @@ export const useAnnouncementStore = defineStore('announcements', () => {
 
     try {
       loading.value = true
+      fetchError.value = false
       const all = await announcementsAPI.list(false)
       if (generation !== fetchGeneration) return
-      announcements.value = all.slice(0, 20)
+      announcements.value = all
       enqueueNewPopups()
     } catch (err: any) {
       if (generation !== fetchGeneration) return
       // Revert throttle timestamp on failure so retry is allowed
       lastFetchTime.value = 0
+      fetchError.value = true
       console.error('Failed to fetch announcements:', err)
     } finally {
       if (generation === fetchGeneration) loading.value = false
@@ -50,7 +53,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   }
 
   function enqueueNewPopups() {
-    const newPopups = announcements.value.filter(
+    const newPopups = announcements.value.slice(0, 20).filter(
       (a) => a.notify_mode === 'popup' && !a.read_at && !shownPopupIds.has(a.id)
     )
     if (newPopups.length === 0) return
@@ -90,34 +93,45 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   }
 
   async function markAsRead(id: number) {
+    const generation = fetchGeneration
     try {
       await announcementsAPI.markRead(id)
+      if (generation !== fetchGeneration) return false
       const ann = announcements.value.find((a) => a.id === id)
       if (ann) {
         ann.read_at = new Date().toISOString()
       }
+      return true
     } catch (err: any) {
       console.error('Failed to mark announcement as read:', err)
+      return false
     }
   }
 
   async function markAllAsRead() {
+    const generation = fetchGeneration
     const unread = announcements.value.filter((a) => !a.read_at)
     if (unread.length === 0) return
 
     try {
       loading.value = true
-      const results = await Promise.allSettled(unread.map(async (a) => {
-        await announcementsAPI.markRead(a.id)
-        a.read_at = new Date().toISOString()
-      }))
-      const failure = results.find((result) => result.status === 'rejected')
+      // The history list is no longer capped at 20. Bound concurrent writes
+      // rather than dispatching one request per historical notice at once.
+      let failure: PromiseRejectedResult | undefined
+      for (let offset = 0; offset < unread.length; offset += 5) {
+        if (generation !== fetchGeneration) return
+        const results = await Promise.allSettled(unread.slice(offset, offset + 5).map(async (a) => {
+          await announcementsAPI.markRead(a.id)
+          a.read_at = new Date().toISOString()
+        }))
+        failure ??= results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+      }
       if (failure) throw failure.reason
     } catch (err: any) {
       console.error('Failed to mark all as read:', err)
       throw err
     } finally {
-      loading.value = false
+      if (generation === fetchGeneration) loading.value = false
     }
   }
 
@@ -129,12 +143,14 @@ export const useAnnouncementStore = defineStore('announcements', () => {
     popupQueue.value = []
     currentPopup.value = null
     loading.value = false
+    fetchError.value = false
   }
 
   return {
     // State
     announcements,
     loading,
+    fetchError,
     currentPopup,
     // Getters
     unreadCount,

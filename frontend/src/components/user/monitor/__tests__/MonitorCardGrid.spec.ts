@@ -51,6 +51,20 @@ function monitor(overrides: Partial<UserMonitorView>): UserMonitorView {
 }
 
 describe('MonitorCardGrid', () => {
+  it('filters compact cards while preserving user-specific rates and detail events', async () => {
+    const items = [monitor({ id: 1, group_name: 'Codex Stable' }), monitor({ id: 2, name: 'Claude Stable', provider: 'anthropic', primary_model: 'claude-sonnet', group_name: 'Claude Max' })]
+    const wrapper = mount(MonitorCardGrid, { props: { items, compact: true, window: '7d', loading: false, detailCache: {}, rateByGroupName: { 'codex stable': .12, 'claude max': .8 } }, global: { stubs: { MonitorCard: MonitorCardStub, ProviderIcon: true } } })
+    expect(wrapper.findAllComponents(MonitorCardStub)).toHaveLength(2)
+    expect(wrapper.findComponent(MonitorCardStub).props('rateMultiplier')).toBe(.12)
+    await wrapper.get('input[type="search"]').setValue('claude-sonnet')
+    expect(wrapper.findAllComponents(MonitorCardStub)).toHaveLength(1)
+    await wrapper.get('[data-test="monitor-card"]').trigger('click')
+    expect(wrapper.emitted('cardClick')?.[0]).toEqual([items[1]])
+    await wrapper.get('input[type="search"]').setValue('no-match')
+    expect(wrapper.findAllComponents(MonitorCardStub)).toHaveLength(0)
+    wrapper.unmount()
+  })
+
   it('groups providers and resolves the effective rate by normalized group name', () => {
     const wrapper = mount(MonitorCardGrid, {
       props: {

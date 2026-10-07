@@ -1,0 +1,28 @@
+export const homeMessages = {
+  zh: {
+    overview: '首页概览', analysis: '用量分析', hello: '欢迎回来，{name}', subtitle: '用量、余额与站内动态，一眼掌握。',
+    refresh: '刷新数据', updated: '更新于 {time}', todayCost: '今日消费', totalCost: '总消费', todayTokens: '今日 Token', totalTokens: '总 Token',
+    actual: '按实际扣费统计', allTime: '账户累计实际消费', inputOutput: '输入 {input} · 输出 {output}', cache: '含缓存 Token {tokens}',
+    balance: '当前余额', available: '账户可用余额', recharge: '充值余额', keys: 'API 密钥', activeKeys: '{n} 个启用中', manage: '管理密钥',
+    throughput: '请求吞吐', fiveMinutes: '最近 5 分钟平均值', rpm: '每分钟请求', tpm: '每分钟 Token',
+    todayRequests: '今日请求', totalRequests: '累计请求', average: '平均响应', endpoint: 'API 接入地址', copy: '复制地址', copied: '已复制',
+    notice: '站内公告', noticeHint: '重要通知与产品更新', unread: '{n} 条未读', all: '全部公告', onlyUnread: '只看未读', history: '历史公告',
+    read: '已读', unreadBadge: '未读', markRead: '标记已读', markAll: '全部已读', search: '搜索公告标题或内容', noNotices: '暂无可见公告', noMatches: '没有匹配的公告',
+    loading: '正在加载…', retry: '重试', noticeError: '公告加载失败，请重试。', markError: '已读状态保存失败，请重试。', previous: '上一页', next: '下一页', page: '第 {page} / {total} 页',
+    statsError: '账户数据加载失败，请重试。', stale: '刷新失败，当前保留上次成功的数据。', chartsError: '用量分析加载失败，请重试。', usageError: '最近调用记录加载失败，请重试。',
+    channel: '渠道状态', channelHint: '可用性、响应速度与近期探测记录', channelEmpty: '暂无可见渠道', channelSearch: '搜索渠道、分组或模型', allProviders: '全部渠道', channelCount: '{n} 个渠道',
+  },
+  en: {
+    overview: 'Overview', analysis: 'Usage analytics', hello: 'Welcome back, {name}', subtitle: 'Your usage, balance and updates, all in one place.',
+    refresh: 'Refresh', updated: 'Updated {time}', todayCost: 'Today’s spending', totalCost: 'Total spending', todayTokens: 'Today’s tokens', totalTokens: 'Total tokens',
+    actual: 'Actual charges today', allTime: 'Lifetime actual charges', inputOutput: 'Input {input} · Output {output}', cache: 'Includes {tokens} cached tokens',
+    balance: 'Current balance', available: 'Available account balance', recharge: 'Add credit', keys: 'API keys', activeKeys: '{n} active', manage: 'Manage keys',
+    throughput: 'Throughput', fiveMinutes: 'Average over the last 5 minutes', rpm: 'Requests per minute', tpm: 'Tokens per minute',
+    todayRequests: 'Requests today', totalRequests: 'Total requests', average: 'Average response', endpoint: 'API endpoint', copy: 'Copy endpoint', copied: 'Copied',
+    notice: 'Announcements', noticeHint: 'Important notices and product updates', unread: '{n} unread', all: 'All announcements', onlyUnread: 'Unread only', history: 'Earlier announcements',
+    read: 'Read', unreadBadge: 'Unread', markRead: 'Mark as read', markAll: 'Mark all read', search: 'Search announcements', noNotices: 'No announcements available', noMatches: 'No matching announcements',
+    loading: 'Loading…', retry: 'Retry', noticeError: 'Announcements could not be loaded. Please retry.', markError: 'Read status could not be saved. Please retry.', previous: 'Previous', next: 'Next', page: 'Page {page} of {total}',
+    statsError: 'Account data could not be loaded. Please retry.', stale: 'Refresh failed. Showing the last successful data.', chartsError: 'Usage analytics could not be loaded. Please retry.', usageError: 'Recent requests could not be loaded. Please retry.',
+    channel: 'Channel status', channelHint: 'Availability, response times and recent checks', channelEmpty: 'No channels available', channelSearch: 'Search channels, groups or models', allProviders: 'All channels', channelCount: '{n} channels',
+  },
+}

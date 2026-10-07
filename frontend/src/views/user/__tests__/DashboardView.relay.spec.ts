@@ -10,6 +10,8 @@ vi.mock('@/api/usage', () => ({ usageAPI: api }))
 vi.mock('@/api/user', () => ({ getMyPlatformQuotas: quotas }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { username: '真实用户', balance: 25 }, isSimpleMode: false, refreshUser: profile }) }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ cachedPublicSettings: { payment_enabled: true } }) }))
+vi.mock('@/stores/announcements', () => ({ useAnnouncementStore: () => ({ fetchAnnouncements: vi.fn() }) }))
+vi.mock('vue-i18n', async () => ({ ...await vi.importActual<typeof import('vue-i18n')>('vue-i18n'), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/composables/useRelayBrand', () => ({ useRelayBrand: () => ({ siteName: '澄川 AI' }) }))
 vi.mock('@/composables/useRelayEndpoint', () => ({ useRelayEndpoint: () => ({ endpoint: 'https://relay.example/v1' }) }))
 vi.mock('@/composables/useClipboard', () => ({ useClipboard: () => ({ copied: false, copyToClipboard: vi.fn().mockResolvedValue(true) }) }))
@@ -18,6 +20,7 @@ function mountDashboard() {
   return mount(DashboardView, { global: { stubs: {
     AppLayout: { template: '<main><slot /></main>' },
     RouterLink: RouterLinkStub, Icon: true, LoadingSpinner: true, RelayQuickStart: true, UserDashboardQuickActions: true, LowBalanceNotice: true,
+    DashboardOverview: { props: ['stats', 'balance'], template: '<div data-testid="overview">{{ stats.today_requests }} / {{ stats.today_actual_cost }} / {{ balance }}</div>' },
     UserDashboardStats: { props: ['stats', 'balance'], template: '<div data-testid="stats">{{ stats.today_requests }} / {{ stats.today_actual_cost }} / {{ balance }}</div>' },
     UserDashboardCharts: { props: ['trend', 'models'], emits: ['refresh', 'dateRangeChange'], template: '<div data-testid="charts">{{ trend }} {{ models }}</div>' },
     UserDashboardRecentUsage: { props: ['data'], template: '<div data-testid="recent">{{ data }}</div>' },
@@ -40,6 +43,10 @@ describe('native dashboard server data', () => {
   it('renders the real server statistics and native quick actions without synthetic counts', async () => {
     const wrapper = mountDashboard()
     await flushPromises()
+    expect(wrapper.get('[data-testid="overview"]').text()).toBe('12 / 0.125 / 25')
+    expect(api.getDashboardTrend).not.toHaveBeenCalled()
+    await wrapper.get('#home-tab-analysis').trigger('click')
+    await flushPromises()
     expect(wrapper.get('[data-testid="stats"]').text()).toBe('12 / 0.125 / 25')
     expect(wrapper.find('user-dashboard-quick-actions-stub').exists()).toBe(true)
     expect(wrapper.find('[data-testid="charts"]').exists()).toBe(true)
@@ -54,6 +61,8 @@ describe('native dashboard server data', () => {
     const wrapper = mountDashboard()
     await flushPromises()
     expect(wrapper.find('[data-testid="stats"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="overview"]').exists()).toBe(false)
+    expect(wrapper.get('[role="alert"]').text()).toContain('statsError')
     expect(wrapper.find('loading-spinner-stub').exists()).toBe(false)
     expect(reportError).toHaveBeenCalledWith('Failed to load dashboard stats:', failure)
     wrapper.unmount()

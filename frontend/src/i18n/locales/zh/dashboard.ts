@@ -654,9 +654,9 @@ export default {
       '30d': '30 天'
     },
     overall: {
-      operational: 'OPERATIONAL',
-      degraded: 'DEGRADED',
-      unavailable: 'UNAVAILABLE'
+      operational: '全部正常',
+      degraded: '部分异常',
+      unavailable: '不可用'
     },
     columns: {
       name: '名称',
