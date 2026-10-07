@@ -11,23 +11,17 @@
     <div class="home-columns">
       <DashboardAnnouncementFeed />
       <aside class="home-aside">
-        <section v-if="!isSimple" class="home-balance" data-testid="home-balance">
-          <div class="home-section-heading"><span>{{ t('homeOverview.balance') }}</span><Icon name="creditCard" size="md" /></div>
-          <strong>{{ money(balance) }}</strong><p>{{ t('homeOverview.available') }}</p>
-          <RouterLink v-if="rechargeEnabled" to="/purchase" class="home-balance-action">{{ t('homeOverview.recharge') }} <Icon name="arrowRight" size="sm" /></RouterLink>
-        </section>
         <section class="home-panel home-account">
-          <div class="home-section-heading"><h2>{{ t('homeOverview.keys') }}</h2><Icon name="key" size="md" /></div>
-          <div class="home-key-row"><strong>{{ stats.total_api_keys }}</strong><span>{{ t('homeOverview.activeKeys', { n: stats.active_api_keys }) }}</span><RouterLink to="/keys">{{ t('homeOverview.manage') }} ↗</RouterLink></div>
-          <div class="home-throughput-title"><h2>{{ t('homeOverview.throughput') }}</h2><span>{{ t('homeOverview.fiveMinutes') }}</span></div>
-          <div class="home-throughput">
-            <div><span>RPM</span><strong data-testid="home-rpm">{{ number(stats.rpm) }}</strong><small>{{ t('homeOverview.rpm') }}</small></div>
-            <div><span>TPM</span><strong data-testid="home-tpm">{{ tokens(stats.tpm) }}</strong><small>{{ t('homeOverview.tpm') }}</small></div>
-          </div>
-          <dl class="home-request-summary"><div><dt>{{ t('homeOverview.todayRequests') }}</dt><dd>{{ number(stats.today_requests) }}</dd></div><div><dt>{{ t('homeOverview.totalRequests') }}</dt><dd>{{ number(stats.total_requests) }}</dd></div><div><dt>{{ t('homeOverview.average') }}</dt><dd>{{ (stats.average_duration_ms / 1000).toFixed(2) }}s</dd></div></dl>
+          <h2>{{ t('homeOverview.accountStatus') }}</h2>
+          <dl class="home-account-rows">
+            <div v-if="!isSimple" data-testid="home-balance"><dt>{{ t('homeOverview.balance') }}</dt><dd class="home-account-balance">{{ money(balance) }}</dd></div>
+            <div :title="t('homeOverview.keyRatio')"><dt>{{ t('homeOverview.keys') }}</dt><dd>{{ stats.active_api_keys }} / {{ stats.total_api_keys }}</dd></div>
+            <div :title="t('homeOverview.fiveMinutes')"><dt>{{ t('homeOverview.recentRpm') }}</dt><dd data-testid="home-rpm">{{ number(stats.rpm) }}</dd></div>
+            <div :title="t('homeOverview.fiveMinutes')"><dt>{{ t('homeOverview.recentTpm') }}</dt><dd data-testid="home-tpm">{{ tokens(stats.tpm) }}</dd></div>
+          </dl>
         </section>
         <div class="home-quick-actions"><UserDashboardQuickActions /></div>
-        <section v-if="endpoint" class="home-panel home-endpoint"><h2>{{ t('homeOverview.endpoint') }}</h2><code>{{ endpoint }}</code><button type="button" @click="copyToClipboard(endpoint)"><Icon name="copy" size="sm" />{{ copied ? t('homeOverview.copied') : t('homeOverview.copy') }}</button></section>
+
       </aside>
     </div>
   </div>
@@ -40,13 +34,9 @@ import type { UserDashboardStats } from '@/api/usage'
 import Icon from '@/components/icons/Icon.vue'
 import UserDashboardQuickActions from './UserDashboardQuickActions.vue'
 import DashboardAnnouncementFeed from './DashboardAnnouncementFeed.vue'
-import { useRelayEndpoint } from '@/composables/useRelayEndpoint'
-import { useClipboard } from '@/composables/useClipboard'
 import '@/styles/dashboard-home.css'
 const props = defineProps<{ stats: UserDashboardStats; balance: number; isSimple: boolean; rechargeEnabled: boolean }>()
 const { t, locale } = useI18n()
-const { endpoint } = useRelayEndpoint()
-const { copied, copyToClipboard } = useClipboard()
 const money = (value: number) => '$' + value.toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
 const number = (value: number) => value.toLocaleString(locale.value === 'zh' ? 'zh-CN' : 'en-US', { maximumFractionDigits: 2 })
 const tokens = (value: number) => value >= 1e6 ? number(value / 1e6) + 'M' : value >= 1e3 ? number(value / 1e3) + 'K' : number(value)

@@ -1,5 +1,15 @@
 export const homeMessages = {
   zh: {
+    greeting: '{greeting}，{name}', lateNight: '夜深了', morning: '早上好', afternoon: '下午好', evening: '晚上好',
+    topUp: '站内充值', contactSupport: '联系客服', accountStatus: '账户状态', keyRatio: '启用 / 总数', recentRpm: '近实时 RPM', recentTpm: '近实时 TPM',
+    quotes: {
+      0: '细数生活的往来，也珍藏日子的浪漫。', 1: '新的一天，给喜欢的事情留一点时间。',
+      2: '把灵感慢慢写下，让想法在今天发芽。', 3: '忙碌的间隙，也别忘了看看窗外的风景。',
+      4: '每一个认真开始，都在靠近心中的答案。', 5: '愿今天的努力，都能遇见恰好的回响。',
+      6: '不必急着抵达，沿途也有值得收藏的风景。', 7: '留一点好奇，让平常的日子多一点惊喜。',
+      8: '从一个小小的想法开始，创造属于你的可能。', 9: '把复杂交给工具，把时间留给热爱的事。',
+      10: '日子慢慢走，喜欢的事慢慢做。', 11: '愿每一次出发，都带着轻松与期待。',
+    },
     overview: '首页概览', analysis: '用量分析', hello: '欢迎回来，{name}', subtitle: '用量、余额与站内动态，一眼掌握。',
     refresh: '刷新数据', updated: '更新于 {time}', todayCost: '今日消费', totalCost: '总消费', todayTokens: '今日 Token', totalTokens: '总 Token',
     actual: '按实际扣费统计', allTime: '账户累计实际消费', inputOutput: '输入 {input} · 输出 {output}', cache: '含缓存 Token {tokens}',
@@ -13,6 +23,16 @@ export const homeMessages = {
     channel: '渠道状态', channelHint: '可用性、响应速度与近期探测记录', channelEmpty: '暂无可见渠道', channelSearch: '搜索渠道、分组或模型', allProviders: '全部渠道', channelCount: '{n} 个渠道',
   },
   en: {
+    greeting: '{greeting}, {name}', lateNight: 'Working late', morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening',
+    topUp: 'Add credit', contactSupport: 'Contact support', accountStatus: 'Account status', keyRatio: 'Active / total', recentRpm: 'Recent RPM', recentTpm: 'Recent TPM',
+    quotes: {
+      0: 'Keep track of the everyday, and treasure its little wonders.', 1: 'Make a little time today for something you love.',
+      2: 'Write down an idea and give it room to grow.', 3: 'Between busy moments, take a look outside.',
+      4: 'Every thoughtful beginning brings an answer closer.', 5: 'May today’s efforts lead somewhere good.',
+      6: 'There is something worth noticing along the way.', 7: 'Stay curious; ordinary days still hold surprises.',
+      8: 'Start with one small idea and see where it takes you.', 9: 'Let tools handle the details, and make time for what matters.',
+      10: 'Take your time with the things you love.', 11: 'May every fresh start bring a little ease and hope.',
+    },
     overview: 'Overview', analysis: 'Usage analytics', hello: 'Welcome back, {name}', subtitle: 'Your usage, balance and updates, all in one place.',
     refresh: 'Refresh', updated: 'Updated {time}', todayCost: 'Today’s spending', totalCost: 'Total spending', todayTokens: 'Today’s tokens', totalTokens: 'Total tokens',
     actual: 'Actual charges today', allTime: 'Lifetime actual charges', inputOutput: 'Input {input} · Output {output}', cache: 'Includes {tokens} cached tokens',

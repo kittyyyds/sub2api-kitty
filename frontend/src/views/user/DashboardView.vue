@@ -7,10 +7,10 @@
             <button id="home-tab-overview" type="button" role="tab" :aria-selected="tab === 'overview'" aria-controls="home-panel-overview" @click="tab = 'overview'"><Icon name="home" size="sm" />{{ t('homeOverview.overview') }}</button>
             <button id="home-tab-analysis" type="button" role="tab" :aria-selected="tab === 'analysis'" aria-controls="home-panel-analysis" @click="tab = 'analysis'"><Icon name="chart" size="sm" />{{ t('homeOverview.analysis') }}</button>
           </div>
-          <h1>{{ t('homeOverview.hello', { name: user?.username || 'Kitty' }) }}</h1><p>{{ t('homeOverview.subtitle') }}</p>
         </div>
         <div class="dashboard-home-refresh"><small v-if="updatedAt">{{ t('homeOverview.updated', { time: updatedAt }) }}</small><button type="button" :disabled="refreshing" @click="refreshAll"><Icon name="refresh" size="sm" :class="{ 'animate-spin': refreshing }" />{{ t('homeOverview.refresh') }}</button></div>
       </header>
+      <DashboardWelcomeCard v-if="tab === 'overview'" :account-id="user?.id" :username="user?.username" :recharge-enabled="!!stats && rechargeEnabled" :is-simple="authStore.isSimpleMode" />
       <div v-if="statsError" class="home-error" role="alert">{{ stats ? t('homeOverview.stale') : t('homeOverview.statsError') }}<button type="button" @click="loadStats">{{ t('homeOverview.retry') }}</button></div>
       <div v-if="loading && !stats" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
       <template v-if="stats">
@@ -45,6 +45,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DashboardOverview from '@/components/user/dashboard/DashboardOverview.vue'
+import DashboardWelcomeCard from '@/components/user/dashboard/DashboardWelcomeCard.vue'
 import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'
 import UserDashboardCharts from '@/components/user/dashboard/UserDashboardCharts.vue'
 import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardRecentUsage.vue'

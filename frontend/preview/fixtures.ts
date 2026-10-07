@@ -32,6 +32,10 @@ export const fixtureAdapter: AxiosAdapter = async config => {
   const path = (config.url || '').split('?')[0]
   mockCalls.push(`${config.method} ${path}`)
   await new Promise(resolve => setTimeout(resolve, 100))
+  if (config.method !== 'get' && !/^\/announcements\/\d+\/read$/.test(path)) {
+    const response = { data: { code: 400, message: '本地预览不提交订单、不创建密钥、不兑换余额。' }, status: 400, statusText: 'Preview only', headers: {}, config }
+    throw new AxiosError(response.data.message, 'ERR_BAD_REQUEST', config, undefined, response)
+  }
   if (scenario === 'error' && (path.includes('/usage/dashboard/stats') || path === '/announcements')) throw new AxiosError('本地模拟加载失败', 'ERR_NETWORK', config)
   let data: unknown
   if (path === '/auth/me' || path === '/user/profile') data = { ...sampleUser, run_mode: scenario === 'simple' ? 'simple' : 'standard' }
@@ -53,6 +57,14 @@ export const fixtureAdapter: AxiosAdapter = async config => {
   else if (path === '/usage/dashboard/trend') data = { trend: Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-0${i + 1}`, requests: 170 + i * 36, total_tokens: 1080000 + i * 200000, input_tokens: 700000 + i * 55000, output_tokens: 90000 + i * 5000, cache_read_tokens: 200000, cache_creation_tokens: 90000, cost: 25 + i * 5, actual_cost: 5 + i * 1.1 })) }
   else if (path === '/usage/dashboard/models') data = { models: [{ model: 'gpt-6-astra', requests: 2100, total_tokens: 10600000, actual_cost: 24.5, cost: 122.5 }, { model: 'claude-sonnet-4-6', requests: 980, total_tokens: 3800000, actual_cost: 12.8, cost: 64 }] }
   else if (path === '/usage') data = { items: [], total: 0, page: 1, page_size: 20, pages: 1 }
+  else if (path === '/usage/stats') data = { total_requests: 0, total_tokens: 0, total_cost: 0, total_actual_cost: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0, endpoints: [] }
+  else if (path === '/usage/dashboard/snapshot-v2') data = { trend: [], groups: [], models: [] }
+  else if (path === '/redeem/history') data = { items: [], total: 0, page: 1, page_size: 20, pages: 1 }
+  else if (path === '/payment/checkout-info') data = {
+    methods: { alipay: { currency: 'CNY', daily_limit: 0, daily_used: 0, daily_remaining: 0, single_min: 1, single_max: 5000, fee_rate: 0, available: true } },
+    global_min: 1, global_max: 5000, plans: [], balance_disabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0,
+    help_text: '', help_image_url: '', stripe_publishable_key: '', recharge_bonus_rules: [], recharge_bonus_summary: { available_amount: 0, active_grants: 0 }, recharge_bonus_tiers: [], recharge_bonus_mode: 'bonus', recharge_bonus_notice: '',
+  }
   else if (path === '/keys') data = { items: [], total: 0, pages: 1 }
   else if (path.includes('subscriptions')) data = []
   else if (path === '/settings/public') data = (window as Window & { __APP_CONFIG__?: unknown }).__APP_CONFIG__

@@ -21,6 +21,7 @@ function mountDashboard() {
     AppLayout: { template: '<main><slot /></main>' },
     RouterLink: RouterLinkStub, Icon: true, LoadingSpinner: true, RelayQuickStart: true, UserDashboardQuickActions: true, LowBalanceNotice: true,
     DashboardOverview: { props: ['stats', 'balance'], template: '<div data-testid="overview">{{ stats.today_requests }} / {{ stats.today_actual_cost }} / {{ balance }}</div>' },
+    DashboardWelcomeCard: true,
     UserDashboardStats: { props: ['stats', 'balance'], template: '<div data-testid="stats">{{ stats.today_requests }} / {{ stats.today_actual_cost }} / {{ balance }}</div>' },
     UserDashboardCharts: { props: ['trend', 'models'], emits: ['refresh', 'dateRangeChange'], template: '<div data-testid="charts">{{ trend }} {{ models }}</div>' },
     UserDashboardRecentUsage: { props: ['data'], template: '<div data-testid="recent">{{ data }}</div>' },
