@@ -178,9 +178,17 @@ func roundAmount(amount float64) float64 {
 // --- Audit Logs ---
 
 func (s *PaymentService) writeAuditLog(ctx context.Context, oid int64, action, op string, detail map[string]any) {
+	// Reconciliation may report the same pending verification every minute.
+	// Keep the first diagnostic and respect the existing order/action uniqueness.
+	if action == "PAYMENT_VERIFICATION_PENDING" && s.hasAuditLog(ctx, oid, action) {
+		return
+	}
 	dj, _ := json.Marshal(detail)
 	_, err := s.entClient.PaymentAuditLog.Create().SetOrderID(strconv.FormatInt(oid, 10)).SetAction(action).SetDetail(string(dj)).SetOperator(op).Save(ctx)
 	if err != nil {
+		if action == "PAYMENT_VERIFICATION_PENDING" && dbent.IsConstraintError(err) && s.hasAuditLog(ctx, oid, action) {
+			return
+		}
 		slog.Error("audit log failed", "orderID", oid, "action", action, "error", err)
 	}
 }

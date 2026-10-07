@@ -65,9 +65,9 @@ func TestEasyPayNotificationProtocolCompatibility(t *testing.T) {
 	}
 }
 
-func TestEasyPayNotificationRequiresDocumentedFields(t *testing.T) {
+func TestEasyPayNotificationRequiresPaymentIdentityAndSignature(t *testing.T) {
 	t.Parallel()
-	for _, field := range []string{"pid", "trade_no", "out_trade_no", "type", "name", "money", "trade_status", "sign", "sign_type"} {
+	for _, field := range []string{"pid", "trade_no", "out_trade_no", "type", "money", "trade_status", "sign"} {
 		for _, missing := range []bool{true, false} {
 			name := field + " empty"
 			if missing {
@@ -95,6 +95,46 @@ func TestEasyPayNotificationRequiresDocumentedFields(t *testing.T) {
 				assertEasyPayNotificationRejected(t, provider, raw)
 			})
 		}
+	}
+}
+
+func TestEasyPayNotificationOptionalDisplayFieldsKeepSignatureChecks(t *testing.T) {
+	t.Parallel()
+	for _, fields := range [][]string{{"name"}, {"sign_type"}, {"name", "sign_type"}} {
+		for _, omit := range []bool{false, true} {
+			t.Run(strings.Join(fields, "+")+map[bool]string{true: " omitted", false: " empty"}[omit], func(t *testing.T) {
+				provider := newTestEasyPay(t, "https://gateway.invalid")
+				params := easyPayTestNotification()
+				for _, field := range fields {
+					if omit {
+						delete(params, field)
+					} else {
+						params[field] = ""
+					}
+				}
+				raw := encodeEasyPayTestNotification(params, provider.config["pkey"])
+				n, err := provider.VerifyNotification(context.Background(), raw, nil)
+				if err != nil || n == nil || n.Amount != 12.34 || n.Status != payment.ProviderStatusSuccess {
+					t.Fatalf("compatible signed notification failed: %v", err)
+				}
+				values, _ := url.ParseQuery(raw)
+				values.Set("money", "0.01")
+				assertEasyPayNotificationRejected(t, provider, values.Encode())
+				assertEasyPayNotificationRejected(t, provider, encodeEasyPayTestNotification(params, "wrong-key"))
+			})
+		}
+	}
+}
+
+func TestEasyPayMissingFieldDiagnosticDoesNotLeakValues(t *testing.T) {
+	provider := newTestEasyPay(t, "https://gateway.invalid")
+	params := easyPayTestNotification()
+	delete(params, "trade_no")
+	params["name"] = "private-subject"
+	raw := encodeEasyPayTestNotification(params, provider.config["pkey"])
+	_, err := provider.VerifyNotification(context.Background(), raw, nil)
+	if err == nil || err.Error() != "easypay notify: missing required field (trade_no)" {
+		t.Fatalf("expected field-name-only diagnostic, got %v", err)
 	}
 }
 

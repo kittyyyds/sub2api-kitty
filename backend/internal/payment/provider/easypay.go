@@ -564,17 +564,24 @@ func parseEasyPayNotification(rawBody string) (map[string]string, error) {
 		}
 		params[key] = value
 	}
-	for _, key := range []string{"pid", "trade_no", "out_trade_no", "type", "name", "money", "trade_status", "sign", "sign_type"} {
+	// The subject is display metadata. Some compatible gateways omit it from
+	// notifications. Do not invent a value: verify the exact fields received.
+	// sign_type defaults to MD5 in EasyPay; any explicit other algorithm fails.
+	for _, key := range []string{"pid", "trade_no", "out_trade_no", "type", "money", "trade_status", "sign"} {
 		if strings.TrimSpace(params[key]) == "" {
-			return nil, fmt.Errorf("easypay notify: missing required field")
+			// key comes from this fixed list, never from untrusted field values.
+			return nil, fmt.Errorf("easypay notify: missing required field (%s)", key)
 		}
+	}
+	if name := params["name"]; name != "" && strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("easypay notify: invalid name")
 	}
 	for _, key := range []string{"pid", "trade_no", "out_trade_no", "type", "trade_status"} {
 		if !validEasyPayIdentifier(params[key]) {
 			return nil, fmt.Errorf("easypay notify: invalid %s", key)
 		}
 	}
-	if !strings.EqualFold(params["sign_type"], signTypeMD5) {
+	if params["sign_type"] != "" && !strings.EqualFold(params["sign_type"], signTypeMD5) {
 		return nil, fmt.Errorf("easypay notify: unsupported sign_type")
 	}
 	if sign, err := hex.DecodeString(params["sign"]); err != nil || len(sign) != md5.Size {

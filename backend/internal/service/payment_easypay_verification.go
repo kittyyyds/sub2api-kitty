@@ -165,7 +165,12 @@ func validateEasyPayPaidQuery(o *dbent.PaymentOrder, resp *payment.QueryOrderRes
 	expected, expectedOK := easyPayCents(o.PayAmount)
 	queried, queriedOK := easyPayCents(resp.Amount)
 	notified, notifiedOK := easyPayCents(amount)
-	if !expectedOK || !queriedOK || !notifiedOK || queried != expected || notified != queried {
+	// Some EasyPay channels add a few cents to identify a payment. Preserve the
+	// existing overpayment limit without ever accepting an underpayment or a
+	// callback amount different from the authenticated platform query. Balance
+	// fulfillment continues to use o.Amount, not the extra cents in PayAmount.
+	if !expectedOK || !queriedOK || !notifiedOK || queried < expected || notified != queried ||
+		!isPaidAmountWithinProviderTolerance(o.PayAmount, resp.Amount, PaymentOrderCurrency(o)) {
 		return fmt.Errorf("easypay verified amount mismatch")
 	}
 	return nil
