@@ -11,7 +11,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
@@ -70,6 +73,41 @@ func run(apply bool, path string) error {
 		return errors.New("cannot read plugin state")
 	}
 	if !apply {
+		if installed != nil {
+			if err := manager.ValidateManagedStartup(ctx); err != nil {
+				return errors.New("managed restart validation failed")
+			}
+			saved, err := manager.GetConfig(ctx, installed.ID)
+			if err != nil {
+				return errors.New("stored plugin configuration unavailable")
+			}
+			var cfg struct {
+				Rules    []json.RawMessage          `json:"rules"`
+				Profiles map[string]json.RawMessage `json:"profiles"`
+			}
+			if json.Unmarshal(saved, &cfg) != nil {
+				return errors.New("invalid stored configuration")
+			}
+			token, _, err := manager.CreateUIAssetToken(ctx, installed.ID, time.Minute)
+			if err != nil {
+				return errors.New("plugin UI verification failed")
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/api/v1/plugin-ui/"+token+"/index.html", nil)
+			if err != nil {
+				return errors.New("plugin UI request unavailable")
+			}
+			client := &http.Client{Timeout: 10 * time.Second}
+			res, err := client.Do(req)
+			if err != nil {
+				return errors.New("plugin UI request failed")
+			}
+			defer res.Body.Close()
+			body, err := io.ReadAll(io.LimitReader(res.Body, 1024*1024))
+			if err != nil || res.StatusCode != 200 || !strings.Contains(string(body), "提示词规则") {
+				return errors.New("plugin configuration page unavailable")
+			}
+			return json.NewEncoder(os.Stdout).Encode(map[string]any{"ready": true, "plugin_id": installed.ID, "state": installed.State, "rules_empty": len(cfg.Rules) == 0 && len(cfg.Profiles) == 0, "ui_status": res.StatusCode, "managed_restart_valid": true, "changes": false})
+		}
 		return json.NewEncoder(os.Stdout).Encode(map[string]any{"ready": true, "already_installed": installed != nil, "changes": false})
 	}
 	if path == "" {
