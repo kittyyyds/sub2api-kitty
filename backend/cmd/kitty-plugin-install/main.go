@@ -48,7 +48,7 @@ func run(apply bool, path string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	var adminID int64
-	if err = db.QueryRowContext(ctx, `SELECT id FROM users WHERE role='admin' AND status='active' AND deleted_at IS NULL ORDER BY id LIMIT 1`).Scan(&adminID); err != nil {
+	if err = db.QueryRowContext(ctx, `SELECT id FROM users WHERE role IN ($1,$2) AND status=$3 AND deleted_at IS NULL ORDER BY role DESC,id LIMIT 1`, service.RoleAdmin, service.RoleSuperAdmin, service.StatusActive).Scan(&adminID); err != nil {
 		return errors.New("active administrator unavailable")
 	}
 	var stepUp bool
