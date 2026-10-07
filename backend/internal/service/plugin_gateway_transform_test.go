@@ -15,6 +15,7 @@ import (
 )
 
 func TestGatewayPromptMutationBoundary(t *testing.T) {
+	require.Error(t, validateGatewayPromptMutation([]byte(`{"model":"allowed","model":"hidden"}`), []byte(`{"model":"hidden","instructions":"new"}`), "instructions"))
 	for _, tc := range []struct {
 		before, after, field string
 		ok                   bool

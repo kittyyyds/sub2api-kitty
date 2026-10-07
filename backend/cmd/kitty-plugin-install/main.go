@@ -14,6 +14,9 @@ import (
 	"os"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/Wei-Shaw/sub2api/ent"
+	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -116,6 +119,12 @@ func run(apply bool, path string) error {
 	out, err := manager.TransformGatewayRequest(ctx, 1, 1, "responses", "maintenance-no-upstream-call", body)
 	if err != nil || string(out) != string(body) {
 		return errors.New("empty configuration changed a synthetic local request")
+	}
+	// Only reveal the installed plugin's administration menu; preserve every
+	// other system setting. This client does not run schema initialization.
+	settings := repository.NewSettingRepository(ent.NewClient(ent.Driver(entsql.OpenDB("postgres", db))))
+	if err := settings.Set(ctx, service.SettingKeyPluginManagementEnabled, "true"); err != nil {
+		return errors.New("plugin enabled but menu could not be displayed")
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]any{"plugin_id": result.ID, "version": result.Version, "state": result.State, "signature_status": result.SignatureStatus, "compatible": result.Compatibility.Compatible, "healthy": result.RuntimeHealthy, "rules_empty": true, "noop_verified": true, "upstream_calls": 0})
 }

@@ -144,12 +144,31 @@ func validateGatewayPromptMutation(before, after []byte, field string) error {
 	decode := func(raw []byte) (map[string]any, error) {
 		d := json.NewDecoder(bytes.NewReader(raw))
 		d.UseNumber()
-		var value map[string]any
-		if err := d.Decode(&value); err != nil {
-			return nil, err
-		}
-		if value == nil {
+		token, err := d.Token()
+		if err != nil || token != json.Delim('{') {
 			return nil, errors.New("invalid object")
+		}
+		value := make(map[string]any)
+		for d.More() {
+			key, err := d.Token()
+			if err != nil {
+				return nil, err
+			}
+			name, ok := key.(string)
+			if !ok {
+				return nil, errors.New("invalid key")
+			}
+			if _, exists := value[name]; exists {
+				return nil, errors.New("duplicate request field")
+			}
+			var item any
+			if err := d.Decode(&item); err != nil {
+				return nil, err
+			}
+			value[name] = item
+		}
+		if _, err := d.Token(); err != nil {
+			return nil, err
 		}
 		var trailing any
 		if d.Decode(&trailing) != io.EOF {
