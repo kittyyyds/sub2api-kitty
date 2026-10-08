@@ -17,7 +17,7 @@ function fixture({ blob = new Blob(['fixture'], { type: 'image/png' }), changeUs
         '@/services/file-storage': { getMediaBlob: async () => { if (changeUser) token = 'changed'; return blob; } },
     };
     vm.runInNewContext(code, { exports, require: id => modules[id], URL, Blob, FormData, AbortController, setTimeout, clearTimeout, crypto: webcrypto,
-        fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, json: async () => ({ url: 'https://media.example/reference', expires_at: '2026-09-23T00:00:00Z' }) }; } });
+        fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, json: async () => ({ url: 'https://media.example/reference', expires_at: new Date(Date.now() + 86400000).toISOString() }) }; } });
     return { ...exports, requests };
 }
 

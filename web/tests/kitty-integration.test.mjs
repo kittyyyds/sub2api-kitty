@@ -8,6 +8,12 @@ const require = createRequire(import.meta.url);
 const ts = require("typescript");
 function loadModule(file, globals = {}, modules = {}) {
     const exports = {};
+    if(file.endsWith('/kitty-video.ts') && globals.fetch) {
+        const contentFetch=globals.fetch;
+        // Legacy tasks have no direct-delivery marker; content behavior stays covered below.
+        globals={...globals,fetch:async(url,options)=>url.startsWith('/canvas-api/v1/videos/')&&!url.endsWith('/content') ? {ok:true,json:async()=>({status:'done'})} : contentFetch(url,options)};
+    }
+    if (file.endsWith('/kitty-quote.ts')) modules['@/lib/kitty-unified-video'] = loadModule('../src/lib/kitty-unified-video.ts');
     const code = ts.transpileModule(readFileSync(new URL(file, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
     vm.runInNewContext(code, { exports, require: (id) => modules[id] ?? require(id), process: { env: { NEXT_PUBLIC_KITTY_MODE: "true" } }, URL, Date, Map, Set, ...globals }, { filename: file });
     return exports;
@@ -176,7 +182,7 @@ test("a successful HTTP create without task ID is unknown; simultaneous node cre
     let calls = 0, missing = true;
     const modules = new Proxy({
         "axios": { post: async () => { calls++; return { data: missing ? { status: "queued" } : { id: "task-fixture", status: "queued" } }; }, isAxiosError: () => false },
-        "@/lib/kitty": { KITTY_MODE: true, kittyHeaders: () => ({ "X-Canvas-Key-ID": "11" }) },
+        "@/lib/kitty": { KITTY_MODE: true, kittyHeaders: () => ({ "X-Canvas-Key-ID": "11" }), kittyCapability: () => undefined },
         "./kitty-quote": { confirmKittyVideoQuote: async () => {} },
         "@/lib/kitty-suanli-video": video,
         "@/lib/seedance-video": { normalizeSeedanceRatio: () => "16:9" },

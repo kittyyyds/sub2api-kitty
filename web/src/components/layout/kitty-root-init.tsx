@@ -11,7 +11,7 @@ import { useUserStore } from "@/stores/use-user-store";
 export function KittyRootInit({ children }: { children: ReactNode }) {
     const { modal } = App.useApp();
     useEffect(() => registerKittyQuoteConfirmation((quote, model) => new Promise<boolean>((resolve) => {
-        modal.confirm({ title: "确认视频生成费用", content: <div className="space-y-2"><p>{model}</p><p>单价 ${quote.unit_price} / {quote.unit}，本次 {quote.billing_mode === "video" ? `${quote.seconds} 秒` : `${quote.count} 条`}</p><p>预估费用：<strong>${quote.estimated_cost}</strong></p><p className="text-xs opacity-70">{quote.note}</p></div>, okText: "确认并生成", cancelText: "取消", onOk: () => resolve(true), onCancel: () => resolve(false) });
+        modal.confirm({ title: "确认视频生成费用", content: <div className="space-y-2"><p>{model}</p><p>生成单价 ${quote.unit_price} / {quote.unit}，本次 {quote.billing_mode === "video" ? `${quote.seconds} 秒` : `${quote.count} 条`}</p>{quote.output_cost !== undefined && <p>生成费用：${quote.output_cost}</p>}{(quote.reference_seconds || 0) > 0 && <p>参考视频 {quote.reference_seconds} 秒 × ${quote.reference_per_second} / 秒，参考费用 ${quote.reference_cost}</p>}<p>预估费用：<strong>${quote.estimated_cost}</strong></p><p className="text-xs opacity-70">{quote.note}</p></div>, okText: "确认并生成", cancelText: "取消", onOk: () => resolve(true), onCancel: () => resolve(false) });
     })), [modal]);
     const [ready, setReady] = useState(false);
     const [error, setError] = useState("");

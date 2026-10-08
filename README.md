@@ -4,11 +4,11 @@
 
 <h1 align="center">无限画布 (infinite-canvas)</h1>
 
-本分支为 **Kitty 接入候选版 v0.7.2-kitty.1**。使用本站登录和客户 Key ID，工程与素材保存在客户浏览器。请使用 [Kitty 接入与预览说明](docs/kitty-canvas-preview.md) 及 [部署与回退](deploy-kitty/部署与回退.md)；下方原项目部署说明不适用于 Kitty 模式。
+本分支为 **Kitty 接入版 v0.8.0-kitty.1**，基于上游正式版 v0.8.0。使用本站登录和客户 Key ID，工程与素材保存在客户浏览器。新统一视频使用本站锁价与预扣账务，成片直接从上游下载。请使用 [Kitty 接入与预览说明](docs/kitty-canvas-preview.md) 及 [部署与回退](deploy-kitty/部署与回退.md)；下方原项目部署说明不适用于 Kitty 模式。原版工作流服务端渠道需要其后端服务，Kitty 模式继续使用本站已开放的模型与接口。
 
 <p align="center">
   <a href="https://github.com/tigerowo/infinite-canvas"><img src="https://img.shields.io/github/stars/tigerowo/infinite-canvas?style=flat-square&logo=github" alt="GitHub stars"></a>
-  <a href="VERSION"><img src="https://img.shields.io/badge/version-v0.7.2--kitty.1-2563eb?style=flat-square" alt="Version"></a>
+  <a href="VERSION"><img src="https://img.shields.io/badge/version-v0.8.0--kitty.1-2563eb?style=flat-square" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-f97316?style=flat-square" alt="License"></a>
   <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-ready-2496ed?style=flat-square&logo=docker&logoColor=white" alt="Docker ready"></a>
   <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16.2-000000?style=flat-square&logo=nextdotjs" alt="Next.js"></a>
@@ -38,6 +38,14 @@
 ## 赞助商
 
 <table>
+  <tr>
+    <td width="190" align="center">
+      <a href="https://tokendance.space/" target="_blank" rel="noopener"><img src="https://tokendance.space/TokenDance%E5%93%81%E7%89%8C%E5%9B%BE%E6%A0%87-%E9%BB%91%E8%89%B2%E5%BA%95.svg" width="163" alt="TokenDance 词元跳动"></a>
+    </td>
+    <td>
+      <strong>观猹 × TokenDance｜从产品诞生到持续增长</strong> 观猹是面向 AI 产品与 AI Builder 的产品社区和创新生态，帮助好产品找到真正懂它的用户。同时，<a href="https://tokendance.space/" target="_blank" rel="noopener noreferrer">TokenDance</a> 为开发者提供统一、低成本的多模型调用入口，并通过“百亿 Token 补贴”“开发者计划”等福利降低早期产品的模型调用成本。观猹与 TokenDance 希望让每一个想法都能更轻松地从 Demo 走向真实世界。
+    </td>
+  </tr>
   <tr>
     <td width="190" align="center">
       <a href="https://88api.ai/sign-up?aff=25ty" target="_blank" rel="noopener"><img src="assets/88.webp" width="128" alt="88API"></a>

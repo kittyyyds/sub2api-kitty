@@ -5,7 +5,8 @@ import { kittyVideoTaskHeaders } from "./kitty-video";
 import { kittyVideoReferenceURL } from "./kitty-video-references";
 import { buildSuanliVideoRequest, splitReferenceURLs, type SuanliVideoRatio } from "@/lib/kitty-suanli-video";
 
-import { KITTY_MODE, kittyHeaders, loadKittyBootstrap } from "@/lib/kitty";
+import { KITTY_MODE, kittyHeaders, kittyCapability, loadKittyBootstrap } from "@/lib/kitty";
+import { buildUnifiedVideoRequest, kittyResolution } from "@/lib/kitty-unified-video";
 import axios from "axios";
 
 import { dataUrlToFile, readFileAsDataUrl } from "@/lib/image-utils";
@@ -24,7 +25,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
-export type VideoResponse = { id: string; kittyKeyId?: string; task_id?: string; video_id?: string; source_id?: string; sourceId?: string; channelId?: string; userChannelId?: string; channelName?: string; channel_id?: string; user_channel_id?: string; channel_name?: string; status?: string; video_url?: string; url?: string; storageKey?: string; progress?: number; error?: { message?: string }; size?: string; seconds?: string; model?: string; created_at?: string | number; createdAt?: string | number; started_at?: string | number; startedAt?: string | number; request_body?: string };
+export type VideoResponse = { id: string; kittyKeyId?: string; task_id?: string; video_id?: string; source_id?: string; sourceId?: string; channelId?: string; userChannelId?: string; channelName?: string; workflowRef?: string; channel_id?: string; user_channel_id?: string; channel_name?: string; status?: string; video_url?: string; url?: string; storageKey?: string; progress?: number; error?: { message?: string }; size?: string; seconds?: string; model?: string; created_at?: string | number; createdAt?: string | number; started_at?: string | number; startedAt?: string | number; request_body?: string };
 type ApiVideoEnvelope = { code: number; data?: VideoResponse | VideoResponse[] | null; msg?: string; message?: string };
 type ApiVideoResponse = VideoResponse | ApiVideoEnvelope;
 export type VideoGenerationResult = { id: string; url: string; durationMs: number; width: number; height: number; bytes: number; mimeType: string; task: VideoResponse };
@@ -111,6 +112,7 @@ export type VideoReferenceInput = {
     audioReferences?: ReferenceAudio[];
     kittyImageURLs?: string;
     kittyAudioURLs?: string;
+    kittyVideoURLs?: string;
     firstFrame?: ReferenceImage | null;
     lastFrame?: ReferenceImage | null;
 };
@@ -137,8 +139,8 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
 async function submitVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] | VideoReferenceInput = [], onProgress?: VideoProgressHandler, options?: string | VideoTaskCreateOptions): Promise<CreatedVideoGenerationTask> {
     const model = config.model || config.videoModel;
     const systemPrompt = (config.systemPrompts.video || config.systemPrompt).trim();
-    if (KITTY_MODE) await confirmKittyVideoQuote(config);
     const body = await createVideoRequestBody(config, model, systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt, normalizeVideoReferenceInput(references));
+    if (KITTY_MODE) await confirmKittyVideoQuote(config, body as Record<string, unknown>);
     const startedAt = Date.now();
     let submitted = false;
     try {
@@ -146,6 +148,7 @@ async function submitVideoGenerationTask(config: AiConfig, prompt: string, refer
         if (KITTY_MODE && createOptions.source === "canvas") await (await import("@/app/(user)/canvas/stores/use-canvas-store")).flushCanvasPersistence();
         const accountProxy = usesAccountProxy(config);
         const headers = { ...aiHeaders(config), ...(accountProxy && createOptions.clientTaskId ? { "X-Client-Video-Task-ID": createOptions.clientTaskId } : {}), ...(accountProxy && createOptions.source ? { "X-Video-Task-Source": createOptions.source } : {}), ...(accountProxy && createOptions.sourceId ? { "X-Video-Task-Source-ID": createOptions.sourceId } : {}) };
+        if (KITTY_MODE) Object.assign(headers, { 'Idempotency-Key': createOptions.clientTaskId || crypto.randomUUID() });
         const directProvider = !accountProxy ? directAIProviderForConfig(config) : null;
         const channel = localChannelForActiveModel(config);
         const createUrl = !accountProxy && isGeminiConfig(config, model)
@@ -364,6 +367,18 @@ async function create88APIVideoRequestBody(config: AiConfig, model: string, prom
 async function createVideoRequestBody(config: AiConfig, model: string, prompt: string, input: Required<VideoReferenceInput>) {
     if (KITTY_MODE) {
         kittyHeaders(config);
+        const cap = kittyCapability(model, config.videoChannelId);
+        if (cap?.family === 'unified') {
+            if (input.firstFrame || input.lastFrame) throw new Error('请将首尾帧作为普通参考图片连接');
+            const images = splitReferenceURLs(input.kittyImageURLs), videos = splitReferenceURLs(input.kittyVideoURLs), audios = splitReferenceURLs(input.kittyAudioURLs);
+            const base = { model, prompt, seconds: Number(config.videoSeconds), resolution: kittyResolution(config.vquality, cap), ratio: cap.aspect_ratios?.includes(config.size) ? config.size : normalizeSeedanceRatio(config.size), generateAudio: config.videoGenerateAudio === 'true' };
+            // Validate counts before uploading local files. Unique placeholders keep order.
+            buildUnifiedVideoRequest(cap, { ...base, images: [...images,...input.references.map((_,i)=>`https://reference.invalid/image/${i}`)], videos: [...videos,...input.videoReferences.map((_,i)=>`https://reference.invalid/video/${i}`)], audios: [...audios,...input.audioReferences.map((_,i)=>`https://reference.invalid/audio/${i}`)] });
+            for (const ref of input.references) images.push(await kittyVideoReferenceURL(config,ref,'image'));
+            for (const ref of input.videoReferences) videos.push(await kittyVideoReferenceURL(config,ref,'video'));
+            for (const ref of input.audioReferences) audios.push(await kittyVideoReferenceURL(config,ref,'audio'));
+            return buildUnifiedVideoRequest(cap, { ...base, images, videos, audios });
+        }
         if (input.videoReferences.length || input.firstFrame || input.lastFrame) throw new Error("当前型号支持普通参考图片/音频，不支持视频或首尾帧参数。");
         const base = { modelID: model, prompt, duration: Number(config.videoSeconds), ratio: normalizeSeedanceRatio(config.size) as SuanliVideoRatio };
         const imageURLs = splitReferenceURLs(input.kittyImageURLs);
@@ -699,8 +714,8 @@ function normalizeKlingV26AspectRatio(value: string) {
 }
 
 function normalizeVideoReferenceInput(input: ReferenceImage[] | VideoReferenceInput): Required<VideoReferenceInput> {
-    if (Array.isArray(input)) return { references: input, videoReferences: [], audioReferences: [], firstFrame: null, lastFrame: null, kittyImageURLs: "", kittyAudioURLs: "" };
-    return { references: input.references || [], videoReferences: input.videoReferences || [], audioReferences: input.audioReferences || [], firstFrame: input.firstFrame || null, lastFrame: input.lastFrame || null, kittyImageURLs: input.kittyImageURLs || "", kittyAudioURLs: input.kittyAudioURLs || "" };
+    if (Array.isArray(input)) return { references: input, videoReferences: [], audioReferences: [], firstFrame: null, lastFrame: null, kittyImageURLs: "", kittyAudioURLs: "", kittyVideoURLs: "" };
+    return { references: input.references || [], videoReferences: input.videoReferences || [], audioReferences: input.audioReferences || [], firstFrame: input.firstFrame || null, lastFrame: input.lastFrame || null, kittyImageURLs: input.kittyImageURLs || "", kittyAudioURLs: input.kittyAudioURLs || "", kittyVideoURLs: input.kittyVideoURLs || "" };
 }
 
 async function imageReferenceToFile(image: ReferenceImage) {

@@ -2,7 +2,7 @@ import type { AiConfig, LocalModelChannel, ModelCapability } from "@/stores/use-
 
 export const KITTY_MODE = process.env.NEXT_PUBLIC_KITTY_MODE === "true";
 export const canvasAssetPath = (path: string) => `${KITTY_MODE ? "/canvas" : ""}${path}`;
-export type KittyCapability = { media_type: "text" | "image" | "video"; supported: boolean; provider?: string; family?: "seedance" | "sd25" | "h3"; seconds?: { min: number; max: number; fixed?: number }; resolutions?: string[]; aspect_ratios?: string[]; reference_images?: { min: number; max: number }; reference_audios?: { min: number; max: number }; operations?: string[] };
+export type KittyCapability = { media_type: "text" | "image" | "video"; supported: boolean; provider?: string; family?: "seedance" | "sd25" | "h3" | "unified"; seconds?: { min: number; max: number; fixed?: number }; second_options?: number[]; resolutions?: string[]; aspect_ratios?: string[]; reference_images?: { min: number; max: number }; reference_audios?: { min: number; max: number }; reference_videos?: { min: number; max: number }; max_reference_seconds?: number; face?: boolean; generate_audio?: boolean; operations?: string[] };
 export type KittyModel = { id: string; capabilities: KittyCapability };
 export type KittyKey = { id: number; name: string; key_display: string; status: string; group_id: number; group?: { id: number; name: string; platform: string }; expires_at?: string | null };
 export type KittyBootstrap = { user: { id: number; username: string; email: string; balance: number }; keys: KittyKey[]; storage_mode: "local"; capabilities_version: string };

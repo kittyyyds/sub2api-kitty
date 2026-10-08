@@ -8,7 +8,7 @@ let cachedOwner = 0;
 
 // Public references remain URLs. Only explicitly selected local references are
 // temporarily uploaded; the project and source blobs stay in local storage.
-export async function kittyVideoReferenceURL(config: AiConfig, reference: Reference, kind: 'image' | 'audio'): Promise<string> {
+export async function kittyVideoReferenceURL(config: AiConfig, reference: Reference, kind: 'image' | 'audio' | 'video'): Promise<string> {
     const token = kittyToken();
     const owner = assertKittySession().user.id;
     if (cachedOwner !== owner) { uploads.clear(); cachedOwner = owner; }
@@ -22,9 +22,9 @@ export async function kittyVideoReferenceURL(config: AiConfig, reference: Refere
     let blob = reference.storageKey ? await getMediaBlob(reference.storageKey) : null;
     if (!blob && /^(blob:|data:)/.test(source)) blob = await (await fetch(source)).blob();
     if (!blob || !blob.size) throw new Error('参考素材在本机不可用，请重新选择文件。');
-    if (blob.size > 25 * 1024 * 1024) throw new Error('单个参考素材最多 25MB。');
-    const accepted = kind === 'image' ? /^image\/(png|jpeg|gif|webp)$/ : /^(audio\/(mpeg|mp3|wav|wave|x-wav|ogg|flac|x-flac|mp4|x-m4a)|application\/ogg)$/;
-    if (!accepted.test(blob.type)) throw new Error(kind === 'image' ? '参考图片支持 PNG、JPEG、GIF、WebP。' : '参考音频支持 MP3、WAV、OGG、FLAC、M4A。');
+    if (blob.size > 50 * 1024 * 1024) throw new Error('单个参考素材最多 50MB。');
+    const accepted = kind === 'video' ? /^video\/mp4$/ : kind === 'image' ? /^image\/(png|jpeg|gif|webp)$/ : /^(audio\/(mpeg|mp3|wav|wave|x-wav|ogg|flac|x-flac|mp4|x-m4a)|application\/ogg)$/;
+    if (!accepted.test(blob.type)) throw new Error(kind === 'video' ? '参考视频支持 MP4。' : kind === 'image' ? '参考图片支持 PNG、JPEG、GIF、WebP。' : '参考音频支持 MP3、WAV、OGG、FLAC、M4A。');
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), value => value.toString(16).padStart(2, '0')).join('');
     const identity = `${owner}:${headers['X-Canvas-Key-ID']}:${hash}`;
     if (kittyToken() !== token) throw new Error('登录账号已变化，请重新打开画布。');

@@ -44,6 +44,7 @@ export type CanvasNodeMetadata = {
     generationMode?: CanvasGenerationMode;
     generationType?: CanvasImageGenerationType;
     model?: string;
+    workflowRef?: import("@/lib/workflow-channel").WorkflowRef;
     channelId?: string;
     size?: string;
     quality?: string;
@@ -95,6 +96,7 @@ export type CanvasNodeMetadata = {
     videoTaskId?: string;
     kittyVideoImageURLs?: string;
     kittyVideoAudioURLs?: string;
+    kittyVideoReferenceURLs?: string;
     kittyVideoKeyId?: string;
     kittyVideoState?: string;
     kittyVideoDownload?: string;
