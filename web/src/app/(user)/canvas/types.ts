@@ -102,6 +102,7 @@ export type CanvasNodeMetadata = {
     kittyVideoDownload?: string;
     kittySubmissionUnknown?: boolean;
     videoTaskVideoId?: string;
+    videoTaskTranslation?: import("@/services/api/video").VideoResponse["translationSnapshot"];
     firstFrameNodeId?: string;
     lastFrameNodeId?: string;
     multiShot?: string;

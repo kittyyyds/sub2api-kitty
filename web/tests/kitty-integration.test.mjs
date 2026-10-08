@@ -182,8 +182,9 @@ test("a successful HTTP create without task ID is unknown; simultaneous node cre
     let calls = 0, missing = true;
     const modules = new Proxy({
         "axios": { post: async () => { calls++; return { data: missing ? { status: "queued" } : { id: "task-fixture", status: "queued" } }; }, isAxiosError: () => false },
-        "@/lib/kitty": { KITTY_MODE: true, kittyHeaders: () => ({ "X-Canvas-Key-ID": "11" }), kittyCapability: () => undefined },
+        "@/lib/kitty": { KITTY_MODE: true, kittyHeaders: () => ({ "X-Canvas-Key-ID": "11" }), kittyCapability: () => undefined, loadKittyBootstrap: async () => ({ user: { balance: 0 } }) },
         "./kitty-quote": { confirmKittyVideoQuote: async () => {} },
+        "./channel-parameter-translation": { findParameterTranslation: async () => null },
         "@/lib/kitty-suanli-video": video,
         "@/lib/seedance-video": { normalizeSeedanceRatio: () => "16:9" },
         "@/lib/gemini": { isGeminiConfig: () => false, isGeminiVideoModel: () => false },
