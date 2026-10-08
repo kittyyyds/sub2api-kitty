@@ -144,7 +144,11 @@ func (h *CanvasHandler) Models(c *gin.Context) {
 	}
 	items := make([]gin.H, 0, len(models))
 	for _, id := range models {
-		items = append(items, gin.H{"id": id, "capabilities": canvasModelCapabilities(id, platform)})
+		capability := service.CanvasCapabilities(id, platform)
+		if platform == service.PlatformVideo {
+			capability = service.VideoGroupCapability(key.Group, id)
+		}
+		items = append(items, gin.H{"id": id, "capabilities": capability})
 	}
 	response.Success(c, gin.H{"api_key_id": key.ID, "models": items, "capabilities_version": "1"})
 }

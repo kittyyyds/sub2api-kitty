@@ -8,7 +8,7 @@ describe('temporary video references', () => {
   it('rejects active formats, wrong kind and oversized files before network', () => {
     expect(() => validateVideoReference(new Blob(['<svg/>'], { type: 'image/svg+xml' }), 'image')).toThrow()
     expect(() => validateVideoReference(new Blob(['file'], { type: 'audio/mpeg' }), 'image')).toThrow()
-    expect(() => validateVideoReference(new Blob([new Uint8Array(25 * 1024 * 1024 + 1)], { type: 'image/png' }), 'image')).toThrow('25MB')
+    expect(() => validateVideoReference(new Blob([new Uint8Array(50 * 1024 * 1024 + 1)], { type: 'image/png' }), 'image')).toThrow('50MB')
   })
   it('authenticates multipart upload with a header and never starts model generation', async () => {
     vi.useFakeTimers()

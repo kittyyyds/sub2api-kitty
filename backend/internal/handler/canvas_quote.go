@@ -20,11 +20,7 @@ func (h *CanvasHandler) Quote(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var input struct {
-		Model   string `json:"model"`
-		Seconds int    `json:"seconds"`
-		Count   int    `json:"count"`
-	}
+	var input videoQuoteInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.BadRequest(c, "请输入型号、整数秒数和数量")
 		return
@@ -41,7 +37,7 @@ func (h *CanvasHandler) Quote(c *gin.Context) {
 		response.BadRequest(c, "当前密钥没有此型号的调用权限")
 		return
 	}
-	quote, err := canvasVideoQuote(key.Group, input.Model, input.Seconds, input.Count)
+	quote, err := quoteVideoInput(c.Request.Context(), key, input)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -50,16 +46,21 @@ func (h *CanvasHandler) Quote(c *gin.Context) {
 }
 
 type canvasQuote struct {
-	Model          string    `json:"model"`
-	BillingMode    string    `json:"billing_mode"`
-	Unit           string    `json:"unit"`
-	UnitPrice      float64   `json:"unit_price"`
-	Seconds        int       `json:"seconds"`
-	Count          int       `json:"count"`
-	EstimatedCost  float64   `json:"estimated_cost"`
-	FinalUnitPrice bool      `json:"final_unit_price"`
-	QuotedAt       time.Time `json:"quoted_at"`
-	Note           string    `json:"note"`
+	ReferenceSeconds   float64   `json:"reference_seconds"`
+	ReferencePerSecond float64   `json:"reference_per_second"`
+	OutputCost         float64   `json:"output_cost"`
+	ReferenceCost      float64   `json:"reference_cost"`
+	ReferenceVideos    []string  `json:"reference_videos,omitempty"`
+	Model              string    `json:"model"`
+	BillingMode        string    `json:"billing_mode"`
+	Unit               string    `json:"unit"`
+	UnitPrice          float64   `json:"unit_price"`
+	Seconds            int       `json:"seconds"`
+	Count              int       `json:"count"`
+	EstimatedCost      float64   `json:"estimated_cost"`
+	FinalUnitPrice     bool      `json:"final_unit_price"`
+	QuotedAt           time.Time `json:"quoted_at"`
+	Note               string    `json:"note"`
 }
 
 func canvasVideoQuote(group *service.Group, model string, seconds, count int) (*canvasQuote, error) {
@@ -67,7 +68,7 @@ func canvasVideoQuote(group *service.Group, model string, seconds, count int) (*
 	if err != nil {
 		return nil, err
 	}
-	capability := service.CanvasCapabilities(model, service.PlatformVideo)
+	capability := service.VideoGroupCapability(group, model)
 	if !capability.Supported || capability.Seconds == nil {
 		return nil, errors.New("该型号尚未完成画布适配")
 	}

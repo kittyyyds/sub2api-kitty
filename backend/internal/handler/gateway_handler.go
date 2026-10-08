@@ -1163,7 +1163,11 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		if apiKey.Group.ModelAllowlistEnabled() {
 			models = apiKey.Group.ModelAllowlist.FilterForListing(models)
 		}
-		writeModelsList(c, service.PlatformVideo, models)
+		items := make([]gin.H, 0, len(models))
+		for _, id := range models {
+			items = append(items, gin.H{"id": id, "object": "model", "created": 1704067200, "owned_by": "video", "capabilities": service.VideoGroupCapability(apiKey.Group, id)})
+		}
+		writeModelsListResponse(c, items)
 		return
 	}
 

@@ -4,13 +4,13 @@ export interface TemporaryVideoReference { id: string; url: string; expires_at: 
 const uploaded = new Map<string, TemporaryVideoReference>()
 let cacheKey = ''
 
-export function validateVideoReference(file: Blob, kind: 'image' | 'audio'): void {
-  if (!file.size || file.size > 25 * 1024 * 1024) throw new Error('单个参考素材需大于 0 且不超过 25MB。')
-  const accepted = kind === 'image' ? /^image\/(png|jpeg|gif|webp)$/ : /^(audio\/(mpeg|mp3|wav|wave|x-wav|ogg|flac|x-flac|mp4|x-m4a)|application\/ogg)$/
-  if (!accepted.test(file.type)) throw new Error(kind === 'image' ? '请选择 PNG、JPEG、GIF 或 WebP 图片。' : '请选择 MP3、WAV、OGG、FLAC 或 M4A 音频。')
+export function validateVideoReference(file: Blob, kind: 'image' | 'audio' | 'video'): void {
+  if (!file.size || file.size > 50 * 1024 * 1024) throw new Error('单个参考素材需大于 0 且不超过 50MB。')
+  const accepted = kind === 'video' ? /^video\/mp4$/ : kind === 'image' ? /^image\/(png|jpeg|gif|webp)$/ : /^(audio\/(mpeg|mp3|wav|wave|x-wav|ogg|flac|x-flac|mp4|x-m4a)|application\/ogg)$/
+  if (!accepted.test(file.type)) throw new Error(kind === 'video' ? '请选择 MP4 参考视频。' : kind === 'image' ? '请选择 PNG、JPEG、GIF 或 WebP 图片。' : '请选择 MP3、WAV、OGG、FLAC 或 M4A 音频。')
 }
 
-export async function uploadVideoReference(apiKey: string, file: File, kind: 'image' | 'audio', signal: AbortSignal): Promise<TemporaryVideoReference> {
+export async function uploadVideoReference(apiKey: string, file: File, kind: 'image' | 'audio' | 'video', signal: AbortSignal): Promise<TemporaryVideoReference> {
   validateVideoReference(file, kind)
   if (cacheKey !== apiKey) { uploaded.clear(); cacheKey = apiKey }
   // File identity stays in this page only; no credential or signed URL is persisted.

@@ -73,6 +73,7 @@ type usageLogBestEffortWriter interface {
 
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
+	PrepaidVideoTaskID    string
 	Cost                  *CostBreakdown
 	User                  *User
 	APIKey                *APIKey
@@ -466,6 +467,14 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 
 func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
 	if p == nil || p.Cost == nil || p.User == nil || deps == nil || deps.billingCacheService == nil {
+		return
+	}
+	if p.PrepaidVideoTaskID != "" {
+		// Admission already deducted the available balance. Capture must not
+		// subtract it a second time from Redis after the SQL hold is consumed.
+		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
+			slog.Warn("invalidate prepaid video balance cache failed", "user_id", p.User.ID)
+		}
 		return
 	}
 	if result != nil && result.ExpiredBonusAmount > 0 {

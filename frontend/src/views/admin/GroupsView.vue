@@ -4732,6 +4732,7 @@ const groupPricingFromAPI = (
     image_input_price: perTokenToMTok(entry.image_input_price),
     image_output_price: perTokenToMTok(entry.image_output_price),
     per_request_price: entry.per_request_price,
+    video: entry.video ? JSON.parse(JSON.stringify(entry.video)) : undefined,
     intervals: apiIntervalsToForm(entry.intervals || []),
     time_pricing: createDefaultTimePricingForm(),
   }));
@@ -4757,6 +4758,7 @@ const groupPricingToAPI = (
       image_input_price: mTokToPerToken(entry.image_input_price),
       image_output_price: mTokToPerToken(entry.image_output_price),
       per_request_price: toNullableNumber(entry.per_request_price),
+      video: entry.video ? JSON.parse(JSON.stringify(entry.video)) : undefined,
       intervals:
         entry.billing_mode === "token"
           ? []

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 
@@ -36,9 +37,48 @@ func (r *usageBillingRepository) ApplyVideoUsage(ctx context.Context, cmd *servi
 	}
 	result := &service.UsageBillingApplyResult{Applied: applied}
 	if applied {
+		// New unified tasks already moved their charge into frozen_balance.
+		// Capture it and write the usage receipt in this same transaction.
+		var taskID, state string
+		var hold float64
+		captureErr := sql.ErrNoRows
+		if cmd.PrepaidVideoTaskID != "" {
+			if e := lockVideoBonusGrants(ctx, tx, cmd.UserID); e != nil {
+				return nil, e
+			}
+			var lockedUser int64
+			if e := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, cmd.UserID).Scan(&lockedUser); e != nil {
+				return nil, e
+			}
+			captureErr = tx.QueryRowContext(ctx, `SELECT id,billing_state,hold_amount FROM video_tasks
+			WHERE id=$1 AND upstream_task_id=$2 AND api_key_id=$3 AND user_id=$4 AND billing_state<>'legacy' FOR UPDATE`,
+				cmd.PrepaidVideoTaskID, strings.TrimPrefix(cmd.RequestID, "grok-video:"), cmd.APIKeyID, cmd.UserID).Scan(&taskID, &state, &hold)
+			if errors.Is(captureErr, sql.ErrNoRows) {
+				return nil, errors.New("video prepayment evidence missing")
+			}
+		}
+		originalBalanceCost := cmd.BalanceCost
+		if captureErr == nil {
+			if state != "held" {
+				return nil, errors.New("video prepayment is not available for settlement")
+			}
+			captured, e := r.captureUsageBillingBatchImageBalance(ctx, tx, &service.BatchImageBalanceHoldCommand{UserID: cmd.UserID, APIKeyID: cmd.APIKeyID, BatchID: "video:" + taskID, HoldAmount: hold, ActualAmount: cmd.BalanceCost})
+			if e != nil {
+				return nil, e
+			}
+			result.NewBalance = captured.NewBalance
+			if _, e = tx.ExecContext(ctx, `UPDATE video_tasks SET billing_state='captured',finished_at=NOW(),updated_at=NOW() WHERE id=$1`, taskID); e != nil {
+				return nil, e
+			}
+			cmd.BalanceCost = 0
+		} else if !errors.Is(captureErr, sql.ErrNoRows) {
+			return nil, captureErr
+		}
 		if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
+			cmd.BalanceCost = originalBalanceCost
 			return nil, err
 		}
+		cmd.BalanceCost = originalBalanceCost
 	}
 	// A repaired receipt belongs to the original charge date, not today's retry.
 	if err := tx.QueryRowContext(ctx, `SELECT MIN(created_at) FROM (

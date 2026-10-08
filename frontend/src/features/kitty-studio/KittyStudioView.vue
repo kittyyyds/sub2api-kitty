@@ -6,6 +6,7 @@ import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
 import { useAppStore } from '@/stores/app'
 import type { ApiKey } from '@/types'
 import SuanliSpecialVideoRunner from '@/features/app-center/components/runners/SuanliSpecialVideoRunner.vue'
+import UnifiedVideoRunner from '@/features/app-center/components/runners/UnifiedVideoRunner.vue'
 import { isExclusiveSuanliModelCatalog } from '@/features/app-center/suanliVideo'
 
 import StudioCanvas from './components/StudioCanvas.vue'
@@ -17,9 +18,9 @@ const studio = useKittyStudio()
 const { isDarkMode } = useDocumentDarkMode()
 const logo = computed(() => appStore.brandLogoUrl || '/logo.svg')
 const specialVideoBusy = ref(false)
-const specialVideoMode = computed(() => (studio.selectedPlatform.value === 'video'
-  || (studio.selectedKey.value?.group?.is_exclusive === true && studio.selectedPlatform.value === 'grok'))
-  && isExclusiveSuanliModelCatalog(studio.gatewayModelIds.value))
+const specialVideoMode = computed(() => studio.selectedPlatform.value === 'video'
+  || (studio.selectedKey.value?.group?.is_exclusive === true && studio.selectedPlatform.value === 'grok'
+  && isExclusiveSuanliModelCatalog(studio.gatewayModelIds.value)))
 
 function keyLabel(key: ApiKey): string {
   const masked = key.key.length > 12 ? `${key.key.slice(0, 6)}...${key.key.slice(-4)}` : key.key
@@ -64,7 +65,8 @@ onMounted(() => {
           >刷新 Key 与模型</button>
           <RouterLink to="/keys">管理 Key</RouterLink>
         </div>
-        <SuanliSpecialVideoRunner
+        <component
+          :is="studio.selectedPlatform.value === 'video' ? UnifiedVideoRunner : SuanliSpecialVideoRunner"
           :api-key="studio.selectedKey.value?.key || ''"
           :model-ids="studio.gatewayModelIds.value"
           :disabled="studio.loadingKeys.value || studio.loadingModels.value"

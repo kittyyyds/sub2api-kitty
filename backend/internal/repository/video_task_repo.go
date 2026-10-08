@@ -42,14 +42,14 @@ func (r *usageLogRepository) AcceptVideoTask(ctx context.Context, t *service.Vid
 }
 
 const videoTaskColumns = `id,COALESCE(upstream_task_id,''),user_id,api_key_id,group_id,account_id,
-    subscription_id,pending,status,attempts,created_at`
+    subscription_id,pending,status,attempts,created_at,billing_state`
 
 func scanVideoTask(row interface{ Scan(...any) error }) (*service.VideoTask, error) {
 	t := &service.VideoTask{}
 	var body []byte
 	var sub sql.NullInt64
 	if err := row.Scan(&t.ID, &t.UpstreamTaskID, &t.UserID, &t.APIKeyID, &t.GroupID, &t.AccountID,
-		&sub, &body, &t.Status, &t.Attempts, &t.CreatedAt); err != nil {
+		&sub, &body, &t.Status, &t.Attempts, &t.CreatedAt, &t.BillingState); err != nil {
 		return nil, err
 	}
 	if sub.Valid {
@@ -63,7 +63,7 @@ func scanVideoTask(row interface{ Scan(...any) error }) (*service.VideoTask, err
 
 func (r *usageLogRepository) FindVideoTask(ctx context.Context, id string, userID, keyID int64) (*service.VideoTask, error) {
 	rows, err := r.sql.QueryContext(ctx, `SELECT `+videoTaskColumns+` FROM video_tasks
-        WHERE upstream_task_id=$1 AND user_id=$2 AND api_key_id=$3`, id, userID, keyID)
+        WHERE (upstream_task_id=$1 OR id=$1) AND user_id=$2 AND api_key_id=$3`, id, userID, keyID)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (r *usageLogRepository) FindVideoTask(ctx context.Context, id string, userI
 func (r *usageLogRepository) LeaseVideoTasks(ctx context.Context, limit int) ([]*service.VideoTask, error) {
 	// The lease expires after crashes; no paid submission is retried here.
 	rows, err := r.sql.QueryContext(ctx, `WITH due AS (
-        SELECT id FROM video_tasks WHERE status='pending' AND next_poll_at<=NOW()
+        SELECT id FROM video_tasks WHERE (status='pending' OR billing_state='refund_pending') AND next_poll_at<=NOW()
         ORDER BY next_poll_at LIMIT $1 FOR UPDATE SKIP LOCKED
     ) UPDATE video_tasks SET next_poll_at=NOW()+INTERVAL '3 minutes',attempts=attempts+1,
         updated_at=NOW() WHERE id IN (SELECT id FROM due) RETURNING `+videoTaskColumns, limit)
@@ -104,6 +104,7 @@ func (r *usageLogRepository) SetVideoTaskState(ctx context.Context, id, status, 
 	// a done task with conflicting billing evidence may require manual review.
 	_, err := r.sql.ExecContext(ctx, `UPDATE video_tasks SET status=$2,last_error=$3,
         next_poll_at=CASE WHEN $2='pending' THEN NOW()+INTERVAL '30 seconds' ELSE NULL END,
+		finished_at=CASE WHEN $2 IN ('done','failed') THEN COALESCE(finished_at,NOW()) ELSE finished_at END,
         updated_at=NOW() WHERE id=$1 AND (status NOT IN ('done','failed')
         OR (status='done' AND $2='needs_review'))`, id, status, message)
 	return err

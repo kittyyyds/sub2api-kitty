@@ -70,7 +70,7 @@ func TestFileAndUserQuotas(t *testing.T) {
 	s, _ := New(t.TempDir())
 	file := make([]byte, MaxFileBytes)
 	copy(file, png)
-	for i := 0; i < 4; i++ {
+	for i := int64(0); i < MaxUserBytes/MaxFileBytes; i++ {
 		if _, err := s.Put(1, bytes.NewReader(file)); err != nil {
 			t.Fatal(err)
 		}
@@ -165,6 +165,7 @@ func TestConcurrentReservationsReleaseAfterCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.limits.UserBytes = MaxFileBytes * MaxConcurrentWrites
 	release := make(chan struct{})
 	completed := make(chan error, MaxConcurrentWrites)
 	for i := 0; i < MaxConcurrentWrites; i++ {

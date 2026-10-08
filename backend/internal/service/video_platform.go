@@ -13,6 +13,7 @@ import (
 // multipliers do not apply. The accepted task stores this value instead of
 // repricing it when polling eventually discovers completion.
 type VideoGroupPrice struct {
+	Video       *VideoModelConfig
 	Model       string
 	BillingMode BillingMode
 	UnitPrice   float64
@@ -74,6 +75,27 @@ func validateVideoAccountGroupPlatforms(ctx context.Context, repo GroupRepositor
 func validateVideoGroupPricing(pricing []ChannelModelPricing) error {
 	seen := make(map[string]struct{})
 	for _, entry := range pricing {
+		if entry.Video != nil {
+			if len(entry.Models) != 1 {
+				return infraerrors.BadRequest("INVALID_VIDEO_CONFIG", "统一视频价格每项必须只有一个型号")
+			}
+			if err := entry.Video.Spec.Validate(); err != nil {
+				return err
+			}
+			if !validVideoMoney(entry.Video.ReferencePerSecond) {
+				return fmt.Errorf("参考视频秒价无效")
+			}
+			for _, v := range entry.Video.ResolutionPrices {
+				if !validVideoMoney(v) {
+					return fmt.Errorf("分辨率价格无效")
+				}
+			}
+			if entry.Video.Markup != nil {
+				if err := entry.Video.Markup.validate(); err != nil {
+					return err
+				}
+			}
+		}
 		if entry.Platform != "" && entry.Platform != PlatformVideo {
 			return infraerrors.BadRequest("INVALID_VIDEO_PRICING_PLATFORM", "video prices must belong to the video platform")
 		}
@@ -116,7 +138,7 @@ func ResolveVideoGroupPrice(group *Group, model string) (*VideoGroupPrice, error
 	for _, entry := range group.ModelPricing {
 		for _, candidate := range entry.Models {
 			if strings.TrimSpace(candidate) == model && model != "" {
-				return &VideoGroupPrice{Model: model, BillingMode: entry.BillingMode, UnitPrice: *entry.PerRequestPrice}, nil
+				return &VideoGroupPrice{Model: model, BillingMode: entry.BillingMode, UnitPrice: *entry.PerRequestPrice, Video: entry.Video}, nil
 			}
 		}
 	}
@@ -175,7 +197,10 @@ func calculateVideoPriceSnapshotCost(snapshot *VideoPriceSnapshot, videoCount in
 	default:
 		return nil, fmt.Errorf("unsupported immutable video billing mode")
 	}
-	total := snapshot.UnitPrice * units
+	if !validVideoMoney(snapshot.ReferencePerSecond) || math.IsNaN(snapshot.ReferenceSeconds) || math.IsInf(snapshot.ReferenceSeconds, 0) || snapshot.ReferenceSeconds < 0 || snapshot.ReferenceSeconds > 120 {
+		return nil, fmt.Errorf("invalid reference video price snapshot")
+	}
+	total := snapshot.UnitPrice*units + snapshot.ReferencePerSecond*snapshot.ReferenceSeconds*float64(videoCount)
 	actual := total
 	if !snapshot.FinalUnitPrice {
 		// Preserve snapshots submitted before final unit pricing was introduced.

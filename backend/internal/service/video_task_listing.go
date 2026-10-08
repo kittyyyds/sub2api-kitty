@@ -9,6 +9,8 @@ import (
 
 // VideoTaskSummary excludes supplier credentials, prompts and result URLs.
 type VideoTaskSummary struct {
+	BillingState  string              `json:"billing_state,omitempty"`
+	HoldAmount    float64             `json:"hold_amount"`
 	ID            string              `json:"id"`
 	TaskID        string              `json:"task_id"`
 	UserID        int64               `json:"user_id"`

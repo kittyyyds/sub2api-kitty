@@ -276,6 +276,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true, title: '视频任务管理' }
   },
   {
+    path: '/admin/video-upstream',
+    name: 'AdminVideoUpstream',
+    component: () => import('@/views/admin/VideoUpstreamView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '视频上游与定价' }
+  },
+  {
     path: '/chat',
     name: 'KittyChat',
     component: () => import('@/features/kitty-chat/KittyChatView.vue'),

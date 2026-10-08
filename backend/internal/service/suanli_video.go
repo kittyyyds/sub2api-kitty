@@ -363,7 +363,7 @@ func normalizeSuanliVideoResponse(endpoint GrokMediaEndpoint, body []byte, reque
 	default:
 		out["status"] = "pending"
 	}
-	for _, key := range []string{"model", "progress", "created_at", "error"} {
+	for _, key := range []string{"model", "progress", "created_at", "error", "delivery_status", "expires_at", "url_expires_at"} {
 		if value := gjson.GetBytes(body, key); value.Exists() {
 			out[key] = value.Value()
 		}
@@ -417,6 +417,10 @@ func NormalizeVideoBillingDurationForProvider(provider string, seconds int) int 
 // Require explicit pricing before submitting paid supplier work. A supplier
 // model must never inherit xAI's built-in fallback price.
 func (s *OpenAIGatewayService) ValidateSuanliVideoPricing(ctx context.Context, apiKey *APIKey, model string) error {
+	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == PlatformVideo {
+		_, err := s.ResolveVideoGroupPricing(ctx, apiKey, model)
+		return err
+	}
 	spec, ok := suanliVideoModels[strings.TrimSpace(model)]
 	if !ok {
 		return newGrokMediaRequestValidationError("unsupported suanli video model")

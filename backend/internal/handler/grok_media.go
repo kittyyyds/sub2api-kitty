@@ -87,6 +87,9 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 	if !h.ensureResponsesDependencies(c, reqLog) {
 		return
 	}
+	if h.unifiedVideoLookup(c, apiKey, endpoint, requestID) {
+		return
+	}
 
 	var body []byte
 	var err error
@@ -406,10 +409,21 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		var durableVideoTask *service.VideoTask
 		forwardCtx := requestCtx
 		if account.Platform == service.PlatformVideo && isGrokVideoCreateEndpoint(endpoint) {
+			requestCtx = service.WithVideoIdempotencyKey(requestCtx, c.GetHeader("Idempotency-Key"))
 			durableVideoTask, err = h.gatewayService.BeginVideoTask(requestCtx, apiKey, account, subscription, requestModel, endpoint, body, contentType)
 			if err != nil {
+				releaseAccount()
+				var replay *service.VideoSubmissionReplay
+				if errors.As(err, &replay) {
+					if replay.Task.UpstreamTaskID == "" {
+						c.JSON(http.StatusAccepted, gin.H{"id": replay.Task.ID, "local_task_id": replay.Task.ID, "status": "submission_unknown", "delivery_mode": "upstream_direct", "message": "原任务尚未确认，请查询原任务，不要更换幂等键重新提交"})
+						return
+					}
+					c.JSON(202, gin.H{"id": replay.Task.UpstreamTaskID, "request_id": replay.Task.UpstreamTaskID, "status": replay.Task.Status, "replayed": true})
+					return
+				}
 				reqLog.Warn("video_task.prepare_failed", zap.Error(err))
-				h.errorResponse(c, http.StatusBadRequest, "video_submission_not_ready", "Video submission is not ready; check the exact group model price and retry later")
+				h.errorResponse(c, http.StatusBadRequest, "video_submission_not_ready", err.Error())
 				return
 			}
 			forwardCtx = service.WithVideoTask(requestCtx, durableVideoTask)
@@ -424,9 +438,20 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			return h.gatewayService.ForwardGrokMedia(forwardCtx, c, account, endpoint, requestID, body, contentType)
 		}()
 		if err != nil && durableVideoTask != nil {
+			var rejected *service.VideoSubmissionRejected
+			if errors.As(err, &rejected) {
+				if refundErr := h.gatewayService.RejectVideoTask(requestCtx, durableVideoTask); refundErr != nil {
+					reqLog.Error("video_task.refund_pending")
+				}
+				return
+			}
 			h.gatewayService.MarkVideoSubmissionUnknown(requestCtx, durableVideoTask)
 			if !service.IsResponseCommitted(c) && c.Writer.Size() == writerSizeBeforeForward {
-				h.errorResponse(c, http.StatusBadGateway, "video_submission_unknown", "Video submission could not be confirmed; check supplier tasks before retrying")
+				if durableVideoTask.Pending.Unified {
+					c.JSON(http.StatusAccepted, gin.H{"id": durableVideoTask.ID, "local_task_id": durableVideoTask.ID, "status": "submission_unknown", "delivery_mode": "upstream_direct", "message": "提交结果待核实，请查询原任务，不要重新生成"})
+				} else {
+					h.errorResponse(c, http.StatusBadGateway, "video_submission_unknown", "提交结果待核实，请查询原任务，不要重新生成")
+				}
 			}
 			return
 		}

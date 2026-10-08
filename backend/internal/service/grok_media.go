@@ -467,6 +467,9 @@ func (s *OpenAIGatewayService) SelectMediaVideoRequestAccount(
 // first observes a completed video URL. Status may omit model/duration; we fall
 // back to this snapshot, then defaults.
 type GrokVideoPendingBilling struct {
+	Unified              bool                      `json:"unified,omitempty"`
+	PrepaidAmount        float64                   `json:"prepaid_amount,omitempty"`
+	ReferenceIDs         []string                  `json:"reference_ids,omitempty"`
 	InflightReservation  *VideoInflightReservation `json:"inflight_reservation,omitempty"`
 	PriceSnapshot        *VideoPriceSnapshot       `json:"price_snapshot,omitempty"`
 	VideoProvider        string                    `json:"video_provider,omitempty"`
@@ -800,6 +803,13 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		return nil, err
 	}
 
+	preparedTask, _ := ctx.Value(videoTaskContextKey{}).(*VideoTask)
+	unified := preparedTask != nil && preparedTask.Pending.Unified
+	if unified {
+		c.Header("X-Video-Task-ID", preparedTask.ID)
+		body = preparedTask.PreparedBody
+		contentType = "application/json"
+	}
 	body, contentType, err = prepareGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
 	if err != nil {
 		return nil, err
@@ -815,7 +825,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	requestInfo.Model = billingModel
 
-	if endpoint.RequiresRequestBody() {
+	if endpoint.RequiresRequestBody() && !unified {
 		mappedModel := strings.TrimSpace(account.GetMappedModel(originalModel))
 		if mappedModel != "" && mappedModel != originalModel {
 			body, contentType, err = rewriteGrokMediaModel(body, contentType, mappedModel)
@@ -824,7 +834,9 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			}
 		}
 	}
-	body, contentType, err = normalizeGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
+	if !unified {
+		body, contentType, err = normalizeGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
+	}
 	if err != nil {
 		writeGrokMediaRequestValidationError(c, err)
 		return nil, err
@@ -837,6 +849,10 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	if account.IsSuanliSpecialVideo() && endpoint.RequiresRequestBody() {
 		suanliRequestBillingInfo(body, &requestInfo)
+	}
+	if unified {
+		requestInfo.DurationSeconds = preparedTask.Pending.VideoDurationSeconds
+		requestInfo.Resolution = preparedTask.Pending.VideoResolution
 	}
 
 	var bodyReader io.Reader
@@ -894,6 +910,10 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	if resp.StatusCode >= 400 {
 		if account.IsSuanliSpecialVideo() && endpoint.IsGenerationRequest() {
+			if unified && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 || resp.StatusCode == 405 || resp.StatusCode == 413 || resp.StatusCode == 422 || resp.StatusCode == 429) {
+				writeGrokMediaErrorResponse(c, resp.StatusCode, "video_submission_rejected", "上游未接受任务，预扣费用将退回")
+				return nil, &VideoSubmissionRejected{}
+			}
 			writeGrokMediaErrorResponse(c, resp.StatusCode, "video_submission_error", "Video supplier rejected or could not confirm this submission; inspect supplier tasks before retrying")
 			return nil, fmt.Errorf("suanli video submission returned HTTP %d", resp.StatusCode)
 		}
@@ -960,11 +980,21 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		VideoResolution:      usage.VideoResolution,
 		VideoDurationSeconds: usage.VideoDurationSeconds,
 	}
+	if unified {
+		result.VideoCount = 0
+		result.VideoDurationSeconds = preparedTask.Pending.VideoDurationSeconds
+		result.VideoResolution = preparedTask.Pending.VideoResolution
+	}
 	if endpoint.IsGenerationRequest() && account.Platform == PlatformVideo {
 		if err := s.acceptVideoTask(ctx, result); err != nil {
 			writeGrokMediaErrorResponse(c, http.StatusBadGateway, "video_task_persistence_failed", "Video submission could not be recorded; check supplier tasks before retrying")
 			return nil, err
 		}
+	}
+	if unified {
+		c.Header("Cache-Control", "no-store")
+		c.JSON(http.StatusAccepted, gin.H{"id": result.ResponseID, "request_id": result.ResponseID, "local_task_id": preparedTask.ID, "status": "queued", "model": preparedTask.Pending.Model, "prepaid_amount": preparedTask.Pending.PrepaidAmount})
+		return result, nil
 	}
 	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
 	return result, nil

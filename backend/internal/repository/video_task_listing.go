@@ -16,7 +16,8 @@ func (r *usageLogRepository) ListVideoTaskSummaries(ctx context.Context, f servi
 		return nil, fmt.Errorf("invalid video task list scope")
 	}
 	rows, err := r.sql.QueryContext(ctx, `SELECT jsonb_build_object(
- 'id',v.id,'task_id',COALESCE(v.upstream_task_id,''),'user_id',v.user_id,
+ 'id',v.id,'task_id',CASE WHEN v.billing_state<>'legacy' THEN COALESCE(NULLIF(v.upstream_task_id,''),v.id) ELSE COALESCE(v.upstream_task_id,'') END,'user_id',v.user_id,
+ 'billing_state',v.billing_state,'hold_amount',v.hold_amount,
  'api_key_id',v.api_key_id,'group_id',v.group_id,'account_id',v.account_id,
  'key_name',COALESCE(k.name,''),'group_name',COALESCE(g.name,''),
  'model',COALESCE(v.pending->>'model',''),'status',v.status,

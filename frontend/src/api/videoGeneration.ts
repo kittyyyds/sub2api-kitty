@@ -22,6 +22,7 @@ export interface VideoGenerationRequest {
 }
 
 export interface VideoGatewayOptions {
+  idempotencyKey?: string
   signal?: AbortSignal
   sessionId?: string
 }
@@ -191,6 +192,7 @@ export async function submitVideoGatewayRequest(
     method: 'POST',
     headers: {
       ...authorizationHeaders(apiKey, options.sessionId),
+      ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),

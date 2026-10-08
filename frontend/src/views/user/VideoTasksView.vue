@@ -54,7 +54,7 @@
                 <p v-if="task.status === 'needs_review'" class="mt-2 max-w-40 text-xs text-amber-600">任务或账务需核验，请勿重复提交。</p>
                 <p v-if="task.status === 'unknown'" class="mt-2 max-w-40 text-xs text-amber-600">提交结果未确认，请联系管理员核查。</p>
               </td>
-              <td class="p-4"><div class="font-medium">{{ task.usage_recorded && task.actual_cost !== null ? money(task.actual_cost) : task.billed ? '账单核验中' : '待结算' }}</div>
+              <td class="p-4"><div class="font-medium">{{ task.usage_recorded && task.actual_cost !== null ? money(task.actual_cost) : task.billed ? '账单核验中' : task.billing_state === 'refunded' ? '预扣已退回' : task.billing_state === 'refund_pending' ? '退款处理中' : task.billing_state === 'held' ? `已预扣 ${money(task.hold_amount || 0)}` : '待结算' }}</div>
                 <div v-if="task.price_snapshot" class="mt-1 whitespace-nowrap text-xs text-gray-500">{{ money(task.price_snapshot.unit_price) }}/{{ task.price_snapshot.billing_mode === 'video' ? '秒' : '条' }}<span v-if="!task.price_snapshot.final_unit_price && task.price_snapshot.rate_multiplier !== 1"> × {{ task.price_snapshot.rate_multiplier }}</span></div>
                 <router-link v-if="task.usage_id" class="mt-2 block text-xs text-primary-600" :to="usageLink(task)">用量记录 #{{ task.usage_id }}</router-link>
               </td>

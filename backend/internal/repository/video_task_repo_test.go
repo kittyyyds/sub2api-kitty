@@ -20,16 +20,16 @@ func TestVideoTaskRepositoryOwnerAndPricingSurviveReload(t *testing.T) {
 		PriceSnapshot: &service.VideoPriceSnapshot{Model: "exact-video", BillingMode: service.BillingModePerRequest, UnitPrice: 1.3, RateMultiplier: 1, DurationSeconds: 30}}
 	raw, err := json.Marshal(pending)
 	require.NoError(t, err)
-	mock.ExpectQuery(`(?s)SELECT .* FROM video_tasks.*WHERE upstream_task_id=\$1 AND user_id=\$2 AND api_key_id=\$3`).
+	mock.ExpectQuery(`(?s)SELECT .* FROM video_tasks.*WHERE \(upstream_task_id=\$1 OR id=\$1\) AND user_id=\$2 AND api_key_id=\$3`).
 		WithArgs("upstream-task", int64(1), int64(6)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "upstream_task_id", "user_id", "api_key_id", "group_id", "account_id", "subscription_id", "pending", "status", "attempts", "created_at"}).
-			AddRow("local-task", "upstream-task", 1, 6, 25, 205, nil, raw, "pending", 2, time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "upstream_task_id", "user_id", "api_key_id", "group_id", "account_id", "subscription_id", "pending", "status", "attempts", "created_at", "billing_state"}).
+			AddRow("local-task", "upstream-task", 1, 6, 25, 205, nil, raw, "pending", 2, time.Now(), "legacy"))
 	task, err := repo.FindVideoTask(context.Background(), "upstream-task", 1, 6)
 	require.NoError(t, err)
 	require.Equal(t, int64(205), task.AccountID)
 	require.Equal(t, 30, task.Pending.PriceSnapshot.DurationSeconds)
 	require.Equal(t, 1.3, task.Pending.PriceSnapshot.UnitPrice)
-	mock.ExpectQuery(`(?s)SELECT .* FROM video_tasks.*WHERE upstream_task_id=\$1 AND user_id=\$2 AND api_key_id=\$3`).
+	mock.ExpectQuery(`(?s)SELECT .* FROM video_tasks.*WHERE \(upstream_task_id=\$1 OR id=\$1\) AND user_id=\$2 AND api_key_id=\$3`).
 		WithArgs("upstream-task", int64(2), int64(6)).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	other, err := repo.FindVideoTask(context.Background(), "upstream-task", 2, 6)
 	require.NoError(t, err)

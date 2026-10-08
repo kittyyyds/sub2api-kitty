@@ -19,6 +19,7 @@ func applyVideoUsageBilling(ctx context.Context, log *UsageLog, p *postUsageBill
 	if cmd == nil || cmd.RequestID == "" || deps == nil || repo == nil {
 		return errors.New("atomic video usage billing is unavailable")
 	}
+	cmd.PrepaidVideoTaskID = p.PrepaidVideoTaskID
 	billingCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
 	result, err := repo.ApplyVideoUsage(billingCtx, cmd, log)

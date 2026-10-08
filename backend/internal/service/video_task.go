@@ -18,16 +18,22 @@ import (
 // A task keeps the customer price agreed at submission, independent of later
 // edits to group prices, account mappings or the requested output duration.
 type VideoPriceSnapshot struct {
-	Model          string      `json:"model"`
-	BillingMode    BillingMode `json:"billing_mode"`
-	UnitPrice      float64     `json:"unit_price"`
-	RateMultiplier float64     `json:"rate_multiplier"`
+	PrepaidTaskID      string      `json:"prepaid_task_id,omitempty"`
+	ReferencePerSecond float64     `json:"reference_per_second,omitempty"`
+	ReferenceSeconds   float64     `json:"reference_seconds,omitempty"`
+	Model              string      `json:"model"`
+	BillingMode        BillingMode `json:"billing_mode"`
+	UnitPrice          float64     `json:"unit_price"`
+	RateMultiplier     float64     `json:"rate_multiplier"`
 	// Missing on older tasks, which must retain their agreed multiplier.
 	FinalUnitPrice  bool `json:"final_unit_price,omitempty"`
 	DurationSeconds int  `json:"duration_seconds"`
 }
 
 type VideoTask struct {
+	BillingState                         string
+	IdempotencyKey, RequestHash          string
+	PreparedBody                         []byte
 	ID                                   string
 	UpstreamTaskID                       string
 	UserID, APIKeyID, GroupID, AccountID int64
@@ -75,6 +81,9 @@ func (s *OpenAIGatewayService) BeginVideoTask(ctx context.Context, apiKey *APIKe
 	price, err := s.ResolveVideoGroupPricing(ctx, apiKey, model)
 	if err != nil {
 		return nil, err
+	}
+	if price.Video != nil {
+		return s.beginUnifiedVideoTask(ctx, apiKey, account, subscription, model, body, contentType, price)
 	}
 	prepared, ct, err := prepareGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
 	if err != nil {
@@ -158,7 +167,7 @@ func (s *OpenAIGatewayService) acceptVideoTask(ctx context.Context, result *Open
 	task.Pending.VideoProvider = result.VideoProvider
 	task.Pending.VideoResolution = result.VideoResolution
 	task.Pending.VideoDurationSeconds = result.VideoDurationSeconds
-	if task.Pending.PriceSnapshot != nil {
+	if task.Pending.PriceSnapshot != nil && !task.Pending.Unified {
 		task.Pending.PriceSnapshot.DurationSeconds = result.VideoDurationSeconds
 	}
 	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
@@ -193,6 +202,9 @@ func (s *OpenAIGatewayService) SettleVideoTask(ctx context.Context, task *VideoT
 	}
 	repo := s.videoTaskRepository()
 	if task.Status == "failed" {
+		if task.Pending.Unified {
+			return errors.New("该任务已失败或退款，不能交付成功结果")
+		}
 		return nil
 	}
 	billed, err := repo.VideoTaskWasBilled(ctx, StableGrokVideoBillingRequestID(task.UpstreamTaskID), task.APIKeyID)
@@ -311,6 +323,14 @@ func (s *OpenAIGatewayService) runVideoTaskCycle(ctx context.Context, keys *APIK
 		return
 	}
 	defer release()
+	// Settle admitted customer tasks before spending time fetching public prices.
+	defer func() {
+		if s.settingService != nil && ctx.Err() == nil {
+			syncCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			_, _ = s.SyncVideoPrices(syncCtx, false)
+		}
+	}()
 	tasks, err := s.videoTaskRepository().LeaseVideoTasks(ctx, 5)
 	if err != nil {
 		slog.Warn("video task recovery scan failed")
@@ -344,6 +364,13 @@ func (s *OpenAIGatewayService) StopVideoTaskWorker() {
 }
 
 func (s *OpenAIGatewayService) pollVideoTask(ctx context.Context, task *VideoTask, keys *APIKeyService) error {
+	if task.Pending.Unified {
+		if task.BillingState == "refund_pending" {
+			return s.RejectVideoTask(ctx, task)
+		}
+		_, err := s.UnifiedVideoStatus(ctx, task, keys)
+		return err
+	}
 	repo := s.videoTaskRepository()
 	billed, err := repo.VideoTaskWasBilled(ctx, StableGrokVideoBillingRequestID(task.UpstreamTaskID), task.APIKeyID)
 	if err != nil {

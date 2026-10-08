@@ -5,17 +5,22 @@ import "strings"
 // CanvasModelCapability describes only contracts implemented by this gateway.
 // A model appearing in a supplier's catalog is not proof of these capabilities.
 type CanvasModelCapability struct {
-	MediaType       string            `json:"media_type"`
-	Supported       bool              `json:"supported"`
-	Provider        string            `json:"provider,omitempty"`
-	Family          string            `json:"family,omitempty"`
-	Seconds         *CanvasCountRange `json:"seconds,omitempty"`
-	Resolutions     []string          `json:"resolutions,omitempty"`
-	AspectRatios    []string          `json:"aspect_ratios,omitempty"`
-	ReferenceImages *CanvasCountRange `json:"reference_images,omitempty"`
-	ReferenceAudios *CanvasCountRange `json:"reference_audios,omitempty"`
-	InputTransport  []string          `json:"input_transport,omitempty"`
-	Operations      []string          `json:"operations"`
+	SecondOptions       []int             `json:"second_options,omitempty"`
+	ReferenceVideos     *CanvasCountRange `json:"reference_videos,omitempty"`
+	MaxReferenceSeconds float64           `json:"max_reference_seconds,omitempty"`
+	Face                bool              `json:"face,omitempty"`
+	GenerateAudio       bool              `json:"generate_audio,omitempty"`
+	MediaType           string            `json:"media_type"`
+	Supported           bool              `json:"supported"`
+	Provider            string            `json:"provider,omitempty"`
+	Family              string            `json:"family,omitempty"`
+	Seconds             *CanvasCountRange `json:"seconds,omitempty"`
+	Resolutions         []string          `json:"resolutions,omitempty"`
+	AspectRatios        []string          `json:"aspect_ratios,omitempty"`
+	ReferenceImages     *CanvasCountRange `json:"reference_images,omitempty"`
+	ReferenceAudios     *CanvasCountRange `json:"reference_audios,omitempty"`
+	InputTransport      []string          `json:"input_transport,omitempty"`
+	Operations          []string          `json:"operations"`
 }
 
 type CanvasCountRange struct {

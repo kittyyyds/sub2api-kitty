@@ -32,8 +32,9 @@ func RegisterGatewayRoutes(
 	cfg *config.Config,
 ) {
 	// Temporary references are local file uploads, never model dispatches.
-	videoReferences := handler.NewVideoReferenceHandler()
+	videoReferences := handler.NewVideoReferenceHandler(h.OpenAIGateway)
 	r.POST("/v1/video-references", gin.HandlerFunc(apiKeyAuth), videoReferences.Upload)
+	r.POST("/v1/videos/quote", gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.VideoQuote)
 	r.GET("/media/video-references/:id", videoReferences.Content)
 	r.HEAD("/media/video-references/:id", videoReferences.Content)
 	// BPS fetches these capability URLs without the client's API key. There is

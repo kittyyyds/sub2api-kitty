@@ -548,6 +548,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		Platform:                   quotaPlatform,
 	}
 	if isVideoUsage {
+		if result.VideoPriceSnapshot != nil {
+			billingParams.PrepaidVideoTaskID = result.VideoPriceSnapshot.PrepaidTaskID
+		}
 		if atomicRepo, ok := s.usageBillingRepo.(VideoUsageBillingRepository); ok {
 			return applyVideoUsageBilling(ctx, usageLog, billingParams, s.billingDeps(), atomicRepo)
 		}

@@ -34,7 +34,7 @@ func referenceTimeout(value time.Duration) time.Duration {
 	return 90 * time.Second
 }
 
-func NewVideoReferenceHandler() *VideoReferenceHandler {
+func NewVideoReferenceHandler(gateways ...*OpenAIGatewayHandler) *VideoReferenceHandler {
 	h := &VideoReferenceHandler{uploads: make(chan struct{}, 4), downloads: make(chan struct{}, 16)}
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("VIDEO_REFERENCE_PUBLIC_BASE_URL")), "/")
 	u, err := url.Parse(base)
@@ -48,11 +48,27 @@ func NewVideoReferenceHandler() *VideoReferenceHandler {
 	if !filepath.IsAbs(dir) {
 		return h
 	}
-	h.store, err = videoreference.New(dir)
+	var providers []func() (videoreference.Policy, error)
+	if len(gateways) > 0 && gateways[0] != nil {
+		gateway := gateways[0].gatewayService
+		providers = append(providers, func() (videoreference.Policy, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			cfg, err := gateway.VideoRuntimeSettings(ctx)
+			if err != nil {
+				return videoreference.Policy{}, err
+			}
+			holds, err := gateway.VideoReferenceHolds(ctx)
+			_, protectLegacy := holds["legacy-untracked"]
+			return videoreference.Policy{Retention: time.Duration(cfg.ReferenceRetentionHours) * time.Hour, UserBytes: int64(cfg.ReferenceUserMB) << 20, TotalBytes: int64(cfg.ReferenceTotalMB) << 20, Holds: holds, ProtectAll: protectLegacy}, err
+		})
+	}
+	h.store, err = videoreference.New(dir, providers...)
 	if err != nil {
 		return h
 	}
 	h.baseURL = base
+	service.RegisterVideoReferenceStore(h.store, base)
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
@@ -79,7 +95,7 @@ func (h *VideoReferenceHandler) Upload(c *gin.Context) {
 		return
 	}
 	if h.store == nil {
-		c.JSON(503, gin.H{"error": gin.H{"message": "临时素材上传尚未启用，请使用公开图片或音频链接"}})
+		c.JSON(503, gin.H{"error": gin.H{"message": "临时素材上传尚未启用，请联系管理员配置"}})
 		return
 	}
 	select {
@@ -107,18 +123,18 @@ func (h *VideoReferenceHandler) Upload(c *gin.Context) {
 	}
 	part, err := reader.NextPart()
 	if err != nil || part.FormName() != "file" || part.FileName() == "" {
-		c.JSON(400, gin.H{"error": gin.H{"message": "每次请选择一个图片或音频文件"}})
+		c.JSON(400, gin.H{"error": gin.H{"message": "每次请选择一个图片、音频或参考视频文件"}})
 		return
 	}
 	entry, err := h.store.Put(key.UserID, part)
 	if err != nil {
 		status, msg := 400, "素材上传失败，请检查文件后重试"
 		if errors.Is(err, videoreference.ErrFormat) {
-			msg = "支持 PNG/JPEG/GIF/WebP 图片及 MP3/WAV/OGG/FLAC/M4A 音频"
+			msg = "支持 PNG/JPEG/GIF/WebP 图片、MP3/WAV/OGG/FLAC/M4A 音频及 MP4 参考视频"
 		}
 		var maxErr *http.MaxBytesError
 		if errors.Is(err, videoreference.ErrLimit) || errors.As(err, &maxErr) {
-			status, msg = 413, "单个文件最多 25MB，每人临时素材最多 100MB；请稍后重试或使用公开链接"
+			status, msg = 413, "单个文件最多50MB，或已达到临时素材容量限制；请稍后重试"
 		}
 		c.JSON(status, gin.H{"error": gin.H{"message": msg}})
 		return

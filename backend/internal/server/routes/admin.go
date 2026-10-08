@@ -38,6 +38,10 @@ func RegisterAdminRoutes(
 	admin.Use(gin.HandlerFunc(auditLog))
 	admin.Use(middleware.UserHierarchyGuard(userService))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
+	admin.GET("/video-upstream", h.OpenAIGateway.VideoUpstreamSettings)
+	admin.PUT("/video-upstream", h.OpenAIGateway.UpdateVideoUpstreamSettings)
+	admin.POST("/video-upstream/sync", h.OpenAIGateway.SyncVideoUpstreamPrices)
+	admin.POST("/video-upstream/import", h.OpenAIGateway.ImportVideoUpstreamModels)
 	admin.GET("/video-tasks", h.OpenAIGateway.ListAdminVideoTasks)
 	admin.GET("/video-tasks/stats", h.OpenAIGateway.AdminVideoTaskStats)
 	{

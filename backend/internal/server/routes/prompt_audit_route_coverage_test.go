@@ -53,6 +53,7 @@ func TestEveryGatewayPOSTRouteIsClassifiedForPromptAuditCoverage(t *testing.T) {
 	}
 	excluded := map[string]string{
 		"/v1/video-references":       "reference media upload only; generation prompts are checked by the video request handler",
+		"/v1/videos/quote":           "video pricing quote only; it does not execute a model request",
 		"/messages/count_tokens":     "tokenization only; it does not execute a model request",
 		"/images/batches/:id/cancel": "control-plane cancellation with no user prompt",
 		"/stt":                       "speech transcription is not a text-generation prompt",
