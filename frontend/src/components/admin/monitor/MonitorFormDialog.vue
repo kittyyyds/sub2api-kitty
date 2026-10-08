@@ -107,9 +107,22 @@
       </div>
 
       <div v-if="usesProbePart">
-        <label for="monitor-request-path" class="input-label">{{ t('admin.channelMonitor.form.requestPath') }}</label>
-        <input id="monitor-request-path" v-model="form.request_path" data-testid="monitor-request-path" type="text" maxlength="500" class="input" placeholder="/v1/chat/completions" />
-        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.requestPathHint') }}</p>
+        <label for="monitor-request-path-preset" class="input-label">{{ t('admin.channelMonitor.form.requestPath') }}</label>
+        <Select
+          id="monitor-request-path-preset"
+          v-model="requestPathSelection"
+          data-testid="monitor-request-path-preset"
+          :aria-label="t('admin.channelMonitor.form.requestPath')"
+          aria-describedby="monitor-request-path-hint"
+          :options="requestPathOptions"
+          :searchable="false"
+        />
+        <p id="monitor-request-path-hint" class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.requestPathHint') }}</p>
+        <div v-if="requestPathSelection === CUSTOM_REQUEST_PATH" class="mt-3">
+          <label for="monitor-request-path" class="input-label">{{ t('admin.channelMonitor.form.requestPathCustom') }}</label>
+          <input id="monitor-request-path" v-model="form.request_path" data-testid="monitor-request-path" type="text" maxlength="500" class="input" placeholder="/v1/chat/completions" aria-describedby="monitor-request-path-custom-hint" @input="forceCustomPath = true" />
+          <p id="monitor-request-path-custom-hint" class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.requestPathCustomHint') }}</p>
+        </div>
       </div>
 
       <div v-if="usesProbePart">
@@ -370,6 +383,48 @@ const form = reactive<MonitorForm>({
 // quota / quota_probe 需要关联账号；probe / quota_probe 需要探活字段。
 const usesQuotaMode = computed(() => form.check_mode !== CHECK_MODE_PROBE)
 const usesProbePart = computed(() => form.check_mode !== CHECK_MODE_QUOTA)
+
+const CUSTOM_REQUEST_PATH = '__custom__'
+const forceCustomPath = ref(false)
+
+// Paths only change the URL; offer presets matching the adapter's request body.
+const requestPathPresets = computed<string[]>(() => {
+  if (form.provider === PROVIDER_GEMINI || form.provider === PROVIDER_ANTIGRAVITY || form.provider === PROVIDER_OPENCODE_GO) return []
+  if (form.provider === PROVIDER_ANTHROPIC) return ['/v1/messages', '/messages']
+  if (form.provider === PROVIDER_OPENAI && form.api_mode === API_MODE_RESPONSES) return ['/v1/responses', '/responses']
+  const paths = ['/v1/chat/completions', '/chat/completions']
+  if (form.provider === PROVIDER_ZHIPU) paths.push('/api/paas/v4/chat/completions')
+  return paths
+})
+
+const defaultRequestPath = computed(() => {
+  if (form.provider === PROVIDER_GEMINI) return '/v1beta/models/{model}:generateContent'
+  if (form.provider === PROVIDER_ZHIPU) return '/api/paas/v4/chat/completions'
+  return requestPathPresets.value[0] || ''
+})
+
+const requestPathOptions = computed(() => [
+  {
+    value: '',
+    label: defaultRequestPath.value
+      ? `${t('admin.channelMonitor.form.requestPathDefault')} (${defaultRequestPath.value})`
+      : t('admin.channelMonitor.form.requestPathDefault'),
+  },
+  ...requestPathPresets.value.map(path => ({ value: path, label: path })),
+  { value: CUSTOM_REQUEST_PATH, label: t('admin.channelMonitor.form.requestPathCustom') },
+])
+
+const requestPathSelection = computed<string>({
+  get: () => {
+    if (forceCustomPath.value) return CUSTOM_REQUEST_PATH
+    if (!form.request_path) return ''
+    return requestPathPresets.value.includes(form.request_path) ? form.request_path : CUSTOM_REQUEST_PATH
+  },
+  set: (value) => {
+    forceCustomPath.value = value === CUSTOM_REQUEST_PATH
+    if (!forceCustomPath.value) form.request_path = value
+  },
+})
 
 // jitter 上限与后端校验一致：interval - jitter 不得低于最小检测间隔 15 秒。
 const maxJitterSeconds = computed<number>(() => Math.max(0, (form.interval_seconds || 0) - 15))
@@ -733,6 +788,7 @@ watch(() => form.api_mode, () => {
 
 function resetForm() {
   suppressFormWatchers = true
+  forceCustomPath.value = false
   form.name = ''
   form.provider = PROVIDER_ANTHROPIC
   form.api_mode = API_MODE_CHAT_COMPLETIONS
@@ -758,6 +814,7 @@ function resetForm() {
 
 function loadFromMonitor(m: ChannelMonitor) {
   suppressFormWatchers = true
+  forceCustomPath.value = false
   form.name = m.name
   form.provider = m.provider
   form.api_mode = normalizeAPIMode(m.api_mode)
