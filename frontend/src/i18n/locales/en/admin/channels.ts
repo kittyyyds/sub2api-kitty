@@ -621,6 +621,8 @@ export default {
         apiModeResponsesHint: 'Use /v1/responses with default instructions + input; best for self-check/Codex paths.',
         endpoint: 'Endpoint',
         endpointPlaceholder: 'https://api.example.com',
+        requestPath: 'Custom API path (optional)',
+        requestPathHint: 'Leave empty for the provider default. Enter a path starting with /, e.g. /v1/chat/completions. Endpoint path prefixes are retained and overlapping API prefixes are merged. Only the probe path changes, not the protocol. Full URLs, queries and fragments are not supported.',
         useCurrentDomain: 'Use current service',
         apiKey: 'API Key',
         apiKeyPlaceholder: 'Enter API Key',

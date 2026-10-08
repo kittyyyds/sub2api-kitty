@@ -170,6 +170,34 @@ describe('MonitorFormDialog linked account selector', () => {
     monitorUpdate.mockReset().mockResolvedValue({})
   })
 
+  it('edits and clears a custom path without replacing the provider or saved key', async () => {
+    const wrapper = mountDialog(makeMonitor({ provider: 'zhipu', request_path: '/v1/chat/completions' }))
+    await flushPromises()
+    const input = wrapper.get<HTMLInputElement>('[data-testid="monitor-request-path"]')
+    expect(input.element.value).toBe('/v1/chat/completions')
+    await input.setValue(' /relay/v1/chat/completions ')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenLastCalledWith(42, expect.objectContaining({ provider: 'zhipu', request_path: '/relay/v1/chat/completions' }))
+    expect(monitorUpdate.mock.calls[0]![1]).not.toHaveProperty('api_key')
+    await input.setValue('')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenLastCalledWith(42, expect.objectContaining({ request_path: '', provider: 'zhipu' }))
+  })
+
+  it('opens legacy monitors with the default path and resets it for a new monitor', async () => {
+    const wrapper = mountDialog(makeMonitor())
+    await flushPromises()
+    const input = wrapper.get<HTMLInputElement>('[data-testid="monitor-request-path"]')
+    expect(input.element.value).toBe('')
+    await input.setValue('/v1/chat/completions')
+    await wrapper.setProps({ monitor: null })
+    expect(input.element.value).toBe('')
+    await wrapper.get('[data-testid="monitor-check-mode-quota"]').trigger('click')
+    expect(wrapper.find('[data-testid="monitor-request-path"]').exists()).toBe(false)
+  })
+
   it('loads the first page of provider accounts when quota mode is enabled', async () => {
     accountsList.mockResolvedValue({ items: [{ id: 1, name: 'a', platform: 'anthropic' }] })
     const wrapper = mountDialog()

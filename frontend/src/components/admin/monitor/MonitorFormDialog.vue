@@ -107,6 +107,12 @@
       </div>
 
       <div v-if="usesProbePart">
+        <label for="monitor-request-path" class="input-label">{{ t('admin.channelMonitor.form.requestPath') }}</label>
+        <input id="monitor-request-path" v-model="form.request_path" data-testid="monitor-request-path" type="text" maxlength="500" class="input" placeholder="/v1/chat/completions" />
+        <p class="mt-1 text-xs text-gray-400">{{ t('admin.channelMonitor.form.requestPathHint') }}</p>
+      </div>
+
+      <div v-if="usesProbePart">
         <label class="input-label">
           {{ t('admin.channelMonitor.form.apiKey') }}<span v-if="!editing" class="text-red-500"> *</span>
         </label>
@@ -325,6 +331,7 @@ interface MonitorForm {
   check_mode: CheckMode
   account_id: number | null
   endpoint: string
+  request_path: string
   api_key: string
   primary_model: string
   extra_models: string[]
@@ -346,6 +353,7 @@ const form = reactive<MonitorForm>({
   check_mode: CHECK_MODE_PROBE,
   account_id: null,
   endpoint: '',
+  request_path: '',
   api_key: '',
   primary_model: '',
   extra_models: [],
@@ -733,6 +741,7 @@ function resetForm() {
   pinnedAccount.value = null
   accountHydrationFailed.value = false
   form.endpoint = ''
+  form.request_path = ''
   form.api_key = ''
   form.primary_model = ''
   form.extra_models = []
@@ -755,6 +764,7 @@ function loadFromMonitor(m: ChannelMonitor) {
   form.check_mode = m.check_mode || CHECK_MODE_PROBE
   form.account_id = m.account_id ?? null
   form.endpoint = m.endpoint
+  form.request_path = m.request_path || ''
   form.api_key = ''
   form.primary_model = m.primary_model
   form.extra_models = [...(m.extra_models || [])]
@@ -823,6 +833,7 @@ function buildPayload(): CreateParams {
     check_mode: form.check_mode,
     account_id: usesQuotaMode.value ? form.account_id : null,
     endpoint: usesProbePart.value ? form.endpoint.trim() : '',
+    request_path: usesProbePart.value ? form.request_path.trim() : '',
     api_key: usesProbePart.value ? form.api_key.trim() : '',
     primary_model: usesProbePart.value ? form.primary_model.trim() : 'quota',
     extra_models: usesProbePart.value ? form.extra_models : [],

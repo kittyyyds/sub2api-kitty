@@ -15028,6 +15028,7 @@ type ChannelMonitorMutation struct {
 	addaccount_id           *int64
 	api_mode                *string
 	endpoint                *string
+	request_path            *string
 	api_key_encrypted       *string
 	primary_model           *string
 	extra_models            *[]string
@@ -15476,6 +15477,42 @@ func (m *ChannelMonitorMutation) OldEndpoint(ctx context.Context) (v string, err
 // ResetEndpoint resets all changes to the "endpoint" field.
 func (m *ChannelMonitorMutation) ResetEndpoint() {
 	m.endpoint = nil
+}
+
+// SetRequestPath sets the "request_path" field.
+func (m *ChannelMonitorMutation) SetRequestPath(s string) {
+	m.request_path = &s
+}
+
+// RequestPath returns the value of the "request_path" field in the mutation.
+func (m *ChannelMonitorMutation) RequestPath() (r string, exists bool) {
+	v := m.request_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestPath returns the old "request_path" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldRequestPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestPath: %w", err)
+	}
+	return oldValue.RequestPath, nil
+}
+
+// ResetRequestPath resets all changes to the "request_path" field.
+func (m *ChannelMonitorMutation) ResetRequestPath() {
+	m.request_path = nil
 }
 
 // SetAPIKeyEncrypted sets the "api_key_encrypted" field.
@@ -16255,7 +16292,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -16279,6 +16316,9 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	}
 	if m.endpoint != nil {
 		fields = append(fields, channelmonitor.FieldEndpoint)
+	}
+	if m.request_path != nil {
+		fields = append(fields, channelmonitor.FieldRequestPath)
 	}
 	if m.api_key_encrypted != nil {
 		fields = append(fields, channelmonitor.FieldAPIKeyEncrypted)
@@ -16343,6 +16383,8 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.APIMode()
 	case channelmonitor.FieldEndpoint:
 		return m.Endpoint()
+	case channelmonitor.FieldRequestPath:
+		return m.RequestPath()
 	case channelmonitor.FieldAPIKeyEncrypted:
 		return m.APIKeyEncrypted()
 	case channelmonitor.FieldPrimaryModel:
@@ -16394,6 +16436,8 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldAPIMode(ctx)
 	case channelmonitor.FieldEndpoint:
 		return m.OldEndpoint(ctx)
+	case channelmonitor.FieldRequestPath:
+		return m.OldRequestPath(ctx)
 	case channelmonitor.FieldAPIKeyEncrypted:
 		return m.OldAPIKeyEncrypted(ctx)
 	case channelmonitor.FieldPrimaryModel:
@@ -16484,6 +16528,13 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEndpoint(v)
+		return nil
+	case channelmonitor.FieldRequestPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestPath(v)
 		return nil
 	case channelmonitor.FieldAPIKeyEncrypted:
 		v, ok := value.(string)
@@ -16732,6 +16783,9 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldEndpoint:
 		m.ResetEndpoint()
+		return nil
+	case channelmonitor.FieldRequestPath:
+		m.ResetRequestPath()
 		return nil
 	case channelmonitor.FieldAPIKeyEncrypted:
 		m.ResetAPIKeyEncrypted()

@@ -41,6 +41,8 @@ func newSSRFSafeHTTPClient(timeout time.Duration) *http.Client {
 // CheckOptions 承载一次检测的自定义入参。
 // 所有字段都是可选（零值即等价于"用默认行为"）。
 type CheckOptions struct {
+	// RequestPath overrides only the probe path, preserving the adapter protocol.
+	RequestPath string
 	// APIMode 仅对 OpenAI provider 生效；空串等同 chat_completions。
 	APIMode string
 	// ExtraHeaders 用户自定义 HTTP 头（merge 到 adapter 默认 headers，用户优先）。
@@ -297,7 +299,16 @@ func callProvider(ctx context.Context, provider, endpoint, apiKey, model, prompt
 		return "", "", 0, err
 	}
 	headers := mergeHeaders(adapter.buildHeaders(apiKey), opts)
-	full := joinURL(endpoint, adapter.buildPath(model))
+	path := adapter.buildPath(model)
+	if opts != nil {
+		if err := validateMonitorRequestPath(opts.RequestPath); err != nil {
+			return "", "", 0, err
+		}
+		if custom := strings.TrimSpace(opts.RequestPath); custom != "" {
+			path = custom
+		}
+	}
+	full := joinURL(endpoint, path)
 	respBytes, status, err := postRawJSON(ctx, full, body, headers)
 	if err != nil {
 		return "", "", status, err

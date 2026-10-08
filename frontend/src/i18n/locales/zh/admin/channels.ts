@@ -621,6 +621,8 @@ export default {
         apiModeResponsesHint: '使用 /v1/responses，默认带 instructions + input；适合本站自检/Codex。',
         endpoint: '上游地址',
         endpointPlaceholder: 'https://api.example.com',
+        requestPath: '自定义接口路径（可选）',
+        requestPathHint: '留空使用供应商默认路径；填写以 / 开头的路径（如 /v1/chat/completions）。保留地址中的路径前缀，重复的接口前缀会自动合并。仅修改探测路径，不改变请求协议；不支持完整网址、查询参数或片段。',
         useCurrentDomain: '使用当前服务',
         apiKey: 'API Key',
         apiKeyPlaceholder: '请输入 API Key',
