@@ -121,7 +121,7 @@
   "backup": {
     "server_postgres_and_redis_verified": true,
     "source_completed_at": "2026-10-09T02:36:40.487296+00:00",
-    "offsite_all_files_sha256_verified": false
+    "offsite_all_files_sha256_verified": true
   },
   "evidence_sha256": {
     "server-acceptance-v10.json": "fb7c7930b3441b5f6cf333dd084c14671be450becd3e3cac74343517a0d636d4",
