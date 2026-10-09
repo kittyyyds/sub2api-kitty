@@ -145,6 +145,9 @@ func (h *CanvasHandler) Models(c *gin.Context) {
 	items := make([]gin.H, 0, len(models))
 	for _, id := range models {
 		capability := service.CanvasCapabilities(id, platform)
+		if imageCapability, ok := service.ImageGroupCapability(key.Group, id); ok {
+			capability = imageCapability
+		}
 		if platform == service.PlatformVideo {
 			capability = service.VideoGroupCapability(key.Group, id)
 		}

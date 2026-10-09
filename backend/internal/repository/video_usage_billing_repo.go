@@ -20,6 +20,17 @@ func (r *usageBillingRepository) ApplyVideoUsage(ctx context.Context, cmd *servi
 		log.APIKeyID != cmd.APIKeyID || log.UserID != cmd.UserID || log.AccountID != cmd.AccountID {
 		return nil, errors.New("invalid atomic video usage billing input")
 	}
+	return r.applyAtomicMediaUsage(ctx, cmd, log)
+}
+
+func (r *usageBillingRepository) ApplyImageUsage(ctx context.Context, cmd *service.UsageBillingCommand, log *service.UsageLog) (*service.UsageBillingApplyResult, error) {
+	if r == nil || r.db == nil || cmd == nil || log == nil || log.ImageCount != 1 || log.VideoCount != 0 || !strings.HasPrefix(log.RequestID, "simg_") || log.RequestID != cmd.RequestID || log.APIKeyID != cmd.APIKeyID || log.UserID != cmd.UserID || log.AccountID != cmd.AccountID || cmd.PrepaidVideoTaskID != "" {
+		return nil, errors.New("invalid atomic image usage billing input")
+	}
+	return r.applyAtomicMediaUsage(ctx, cmd, log)
+}
+
+func (r *usageBillingRepository) applyAtomicMediaUsage(ctx context.Context, cmd *service.UsageBillingCommand, log *service.UsageLog) (*service.UsageBillingApplyResult, error) {
 	cmd.Normalize()
 	log.ActualCost = service.QuantizeUsageBillingAmount(log.ActualCost)
 	log.TotalCost = service.QuantizeUsageBillingAmount(log.TotalCost)

@@ -164,6 +164,24 @@ func (h *AsyncImageHandler) checkSecurityAuditBeforeSubmit(c *gin.Context, apiKe
 }
 
 func (h *AsyncImageHandler) Get(c *gin.Context) {
+	if strings.HasPrefix(c.Param("task_id"), "simg_") && h.openAI != nil && h.openAI.gatewayService != nil {
+		key, ok := middleware2.GetAPIKeyFromContext(c)
+		if !ok || key == nil {
+			imageTaskError(c, service.ErrImageTaskForbidden)
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+		defer cancel()
+		task, err := h.openAI.gatewayService.GetSuanliImageTask(ctx, c.Param("task_id"), service.ImageTaskOwner{UserID: key.UserID, APIKeyID: key.ID}, h.openAI.apiKeyService)
+		if err != nil {
+			imageTaskError(c, err)
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.Header("Retry-After", "3")
+		c.JSON(http.StatusOK, task)
+		return
+	}
 	// Polling deliberately does not require the feature to be enabled, only that
 	// the task store is reachable. Turning the switch off in the admin UI must not
 	// strand tasks that were already accepted — their results are still in Redis

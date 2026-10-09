@@ -357,6 +357,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier, _ := account.EffectiveBillingRateMultiplierAt(time.Now())
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
+	if result.SuanliImageTaskID != "" {
+		requestID = result.SuanliImageTaskID
+	}
 	if result.OpenAIWSMode {
 		if upstreamRequestID := strings.TrimSpace(result.RequestID); upstreamRequestID != "" {
 			requestID = upstreamRequestID
@@ -547,6 +550,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		APIKeyService:              input.APIKeyService,
 		Platform:                   quotaPlatform,
 	}
+	if result.SuanliImageTaskID != "" {
+		billingParams.RequestPayloadHash = HashUsageRequestPayload([]byte(result.SuanliImageTaskID))
+		if atomicRepo, ok := s.usageBillingRepo.(ImageUsageBillingRepository); ok {
+			return applyVideoUsageBilling(ctx, usageLog, billingParams, s.billingDeps(), imageAtomicBillingAdapter{atomicRepo})
+		}
+		return errors.New("atomic image usage billing is unavailable")
+	}
 	if isVideoUsage {
 		if result.VideoPriceSnapshot != nil {
 			billingParams.PrepaidVideoTaskID = result.VideoPriceSnapshot.PrepaidTaskID
@@ -685,6 +695,9 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	}
 
 	if result != nil && result.ImageCount > 0 {
+		if result.SuanliImageUnitPrice != nil {
+			return s.calculateOpenAIImageCost(ctx, billingModel, requestedModel, apiKey, result, imageMultiplier), nil
+		}
 		sizeTier := NormalizeImageBillingTierOrDefault(result.ImageSize)
 		apiKey = s.apiKeyWithFreshImageModelPricing(ctx, apiKey, sizeTier,
 			requestedModel,
@@ -847,6 +860,10 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	result *OpenAIForwardResult,
 	multiplier float64,
 ) *CostBreakdown {
+	if result.SuanliImageUnitPrice != nil && result.ImageCount > 0 {
+		cost := *result.SuanliImageUnitPrice
+		return &CostBreakdown{TotalCost: cost, ActualCost: cost, BillingMode: string(BillingModeImage), FinalPriceApplied: true}
+	}
 	sizeTier := NormalizeImageBillingTierOrDefault(result.ImageSize)
 	apiKey = s.apiKeyWithFreshImageModelPricing(ctx, apiKey, sizeTier,
 		requestedModel,

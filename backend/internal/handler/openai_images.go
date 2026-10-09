@@ -122,6 +122,12 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	}
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	if parsed.Suanli {
+		parsed.SuanliIPAddress, parsed.SuanliUserAgent = ip.GetClientIP(c), c.GetHeader("User-Agent")
+		if subscription != nil {
+			parsed.SuanliSubscriptionID = &subscription.ID
+		}
+	}
 
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	routingStart := time.Now()
@@ -145,7 +151,12 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	}
 
 	// 余额模式在途预留（与计费同口径估算；计费任务扣减余额缓存后才释放）。
-	inflightDone, inflightErr := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, service.InflightEstimateRequest{Model: routingModel, BodyBytes: len(body), Kind: service.InflightEstimateImage, Units: parsed.N})
+	inflightDone, inflightErr := func() (func(), error) {
+		if parsed.Suanli {
+			return func() {}, nil
+		} // durable task owns the exact-price reservation
+		return reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, service.InflightEstimateRequest{Model: routingModel, BodyBytes: len(body), Kind: service.InflightEstimateImage, Units: parsed.N})
+	}()
 	if inflightErr != nil {
 		status, code, message, retryAfter := billingErrorDetails(inflightErr)
 		if retryAfter > 0 {
@@ -281,6 +292,29 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			return h.gatewayService.ForwardImages(rpmAdmission.forwardContext(requestCtx, account), c, account, body, parsed, channelMapping.MappedModel)
 		}()
 		if h.handleOpenAIRPMForwardError(c, err, streamStarted, false) {
+			return
+		}
+		if err == nil && result != nil && result.SuanliImageTaskID != "" {
+			billingCtx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 20*time.Second)
+			defer cancel()
+			task, e := h.gatewayService.GetSuanliImageTask(billingCtx, result.SuanliImageTaskID, service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID}, h.apiKeyService)
+			if e != nil {
+				h.errorResponse(c, 503, "api_error", "图片结果待结算，请用相同 Idempotency-Key 重试查询，勿创建新任务")
+				return
+			}
+			c.Header("Cache-Control", "no-store")
+			c.Header("X-Image-Task-ID", task.ID)
+			if task.Status == service.ImageTaskStatusCompleted && len(task.Result) > 0 {
+				c.Data(http.StatusOK, "application/json", task.Result)
+				return
+			}
+			if task.Status == service.ImageTaskStatusFailed || task.Status == "needs_review" {
+				c.JSON(http.StatusConflict, gin.H{"error": task.Error, "task_id": task.ID})
+				return
+			}
+			c.Header("Location", "/v1/images/tasks/"+task.ID)
+			c.Header("Retry-After", "3")
+			c.JSON(http.StatusAccepted, task)
 			return
 		}
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()

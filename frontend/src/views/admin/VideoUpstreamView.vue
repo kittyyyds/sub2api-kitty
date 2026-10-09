@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import ImageUpstreamPanel from './ImageUpstreamPanel.vue'
 import { videoUpstreamAPI, type VideoRuntimeSettings, type VideoCatalog } from '@/api/admin/videoUpstream'
 import { list as listGroups } from '@/api/admin/groups'
 
 const settings = ref<VideoRuntimeSettings>()
+const section = ref<'video' | 'image'>('video')
 const catalog = ref<VideoCatalog>()
 const groups = ref<{ id: number; name: string }[]>([])
 const group = ref<number>()
@@ -39,7 +41,10 @@ onMounted(() => perform(load))
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <div><h1 class="text-2xl font-semibold text-gray-900 dark:text-white">视频上游与定价</h1><p class="mt-2 text-sm text-gray-500">算力 AI · 新任务锁价 · 提交预扣、成功结算、明确失败退款 · 成片从上游直接下载</p></div>
+      <div><h1 class="text-2xl font-semibold text-gray-900 dark:text-white">上游与自动跟价</h1><p class="mt-2 text-sm text-gray-500">视频与图片分别设置、分别保存；手动售价优先。</p></div>
+      <div class="flex gap-3" role="tablist" aria-label="媒体类型"><button role="tab" :aria-selected="section === 'video'" class="btn" :class="section === 'video' ? 'btn-primary' : 'btn-secondary'" @click="section = 'video'">视频跟价</button><button role="tab" :aria-selected="section === 'image'" class="btn" :class="section === 'image' ? 'btn-primary' : 'btn-secondary'" @click="section = 'image'">图片跟价</button></div>
+      <ImageUpstreamPanel v-show="section === 'image'" />
+      <div v-show="section === 'video'" class="space-y-6">
       <p v-if="error" role="alert" class="rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950">{{ error }}</p>
       <p v-if="message" role="status" class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700 dark:bg-emerald-950">{{ message }}</p>
       <form v-if="settings" class="card space-y-5 p-5" @submit.prevent="save">
@@ -76,6 +81,7 @@ onMounted(() => perform(load))
         <div class="max-h-[32rem] overflow-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-white dark:bg-dark-800"><tr><th class="p-2">选择</th><th>型号</th><th>上游输出价</th><th>上游参考价</th><th>适配情况</th></tr></thead><tbody><tr v-for="m in models" :key="m.model" class="border-t border-gray-100 dark:border-dark-500"><td class="p-2"><input v-model="selected" type="checkbox" :value="m.model" :disabled="!!m.unavailable_reason || !m.spec?.supported"></td><td class="max-w-sm break-words p-2">{{ m.model }}</td><td class="whitespace-nowrap p-2">{{ m.unit_price }} / {{ m.billing_mode === 'per_request' ? '条' : '秒' }}</td><td class="p-2">{{ m.reference_per_second }} / 秒</td><td class="max-w-xs p-2">{{ m.unavailable_reason || m.spec?.reason || (m.spec?.supported ? '协议参数可用，开放前请实测' : '待核实') }}</td></tr></tbody></table><p v-if="!models.length" class="py-8 text-center text-gray-500">暂无目录，请同步价格。</p></div>
       </section>
       <section class="card space-y-4 p-5"><h2 class="font-semibold">最近调价记录</h2><div class="max-h-80 overflow-auto"><table class="w-full text-left text-sm"><thead><tr><th>时间</th><th>分组</th><th>型号</th><th>输出单价</th><th>参考秒价</th></tr></thead><tbody><tr v-for="(c, i) in changes" :key="i" class="border-t border-gray-100 dark:border-dark-500"><td class="py-2">{{ date(c.at) }}</td><td>{{ c.group_id }}</td><td>{{ c.model }}</td><td>{{ c.old }} → {{ c.new }}</td><td>{{ c.old_reference }} → {{ c.new_reference }}</td></tr></tbody></table><p v-if="!changes.length" class="py-6 text-gray-500">暂无自动调价记录</p></div></section>
+      </div>
     </div>
   </AppLayout>
 </template>

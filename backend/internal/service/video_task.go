@@ -325,10 +325,14 @@ func (s *OpenAIGatewayService) runVideoTaskCycle(ctx context.Context, keys *APIK
 	defer release()
 	// Settle admitted customer tasks before spending time fetching public prices.
 	defer func() {
+		s.runSuanliImageTaskCycle(ctx, keys)
 		if s.settingService != nil && ctx.Err() == nil {
 			syncCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			defer cancel()
 			_, _ = s.SyncVideoPrices(syncCtx, false)
+			imageCtx, imageCancel := context.WithTimeout(ctx, 20*time.Second)
+			defer imageCancel()
+			_, _ = s.SyncImagePrices(imageCtx, false, true)
 		}
 	}()
 	tasks, err := s.videoTaskRepository().LeaseVideoTasks(ctx, 5)

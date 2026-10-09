@@ -1025,7 +1025,7 @@ const adminNavItems = computed((): NavItem[] => {
     },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/video-tasks', label: '视频任务', icon: OrderIcon },
-    { path: '/admin/video-upstream', label: '视频上游与定价', icon: PriceTagIcon },
+    { path: '/admin/video-upstream', label: '上游与自动跟价', icon: PriceTagIcon },
     { path: '/admin/tiered-routing', label: t('nav.tieredRouting'), icon: SignalIcon },
     { path: '/admin/tickets', label: t('nav.ticketsAdmin'), icon: TicketIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }

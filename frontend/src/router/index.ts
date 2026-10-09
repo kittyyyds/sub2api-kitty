@@ -279,7 +279,7 @@ const routes: RouteRecordRaw[] = [
     path: '/admin/video-upstream',
     name: 'AdminVideoUpstream',
     component: () => import('@/views/admin/VideoUpstreamView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true, title: '视频上游与定价' }
+    meta: { requiresAuth: true, requiresAdmin: true, title: '上游与自动跟价' }
   },
   {
     path: '/chat',

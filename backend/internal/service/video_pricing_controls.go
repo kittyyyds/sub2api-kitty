@@ -11,6 +11,18 @@ import (
 // persisted prices may supply an inherited price; an empty input is never zero.
 func (s *adminServiceImpl) normalizeSavedGroupModelPricing(ctx context.Context, platform string, pricing, previous []ChannelModelPricing) ([]ChannelModelPricing, error) {
 	if platform != PlatformVideo {
+		// The general group editor submits prices, never trusted supplier metadata.
+		for i := range pricing {
+			pricing[i].Image = nil
+			if len(pricing[i].Models) == 1 {
+				for _, old := range previous {
+					if len(old.Models) == 1 && old.Models[0] == pricing[i].Models[0] {
+						pricing[i].Image = old.Image
+						break
+					}
+				}
+			}
+		}
 		return normalizeGroupModelPricing(platform, pricing)
 	}
 	needsCatalog := false

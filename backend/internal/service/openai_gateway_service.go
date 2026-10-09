@@ -241,7 +241,7 @@ type OpenAIForwardResult struct {
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
 	UpstreamHeaders http.Header
 	Usage           OpenAIUsage
-	UsageAudit *UsageAudit
+	UsageAudit      *UsageAudit
 	// UsageUnavailable prevents a protocol without upstream usage from being
 	// recorded or billed as if it reported an authoritative zero-token result.
 	UsageUnavailable bool
@@ -285,6 +285,8 @@ type OpenAIForwardResult struct {
 	FirstTokenMs          *int
 	ClientDisconnect      bool
 	ImageCount            int
+	SuanliImageUnitPrice  *float64
+	SuanliImageTaskID     string
 	ImageSize             string
 	ImageInputSize        string
 	ImageOutputSize       string

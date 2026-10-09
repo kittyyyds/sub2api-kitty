@@ -222,6 +222,12 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64, de
 				RequiresVisualOrAudio: v.Spec.RequiresVisualOrAudio,
 			}
 		}
+		if m.Pricing != nil && m.Pricing.Image != nil && m.Pricing.Image.Provider == "suanli" {
+			model.Description = "图片生成与参考图编辑；每次生成一张；尺寸和质量以上游渠道支持为准"
+			if description := m.Pricing.Image.Description; description != "" {
+				model.Description += "；上游说明：" + description
+			}
+		}
 		models = append(models, model)
 	}
 	dto := modelPlazaGroup{
