@@ -54,8 +54,12 @@
   "selected_import": {
     "site": "kittyyyds",
     "group_id": 25,
-    "count": 0,
-    "public_prices_and_descriptions_verified": false,
-    "status": "pending_model_selection_after_account_replacement"
+    "account_id": 272,
+    "completed_at": "2026-10-09T10:22:26.628837+00:00",
+    "count": 11,
+    "public_prices_and_descriptions_verified": true,
+    "markup_verified": true,
+    "global_settings_unchanged": true,
+    "status": "completed"
   }
 }

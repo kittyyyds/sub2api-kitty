@@ -1,0 +1,190 @@
+{
+  "at": "2026-10-09T10:28:45.162Z",
+  "site": "kittyyyds.xyz",
+  "authenticated": false,
+  "mocked": false,
+  "paid_generation_requests": 0,
+  "passed": true,
+  "models": [
+    {
+      "model": "官方直连sd2.0(fast全参不排队480P)",
+      "displayed_price": 0.42,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.0(fast全参不排队720P)",
+      "displayed_price": 0.65,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.0(mini全参不排队480P)",
+      "displayed_price": 0.193,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.0(mini全参不排队720P)",
+      "displayed_price": 0.32,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.0(满血全参不排队1080P)",
+      "displayed_price": 1.75,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.0(满血全参不排队480P)",
+      "displayed_price": 0.56,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.0(满血全参不排队4K)",
+      "displayed_price": 5.55,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.0(满血全参不排队720P)",
+      "displayed_price": 0.78,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.5(满血全参不排队1080P)",
+      "displayed_price": 2.5,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.5(满血全参不排队480P)",
+      "displayed_price": 0.92,
+      "description_visible": true
+    },
+    {
+      "model": "官方直连sd2.5(满血全参不排队720P)",
+      "displayed_price": 1.2,
+      "description_visible": true
+    }
+  ],
+  "responses": [
+    {
+      "path": "/model-plaza",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-misc-A4Mo5VYP.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/index-Bd7EYHp0.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/index-B1XU6od0.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-i18n-BCLMit9e.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-vue-jBnSG333.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-misc-Cxoxj5Xu.js",
+      "status": 200
+    },
+    {
+      "path": "/cdn-cgi/trace",
+      "status": 200
+    },
+    {
+      "path": "/logo.svg",
+      "status": 200
+    },
+    {
+      "path": "/assets/homeOverview-C_kv5IJh.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/index-BUclyybK.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/AppHeader-COkgQlff.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/useClipboard-D_Rj9YiJ.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelPlazaView-Jt_c2R0t.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/customerContact-xl8gN36D.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/AppLayout.vue_vue_type_script_setup_true_lang-dP41QnvI.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelIcon-BR3Adxor.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/LocaleSwitcher-9VkfSqPt.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelIcon-DfEL8oKp.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/AppHeader.vue_vue_type_style_index_0_scoped_3927b477_lang-DT6U5vvK.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelPlazaView-BLYQAOMb.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/useDocumentDarkMode-Dbqm2GVb.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/platformColors-Dy61O4Gb.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/LocaleSwitcher-B6rADQT5.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/modelPlaza-D3izbjoB.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/site-D_35IA8R.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/pricing-DFfTvfS3.js",
+      "status": 200
+    },
+    {
+      "path": "/setup/status",
+      "status": 200
+    },
+    {
+      "path": "/logo.svg",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/model-plaza",
+      "status": 200
+    }
+  ],
+  "navigation_status": 200,
+  "blocked_write_requests": [],
+  "public_model_count": 11
+}
