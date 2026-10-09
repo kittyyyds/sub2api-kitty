@@ -60,7 +60,12 @@ func selectedVideoCost(cost VideoSupplierPrice) (VideoSupplierPrice, bool) {
 		spec.Reason = ""
 	}
 	if spec.Validate() != nil {
-		return cost, false
+		// An incomplete static parameter row is not another availability veto.
+		// Use the same bounded generic transport as a newly added supplier ID.
+		spec = genericVideoSpecification()
+		if !cost.ReferencePriceKnown {
+			spec.MaxVideos, spec.MaxReferenceSeconds, spec.ReferencePricePending = 0, 0, true
+		}
 	}
 	cost.Spec = &spec
 	return cost, true

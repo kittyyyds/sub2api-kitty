@@ -141,3 +141,13 @@ func TestVideoAccountSyncKeepsConfiguredDirectionAndManualPrices(t *testing.T) {
 	require.False(t, warning)
 	require.Equal(t, updated, fixed)
 }
+
+func TestVideoAccountSyncIncompleteStaticMetadataUsesGenericContract(t *testing.T) {
+	incomplete := UnifiedVideoSpec{MinSeconds: 4, MaxSeconds: 30}
+	cost, ok := selectedVideoCost(VideoSupplierPrice{Model: "selected-by-admin", BillingMode: BillingModeVideo, UnitPrice: .6, Spec: &incomplete})
+	require.True(t, ok)
+	require.True(t, cost.Spec.Generic)
+	require.NoError(t, cost.Spec.Validate())
+	require.True(t, cost.Spec.ReferencePricePending)
+	require.Zero(t, cost.Spec.MaxVideos)
+}
