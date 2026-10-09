@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('vue-router', () => ({ useRoute: () => ({ path: '/video-tasks' }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 2 } }) }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ siteVersion: 'test' }) }))
 vi.mock('@/api/videoTasks', () => ({ listVideoTasks: mocks.list, getVideoTaskStats: mocks.stats,
   downloadVideoTask: mocks.blob, refreshVideoTask: vi.fn(), fetchVideoTaskContent: mocks.request }))
 vi.mock('@/utils/videoDownload', () => ({ supportsVideoFileDownload: () => mocks.supported,

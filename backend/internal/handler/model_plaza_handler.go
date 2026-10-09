@@ -61,14 +61,16 @@ type modelPlazaTimePricing struct {
 
 // modelPlazaModel 广场模型条目：渠道定价（白名单形态）+ 官方参考价。
 type modelPlazaModel struct {
-	Name                 string                     `json:"name"`
-	Platform             string                     `json:"platform"`
-	Pricing              *userSupportedModelPricing `json:"pricing"`
-	OfficialPricing      *modelPlazaOfficialPricing `json:"official_pricing"`
-	FinalImagePriceTiers []string                   `json:"final_image_price_tiers,omitempty"`
-	FinalVideoPriceTiers []string                   `json:"final_video_price_tiers,omitempty"`
-	LongContextBasis     string                     `json:"long_context_basis,omitempty"`
-	TimePricing          *modelPlazaTimePricing     `json:"time_pricing,omitempty"`
+	Name                 string                       `json:"name"`
+	Platform             string                       `json:"platform"`
+	Pricing              *modelPlazaPricing           `json:"pricing"`
+	Description          string                       `json:"description,omitempty"`
+	Capabilities         *modelPlazaVideoCapabilities `json:"capabilities,omitempty"`
+	OfficialPricing      *modelPlazaOfficialPricing   `json:"official_pricing"`
+	FinalImagePriceTiers []string                     `json:"final_image_price_tiers,omitempty"`
+	FinalVideoPriceTiers []string                     `json:"final_video_price_tiers,omitempty"`
+	LongContextBasis     string                       `json:"long_context_basis,omitempty"`
+	TimePricing          *modelPlazaTimePricing       `json:"time_pricing,omitempty"`
 }
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
@@ -200,16 +202,27 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64, de
 		if service.UserGroupDeniesModel(deniedModels, m.Name) {
 			continue
 		}
-		models = append(models, modelPlazaModel{
+		model := modelPlazaModel{
 			Name:                 m.Name,
 			Platform:             m.Platform,
-			Pricing:              toUserPricing(m.Pricing),
+			Pricing:              toModelPlazaPricing(m.Pricing),
 			OfficialPricing:      toModelPlazaOfficialPricing(m.OfficialPricing),
 			FinalImagePriceTiers: m.FinalImagePriceTiers,
 			FinalVideoPriceTiers: m.FinalVideoPriceTiers,
 			LongContextBasis:     string(m.LongContextBasis),
 			TimePricing:          toModelPlazaTimePricing(m.TimePricing),
-		})
+		}
+		if m.Platform == service.PlatformVideo && m.Pricing != nil && m.Pricing.Video != nil {
+			v := m.Pricing.Video
+			model.Description = modelPlazaVideoDescription(v.Spec)
+			model.Capabilities = &modelPlazaVideoCapabilities{
+				CanvasModelCapability: v.Capability(),
+				MaxCombinedSeconds:    v.Spec.MaxCombinedSeconds,
+				AllowAudioOnly:        v.Spec.AllowAudioOnly,
+				RequiresVisualOrAudio: v.Spec.RequiresVisualOrAudio,
+			}
+		}
+		models = append(models, model)
 	}
 	dto := modelPlazaGroup{
 		ID:                        g.ID,

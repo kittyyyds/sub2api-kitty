@@ -24,7 +24,7 @@ export function productFor(model: PlazaModel): string {
 export function priceTableRows(group: ModelPlazaGroup, product: string): PriceTableRow[] {
   return group.models.filter(model => productFor(model) === product).flatMap<PriceTableRow>(model => {
     const kind = catalogKind(model)
-    const modelId = normalizeModelId(model.name)
+    const modelId = model.platform === 'video' ? model.name : normalizeModelId(model.name)
     // A product can contain identically named models from several platforms.
     // Keep their identities separate while leaving the displayed/copyable ID intact.
     const modelKey = JSON.stringify([group.id, model.platform || group.platform, kind, model.name])

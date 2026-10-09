@@ -43,11 +43,44 @@ export interface PlazaTimePricing {
   periods: PlazaTimePricingPeriod[]
 }
 
+/** Public selling prices for this group; never supplier costs or markup settings. */
+export interface PlazaModelPricing extends UserSupportedModelPricing {
+  final_unit_price?: boolean
+  reference_per_second?: number | null
+  resolution_prices?: Record<string, number | null>
+}
+
+export interface PlazaVideoCountRange {
+  min: number
+  max: number
+  fixed?: number
+}
+
+/** Customer-facing capabilities only. Private video configuration is not part of this DTO. */
+export interface PlazaVideoCapabilities {
+  media_type: string
+  supported: boolean
+  seconds?: PlazaVideoCountRange
+  second_options?: number[]
+  resolutions?: string[]
+  aspect_ratios?: string[]
+  reference_images?: PlazaVideoCountRange
+  reference_videos?: PlazaVideoCountRange
+  reference_audios?: PlazaVideoCountRange
+  max_reference_seconds?: number
+  max_combined_seconds?: number
+  allow_audio_only?: boolean
+  requires_visual_or_audio?: boolean
+  generate_audio?: boolean
+}
+
 export interface PlazaModel {
   name: string
   platform: string
+  description?: string
+  capabilities?: PlazaVideoCapabilities
   /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
-  pricing: UserSupportedModelPricing | null
+  pricing: PlazaModelPricing | null
   official_pricing: PlazaOfficialPricing | null
   /** Image tiers whose configured USD price is already the final customer charge. */
   final_image_price_tiers?: string[]

@@ -213,7 +213,7 @@ describe('ModelPlazaContent model catalog', () => {
 
     const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(2)
-    expect(rows[0].get('.price-primary').text()).toBe('$9.00 / modelPlaza.catalog.units.request')
+    expect(rows[0].get('.price-primary').text()).toBe('$9.00 / modelPlaza.video.perVideoUnit')
     expect(rows[1].get('.price-primary').text()).toBe('$0.25 / modelPlaza.catalog.units.second')
     expect(rows.every(row => row.findAll('td').length === 2)).toBe(true)
   })

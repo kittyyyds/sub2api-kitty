@@ -7,6 +7,7 @@ const { route, listVideoTasks, getVideoTaskStats } = vi.hoisted(() => ({
 }))
 vi.mock('vue-router', () => ({ useRoute: () => route }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 2 } }) }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ siteVersion: 'test' }) }))
 vi.mock('@/api/videoTasks', () => ({ listVideoTasks, getVideoTaskStats, downloadVideoTask: vi.fn(), refreshVideoTask: vi.fn() }))
 
 const task = { id: 'local-id', task_id: 'remote-id', user_id: 2, api_key_id: 166,

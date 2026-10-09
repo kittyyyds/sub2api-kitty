@@ -13,6 +13,7 @@ import { platformLabel } from '@/utils/platformColors'
 import { formatScaled } from '@/utils/pricing'
 import { groupTextRate, visibleCatalogGroups } from './modelCatalog'
 import { priceTableRows, productFor, type PriceTableRow } from './catalogTable'
+import PlazaVideoModelDetails from './PlazaVideoModelDetails.vue'
 
 const props = defineProps<{ response: ModelPlazaResponse | null; loading: boolean; error?: boolean; embedded?: boolean }>()
 const emit = defineEmits<{ retry: [] }>()
@@ -25,13 +26,16 @@ const selectedGroupId = ref<number | null>(null)
 const priceMode = ref<'group' | 'official'>('group')
 const groups = computed(() => visibleCatalogGroups(props.response?.groups ?? []))
 const productOrder = ['anthropic', 'openai', 'grok', 'gemini', 'antigravity', 'deepseek', 'image', 'video']
-const products = computed(() => [...new Set(groups.value.flatMap(group => group.models.map(productFor)))].sort((a, b) => {
+const products = computed(() => [...new Set(groups.value.flatMap(group => group.platform === 'video' ? ['video'] : group.models.map(productFor)))].sort((a, b) => {
   const rank = (p: string) => productOrder.includes(p) ? productOrder.indexOf(p) : 99
   return rank(a) - rank(b)
 }))
-const productGroups = computed(() => groups.value.filter(group => group.models.some(model => productFor(model) === selectedProduct.value)))
+const productGroups = computed(() => groups.value.filter(group =>
+  (group.platform === 'video' && selectedProduct.value === 'video')
+  || group.models.some(model => productFor(model) === selectedProduct.value)))
 const selectedGroup = computed(() => productGroups.value.find(group => group.id === selectedGroupId.value))
 const rows = computed(() => selectedGroup.value ? priceTableRows(selectedGroup.value, selectedProduct.value) : [])
+const isVideoGroup = computed(() => selectedGroup.value?.platform === 'video')
 const tokenTable = computed(() => rows.value.some(row => row.kind === 'token'))
 const columns = computed(() => [
   { key: 'input', label: t('modelPlaza.reference.input') },
@@ -63,7 +67,14 @@ function price(row: PriceTableRow, key: string, official = priceMode.value === '
 }
 function saving(row: PriceTableRow) { return row.metrics.find(item => item.key === 'input')?.saving ?? null }
 function unit(row: PriceTableRow) {
+  if (row.model.platform === 'video' && row.kind === 'per_request') return t('modelPlaza.video.perVideoUnit')
   return row.kind === 'token' ? '1M tokens' : t(`modelPlaza.catalog.units.${row.kind === 'image' ? 'image' : row.kind === 'video' ? 'second' : 'request'}`)
+}
+function referencePrice(row: PriceTableRow): string | null {
+  const maxVideos = row.model.capabilities?.reference_videos?.max
+  if (typeof maxVideos !== 'number' || !Number.isFinite(maxVideos) || maxVideos <= 0) return null
+  const value = row.model.pricing?.reference_per_second
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? formatScaled(value, 1, 2) : null
 }
 function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPlaza.catalog.copySuccess')) }
 </script>
@@ -89,13 +100,13 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
         <div v-if="productGroups.length" class="pricing-group-scroll" :aria-label="t('modelPlaza.catalog.groupSelector')">
           <button v-for="group in productGroups" :key="group.id" type="button" class="pricing-group-card" :class="{ active: selectedGroupId === group.id }" :aria-pressed="selectedGroupId === group.id" @click="selectedGroupId = group.id">
             <span class="pricing-group-title"><strong :title="group.name">{{ group.name }}</strong><Icon v-if="selectedGroupId === group.id" name="checkCircle" size="sm" /></span>
-            <span class="pricing-group-meta"><small :title="group.user_rate_multiplier != null ? t('modelPlaza.catalog.personalRate') : undefined">{{ groupRate(group) }}</small><span>{{ t(group.user_rate_multiplier != null ? 'modelPlaza.catalog.personalRate' : 'modelPlaza.catalog.effectiveMultiplier') }}</span></span>
+            <span class="pricing-group-meta"><small :title="group.platform !== 'video' && group.user_rate_multiplier != null ? t('modelPlaza.catalog.personalRate') : undefined">{{ groupRate(group) }}</small><span>{{ t(group.platform === 'video' ? 'modelPlaza.video.groupSellingPrice' : group.user_rate_multiplier != null ? 'modelPlaza.catalog.personalRate' : 'modelPlaza.catalog.effectiveMultiplier') }}</span></span>
           </button>
         </div>
         <div v-if="selectedGroup" class="group-description"><strong>{{ t('modelPlaza.reference.groupIntro') }}</strong><span>{{ selectedGroup.description || t('modelPlaza.detail.defaultDescription') }}</span></div>
         <div v-if="loading" class="state-panel" role="status"><div class="state-spinner"></div>{{ t('modelPlaza.loading') }}</div>
         <div v-else-if="error" class="state-panel"><p>{{ t('modelPlaza.loadFailed') }}</p><button type="button" class="retry-button" @click="emit('retry')">{{ t('common.refresh') }}</button></div>
-        <div v-else-if="rows.length === 0" class="state-panel">{{ t('modelPlaza.empty') }}</div>
+        <div v-else-if="rows.length === 0" class="state-panel" role="status">{{ t(isVideoGroup ? 'modelPlaza.video.noConfiguredPrices' : 'modelPlaza.empty') }}</div>
         <template v-else>
           <div class="pricing-table-scroll" tabindex="0" :aria-label="t('modelPlaza.reference.title')">
             <table class="reference-pricing-table">
@@ -104,6 +115,7 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
                 <tr v-for="row in rows" :key="row.key" :data-billing-kind="row.kind">
                   <th scope="row" class="model-id-cell"><div><code>{{ row.modelId }}</code><button type="button" class="copy-id-button" :aria-label="`${t('modelPlaza.catalog.copyModelId')}: ${row.modelId}`" @click="copyModelId(row.modelId)"><Icon name="copy" size="xs" /></button></div>
                     <small class="model-platform">{{ platformLabel(row.model.platform || selectedGroup?.platform || '') }}</small>
+                    <PlazaVideoModelDetails v-if="row.model.platform === 'video'" :description="row.model.description" :capabilities="row.model.capabilities" />
                     <small v-if="tokenTable && row.tier">{{ row.tier }}</small><small v-if="row.period" class="period-label">{{ row.period }}</small>
                     <small v-if="row.model.long_context_basis === 'marginal'">{{ t('modelPlaza.reference.marginal') }}</small>
                     <small v-if="row.model.pricing?.reasoning_effort_multipliers && Object.keys(row.model.pricing.reasoning_effort_multipliers).length" class="effort-note"><template v-for="(rate, effort) in row.model.pricing.reasoning_effort_multipliers" :key="effort">{{ effort }} ×{{ rate }} · </template></small>
@@ -117,7 +129,13 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
                     <td v-if="!tokenTable">{{ row.tier || '—' }}</td>
                     <td :colspan="tokenTable ? columns.length + 1 : 1">
                       <div v-if="tokenTable" class="unit-billing-kind">{{ t(`modelPlaza.catalog.kinds.${row.kind}`) }}</div>
-                      <div class="price-primary"><strong>{{ price(row, row.metrics[0]!.key) }}</strong><small v-if="priceMode === 'group'"> / {{ unit(row) }}</small></div>
+                      <div v-if="row.model.platform === 'video' && priceMode === 'group' && row.metrics[0]?.current == null" class="empty-price" data-testid="video-price-unconfigured">{{ t('modelPlaza.video.priceUnconfigured') }}</div>
+                      <div v-else class="price-primary"><strong>{{ price(row, row.metrics[0]!.key) }}</strong><small v-if="priceMode === 'group'"> / {{ unit(row) }}</small></div>
+                      <div v-if="row.model.platform === 'video' && priceMode === 'group' && referencePrice(row) != null" class="video-reference-price">
+                        {{ row.model.pricing?.reference_per_second === 0
+                          ? t('modelPlaza.video.referenceIncluded')
+                          : t('modelPlaza.video.referencePrice', { price: referencePrice(row) }) }}
+                      </div>
                       <small v-if="priceMode === 'official'" class="empty-price">{{ t('modelPlaza.reference.noOfficial') }}</small>
                     </td>
                   </template>
@@ -125,7 +143,7 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
               </tbody>
             </table>
           </div>
-          <p class="catalog-footnote">{{ t('modelPlaza.reference.note') }}</p>
+          <p class="catalog-footnote">{{ t(isVideoGroup ? 'modelPlaza.video.priceNote' : 'modelPlaza.reference.note') }}</p>
           <p v-if="selectedGroup?.peak_rate_enabled && selectedGroup.platform !== 'video'" class="catalog-footnote">{{ t('modelPlaza.detail.peakNote', { window: `${selectedGroup.peak_start}–${selectedGroup.peak_end}`, multiplier: selectedGroup.peak_rate_multiplier }) }}</p>
         </template>
         <div v-if="descriptionHtml" class="catalog-notice" v-html="descriptionHtml"></div>
@@ -172,6 +190,7 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
 .reference-pricing-table tbody tr:hover { background: var(--catalog-muted-surface); }
 .model-id-cell { font-weight: 500; min-width: 220px; max-width: 320px; }
 .model-id-cell > div { display: flex; align-items: center; gap: 10px; }
+.model-id-cell > .video-model-details { display: block; }
 .model-id-cell code { font-family: inherit; overflow-wrap: anywhere; }
 .copy-id-button { flex-shrink: 0; padding: 4px; color: var(--catalog-muted); border-radius: 4px; }
 .copy-id-button:hover { color: var(--catalog-accent); background: var(--catalog-tint); }
@@ -182,6 +201,7 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
 .price-primary small { font-size: 10px; color: var(--catalog-muted); }
 .unit-billing-kind { margin-bottom: 4px; color: var(--catalog-muted); font-size: 11px; }
 .price-reference { margin-top: 4px; font-size: 10px; color: var(--catalog-muted); white-space: nowrap; }
+.video-reference-price { margin-top: 6px; font-size: 12px; color: var(--catalog-muted); }
 .price-cache-hour { margin-top: 6px; font-size: 10px; color: var(--catalog-muted); }
 .price-cache-hour .price-reference { display: block; }
 .price-reference.discounted { text-decoration: line-through; opacity: .8; }

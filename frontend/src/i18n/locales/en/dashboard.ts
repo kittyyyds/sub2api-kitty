@@ -793,6 +793,25 @@ export default {
 
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
+    video: {
+      noConfiguredPrices: 'No model selling prices are configured for this video group. Please contact an administrator.',
+      priceUnconfigured: 'Price not configured',
+      groupSellingPrice: 'Group selling price',
+      perVideoUnit: 'video',
+      referenceIncluded: 'No additional charge for reference video',
+      referencePrice: 'Reference video: {price} / second',
+      priceNote: 'These are final group selling prices, charged per video or generated second. Reference video is charged separately at the listed reference rate. Resolutions without a configured price are unavailable. Quotes and bills determine actual charges.',
+      specifications: 'Model specifications',
+      duration: 'Output duration',
+      seconds: '{value} seconds',
+      resolutions: 'Supported resolutions',
+      ratios: 'Aspect ratios',
+      images: 'Reference image count',
+      videos: 'Reference video count',
+      audios: 'Reference audio count',
+      referenceDuration: 'Maximum total reference video duration',
+      combinedDuration: 'Maximum combined reference and output duration',
+    },
     reference: {"products": "Model products", "title": "Price list", "subtitle": "Choose a group to view its model prices.", "mode": "Price type", "groupPrice": "Group prices", "groupIntro": "About this group", "rule": "USD balance units · Text base price × group/personal rate; media uses its independent rate or final price.", "input": "Input price", "output": "Output price", "cacheWrite": "Cache creation", "cacheRead": "Cache read", "cacheWrite1h": "Cache creation 1h", "note": "Prices are in USD balance units. Configured context tiers and time windows are listed; rows without a time window show standard prices. Actual charges follow the request’s key group and bill.", "noOfficial": "No official reference price", "marginal": "Higher tier applies only to tokens beyond the threshold"},
     title: 'Model Pricing',
     description: 'Browse effective model prices by platform and group with clear reference comparisons',

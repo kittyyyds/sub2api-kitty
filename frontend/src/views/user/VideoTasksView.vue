@@ -6,7 +6,7 @@
           <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ admin ? '视频任务管理' : '我的视频任务' }}</h1>
           <p class="mt-2 text-sm text-gray-500">生成状态、分组计价与扣费记录集中查看。下载重试不会重新生成视频。</p>
         </div>
-        <router-link to="/creative-canvas" class="btn btn-secondary">无限画布</router-link>
+        <a :href="canvasUrl" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">无限画布</a>
       </div>
       <div class="card flex flex-wrap items-end gap-3 p-4">
         <label class="text-sm">开始日期<input v-model="startDate" type="date" class="input mt-1" /></label>
@@ -79,6 +79,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
+import { getCreativeCanvasUrl } from '@/utils/creativeCanvas'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { downloadVideoTask, fetchVideoTaskContent, getVideoTaskStats, listVideoTasks, refreshVideoTask, type VideoTaskFilters, type VideoTaskStats, type VideoTaskSummary } from '@/api/videoTasks'
 
@@ -86,6 +88,8 @@ import { downloadVideoToFile, pickVideoDownloadFile, supportsVideoFileDownload, 
 
 const route = useRoute()
 const auth = useAuthStore()
+const appStore = useAppStore()
+const canvasUrl = computed(() => getCreativeCanvasUrl(appStore.siteVersion))
 const admin = computed(() => route.path.startsWith('/admin/'))
 const states: Record<string, string> = { submitting: '提交中', unknown: '提交待核查', pending: '生成 / 结算中', done: '已完成', failed: '生成失败', needs_review: '待核验' }
 const tasks = ref<VideoTaskSummary[]>([])

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -263,7 +264,9 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		g := groupEnt[gid]
 		for j := range pg.Models {
 			s.fillDisplayPricing(ctx, &pg.Models[j], g)
-			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+			if g.Platform != PlatformVideo {
+				pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+			}
 		}
 		out = append(out, *pg)
 	}
@@ -417,7 +420,17 @@ func plazaMediaDisplayPricing(p *ChannelModelPricing, g *Group, model string) *C
 		}
 		// Exact video model cells already contain the final customer unit price.
 		// Clients must not apply the group's token or legacy media multipliers.
-		return &ChannelModelPricing{Platform: PlatformVideo, Models: []string{price.Model}, BillingMode: price.BillingMode, PerRequestPrice: &price.UnitPrice}
+		display := &ChannelModelPricing{Platform: PlatformVideo, Models: []string{price.Model}, BillingMode: price.BillingMode, PerRequestPrice: &price.UnitPrice}
+		if price.Video != nil {
+			// Carry only the effective selling prices and public input contract.
+			// Supplier costs and pricing controls never enter the plaza projection.
+			display.Video = &VideoModelConfig{
+				Spec:               price.Video.Spec,
+				ReferencePerSecond: price.Video.ReferencePerSecond,
+				ResolutionPrices:   maps.Clone(price.Video.ResolutionPrices),
+			}
+		}
+		return display
 	}
 	return plazaVideoDisplayPricing(plazaImageDisplayPricing(p, g, model), g, model)
 }

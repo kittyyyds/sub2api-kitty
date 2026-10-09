@@ -115,7 +115,9 @@
           <router-link
             v-for="item in personalNavItems"
             :key="item.path"
-            :to="item.path"
+            :to="item.path === '/creative-canvas' ? canvasUrl : item.path"
+            :target="item.path === '/creative-canvas' ? '_blank' : undefined"
+            :rel="item.path === '/creative-canvas' ? 'noopener noreferrer' : undefined"
             class="sidebar-link mb-1"
             :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
             :title="sidebarCollapsed ? item.label : undefined"
@@ -138,7 +140,9 @@
             <span v-else>{{ section.label }}</span>
           </div>
           <div :id="`sidebar-category-${section.id}`">
-          <router-link v-for="item in section.items" :key="item.path" :to="item.path"
+          <router-link v-for="item in section.items" :key="item.path" :to="item.path === '/creative-canvas' ? canvasUrl : item.path"
+            :target="item.path === '/creative-canvas' ? '_blank' : undefined"
+            :rel="item.path === '/creative-canvas' ? 'noopener noreferrer' : undefined"
             class="sidebar-link mb-1"
             :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
             :title="sidebarCollapsed ? item.label : undefined" :aria-label="item.label"
@@ -214,6 +218,7 @@ import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
+import { getCreativeCanvasUrl } from '@/utils/creativeCanvas'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 import { useTheme } from '@/composables/useTheme'
 import {
@@ -270,6 +275,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const canvasUrl = computed(() => getCreativeCanvasUrl(appStore.siteVersion))
 const authStore = useAuthStore()
 const onboardingStore = useOnboardingStore()
 const adminSettingsStore = useAdminSettingsStore()

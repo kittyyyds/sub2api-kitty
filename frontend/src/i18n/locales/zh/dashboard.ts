@@ -798,6 +798,25 @@ export default {
 
   // Model Plaza (public group/model pricing showcase)
   modelPlaza: {
+    video: {
+      noConfiguredPrices: '该视频分组暂未配置模型售价，请联系管理员配置后使用。',
+      priceUnconfigured: '未配置售价',
+      groupSellingPrice: '分组售价',
+      perVideoUnit: '条',
+      referenceIncluded: '参考视频无需另收费用',
+      referencePrice: '参考视频：{price} / 秒',
+      priceNote: '以上为当前分组的最终售价，按条或按生成秒数计费；参考视频费用按标注的参考秒价另计。未配置售价的分辨率不可用，实际扣费以报价及账单为准。',
+      specifications: '模型规格',
+      duration: '生成时长',
+      seconds: '{value} 秒',
+      resolutions: '支持分辨率',
+      ratios: '画面比例',
+      images: '参考图片数量',
+      videos: '参考视频数量',
+      audios: '参考音频数量',
+      referenceDuration: '参考视频总时长上限',
+      combinedDuration: '参考与生成视频总时长上限',
+    },
     reference: {"products": "模型产品", "title": "价格列表", "subtitle": "选择分组后，查看当前分组模型价格。", "mode": "价格类型", "groupPrice": "分组价格", "groupIntro": "分组介绍", "rule": "以 USD 余额计价 · 文本基础价 × 分组／专属倍率；媒体按独立倍率或最终价计费。", "input": "输入价格", "output": "输出价格", "cacheWrite": "缓存创建", "cacheRead": "缓存读取", "cacheWrite1h": "缓存创建 1h", "note": "价格单位为 USD 余额。下表列出已配置的上下文阶梯与分时时段；未标时段为标准价。实际扣费以请求对应密钥分组及账单为准。", "noOfficial": "暂无官方参考价", "marginal": "仅超出阈值的部分按阶梯计费"},
     title: '模型价格',
     description: '按平台与分组查看模型折后价格，官方参考价与预计扣费一目了然',
