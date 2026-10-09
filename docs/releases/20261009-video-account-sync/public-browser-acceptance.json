@@ -1,0 +1,246 @@
+{
+  "at": "2026-10-09T13:19:05.891Z",
+  "site": "kittyyyds.xyz",
+  "authenticated": false,
+  "mocked": false,
+  "paid_generation_requests": 0,
+  "passed": true,
+  "models": [
+    {
+      "tier": "480p",
+      "model": "官方直连sd2.0(fast全参不排队480P)",
+      "displayed_price": 0.42,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官方直连sd2.0(fast全参不排队720P)",
+      "displayed_price": 0.65,
+      "description_visible": true
+    },
+    {
+      "tier": "480p",
+      "model": "官方直连sd2.0(mini全参不排队480P)",
+      "displayed_price": 0.193,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官方直连sd2.0(mini全参不排队720P)",
+      "displayed_price": 0.32,
+      "description_visible": true
+    },
+    {
+      "tier": "1080p",
+      "model": "官方直连sd2.0(满血全参不排队1080P)",
+      "displayed_price": 1.75,
+      "description_visible": true
+    },
+    {
+      "tier": "480p",
+      "model": "官方直连sd2.0(满血全参不排队480P)",
+      "displayed_price": 0.56,
+      "description_visible": true
+    },
+    {
+      "tier": "4k",
+      "model": "官方直连sd2.0(满血全参不排队4K)",
+      "displayed_price": 5.55,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官方直连sd2.0(满血全参不排队720P)",
+      "displayed_price": 0.78,
+      "description_visible": true
+    },
+    {
+      "tier": "1080p",
+      "model": "官方直连sd2.5(满血全参不排队1080P)",
+      "displayed_price": 2.5,
+      "description_visible": true
+    },
+    {
+      "tier": "480p",
+      "model": "官方直连sd2.5(满血全参不排队480P)",
+      "displayed_price": 0.92,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官方直连sd2.5(满血全参不排队720P)",
+      "displayed_price": 1.2,
+      "description_visible": true
+    },
+    {
+      "tier": "1080p",
+      "model": "官方直连wan3.0(10-5-5不卡脸1080P)",
+      "displayed_price": 0.9,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官方直连wan3.0(10-5-5不卡脸720P)",
+      "displayed_price": 0.55,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官转sd2.0(903不卡脸不排队720P)",
+      "displayed_price": 0.7,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官转sd2.0(mini903不卡脸不排队720P)",
+      "displayed_price": 0.53,
+      "description_visible": true
+    },
+    {
+      "tier": "1080p",
+      "model": "官转sd2.5(30图10音不卡脸1080P)",
+      "displayed_price": 1.05,
+      "description_visible": true
+    },
+    {
+      "tier": "720p",
+      "model": "官转sd2.5(30图10音不卡脸720P)",
+      "displayed_price": 0.95,
+      "description_visible": true
+    },
+    {
+      "tier": "480p",
+      "model": "特价稳定wan3.0(10-5-5不卡脸480P)",
+      "displayed_price": 0.45,
+      "description_visible": true
+    }
+  ],
+  "responses": [
+    {
+      "path": "/model-plaza",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-misc-A4Mo5VYP.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/index-Bd7EYHp0.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-i18n-BCLMit9e.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-vue-jBnSG333.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/index-e3DVM86v.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/vendor-misc-Cxoxj5Xu.js",
+      "status": 200
+    },
+    {
+      "path": "/logo.svg",
+      "status": 200
+    },
+    {
+      "path": "/assets/homeOverview-C_kv5IJh.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/index-BUclyybK.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/AppHeader.vue_vue_type_style_index_0_scoped_3927b477_lang-oUF4-vhB.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelPlazaView-Cva8EUuR.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/useClipboard-DuBS4nC5.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/AppHeader-COkgQlff.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/AppLayout.vue_vue_type_script_setup_true_lang-Bu03xSzu.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/LocaleSwitcher-9VkfSqPt.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelIcon-BR3Adxor.css",
+      "status": 200
+    },
+    {
+      "path": "/assets/customerContact-xl8gN36D.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/pricing-DFfTvfS3.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/site-D_35IA8R.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/modelPlaza-cWpMHiRm.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/LocaleSwitcher-CoMQh1SZ.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/useDocumentDarkMode-Dbqm2GVb.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/platformColors-Dy61O4Gb.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelIcon-B1l1h092.js",
+      "status": 200
+    },
+    {
+      "path": "/assets/ModelPlazaView-BLYQAOMb.css",
+      "status": 200
+    },
+    {
+      "path": "/setup/status",
+      "status": 200
+    },
+    {
+      "path": "/logo.svg",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/model-plaza",
+      "status": 200
+    }
+  ],
+  "page_errors": [],
+  "failed_requests": [
+    {
+      "path": "/cdn-cgi/trace",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "navigation_status": 200,
+  "blocked_write_requests": [],
+  "public_model_count": 18
+}

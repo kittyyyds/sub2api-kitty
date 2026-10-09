@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-09T12:59:00.918181+00:00",
+  "run_id": "account-sync-v13-20261009125900-2e78e5",
+  "identity": {
+    "build-manifest.json": "04846e64a7588a1de965ea216d9f5fe68454f8655c0a82cb9a4ec2aeec3c2373",
+    "build-preflight.json": "683a2af1db48ee02360cfec6310f2d18804660e47d0941be2290ee75a3219776",
+    "preflight.json": "683a2af1db48ee02360cfec6310f2d18804660e47d0941be2290ee75a3219776",
+    "recovery/manifest.json": "c2fa716f97fa649a398d21ac0e59fec0c2df261efbc57b798fce110eac007f5c",
+    "recovery/verified.json": "c85703c587cae7e64ff7f4b1efa604483cd58565d8387fa7c95fe69e2c21dde3",
+    "previous-build-manifest.json": "a007f3ab1f378d7ee5c0a89a671c2139e8666b3c9cf05887172523eba4b1cca6"
+  },
+  "passed": true,
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.13",
+      "schema_count": 362,
+      "ledger_unchanged": true,
+      "empty_group_saved": true,
+      "upstream_empty_price_saved": true,
+      "manual_zero_saved": true,
+      "account_saved": true,
+      "account_kind": "video_model_prices",
+      "probe_preserved_prices": true,
+      "quote_did_not_charge": true,
+      "managed_handoff": true,
+      "previous_version": "2.9.9-kitty.12",
+      "plaza_final_reference_resolution_quote_match": true,
+      "unsupported_resolution_rejected": true,
+      "plaza_no_cost_or_markup": true,
+      "unpriced_group_hidden": true,
+      "account_auto_models_alias_scope_and_lifecycle": true,
+      "generic_model_and_canvas_quote": true,
+      "manual_preserved_after_sync": true
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.13",
+      "schema_count": 362,
+      "ledger_unchanged": true,
+      "empty_group_saved": true,
+      "upstream_empty_price_saved": true,
+      "manual_zero_saved": true,
+      "account_saved": true,
+      "account_kind": "video_model_prices",
+      "probe_preserved_prices": true,
+      "quote_did_not_charge": true,
+      "managed_handoff": true,
+      "previous_version": "2.9.9-kitty.12",
+      "plaza_final_reference_resolution_quote_match": true,
+      "unsupported_resolution_rejected": true,
+      "plaza_no_cost_or_markup": true,
+      "unpriced_group_hidden": true,
+      "account_auto_models_alias_scope_and_lifecycle": true,
+      "generic_model_and_canvas_quote": true,
+      "manual_preserved_after_sync": true
+    }
+  },
+  "external_network": false,
+  "paid_requests": 0,
+  "production_database_changes": false,
+  "tool_sha256": "8a502e02136396f5a834b3f2ec503aeefa3a3b9a97e2dd4d66263fc5810adf02",
+  "common_sha256": "d11dd9714f896e463d0bf895ed0fd29aacca29f8d9f1c99d317a960e25ab89ac"
+}

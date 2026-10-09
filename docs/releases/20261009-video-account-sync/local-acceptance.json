@@ -1,0 +1,14 @@
+{
+  "source_commit": "c62e03f82ad330c8a5e2666bc1ae3e063b9ac6bb",
+  "backend_targeted_packages": [
+    "service",
+    "handler",
+    "repository",
+    "routes"
+  ],
+  "backend_passed": true,
+  "frontend_tests": 83,
+  "frontend_typecheck_passed": true,
+  "frontend_changed_files_lint_passed": true,
+  "paid_generation_requests": 0
+}

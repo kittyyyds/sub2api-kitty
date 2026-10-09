@@ -1,0 +1,243 @@
+{
+  "version": "2.9.9-kitty.13",
+  "runtime_commit": "c62e03f82ad330c8a5e2666bc1ae3e063b9ac6bb",
+  "production_verified_at": "2026-10-09T13:13:15.115581+00:00",
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.13",
+      "binary_sha256": "6ca1c2994cc149f0d8458d8acdabd896ef50c7bb01e2bf331a14dbcc609da8d5",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 0,
+      "old_active_ws": 0,
+      "old_retire_ready": true
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.13",
+      "binary_sha256": "23be1cb9869cf2e4b19d62bcc2ac2305218a8e8b9ea42c112deeab621199508f",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 1,
+      "old_active_ws": 1,
+      "old_retire_ready": false
+    }
+  },
+  "schema_count": 362,
+  "added_migrations": [],
+  "canvas_changed": false,
+  "canvas_version": "v0.8.0-kitty.2",
+  "server_backups_verified": true,
+  "offsite_backups_verified": false,
+  "paid_generation_requests": 0,
+  "account_model_sync": {
+    "at": "2026-10-09T13:15:26.065619+00:00",
+    "phase": "completed",
+    "sites": {
+      "kittyapi": {
+        "phase": "enabled",
+        "other_settings_unchanged": true
+      },
+      "kittyyyds": {
+        "phase": "enabled",
+        "other_settings_unchanged": true
+      }
+    },
+    "paid_generation_requests": 0,
+    "group_id": 25,
+    "account_id": 272,
+    "expected_model_count": 18,
+    "completed_at": "2026-10-09T13:16:20.461612+00:00",
+    "prices": [
+      {
+        "model": "官方直连sd2.0(fast全参不排队480P)",
+        "customer_price": 0.42,
+        "reference_price": 0.42,
+        "resolutions": [
+          "480p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 3
+      },
+      {
+        "model": "官方直连sd2.0(fast全参不排队720P)",
+        "customer_price": 0.65,
+        "reference_price": 0.65,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 3
+      },
+      {
+        "model": "官方直连sd2.0(mini全参不排队480P)",
+        "customer_price": 0.193,
+        "reference_price": 0.193,
+        "resolutions": [
+          "480p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 3
+      },
+      {
+        "model": "官方直连sd2.0(mini全参不排队720P)",
+        "customer_price": 0.32,
+        "reference_price": 0.32,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 3
+      },
+      {
+        "model": "官方直连sd2.0(满血全参不排队1080P)",
+        "customer_price": 1.75,
+        "reference_price": 1.75,
+        "resolutions": [
+          "1080p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 3
+      },
+      {
+        "model": "官方直连sd2.0(满血全参不排队480P)",
+        "customer_price": 0.56,
+        "reference_price": 0.56,
+        "resolutions": [
+          "480p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 3
+      },
+      {
+        "model": "官方直连sd2.0(满血全参不排队4K)",
+        "customer_price": 5.55,
+        "reference_price": 0,
+        "resolutions": [
+          "4k"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 0
+      },
+      {
+        "model": "官方直连sd2.0(满血全参不排队720P)",
+        "customer_price": 0.78,
+        "reference_price": 0.78,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 3
+      },
+      {
+        "model": "官方直连sd2.5(满血全参不排队1080P)",
+        "customer_price": 2.5,
+        "reference_price": 2.5,
+        "resolutions": [
+          "1080p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 10
+      },
+      {
+        "model": "官方直连sd2.5(满血全参不排队480P)",
+        "customer_price": 0.92,
+        "reference_price": 0.92,
+        "resolutions": [
+          "480p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 10
+      },
+      {
+        "model": "官方直连sd2.5(满血全参不排队720P)",
+        "customer_price": 1.2,
+        "reference_price": 1.2,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 10
+      },
+      {
+        "model": "官方直连wan3.0(10-5-5不卡脸1080P)",
+        "customer_price": 0.9,
+        "reference_price": 0,
+        "resolutions": [
+          "1080p"
+        ],
+        "reference_price_pending": true,
+        "max_video_references": 0
+      },
+      {
+        "model": "官方直连wan3.0(10-5-5不卡脸720P)",
+        "customer_price": 0.55,
+        "reference_price": 0,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": true,
+        "max_video_references": 0
+      },
+      {
+        "model": "官转sd2.0(903不卡脸不排队720P)",
+        "customer_price": 0.7,
+        "reference_price": 0,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 0
+      },
+      {
+        "model": "官转sd2.0(mini903不卡脸不排队720P)",
+        "customer_price": 0.53,
+        "reference_price": 0,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 0
+      },
+      {
+        "model": "官转sd2.5(30图10音不卡脸1080P)",
+        "customer_price": 1.05,
+        "reference_price": 0,
+        "resolutions": [
+          "1080p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 0
+      },
+      {
+        "model": "官转sd2.5(30图10音不卡脸720P)",
+        "customer_price": 0.95,
+        "reference_price": 0,
+        "resolutions": [
+          "720p"
+        ],
+        "reference_price_pending": false,
+        "max_video_references": 0
+      },
+      {
+        "model": "特价稳定wan3.0(10-5-5不卡脸480P)",
+        "customer_price": 0.45,
+        "reference_price": 0,
+        "resolutions": [
+          "480p"
+        ],
+        "reference_price_pending": true,
+        "max_video_references": 0
+      }
+    ],
+    "public_model_count": 18,
+    "public_prices_and_capabilities_match": true,
+    "initial_group_model_count": 11
+  },
+  "public_browser_passed": true
+}

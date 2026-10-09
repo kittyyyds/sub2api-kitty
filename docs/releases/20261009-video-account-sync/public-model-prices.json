@@ -1,0 +1,1182 @@
+{
+  "id": 25,
+  "name": "\u5b98\u65b9 - \u76f4\u8fde - \u7ba1\u8f6c\u3010\u89c6\u9891\u6a21\u578b\u3011",
+  "description": "\u5185\u5305\u542bSD2\u3001SD2.5\u3001wan \u7b49\u7b49 \u81ea\u884c\u62c9\u53d6\u6a21\u578b\u5373\u53ef",
+  "platform": "video",
+  "subscription_type": "standard",
+  "rate_multiplier": 1,
+  "image_rate_independent": false,
+  "image_rate_multiplier": 1,
+  "video_rate_independent": true,
+  "video_rate_multiplier": 1,
+  "long_context_pricing_enabled": false,
+  "peak_rate_enabled": false,
+  "peak_start": "",
+  "peak_end": "",
+  "peak_rate_multiplier": 1,
+  "is_exclusive": false,
+  "models": [
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(fast\u5168\u53c2\u4e0d\u6392\u961f480P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.42,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0.42,
+        "resolution_prices": {
+          "480p": 0.42
+        }
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 480p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 3 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 3
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "480p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(fast\u5168\u53c2\u4e0d\u6392\u961f720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.65,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0.65,
+        "resolution_prices": {
+          "720p": 0.65
+        }
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 3 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 3
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(mini\u5168\u53c2\u4e0d\u6392\u961f480P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.193,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0.193,
+        "resolution_prices": {
+          "480p": 0.193
+        }
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 480p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 3 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 3
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "480p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(mini\u5168\u53c2\u4e0d\u6392\u961f720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.32,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0.32,
+        "resolution_prices": {
+          "720p": 0.32
+        }
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 3 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 3
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(\u6ee1\u8840\u5168\u53c2\u4e0d\u6392\u961f1080P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 1.75,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 1.75,
+        "resolution_prices": {
+          "1080p": 1.75
+        }
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 1080p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 3 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 3
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "1080p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(\u6ee1\u8840\u5168\u53c2\u4e0d\u6392\u961f480P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.56,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0.56,
+        "resolution_prices": {
+          "480p": 0.56
+        }
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 480p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 3 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 3
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "480p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(\u6ee1\u8840\u5168\u53c2\u4e0d\u6392\u961f4K)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 5.55,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 4k\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "4k"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.0(\u6ee1\u8840\u5168\u53c2\u4e0d\u6392\u961f720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.78,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0.78,
+        "resolution_prices": {
+          "720p": 0.78
+        }
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 3 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 3
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.5(\u6ee1\u8840\u5168\u53c2\u4e0d\u6392\u961f1080P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 2.5,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 2.5,
+        "resolution_prices": {
+          "1080p": 2.5
+        }
+      },
+      "description": "\u65f6\u957f 4\u201330 \u79d2\uff1b\u5206\u8fa8\u7387 1080p\uff1b\u53c2\u8003\u56fe\u7247 0\u201330 \u5f20\uff0c\u89c6\u9891\u6700\u591a 10 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 10 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 10
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 30
+        },
+        "resolutions": [
+          "1080p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 30
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 10
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.5(\u6ee1\u8840\u5168\u53c2\u4e0d\u6392\u961f480P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.92,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0.92
+      },
+      "description": "\u65f6\u957f 4\u201330 \u79d2\uff1b\u5206\u8fa8\u7387 480p\uff1b\u53c2\u8003\u56fe\u7247 0\u201330 \u5f20\uff0c\u89c6\u9891\u6700\u591a 10 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 10 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 10
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 30
+        },
+        "resolutions": [
+          "480p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 30
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 10
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdesd2.5(\u6ee1\u8840\u5168\u53c2\u4e0d\u6392\u961f720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 1.2,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 1.2
+      },
+      "description": "\u65f6\u957f 4\u201330 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u201330 \u5f20\uff0c\u89c6\u9891\u6700\u591a 10 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 10 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u603b\u65f6\u957f\u4e0d\u8d85\u8fc7 15 \u79d2\uff0c\u6309\u6d4b\u5f97\u65f6\u957f\u548c\u53c2\u8003\u79d2\u4ef7\u8ba1\u8d39\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247\u6216\u89c6\u9891",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 10
+        },
+        "max_reference_seconds": 15,
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 30
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 30
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 10
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdewan3.0(10-5-5\u4e0d\u5361\u81381080P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.9,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u53ef\u9009\u65f6\u957f 5/6/7/8/9/10/11/12/13/14/15/20/25/30 \u79d2\uff1b\u5206\u8fa8\u7387 1080p\uff1b\u53c2\u8003\u56fe\u7247 0\u201310 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 5 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u4ef7\u683c\u672a\u63d0\u4f9b\uff0c\u6682\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "second_options": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          20,
+          25,
+          30
+        ],
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 5,
+          "max": 30
+        },
+        "resolutions": [
+          "1080p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 10
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 5
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u65b9\u76f4\u8fdewan3.0(10-5-5\u4e0d\u5361\u8138720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.55,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u53ef\u9009\u65f6\u957f 5/6/7/8/9/10/11/12/13/14/15/20/25/30 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u201310 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 5 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u4ef7\u683c\u672a\u63d0\u4f9b\uff0c\u6682\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "second_options": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          20,
+          25,
+          30
+        ],
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 5,
+          "max": 30
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 10
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 5
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u8f6csd2.0(903\u4e0d\u5361\u8138\u4e0d\u6392\u961f720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.7,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u8f6csd2.0(mini903\u4e0d\u5361\u8138\u4e0d\u6392\u961f720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.53,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u65f6\u957f 4\u201315 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u20139 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 3 \u4e2a\uff1b\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 15
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 9
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 3
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u8f6csd2.5(30\u56fe10\u97f3\u4e0d\u5361\u81381080P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 1.05,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u65f6\u957f 4\u201330 \u79d2\uff1b\u5206\u8fa8\u7387 1080p\uff1b\u53c2\u8003\u56fe\u7247 0\u201330 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 10 \u4e2a\uff1b\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 30
+        },
+        "resolutions": [
+          "1080p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 30
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 10
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u5b98\u8f6csd2.5(30\u56fe10\u97f3\u4e0d\u5361\u8138720P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.95,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u65f6\u957f 4\u201330 \u79d2\uff1b\u5206\u8fa8\u7387 720p\uff1b\u53c2\u8003\u56fe\u7247 0\u201330 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 10 \u4e2a\uff1b\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 4,
+          "max": 30
+        },
+        "resolutions": [
+          "720p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 30
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 10
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    },
+    {
+      "name": "\u7279\u4ef7\u7a33\u5b9awan3.0(10-5-5\u4e0d\u5361\u8138480P)",
+      "platform": "video",
+      "pricing": {
+        "billing_mode": "video",
+        "input_price": null,
+        "output_price": null,
+        "cache_write_price": null,
+        "cache_write_1h_price": null,
+        "cache_read_price": null,
+        "image_input_price": null,
+        "image_output_price": null,
+        "per_request_price": 0.45,
+        "intervals": [],
+        "final_unit_price": true,
+        "reference_per_second": 0
+      },
+      "description": "\u53ef\u9009\u65f6\u957f 5/6/7/8/9/10/11/12/13/14/15/20/25/30 \u79d2\uff1b\u5206\u8fa8\u7387 480p\uff1b\u53c2\u8003\u56fe\u7247 0\u201310 \u5f20\uff0c\u89c6\u9891\u6700\u591a 0 \u4e2a\uff0c\u97f3\u9891\u6700\u591a 5 \u4e2a\uff1b\u53c2\u8003\u89c6\u9891\u4ef7\u683c\u672a\u63d0\u4f9b\uff0c\u6682\u4e0d\u63a5\u53d7\u53c2\u8003\u89c6\u9891\uff1b\u53c2\u8003\u97f3\u9891\u987b\u540c\u65f6\u63d0\u4f9b\u56fe\u7247",
+      "capabilities": {
+        "second_options": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          20,
+          25,
+          30
+        ],
+        "reference_videos": {
+          "min": 0,
+          "max": 0
+        },
+        "media_type": "video",
+        "supported": true,
+        "provider": "suanli_special",
+        "family": "unified",
+        "seconds": {
+          "min": 5,
+          "max": 30
+        },
+        "resolutions": [
+          "480p"
+        ],
+        "aspect_ratios": [
+          "16:9",
+          "9:16"
+        ],
+        "reference_images": {
+          "min": 0,
+          "max": 10
+        },
+        "reference_audios": {
+          "min": 0,
+          "max": 5
+        },
+        "input_transport": [
+          "public_url",
+          "temporary_upload"
+        ],
+        "operations": [
+          "text_to_video",
+          "image_to_video",
+          "reference_to_video"
+        ],
+        "allow_audio_only": false,
+        "requires_visual_or_audio": false
+      },
+      "official_pricing": null
+    }
+  ]
+}

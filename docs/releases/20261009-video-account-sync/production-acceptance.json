@@ -1,0 +1,39 @@
+{
+  "at": "2026-10-09T13:13:15.115581+00:00",
+  "identity": {
+    "build-manifest.json": "04846e64a7588a1de965ea216d9f5fe68454f8655c0a82cb9a4ec2aeec3c2373",
+    "build-preflight.json": "683a2af1db48ee02360cfec6310f2d18804660e47d0941be2290ee75a3219776",
+    "preflight.json": "683a2af1db48ee02360cfec6310f2d18804660e47d0941be2290ee75a3219776",
+    "recovery/manifest.json": "c2fa716f97fa649a398d21ac0e59fec0c2df261efbc57b798fce110eac007f5c",
+    "recovery/verified.json": "c85703c587cae7e64ff7f4b1efa604483cd58565d8387fa7c95fe69e2c21dde3",
+    "previous-build-manifest.json": "a007f3ab1f378d7ee5c0a89a671c2139e8666b3c9cf05887172523eba4b1cca6"
+  },
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.13",
+      "binary_sha256": "6ca1c2994cc149f0d8458d8acdabd896ef50c7bb01e2bf331a14dbcc609da8d5",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 0,
+      "old_active_ws": 0,
+      "old_retire_ready": true
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.13",
+      "binary_sha256": "23be1cb9869cf2e4b19d62bcc2ac2305218a8e8b9ea42c112deeab621199508f",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 1,
+      "old_active_ws": 1,
+      "old_retire_ready": false
+    }
+  },
+  "passed": true,
+  "paid_requests": 0
+}
