@@ -8,7 +8,7 @@
         项目与素材保存在当前浏览器。请定期导出项目备份；切换设备或清理浏览器数据后，本地内容不会自动恢复。调用模型仍按所选密钥的分组价格计费。
       </div>
       <div class="flex flex-wrap gap-3">
-        <a class="btn btn-primary" href="/canvas/canvas">进入无限画布</a>
+        <a class="btn btn-primary" :href="canvasUrl">进入无限画布</a>
         <router-link class="btn btn-secondary" to="/video-tasks">查看视频任务</router-link>
       </div>
     </div>
@@ -16,5 +16,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
+const canvasUrl = computed(() => `/canvas/canvas?kitty_version=${encodeURIComponent(appStore.siteVersion || 'v0.8.0-kitty.2')}`)
 </script>
