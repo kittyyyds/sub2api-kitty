@@ -1,0 +1,132 @@
+{
+  "version": "2.9.9-kitty.10",
+  "runtime_commit": "b843a67762194d5123a760d4b29ff1568b5ef230",
+  "production_verified_at": "2026-10-09T03:21:40.235311+00:00",
+  "canvas_runtime_commit": "1673403705f0918e93b9f08f288ce620dab7089a",
+  "canvas_version": "v0.8.0-kitty.2",
+  "canvas_image": "sha256:0bd6eab77b15d1b6b4ec686f06cb3bb6d93121408dd876b3614ae06240675e57",
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.10",
+      "binary_sha256": "26f91b4c81d5d4770d09595cf86a63cd4884d10c204180165446d53397788d45",
+      "restart_count": 0,
+      "migration_count": 362,
+      "historical_migrations_unchanged": true,
+      "existing_settings_unchanged": true,
+      "existing_video_prices_unchanged": true,
+      "fatal_errors": 0,
+      "hosts": {
+        "kittyapi.xyz": {
+          "/health": 200,
+          "/api/v1/settings/public": 200,
+          "/dashboard": 200,
+          "/monitor": 200,
+          "/admin/plugins": 200,
+          "/admin/video-upstream": 200,
+          "/apps": 200,
+          "/creative-canvas": 200,
+          "/video-tasks": 200,
+          "/api/v1/admin/video-upstream": 401,
+          "/api/v1/canvas/bootstrap": 401,
+          "/api/v1/usage/dashboard/stats": 401,
+          "/api/v1/announcements": 401,
+          "canvas": {
+            "page": 200,
+            "versioned_entry": "2.9.9-kitty.10",
+            "html_cache_control": "no-store, max-age=0",
+            "new_chunks_verified": 3
+          }
+        },
+        "cdn.kittyapi.xyz": {
+          "/health": 200,
+          "/api/v1/settings/public": 200,
+          "/dashboard": 200,
+          "/monitor": 200,
+          "/admin/plugins": 200,
+          "/admin/video-upstream": 200,
+          "/apps": 200,
+          "/creative-canvas": 200,
+          "/video-tasks": 200,
+          "/api/v1/admin/video-upstream": 401,
+          "/api/v1/canvas/bootstrap": 401,
+          "/api/v1/usage/dashboard/stats": 401,
+          "/api/v1/announcements": 401,
+          "canvas": {
+            "page": 200,
+            "versioned_entry": "2.9.9-kitty.10",
+            "html_cache_control": "no-store, max-age=0",
+            "new_chunks_verified": 3
+          }
+        }
+      },
+      "old_active_requests_at_verification": 0
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.10",
+      "binary_sha256": "713609d8cab1413ccae4c35d214c47be9570712a08a9923c97b95802059820ae",
+      "restart_count": 0,
+      "migration_count": 362,
+      "historical_migrations_unchanged": true,
+      "existing_settings_unchanged": true,
+      "existing_video_prices_unchanged": true,
+      "fatal_errors": 0,
+      "hosts": {
+        "kittyyyds.xyz": {
+          "/health": 200,
+          "/api/v1/settings/public": 200,
+          "/dashboard": 200,
+          "/monitor": 200,
+          "/admin/plugins": 200,
+          "/admin/video-upstream": 200,
+          "/apps": 200,
+          "/creative-canvas": 200,
+          "/video-tasks": 200,
+          "/api/v1/admin/video-upstream": 401,
+          "/api/v1/canvas/bootstrap": 401,
+          "/api/v1/usage/dashboard/stats": 401,
+          "/api/v1/announcements": 401,
+          "canvas": {
+            "page": 200,
+            "versioned_entry": "2.9.9-kitty.10",
+            "html_cache_control": "no-store, max-age=0",
+            "new_chunks_verified": 3
+          }
+        },
+        "cdn.kittyyyds.xyz": {
+          "/health": 200,
+          "/api/v1/settings/public": 200,
+          "/dashboard": 200,
+          "/monitor": 200,
+          "/admin/plugins": 200,
+          "/admin/video-upstream": 200,
+          "/apps": 200,
+          "/creative-canvas": 200,
+          "/video-tasks": 200,
+          "/api/v1/admin/video-upstream": 401,
+          "/api/v1/canvas/bootstrap": 401,
+          "/api/v1/usage/dashboard/stats": 401,
+          "/api/v1/announcements": 401,
+          "canvas": {
+            "page": 200,
+            "versioned_entry": "2.9.9-kitty.10",
+            "html_cache_control": "no-store, max-age=0",
+            "new_chunks_verified": 3
+          }
+        }
+      },
+      "old_active_requests_at_verification": 7
+    }
+  },
+  "real_paid_model_tests": 0,
+  "backup": {
+    "server_postgres_and_redis_verified": true,
+    "source_completed_at": "2026-10-09T02:36:40.487296+00:00",
+    "offsite_all_files_sha256_verified": false
+  },
+  "evidence_sha256": {
+    "server-acceptance-v10.json": "fb7c7930b3441b5f6cf333dd084c14671be450becd3e3cac74343517a0d636d4",
+    "server-linux-v10.json": "01fd0c85040978e2de6ccd9497bf63882fcd482b33308172deb5e69d7ad5e206",
+    "server-rollback-acceptance.json": "b3640c893d4b880bc5d30587e626c5f1de2f6df167aad50bbe31cb09dbbe931e",
+    "cache-policy-v10.json": "d6d8c145d4c79e35800e2a0d507caf307fa0600c3548a17834b67be68c2357ad"
+  }
+}
