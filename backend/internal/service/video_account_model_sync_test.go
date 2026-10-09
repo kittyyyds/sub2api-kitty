@@ -151,3 +151,28 @@ func TestVideoAccountSyncIncompleteStaticMetadataUsesGenericContract(t *testing.
 	require.True(t, cost.Spec.ReferencePricePending)
 	require.Zero(t, cost.Spec.MaxVideos)
 }
+
+func TestVideoAccountSyncReferenceCapabilityFollowsItsPrice(t *testing.T) {
+	models, bindings, cfg := accountSyncFixture(t)
+	model := "官方直连sd2.0(fast全参不排队480P)"
+	bindings[0].Models = map[string]string{model: model}
+	rows, _ := reconcileVideoAccountPricing(nil, bindings, models, cfg, "t1", true)
+	cost := models[model]
+	spec := *cost.Spec
+	spec.ReferencePricePending, spec.MaxVideos, spec.MaxReferenceSeconds = true, 0, 0
+	cost.Spec, cost.ReferencePriceKnown, cost.ReferencePerSecond = &spec, false, 0
+	// Even without auto-import, a disappearing reference price cannot become a
+	// zero-priced reference input on an existing automatically repriced model.
+	entry, err := repriceVideoEntry(rows[0], cost, cfg, "t2", false)
+	require.NoError(t, err)
+	require.Zero(t, entry.Video.Spec.MaxVideos)
+	require.Zero(t, entry.Video.ReferencePerSecond)
+	// Conversely, capability cannot reopen while price updates are disabled.
+	kept, warning := reconcileVideoAccountPricing([]ChannelModelPricing{entry}, bindings, models, cfg, "t3", false)
+	require.False(t, warning)
+	require.Zero(t, kept[0].Video.Spec.MaxVideos)
+	updated, warning := reconcileVideoAccountPricing(kept, bindings, models, cfg, "t4", true)
+	require.False(t, warning)
+	require.Equal(t, 3, updated[0].Video.Spec.MaxVideos)
+	require.InDelta(t, .42, updated[0].Video.ReferencePerSecond, 1e-8)
+}

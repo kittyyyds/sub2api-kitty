@@ -116,7 +116,10 @@ func reconcileVideoAccountPricing(previous []ChannelModelPricing, bindings []Vid
 		v := *entry.Video
 		candidate.Video = &v
 		if managed {
-			v.AccountSynced, v.Spec = true, *cost.Spec
+			v.AccountSynced = true
+			if reprice || remapped {
+				v.Spec = *cost.Spec
+			}
 		}
 		if reprice || remapped {
 			updated, err := repriceVideoEntry(candidate, cost, cfg, at, remapped)

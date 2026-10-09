@@ -295,6 +295,9 @@ func repriceVideoEntry(entry ChannelModelPricing, cost VideoSupplierPrice, cfg V
 		old = *entry.PerRequestPrice
 	}
 	v := *entry.Video
+	if cost.Spec != nil && cost.Spec.ReferencePricePending {
+		v.Spec.MaxVideos, v.Spec.MaxReferenceSeconds, v.Spec.ReferencePricePending = 0, 0, true
+	}
 	add, oldAdd := markup.OutputPerSecond, v.AppliedMarkup.OutputPerSecond
 	if cost.BillingMode == BillingModePerRequest {
 		add, oldAdd = markup.PerRequest, v.AppliedMarkup.PerRequest
