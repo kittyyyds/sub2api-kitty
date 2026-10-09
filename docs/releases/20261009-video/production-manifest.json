@@ -128,5 +128,17 @@
     "server-linux-v10.json": "01fd0c85040978e2de6ccd9497bf63882fcd482b33308172deb5e69d7ad5e206",
     "server-rollback-acceptance.json": "b3640c893d4b880bc5d30587e626c5f1de2f6df167aad50bbe31cb09dbbe931e",
     "cache-policy-v10.json": "d6d8c145d4c79e35800e2a0d507caf307fa0600c3548a17834b67be68c2357ad"
+  },
+  "build_migration_overrides": {
+    "kittyapi": {
+      "241_add_typesafe_platform.sql": "174c693fde33cfd6f24c0cf3fc40a0eec1afa808c20e149a9347863abfe6a9c9",
+      "263_kitty_typesafe_video_platforms.sql": "4ada281e7ddf495ed6bbdcbfe7cf7aa41e8f1ff56c38c0c566a22e387676c3c4",
+      "264_retire_kitty_manual_prism.sql": "440800427c437c67349159be8c99895d6cef33f77d46d32f1f9871d073a80f05"
+    },
+    "kittyyyds": {
+      "241_add_typesafe_platform.sql": "174c693fde33cfd6f24c0cf3fc40a0eec1afa808c20e149a9347863abfe6a9c9",
+      "263_kitty_typesafe_video_platforms.sql": "4ada281e7ddf495ed6bbdcbfe7cf7aa41e8f1ff56c38c0c566a22e387676c3c4",
+      "264_retire_kitty_manual_prism.sql": "440800427c437c67349159be8c99895d6cef33f77d46d32f1f9871d073a80f05"
+    }
   }
 }

@@ -33,3 +33,9 @@ CDN曾返回带一年共享缓存的旧画布HTML（部分节点响应Server为C
 兼容回退版`2.9.9-kitty.8-video-rollback1`已通过Linux schema副本验证，保留新增迁移以避免旧程序拒绝启动。仅在没有新预扣任务且未启用统一型号时才可回退旧业务；存在新任务则保留新版结算能力，采用前向修复。
 
 本次保留独立发布分支与精确生产tag，不覆盖main或历史发布记录。
+
+## 重建输入
+
+两站历史SQL并非完全相同。本目录`migration-overrides/<site>/`保存相对运行源码的三个历史SQL字节覆盖，清单包含文件SHA。重建时先检出精确运行commit，再只复制目标站点的覆盖到`backend/migrations`，使用对应`VITE_KITTY_SITE`及Go的`releaseSiteID`，禁止使用另一站覆盖。保留当前生产已执行migration校验和，不能改数据库ledger以适配不同SQL。
+
+构建还需合并前版已发布的哈希静态资源。已验收完整构建树、二进制、Canvas OCI、兼容回退包与各自manifest保存在本机D盘的`kitty-video-release-20261009`及`kitty-video-release-20261009-r2`，服务器恢复目录也保留了部署包。只检出公共源码直接构建并不包含这些兼容输入。
