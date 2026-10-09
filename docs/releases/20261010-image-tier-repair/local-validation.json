@@ -1,0 +1,9 @@
+{
+  "go_related_regressions": "passed",
+  "frontend_tests": 125,
+  "typecheck": "passed",
+  "eslint_changed_files": "passed",
+  "browser": true,
+  "source_commit": "fe1b27b2a3aae39a4d0ea2d7124f287101d57fd3",
+  "schema_migrations_changed": false
+}

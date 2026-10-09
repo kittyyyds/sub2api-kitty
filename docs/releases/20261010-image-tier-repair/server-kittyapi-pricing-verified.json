@@ -1,0 +1,396 @@
+{
+  "site": "kittyapi",
+  "version": "2.9.9-kitty.16",
+  "at": "2026-10-09T20:07:16.074973+00:00",
+  "group_id": 50,
+  "account_id": 12396,
+  "settings": {
+    "auto_sync": true,
+    "auto_import_account_models": true,
+    "follow_increase": true,
+    "follow_decrease": false,
+    "interval_seconds": 60,
+    "markup": 0
+  },
+  "configured_models": 31,
+  "automatic_models": 31,
+  "public_prices_match_billing": true,
+  "last_success": "2026-10-09T20:07:13Z",
+  "last_sync_attempt": "2026-10-09T20:07:13Z",
+  "last_error": "",
+  "prices": [
+    {
+      "model": "Banana-2-\u9999\u85492",
+      "upstream": 0.095,
+      "markup": 0,
+      "selling_price": 0.095,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "Banana-pro-\u9999\u8549pro",
+      "upstream": 0.1,
+      "markup": 0,
+      "selling_price": 0.1,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2",
+      "upstream": 0.08,
+      "markup": 0,
+      "selling_price": 0.08,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2(\u539f\u751f\u9ad8\u8d28\u91cf\u652f\u6301\u771f4K)",
+      "upstream": 0.085,
+      "markup": 0,
+      "selling_price": 0.085,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-1K-\u4f18\u60e0",
+      "upstream": 0.05,
+      "markup": 0,
+      "selling_price": 0.05,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-2/4K-\u4f18\u60e0",
+      "upstream": 0.12,
+      "markup": 0,
+      "selling_price": 0.12,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-4K",
+      "upstream": 0.15,
+      "markup": 0,
+      "selling_price": 0.15,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-4K-\u9ad8\u6e054K",
+      "upstream": 0.2,
+      "markup": 0,
+      "selling_price": 0.2,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-Stable Plus",
+      "upstream": 0.03,
+      "markup": 0,
+      "selling_price": 0.03,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-stable-High quality",
+      "upstream": 0.06,
+      "markup": 0,
+      "selling_price": 0.06,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-\u4f53\u9a8c",
+      "upstream": 0.02,
+      "markup": 0,
+      "selling_price": 0.02,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2-\u5b98\u6e20",
+      "upstream": 0.05,
+      "markup": 0,
+      "selling_price": 0.05,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-flare-\u4f53\u9a8c",
+      "upstream": 0.02,
+      "markup": 0,
+      "selling_price": 0.02,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-flare-\u5907\u7528",
+      "upstream": 0.08,
+      "markup": 0,
+      "selling_price": 0.08,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-flare-\u5b98\u6e20",
+      "upstream": 0.03,
+      "markup": 0,
+      "selling_price": 0.03,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-sunburst-Stable Plus",
+      "upstream": 0.03,
+      "markup": 0,
+      "selling_price": 0.03,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-sunburst-\u5907\u7528",
+      "upstream": 0.08,
+      "markup": 0,
+      "selling_price": 0.08,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-sunburst-\u5b98\u6e20",
+      "upstream": 0.03,
+      "markup": 0,
+      "selling_price": 0.03,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-sunburst-\u7a33\u5b9a",
+      "upstream": 0.03,
+      "markup": 0,
+      "selling_price": 0.03,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "gpt-image-2.5-\u4f53\u9a8c",
+      "upstream": 0.02,
+      "markup": 0,
+      "selling_price": 0.02,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "grok-imagine-image-2.0-\u51fa\u56fe",
+      "upstream": 0.08,
+      "markup": 0,
+      "selling_price": 0.08,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "grok-imagine-image-\u4f53\u9a8c",
+      "upstream": 0.02,
+      "markup": 0,
+      "selling_price": 0.02,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "nano-banana-2-\u7a33\u5b9a\u51fa\u56fe",
+      "upstream": 0.15,
+      "markup": 0,
+      "selling_price": 0.15,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "nano-banana-pro-\u7a33\u5b9a\u51fa\u56fe",
+      "upstream": 0.15,
+      "markup": 0,
+      "selling_price": 0.15,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "\u4f18\u8d28\u6e20\u9053-gpt-image-2",
+      "upstream": 0.09,
+      "markup": 0,
+      "selling_price": 0.09,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "\u4f18\u8d28\u6e20\u9053-gpt-image-2.5",
+      "upstream": 0.1,
+      "markup": 0,
+      "selling_price": 0.1,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "\u4f18\u8d28\u6e20\u9053-gpt-image-2.5-flare",
+      "upstream": 0.12,
+      "markup": 0,
+      "selling_price": 0.12,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "\u4f18\u8d28\u6e20\u9053-gpt-image-2.5-sunburst",
+      "upstream": 0.2,
+      "markup": 0,
+      "selling_price": 0.2,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "\u4f18\u8d28\u6e20\u90532-gpt-image-2",
+      "upstream": 0.12,
+      "markup": 0,
+      "selling_price": 0.12,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "\u4f18\u8d28\u6e20\u90532-gpt-image-2K",
+      "upstream": 0.15,
+      "markup": 0,
+      "selling_price": 0.15,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    {
+      "model": "\u4f18\u8d28\u6e20\u90532-gpt-image-4K",
+      "upstream": 0.18,
+      "markup": 0,
+      "selling_price": 0.18,
+      "automatic": true,
+      "tiers": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    }
+  ],
+  "paid_requests": 0
+}

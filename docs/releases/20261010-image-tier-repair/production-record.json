@@ -1,0 +1,925 @@
+{
+  "version": "2.9.9-kitty.16",
+  "runtime_commit": "fe1b27b2a3aae39a4d0ea2d7124f287101d57fd3",
+  "sites": {
+    "kittyapi": {
+      "site": "kittyapi",
+      "version": "2.9.9-kitty.16",
+      "at": "2026-10-09T20:07:16.074973+00:00",
+      "group_id": 50,
+      "account_id": 12396,
+      "settings": {
+        "auto_sync": true,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": 0
+      },
+      "configured_models": 31,
+      "automatic_models": 31,
+      "public_prices_match_billing": true,
+      "last_success": "2026-10-09T20:07:13Z",
+      "last_sync_attempt": "2026-10-09T20:07:13Z",
+      "last_error": "",
+      "prices": [
+        {
+          "model": "Banana-2-香蕉2",
+          "upstream": 0.095,
+          "markup": 0,
+          "selling_price": 0.095,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "Banana-pro-香蕉pro",
+          "upstream": 0.1,
+          "markup": 0,
+          "selling_price": 0.1,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2",
+          "upstream": 0.08,
+          "markup": 0,
+          "selling_price": 0.08,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2(原生高质量支持真4K)",
+          "upstream": 0.085,
+          "markup": 0,
+          "selling_price": 0.085,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-1K-优惠",
+          "upstream": 0.05,
+          "markup": 0,
+          "selling_price": 0.05,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-2/4K-优惠",
+          "upstream": 0.12,
+          "markup": 0,
+          "selling_price": 0.12,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-4K",
+          "upstream": 0.15,
+          "markup": 0,
+          "selling_price": 0.15,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-4K-高清4K",
+          "upstream": 0.2,
+          "markup": 0,
+          "selling_price": 0.2,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-Stable Plus",
+          "upstream": 0.03,
+          "markup": 0,
+          "selling_price": 0.03,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-stable-High quality",
+          "upstream": 0.06,
+          "markup": 0,
+          "selling_price": 0.06,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-体验",
+          "upstream": 0.02,
+          "markup": 0,
+          "selling_price": 0.02,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-官渠",
+          "upstream": 0.05,
+          "markup": 0,
+          "selling_price": 0.05,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-flare-体验",
+          "upstream": 0.02,
+          "markup": 0,
+          "selling_price": 0.02,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-flare-备用",
+          "upstream": 0.08,
+          "markup": 0,
+          "selling_price": 0.08,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-flare-官渠",
+          "upstream": 0.03,
+          "markup": 0,
+          "selling_price": 0.03,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-Stable Plus",
+          "upstream": 0.03,
+          "markup": 0,
+          "selling_price": 0.03,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-备用",
+          "upstream": 0.08,
+          "markup": 0,
+          "selling_price": 0.08,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-官渠",
+          "upstream": 0.03,
+          "markup": 0,
+          "selling_price": 0.03,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-稳定",
+          "upstream": 0.03,
+          "markup": 0,
+          "selling_price": 0.03,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-体验",
+          "upstream": 0.02,
+          "markup": 0,
+          "selling_price": 0.02,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "grok-imagine-image-2.0-出图",
+          "upstream": 0.08,
+          "markup": 0,
+          "selling_price": 0.08,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "grok-imagine-image-体验",
+          "upstream": 0.02,
+          "markup": 0,
+          "selling_price": 0.02,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "nano-banana-2-稳定出图",
+          "upstream": 0.15,
+          "markup": 0,
+          "selling_price": 0.15,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "nano-banana-pro-稳定出图",
+          "upstream": 0.15,
+          "markup": 0,
+          "selling_price": 0.15,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2",
+          "upstream": 0.09,
+          "markup": 0,
+          "selling_price": 0.09,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2.5",
+          "upstream": 0.1,
+          "markup": 0,
+          "selling_price": 0.1,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2.5-flare",
+          "upstream": 0.12,
+          "markup": 0,
+          "selling_price": 0.12,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2.5-sunburst",
+          "upstream": 0.2,
+          "markup": 0,
+          "selling_price": 0.2,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道2-gpt-image-2",
+          "upstream": 0.12,
+          "markup": 0,
+          "selling_price": 0.12,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道2-gpt-image-2K",
+          "upstream": 0.15,
+          "markup": 0,
+          "selling_price": 0.15,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道2-gpt-image-4K",
+          "upstream": 0.18,
+          "markup": 0,
+          "selling_price": 0.18,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        }
+      ],
+      "paid_requests": 0
+    },
+    "kittyyyds": {
+      "site": "kittyyyds",
+      "version": "2.9.9-kitty.16",
+      "at": "2026-10-09T20:11:05.282963+00:00",
+      "group_id": 36,
+      "account_id": 276,
+      "settings": {
+        "auto_sync": true,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": 0.02
+      },
+      "configured_models": 31,
+      "automatic_models": 31,
+      "public_prices_match_billing": true,
+      "additional_non_image_models": [
+        "codex-auto-review",
+        "gpt-5.2",
+        "gpt-5.3-codex-spark",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.5",
+        "gpt-5.6",
+        "gpt-5.6-luna",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-6",
+        "gpt-6-astra",
+        "gpt-6-luna",
+        "gpt-6-sol",
+        "gpt-6.1-sol"
+      ],
+      "last_success": "2026-10-09T20:10:31Z",
+      "last_sync_attempt": "2026-10-09T20:10:31Z",
+      "last_error": "",
+      "prices": [
+        {
+          "model": "Banana-2-香蕉2",
+          "upstream": 0.095,
+          "markup": 0.02,
+          "selling_price": 0.115,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "Banana-pro-香蕉pro",
+          "upstream": 0.1,
+          "markup": 0.02,
+          "selling_price": 0.12,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2",
+          "upstream": 0.08,
+          "markup": 0.02,
+          "selling_price": 0.1,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2(原生高质量支持真4K)",
+          "upstream": 0.085,
+          "markup": 0.02,
+          "selling_price": 0.105,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-1K-优惠",
+          "upstream": 0.05,
+          "markup": 0.02,
+          "selling_price": 0.07,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-2/4K-优惠",
+          "upstream": 0.12,
+          "markup": 0.02,
+          "selling_price": 0.14,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-4K",
+          "upstream": 0.15,
+          "markup": 0.02,
+          "selling_price": 0.17,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-4K-高清4K",
+          "upstream": 0.2,
+          "markup": 0.02,
+          "selling_price": 0.22,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-Stable Plus",
+          "upstream": 0.03,
+          "markup": 0.02,
+          "selling_price": 0.05,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-stable-High quality",
+          "upstream": 0.06,
+          "markup": 0.02,
+          "selling_price": 0.08,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-体验",
+          "upstream": 0.02,
+          "markup": 0.02,
+          "selling_price": 0.04,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2-官渠",
+          "upstream": 0.05,
+          "markup": 0.02,
+          "selling_price": 0.07,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-flare-体验",
+          "upstream": 0.02,
+          "markup": 0.02,
+          "selling_price": 0.04,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-flare-备用",
+          "upstream": 0.08,
+          "markup": 0.02,
+          "selling_price": 0.1,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-flare-官渠",
+          "upstream": 0.03,
+          "markup": 0.02,
+          "selling_price": 0.05,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-Stable Plus",
+          "upstream": 0.03,
+          "markup": 0.02,
+          "selling_price": 0.05,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-备用",
+          "upstream": 0.08,
+          "markup": 0.02,
+          "selling_price": 0.1,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-官渠",
+          "upstream": 0.03,
+          "markup": 0.02,
+          "selling_price": 0.05,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-sunburst-稳定",
+          "upstream": 0.03,
+          "markup": 0.02,
+          "selling_price": 0.05,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "gpt-image-2.5-体验",
+          "upstream": 0.02,
+          "markup": 0.02,
+          "selling_price": 0.04,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "grok-imagine-image-2.0-出图",
+          "upstream": 0.08,
+          "markup": 0.02,
+          "selling_price": 0.1,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "grok-imagine-image-体验",
+          "upstream": 0.02,
+          "markup": 0.02,
+          "selling_price": 0.04,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "nano-banana-2-稳定出图",
+          "upstream": 0.15,
+          "markup": 0.02,
+          "selling_price": 0.17,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "nano-banana-pro-稳定出图",
+          "upstream": 0.15,
+          "markup": 0.02,
+          "selling_price": 0.17,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2",
+          "upstream": 0.09,
+          "markup": 0.02,
+          "selling_price": 0.11,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2.5",
+          "upstream": 0.1,
+          "markup": 0.02,
+          "selling_price": 0.12,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2.5-flare",
+          "upstream": 0.12,
+          "markup": 0.02,
+          "selling_price": 0.14,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道-gpt-image-2.5-sunburst",
+          "upstream": 0.2,
+          "markup": 0.02,
+          "selling_price": 0.22,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道2-gpt-image-2",
+          "upstream": 0.12,
+          "markup": 0.02,
+          "selling_price": 0.14,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道2-gpt-image-2K",
+          "upstream": 0.15,
+          "markup": 0.02,
+          "selling_price": 0.17,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        },
+        {
+          "model": "优质渠道2-gpt-image-4K",
+          "upstream": 0.18,
+          "markup": 0.02,
+          "selling_price": 0.2,
+          "automatic": true,
+          "tiers": [
+            "1K",
+            "2K",
+            "4K"
+          ]
+        }
+      ],
+      "paid_requests": 0
+    }
+  },
+  "linux_acceptance": {
+    "at": "2026-10-09T20:02:43.446189+00:00",
+    "run_id": "img-tier16-20261009200243-04be69",
+    "identity": {
+      "build-manifest.json": "c100b7eb01404bfdf75b9dc1c7ba5ad90edea0171c5d1cfa20279fc27a8288ad",
+      "build-preflight.json": "bbc343a1220a0311bd53c75744c6bfa929c9b7734ad221614cb7d3b0a03df73c",
+      "preflight.json": "bbc343a1220a0311bd53c75744c6bfa929c9b7734ad221614cb7d3b0a03df73c",
+      "recovery/manifest.json": "be15c382ac55044aca740485f2abc5194f84f8457799757b9e032083903bcc18",
+      "recovery/verified.json": "771944d4823903c0d3858e4d5c5a6ba60b9fc0e3f65738aa43cef8b05b79ced7",
+      "previous-build-manifest.json": "c4460a13018522a273badee1b448abf5aadb234a6bb100ffb9e9f65cb0f189ff"
+    },
+    "passed": true,
+    "sites": {
+      "kittyapi": {
+        "version": "2.9.9-kitty.16",
+        "schema_count": 363,
+        "schema_unchanged": true,
+        "previous_schema_boot": true,
+        "image_checks_passed": true,
+        "empty_group_saved": true,
+        "upstream_empty_price_saved": true,
+        "manual_zero_saved": true,
+        "account_saved": true,
+        "account_kind": "video_model_prices",
+        "probe_preserved_prices": true,
+        "quote_did_not_charge": true,
+        "managed_handoff": true,
+        "previous_version": "2.9.9-kitty.15",
+        "plaza_final_reference_resolution_quote_match": true,
+        "unsupported_resolution_rejected": true,
+        "plaza_no_cost_or_markup": true,
+        "unpriced_group_hidden": true,
+        "account_auto_models_alias_scope_and_lifecycle": true,
+        "generic_model_and_canvas_quote": true,
+        "manual_preserved_after_sync": true
+      },
+      "kittyyyds": {
+        "version": "2.9.9-kitty.16",
+        "schema_count": 363,
+        "schema_unchanged": true,
+        "previous_schema_boot": true,
+        "image_checks_passed": true,
+        "empty_group_saved": true,
+        "upstream_empty_price_saved": true,
+        "manual_zero_saved": true,
+        "account_saved": true,
+        "account_kind": "video_model_prices",
+        "probe_preserved_prices": true,
+        "quote_did_not_charge": true,
+        "managed_handoff": true,
+        "previous_version": "2.9.9-kitty.15",
+        "plaza_final_reference_resolution_quote_match": true,
+        "unsupported_resolution_rejected": true,
+        "plaza_no_cost_or_markup": true,
+        "unpriced_group_hidden": true,
+        "account_auto_models_alias_scope_and_lifecycle": true,
+        "generic_model_and_canvas_quote": true,
+        "manual_preserved_after_sync": true
+      }
+    },
+    "external_network": false,
+    "paid_requests": 0,
+    "production_database_changes": false,
+    "tool_sha256": "c7594255ad57da94ccc366cfe2a55cd0c7c2cd88f3ec0e6916373d07df62cc7f",
+    "common_sha256": "143b2d86a68e63706d995f940fcf4056fe8905db31cdf915163aed25cba538ad",
+    "image_test_sha256": "fd90412ea9ba068118130e353903f63263768364d973345c506f3ecd49997243"
+  },
+  "production_acceptance": {
+    "at": "2026-10-09T20:11:05.525589+00:00",
+    "identity": {
+      "build-manifest.json": "c100b7eb01404bfdf75b9dc1c7ba5ad90edea0171c5d1cfa20279fc27a8288ad",
+      "build-preflight.json": "bbc343a1220a0311bd53c75744c6bfa929c9b7734ad221614cb7d3b0a03df73c",
+      "preflight.json": "bbc343a1220a0311bd53c75744c6bfa929c9b7734ad221614cb7d3b0a03df73c",
+      "recovery/manifest.json": "be15c382ac55044aca740485f2abc5194f84f8457799757b9e032083903bcc18",
+      "recovery/verified.json": "771944d4823903c0d3858e4d5c5a6ba60b9fc0e3f65738aa43cef8b05b79ced7",
+      "previous-build-manifest.json": "c4460a13018522a273badee1b448abf5aadb234a6bb100ffb9e9f65cb0f189ff"
+    },
+    "sites": {
+      "kittyapi": {
+        "version": "2.9.9-kitty.16",
+        "binary_sha256": "1fcd8360d4458c5ad1bce872c3a27010bc0c5d799af2d9cf28c3d837806cd476",
+        "schema_count": 363,
+        "price_digest_unchanged": true,
+        "leader_healthy": true,
+        "canvas_unchanged": true,
+        "old_running": true,
+        "old_active_requests": 0,
+        "old_active_ws": 0,
+        "old_retire_ready": true
+      },
+      "kittyyyds": {
+        "version": "2.9.9-kitty.16",
+        "binary_sha256": "bc42d5e9cf0e9a22bc512bab7c0e82380341e7fc27cdf1574f589e4d9fff490c",
+        "schema_count": 363,
+        "price_digest_unchanged": true,
+        "leader_healthy": true,
+        "canvas_unchanged": true,
+        "old_running": true,
+        "old_active_requests": 0,
+        "old_active_ws": 0,
+        "old_retire_ready": true
+      }
+    },
+    "passed": true,
+    "paid_requests": 0
+  },
+  "no_real_paid_generation": true,
+  "old_instances_left_draining": true,
+  "canvas_unchanged": true,
+  "schema": 363
+}
