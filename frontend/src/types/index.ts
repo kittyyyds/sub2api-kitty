@@ -2,6 +2,7 @@
  * Core Type Definitions for Sub2API Frontend
  */
 
+import type { ImageCatalog } from '@/api/admin/imageUpstream'
 import type { VideoCatalog } from '@/api/admin/videoUpstream'
 
 // ==================== Common Types ====================
@@ -1248,7 +1249,8 @@ export interface UpstreamBalanceSnapshot {
 export type VideoSupplierCatalog = VideoCatalog
 
 export interface UpstreamBillingProbeSnapshot {
-  kind?: 'video_model_prices'
+  kind?: 'video_model_prices' | 'image_model_prices'
+  image_pricing?: ImageCatalog
   video_pricing?: VideoSupplierCatalog
   status: UpstreamBillingProbeStatus
   data?: UpstreamBillingData

@@ -1893,6 +1893,24 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_responses_supported).toBe(false)
   })
 
+  it('saves an image account even when public model price probing fails', async () => {
+    const account = { ...buildAccount(), platform: 'openai', type: 'apikey', credentials: { api_key: 'fixture-key', base_url: 'https://suanliai.top/v1' }, extra: { upstream_billing_probe_enabled: true, upstream_billing_rate_sync_enabled: true } }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    probeVideoPricesMock.mockReset().mockRejectedValue(new Error('offline'))
+    const wrapper = mountModal(account)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="upstream-billing-auto-probe"]').attributes('aria-label')).toBe('admin.accounts.upstreamBilling.video.autoProbe')
+    expect(wrapper.find('[data-testid="upstream-billing-rate-sync"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="account-cost-auto-sync"]').exists()).toBe(false)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock).toHaveBeenCalledOnce()
+    expect(updateAccountMock.mock.calls[0]?.[1]?.upstream_billing_rate_sync_enabled).toBe(false)
+    expect(probeVideoPricesMock).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('updated')).toHaveLength(1)
+  })
+
   it.each(['failed', 'transport', 'disabled'])('keeps video saving independent of price probing (%s) and drops legacy rate sync', async (outcome) => {
     const account = { ...buildAccount(), platform: 'video', credentials: { api_key: 'test-video-key', base_url: 'https://video.example.com' },
       extra: { upstream_billing_probe_enabled: true, upstream_billing_rate_sync_enabled: true } }

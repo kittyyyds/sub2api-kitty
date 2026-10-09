@@ -1462,15 +1462,15 @@
           class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
         >
           <div>
-            <label class="input-label mb-0">{{ t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe') }}</label>
+            <label class="input-label mb-0">{{ t(isModelPriceProbe ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe') }}</label>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbeHint' : 'admin.accounts.upstreamBilling.autoProbeHint') }}
+              {{ t(isModelPriceProbe ? 'admin.accounts.upstreamBilling.video.autoProbeHint' : 'admin.accounts.upstreamBilling.autoProbeHint') }}
             </p>
           </div>
           <Toggle
             v-model="upstreamBillingAutoProbeEnabled"
             data-testid="upstream-billing-auto-probe"
-            :aria-label="t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe')"
+            :aria-label="t(isModelPriceProbe ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe')"
           />
         </div>
 
@@ -3012,7 +3012,7 @@
             class="input"
             data-testid="account-cost-multiplier"
           />
-          <p class="input-hint">{{ t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.costMultiplierHint' : 'admin.accounts.costMultiplierHint') }}</p>
+          <p class="input-hint">{{ t(isModelPriceProbe ? 'admin.accounts.upstreamBilling.video.costMultiplierHint' : 'admin.accounts.costMultiplierHint') }}</p>
         </div>
       </div>
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -3884,6 +3884,7 @@
 </template>
 
 <script setup lang="ts">
+import { usesImagePriceProbe } from "@/utils/modelPriceProbe"
 import OpenAIRequestTimezoneField from './OpenAIRequestTimezoneField.vue'
 import { readOpenAIRequestTimezone, withOpenAIRequestTimezone } from '@/utils/openAIRequestTimezone'
 import AccountTierRoutingFields from './AccountTierRoutingFields.vue'
@@ -4184,6 +4185,7 @@ const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
 const grokMediaProvider = ref<GrokMediaProvider>('')
+const isModelPriceProbe = computed(() => form.platform === 'video' || usesImagePriceProbe(form.platform, apiKeyBaseUrl.value))
 const upstreamBillingAutoProbeEnabled = ref(true)
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）账号类型、API 协议与端点 ──
@@ -5336,11 +5338,11 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
     ) {
       try {
         const result = await adminAPI.accounts.probeUpstreamBilling(account.id)
-        if (payload.platform === 'video' && (result.error || (result.snapshot && result.snapshot.status !== 'ok'))) {
+        if (isModelPriceProbe.value && (result.error || (result.snapshot && result.snapshot.status !== 'ok'))) {
           appStore.showWarning(t('admin.accounts.upstreamBilling.video.savedProbeFailed'))
         }
       } catch {
-        appStore.showWarning(t(payload.platform === 'video'
+        appStore.showWarning(t(isModelPriceProbe.value
           ? 'admin.accounts.upstreamBilling.video.savedProbeFailed'
           : 'admin.accounts.upstreamBilling.probeFailed'))
       }

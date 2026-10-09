@@ -22,6 +22,7 @@ vi.mock('@/api/admin', () => ({
     accounts: { list: vi.fn(), getById: vi.fn() },
   },
 }))
+vi.mock('@/api/admin/imageUpstream', () => ({ imageUpstreamAPI: { get: vi.fn().mockResolvedValue({ settings: { auto_sync: true, auto_import_account_models: true, markup: 0, interval_seconds: 60 }, catalog: { models: {} } }) } }))
 vi.mock('@/api/admin/videoUpstream', () => ({ videoUpstreamAPI: { get: mocks.get } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showSuccess: vi.fn(), showError: mocks.showError }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isSimpleMode: false }) }))
@@ -57,7 +58,7 @@ function mountView() {
         TablePageLayout: defineComponent({ template: '<section><slot name="filters" /><slot name="table" /><slot name="pagination" /></section>' }),
         DataTable: defineComponent({ props: ['data'], template: '<div><div v-for="row in data" :key="row.id" data-testid="group-row"><slot name="cell-actions" :row="row" /></div></div>' }),
         BaseDialog: defineComponent({ props: { show: Boolean }, template: '<div v-if="show"><slot /><slot name="footer" /></div>' }),
-        Select: SelectStub, Pagination: true, ConfirmDialog: true, EmptyState: true, PlatformIcon: true, Icon: true,
+        Select: SelectStub, RouterLink: true, Pagination: true, ConfirmDialog: true, EmptyState: true, PlatformIcon: true, Icon: true,
         GroupCapacityBadge: true, GroupRateMultipliersModal: true, GroupRPMOverridesModal: true, VueDraggable: true,
       },
     },
@@ -234,4 +235,19 @@ describe('GroupsView video pricing payloads', () => {
     const wire = JSON.parse(JSON.stringify(payload))
     expect(wire.model_pricing[0]).toMatchObject({ per_request_price: 1, video: { price_source: 'upstream', auto_price: true, reference_per_second: 0, resolution_prices: {} } })
   })
+  it('preserves image adapter and automatic price metadata when editing a group', async () => {
+    const image = { provider: 'suanli', upstream_model: 'Image-A', auto_price: true, cost: 0.08, applied_markup: 0.1, applied_prices: { '1K': 0.18, '2K': 0.18, '4K': 0.18 } }
+    const pricing = { ...newVideoGroupPricing(), video: undefined, models: ['Image-A'], billing_mode: 'image', per_request_price: 0.18, image }
+    mocks.list.mockResolvedValue({ items: [{ ...group, platform: 'openai', allow_image_generation: true, model_pricing: [pricing], image_model_prices: { 'image-a': image.applied_prices } }], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-row"]').findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="image-group-pricing"]').text()).toContain('0.08')
+    await wrapper.get('#edit-group-form').trigger('submit')
+    await flushPromises()
+    expect(mocks.showError).not.toHaveBeenCalled()
+    expect(mocks.update).toHaveBeenCalledWith(42, expect.objectContaining({ model_pricing: [expect.objectContaining({ image })], image_model_prices: expect.objectContaining({ 'image-a': image.applied_prices }) }))
+  })
+
 })

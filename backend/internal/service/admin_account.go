@@ -887,7 +887,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.Extra == nil {
 		account.Extra = prepareCodexFingerprintExtraForUpdate(account, account.Extra)
 	}
-	if account.Platform == PlatformVideo {
+	if isModelPriceProbeAccount(account) {
+		if isSuanliImageAccount(account) && requestedRateSyncEnabledUpdate != nil && *requestedRateSyncEnabledUpdate {
+			return nil, infraerrors.BadRequest("IMAGE_BILLING_RATE_SYNC_UNSUPPORTED", "图片账号请使用模型自动跟价，不支持同步账号倍率")
+		}
 		if requestedRateSyncEnabledUpdate != nil && *requestedRateSyncEnabledUpdate {
 			return nil, ErrVideoBillingRateSyncUnsupported
 		}
@@ -1406,7 +1409,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		}
 		syncEnabledCount := 0
 		for _, account := range cachedTargets {
-			if account == nil || account.Extra == nil || account.Platform == PlatformVideo {
+			if account == nil || account.Extra == nil || isModelPriceProbeAccount(account) {
 				continue
 			}
 			enabled, _ := account.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)

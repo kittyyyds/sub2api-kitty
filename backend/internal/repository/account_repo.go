@@ -3093,7 +3093,7 @@ func (r *accountRepository) UpdateUpstreamBillingProbeSnapshot(
 		return service.ErrAccountNilInput
 	}
 	if snapshot.Status != service.UpstreamBillingProbeStatusOK || account.Platform == service.PlatformVideo ||
-		snapshot.Kind == service.UpstreamBillingProbeKindVideoModelPrices {
+		snapshot.Kind == service.UpstreamBillingProbeKindVideoModelPrices || snapshot.Kind == service.UpstreamBillingProbeKindImageModelPrices {
 		rateMultiplier = nil
 	}
 	if dbent.TxFromContext(ctx) == nil {
@@ -3127,7 +3127,7 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 	rateMultiplier *float64,
 ) error {
 	updates := map[string]any{service.UpstreamBillingProbeExtraKey: snapshot}
-	if service.IsUpstreamBillingProbeIdentity(account.Platform, account.Type) && snapshot.Kind != service.UpstreamBillingProbeKindVideoModelPrices {
+	if service.IsUpstreamBillingProbeIdentity(account.Platform, account.Type) && snapshot.Kind != service.UpstreamBillingProbeKindVideoModelPrices && snapshot.Kind != service.UpstreamBillingProbeKindImageModelPrices {
 		if cost, ok := snapshot.CostMultiplierToSync(); ok {
 			updates[service.AccountCostMultiplierExtraKey] = cost
 		}

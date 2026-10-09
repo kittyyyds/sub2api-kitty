@@ -186,6 +186,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { usesModelPriceProbe } from '@/utils/modelPriceProbe'
 import { useI18n } from 'vue-i18n'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -210,8 +211,8 @@ const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000
 // 探测资格已放宽到全部 API-key 平台（上游是 sub2api 即可应答）。
 const eligible = computed(() => props.account.type === 'apikey')
 const snapshot = computed<UpstreamBillingProbeSnapshot | undefined>(() => props.account.extra?.upstream_billing_probe)
-const isVideoPricing = computed(() => props.account.platform === 'video' || snapshot.value?.kind === 'video_model_prices')
-const videoCatalog = computed(() => snapshot.value?.kind === 'video_model_prices' ? snapshot.value.video_pricing : undefined)
+const isVideoPricing = computed(() => usesModelPriceProbe(props.account))
+const videoCatalog = computed(() => snapshot.value?.kind === 'image_model_prices' ? snapshot.value.image_pricing : snapshot.value?.kind === 'video_model_prices' ? snapshot.value.video_pricing : undefined)
 // A catalog must never be interpreted as a token rate, including retained legacy data.
 const data = computed(() => isVideoPricing.value ? undefined : snapshot.value?.data)
 const formatVideoPrice = (value: unknown, mode: string) => {
@@ -227,12 +228,12 @@ const videoModels = computed(() => Object.entries(videoCatalog.value?.models ?? 
   .map(([name, price]) => ({
     name,
     cost: formatVideoPrice(price.unit_price, price.billing_mode),
-    reference: price.billing_mode === 'video' ? formatVideoPrice(price.reference_per_second, 'video') : '',
-    resolutions: Object.entries(price.resolution_prices ?? {}).map(([resolution, value]) => ({
+    reference: price.billing_mode === 'video' ? formatVideoPrice(('reference_per_second' in price ? price.reference_per_second : undefined), 'video') : '',
+    resolutions: Object.entries('resolution_prices' in price ? price.resolution_prices ?? {} : {}).map(([resolution, value]) => ({
       resolution,
       cost: formatVideoPrice(value, price.billing_mode)
     })),
-    unavailable: price.unavailable_reason
+    unavailable: 'unavailable_reason' in price ? price.unavailable_reason : ''
   })))
 const videoFailure = computed(() => snapshot.value?.last_error || videoCatalog.value?.last_error ||
   (snapshot.value?.status === 'failed' ? t('admin.accounts.upstreamBilling.failed') : ''))
@@ -365,7 +366,7 @@ const BALANCE_KEY_STATUS_KEYS: Record<string, string> = {
   quota_exhausted: 'quotaExhausted',
   expired: 'expired'
 }
-const balance = computed<UpstreamBalanceSnapshot | undefined>(() => snapshot.value?.balance)
+const balance = computed<UpstreamBalanceSnapshot | undefined>(() => isVideoPricing.value ? undefined : snapshot.value?.balance)
 const balanceData = computed(() => balance.value?.data)
 const balanceReceivedAt = computed(() => typeof balance.value?.received_at === 'string' ? Date.parse(balance.value.received_at) : Number.NaN)
 const balanceStale = computed(() => {

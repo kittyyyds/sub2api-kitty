@@ -113,6 +113,7 @@ type UpstreamBillingProbeSnapshot struct {
 	// observations only and never supply account multipliers or group prices.
 	Kind          string                `json:"kind,omitempty"`
 	VideoPricing  *VideoSupplierCatalog `json:"video_pricing,omitempty"`
+	ImagePricing  *ImageSupplierCatalog `json:"image_pricing,omitempty"`
 	Status        string                `json:"status"`
 	Data          map[string]any        `json:"data,omitempty"`
 	ReceivedAt    *time.Time            `json:"received_at,omitempty"`
@@ -629,7 +630,7 @@ func (s *UpstreamBillingProbeService) SetAccountEnabled(ctx context.Context, acc
 		return ErrUpstreamBillingProbeAccountInvalid
 	}
 	updates := map[string]any{UpstreamBillingProbeEnabledExtraKey: enabled}
-	if !enabled || account.Platform == PlatformVideo {
+	if !enabled || isModelPriceProbeAccount(account) {
 		updates[UpstreamBillingRateSyncEnabledExtraKey] = false
 	}
 	return s.accountRepo.UpdateExtra(ctx, accountID, updates)
@@ -638,6 +639,9 @@ func (s *UpstreamBillingProbeService) SetAccountEnabled(ctx context.Context, acc
 func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, account *Account, intervalMinutes int) (*UpstreamBillingProbeSnapshot, error) {
 	if account.Platform == PlatformVideo {
 		return s.probeVideoModelPrices(ctx, account, intervalMinutes)
+	}
+	if isSuanliImageAccount(account) {
+		return s.probeImageModelPrices(ctx, account, intervalMinutes)
 	}
 	now := s.currentTime().UTC()
 	if s.accountTestService == nil || s.accountTestService.httpUpstream == nil {
@@ -897,6 +901,18 @@ func upstreamBillingProbeFailureSnapshot(
 			catalog.LastAttempt = now.Format(time.RFC3339)
 			catalog.LastError = reason
 			snapshot.VideoPricing = &catalog
+			snapshot.ReceivedAt = previous.ReceivedAt
+			snapshot.FreshUntil = previous.FreshUntil
+		}
+		return snapshot
+	}
+	if isSuanliImageAccount(account) {
+		snapshot.Kind = UpstreamBillingProbeKindImageModelPrices
+		if previous != nil && previous.Kind == UpstreamBillingProbeKindImageModelPrices && previous.ImagePricing != nil {
+			catalog := *previous.ImagePricing
+			catalog.LastAttempt = now.Format(time.RFC3339)
+			catalog.LastError = reason
+			snapshot.ImagePricing = &catalog
 			snapshot.ReceivedAt = previous.ReceivedAt
 			snapshot.FreshUntil = previous.FreshUntil
 		}
@@ -1230,7 +1246,7 @@ func upstreamBillingProbeEnabled(account *Account) bool {
 // authority: the repository CAS re-checks both switches against the row it
 // updates, so a switch flipped between load and write can never sneak a rate in.
 func upstreamBillingRateSyncEnabled(account *Account) bool {
-	if account == nil || account.Extra == nil || account.Platform == PlatformVideo {
+	if account == nil || account.Extra == nil || isModelPriceProbeAccount(account) {
 		return false
 	}
 	enabled, ok := account.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)

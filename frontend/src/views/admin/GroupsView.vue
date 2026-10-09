@@ -1629,6 +1629,7 @@
         </div>
 
 
+        <ImageGroupPricingSummary v-if="createForm.platform === 'openai' && createForm.allow_image_generation" :pricing="createForm.model_pricing" :prices="createForm.image_model_prices" />
         <VideoGroupPricingEditor v-if="createForm.platform === 'video'" v-model="createForm.model_pricing" />
         <div v-else class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -1645,7 +1646,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" :entry="entry" :platform="createForm.platform" allow-video-billing hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in createForm.model_pricing" :key="index" v-show="!entry.image" :entry="entry" :platform="createForm.platform" allow-video-billing hide-token-intervals @update="createForm.model_pricing[index] = $event" @remove="createForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -3414,6 +3415,7 @@
         />
 
 
+        <ImageGroupPricingSummary v-if="editForm.platform === 'openai' && editForm.allow_image_generation" :pricing="editForm.model_pricing" :prices="editForm.image_model_prices" />
         <VideoGroupPricingEditor v-if="editForm.platform === 'video'" v-model="editForm.model_pricing" />
         <div v-else class="border-t border-gray-200 pt-4 mt-4 dark:border-dark-400">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -3430,7 +3432,7 @@
             <span><span class="block text-sm text-gray-700 dark:text-gray-300">{{ t("admin.groups.modelPricing.longContext") }}</span><span class="block text-xs text-gray-500">{{ t("admin.groups.modelPricing.longContextHint") }}</span></span>
           </label>
           <div class="mt-3 space-y-2">
-            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" :entry="entry" :platform="editForm.platform" allow-video-billing hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
+            <PricingEntryCard v-for="(entry, index) in editForm.model_pricing" :key="index" v-show="!entry.image" :entry="entry" :platform="editForm.platform" allow-video-billing hide-token-intervals @update="editForm.model_pricing[index] = $event" @remove="editForm.model_pricing.splice(index, 1)" />
           </div>
         </div>
 
@@ -4605,6 +4607,7 @@ import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
 import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
+import ImageGroupPricingSummary from "@/components/admin/channel/ImageGroupPricingSummary.vue";
 import VideoGroupPricingEditor from "@/components/admin/channel/VideoGroupPricingEditor.vue";
 import { validateVideoGroupPricing, videoConfigToAPI } from "@/components/admin/channel/videoGroupPricing";
 import type { PricingFormEntry } from "@/components/admin/channel/types";
@@ -4733,6 +4736,7 @@ const groupPricingFromAPI = (
     image_output_price: perTokenToMTok(entry.image_output_price),
     per_request_price: entry.per_request_price,
     video: entry.video ? JSON.parse(JSON.stringify(entry.video)) : undefined,
+    image: entry.image ? JSON.parse(JSON.stringify(entry.image)) : undefined,
     intervals: apiIntervalsToForm(entry.intervals || []),
     time_pricing: createDefaultTimePricingForm(),
   }));
@@ -4759,6 +4763,7 @@ const groupPricingToAPI = (
       image_output_price: mTokToPerToken(entry.image_output_price),
       per_request_price: toNullableNumber(entry.per_request_price),
       video: videoConfigToAPI(entry.video),
+      image: entry.image ? JSON.parse(JSON.stringify(entry.image)) : undefined,
       intervals:
         entry.billing_mode === "token"
           ? []

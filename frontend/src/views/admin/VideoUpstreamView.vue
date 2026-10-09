@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageUpstreamPanel from './ImageUpstreamPanel.vue'
 import { videoUpstreamAPI, type VideoRuntimeSettings, type VideoCatalog } from '@/api/admin/videoUpstream'
 import { list as listGroups } from '@/api/admin/groups'
 
 const settings = ref<VideoRuntimeSettings>()
-const section = ref<'video' | 'image'>('video')
+const route = useRoute()
+const section = ref<'video' | 'image'>(route.query.section === 'image' ? 'image' : 'video')
+watch(() => route.query.section, value => { section.value = value === 'image' ? 'image' : 'video' })
 const catalog = ref<VideoCatalog>()
 const groups = ref<{ id: number; name: string }[]>([])
 const group = ref<number>()

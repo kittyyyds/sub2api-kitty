@@ -357,7 +357,7 @@
             <span class="inline-flex items-center gap-1 text-sm font-mono text-gray-700 dark:text-gray-300">
               <span>{{ formatMultiplier(row.rate_multiplier ?? 1) }}x</span>
               <span
-                v-if="row.platform !== 'video' && row.extra?.upstream_billing_probe?.kind !== 'video_model_prices' && row.extra?.upstream_billing_rate_sync_enabled === true"
+                v-if="!usesModelPriceProbe(row) && row.extra?.upstream_billing_rate_sync_enabled === true"
                 class="inline-flex cursor-help text-emerald-600 dark:text-emerald-400"
                 :aria-label="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
                 :title="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
@@ -497,6 +497,7 @@
 </template>
 
 <script setup lang="ts">
+import { usesModelPriceProbe } from "@/utils/modelPriceProbe"
 import { isValidAccountCostMultiplier } from '@/utils/accountCost'
 import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
@@ -1289,7 +1290,7 @@ const applyUpstreamBillingRateSnapshots = async (
     else delete nextExtra.upstream_billing_probe
     const nextAccount = {
       ...account,
-      ...(account.platform !== 'video' && nextSnapshot?.kind !== 'video_model_prices' && typeof nextSnapshot?.synced_rate_multiplier === 'number'
+      ...(!usesModelPriceProbe(account) && nextSnapshot?.kind !== 'video_model_prices' && nextSnapshot?.kind !== 'image_model_prices' && typeof nextSnapshot?.synced_rate_multiplier === 'number'
         ? { rate_multiplier: nextSnapshot.synced_rate_multiplier }
         : {}),
       extra: nextExtra
@@ -2305,7 +2306,7 @@ const patchUpstreamBillingSnapshot = (accountID: number, snapshot: UpstreamBilli
   upstreamBillingNow.value = Date.now()
   patchAccountInList({
     ...account,
-    ...(account.platform !== 'video' && snapshot.kind !== 'video_model_prices' && typeof snapshot.synced_rate_multiplier === 'number'
+    ...(!usesModelPriceProbe(account) && snapshot.kind !== 'video_model_prices' && snapshot.kind !== 'image_model_prices' && typeof snapshot.synced_rate_multiplier === 'number'
       ? { rate_multiplier: snapshot.synced_rate_multiplier }
       : {}),
     extra: { ...account.extra, upstream_billing_probe: snapshot }
