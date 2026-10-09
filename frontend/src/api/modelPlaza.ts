@@ -58,6 +58,7 @@ export interface PlazaVideoCountRange {
 
 /** Customer-facing capabilities only. Private video configuration is not part of this DTO. */
 export interface PlazaVideoCapabilities {
+  generic?: boolean
   media_type: string
   supported: boolean
   seconds?: PlazaVideoCountRange

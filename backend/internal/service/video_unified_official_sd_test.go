@@ -193,10 +193,15 @@ func TestVideoUnifiedOfficialSDVideoMultiKeepsIndependentReferencePrice(t *testi
 				row := map[string]any{"model_name": tc.model, "billing_mode": "video_multi", "model_price": 9.0, "video_pricing": video}
 				cost := officialSDParsePriceRows(t, []map[string]any{row})[tc.model]
 				if reference == nil {
-					require.NotEmpty(t, cost.UnavailableReason, "a missing reference price cannot fall back to output price")
+					require.Empty(t, cost.UnavailableReason, "a missing reference price must not hide a valid output price")
 					require.False(t, cost.ReferencePriceKnown)
-					_, err := repriceVideoEntry(ChannelModelPricing{Models: []string{tc.model}, Video: &VideoModelConfig{Spec: *cost.Spec}}, cost, DefaultVideoRuntimeSettings(), "test", true)
-					require.Error(t, err)
+					require.True(t, cost.Spec.ReferencePricePending)
+					require.Zero(t, cost.Spec.MaxVideos)
+					entry, err := repriceVideoEntry(ChannelModelPricing{Models: []string{tc.model}, Video: &VideoModelConfig{Spec: *cost.Spec}}, cost, DefaultVideoRuntimeSettings(), "test", true)
+					require.NoError(t, err)
+					require.Zero(t, entry.Video.ReferencePerSecond)
+					_, err = PrepareUnifiedVideoInput([]byte(`{"model":"fixture","prompt":"x","seconds":5,"videos":["https://example.com/ref.mp4"]}`), "application/json", entry.Video.Spec)
+					require.Error(t, err, "unpriced reference video must fail before billing or submission")
 					continue
 				}
 				require.Empty(t, cost.UnavailableReason)

@@ -8,6 +8,34 @@ import (
 	"time"
 )
 
+func (r *usageLogRepository) ListVideoAccountModelBindings(ctx context.Context, groupID int64) ([]service.VideoAccountModelBinding, error) {
+	rows, err := r.sql.QueryContext(ctx, `SELECT COALESCE(a.credentials->>'base_url',''),
+		COALESCE(a.credentials->'model_mapping','{}'::jsonb),COALESCE(ag.allowed_models,'[]'::jsonb)
+		FROM accounts a JOIN account_groups ag ON ag.account_id=a.id
+		WHERE ag.group_id=$1 AND a.platform='video' AND a.type='apikey' AND a.deleted_at IS NULL
+		ORDER BY a.id`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []service.VideoAccountModelBinding
+	for rows.Next() {
+		var b service.VideoAccountModelBinding
+		var mapping, allowed []byte
+		if err := rows.Scan(&b.BaseURL, &mapping, &allowed); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(mapping, &b.Models); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(allowed, &b.AllowedModels); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
 func (r *usageLogRepository) ListVideoPricingGroups(ctx context.Context, after int64, limit int) ([]service.VideoPricingGroup, error) {
 	rows, err := r.sql.QueryContext(ctx, `SELECT id,COALESCE(model_pricing,'[]'::jsonb) FROM groups WHERE platform='video' AND deleted_at IS NULL AND id>$1 ORDER BY id LIMIT $2`, after, limit)
 	if err != nil {

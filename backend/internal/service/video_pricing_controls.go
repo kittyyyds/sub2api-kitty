@@ -57,13 +57,20 @@ func prepareVideoPricingForSave(pricing, previous []ChannelModelPricing, cat Vid
 		p.Video = &v
 		// Selling prices are administrator input; supplier metadata is not.
 		// This also covers legacy callers that omit price_source entirely.
-		v.Cost, v.SyncedAt = nil, ""
+		v.Cost, v.SyncedAt, v.AccountSynced = nil, "", false
 		if len(p.Models) == 1 {
 			model := strings.TrimSpace(p.Models[0])
 			if old, ok := oldByModel[model]; ok && old.Video != nil {
-				v.Cost, v.SyncedAt = old.Video.Cost, old.Video.SyncedAt
+				v.Cost, v.SyncedAt, v.AccountSynced = old.Video.Cost, old.Video.SyncedAt, old.Video.AccountSynced
 			}
-			if cost, ok := cat.Models[model]; ok && cost.UnavailableReason == "" && cost.Spec != nil && cost.Spec.Supported {
+			costModel := model
+			if v.Cost != nil && v.Cost.Model != "" {
+				costModel = v.Cost.Model
+			}
+			if cost, ok := cat.Models[costModel]; ok && cost.UnavailableReason == "" && cost.Spec != nil && (cost.Spec.Supported || v.AccountSynced) {
+				if v.AccountSynced {
+					cost, _ = selectedVideoCost(cost)
+				}
 				v.Cost, v.SyncedAt = &cost, cat.LastSuccess
 			}
 		}
@@ -85,7 +92,14 @@ func prepareVideoPricingForSave(pricing, previous []ChannelModelPricing, cat Vid
 		}
 		model := strings.TrimSpace(p.Models[0])
 		old, exists := oldByModel[model]
-		cost, available := cat.Models[model]
+		costModel := model
+		if v.Cost != nil && v.Cost.Model != "" {
+			costModel = v.Cost.Model
+		}
+		cost, available := cat.Models[costModel]
+		if available && v.AccountSynced {
+			cost, available = selectedVideoCost(cost)
+		}
 		// A failed refresh may retain the last authoritative supplier cost. Never
 		// trust a cost/spec/markup snapshot sent back by a stale browser form.
 		if !available && exists && old.Video != nil && old.Video.Cost != nil {

@@ -149,7 +149,7 @@ function unitMetrics(model: PlazaModel, group: ModelPlazaGroup, kind: CatalogKin
         .map(tier => ({ tier, value: finitePrice(resolutions[tier]) }))
       : validMode && pricing.intervals?.length
         ? pricing.intervals.map(interval => ({ tier: interval.tier_label?.trim() || '', value: finitePrice(interval.per_request_price) }))
-        : [{ tier: '', value: validMode ? finitePrice(pricing.per_request_price) : null }]
+        : [{ tier: model.capabilities?.generic ? '以上游参数为准' : (model.capabilities?.resolutions ?? []).join(' / '), value: validMode ? finitePrice(pricing.per_request_price) : null }]
     return rows.map((row, index) => ({
       key: `${kind}:${row.tier || index}`, label: 'unit', tier: row.tier,
       current: row.value, official: null, saving: null,

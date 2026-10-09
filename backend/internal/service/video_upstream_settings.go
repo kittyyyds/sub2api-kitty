@@ -26,6 +26,7 @@ type VideoMarkup struct {
 
 type VideoRuntimeSettings struct {
 	AutoSync                bool        `json:"auto_sync"`
+	AutoImportAccountModels bool        `json:"auto_import_account_models"`
 	FollowIncrease          bool        `json:"follow_increase"`
 	FollowDecrease          bool        `json:"follow_decrease"`
 	IntervalSeconds         int         `json:"interval_seconds"`
@@ -83,6 +84,7 @@ func (s *SettingService) SaveVideoRuntime(ctx context.Context, cfg VideoRuntimeS
 // VideoModelConfig is stored in the existing group's model_pricing JSON. Old
 // entries without this field keep their legacy provider and billing contract.
 type VideoModelConfig struct {
+	AccountSynced bool `json:"account_synced,omitempty"`
 	// Empty preserves the pre-controls contract. New entries explicitly separate
 	// a supplier-derived effective price from an administrator's fixed price.
 	PriceSource        string              `json:"price_source,omitempty"`
@@ -175,8 +177,11 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 		}
 		spec, known := UnifiedVideoSpecification(row.Model)
 		if !known {
-			continue
-		} // The mixed catalog also contains text and image models.
+			if row.Mode != "per_second" && row.Mode != "per_request" && row.Mode != "video_multi" {
+				continue
+			}
+			spec = genericVideoSpecification()
+		}
 		p := VideoSupplierPrice{Model: row.Model, Spec: &spec}
 		if row.Price == nil || !validVideoMoney(*row.Price) {
 			p.UnavailableReason = "缺少有效价格"
@@ -191,13 +196,15 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 			p.BillingMode = BillingModeVideo
 		case "video_multi":
 			p.BillingMode = BillingModeVideo
-			if row.Video == nil || row.Video.Output == nil || row.Video.Reference == nil {
+			if row.Video == nil || row.Video.Output == nil {
 				p.UnavailableReason = "多维视频价格不完整"
 				break
 			}
 			p.UnitPrice = *row.Video.Output
-			p.ReferencePerSecond = *row.Video.Reference
-			p.ReferencePriceKnown = spec.MaxVideos > 0
+			if row.Video.Reference != nil {
+				p.ReferencePerSecond = *row.Video.Reference
+				p.ReferencePriceKnown = true
+			}
 			p.ResolutionPrices = make(map[string]float64, len(row.Video.Resolution))
 			for raw, price := range row.Video.Resolution {
 				resolution := strings.ToLower(strings.TrimSpace(raw))
@@ -215,8 +222,11 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 			p.ReferencePerSecond = p.UnitPrice
 			p.ReferencePriceKnown = true
 		}
-		if spec.MaxVideos > 0 && row.Mode == "per_second" && !spec.ReferenceBilled {
-			p.UnavailableReason = "参考视频计费依据未明确，需要核实后开放"
+		// Keep a valid output price available. Never guess an absent reference
+		// price as free or apply the output rate without documented evidence.
+		if spec.MaxVideos > 0 && (p.BillingMode == BillingModeVideo || !known) && !p.ReferencePriceKnown {
+			spec.ReferencePricePending, spec.MaxVideos = true, 0
+			spec.MaxReferenceSeconds = 0
 		}
 		if !validVideoMoney(p.UnitPrice) || !validVideoMoney(p.ReferencePerSecond) {
 			return nil, "", errors.New("上游视频金额无效")
@@ -293,7 +303,7 @@ func repriceVideoEntry(entry ChannelModelPricing, cost VideoSupplierPrice, cfg V
 	entry.PerRequestPrice = &unit
 	entry.BillingMode = cost.BillingMode
 	v.ReferencePerSecond = 0
-	if cost.BillingMode == BillingModeVideo && (cost.ReferencePriceKnown || entry.Video.Spec.ReferenceBilled || entry.Video.ReferencePerSecond > 0 || cost.Spec != nil && cost.Spec.ReferenceBilled || cost.ReferencePerSecond > 0) {
+	if cost.BillingMode == BillingModeVideo && (cost.Spec == nil || !cost.Spec.ReferencePricePending) && (cost.ReferencePriceKnown || entry.Video.Spec.ReferenceBilled || entry.Video.ReferencePerSecond > 0 || cost.Spec != nil && cost.Spec.ReferenceBilled || cost.ReferencePerSecond > 0) {
 		v.ReferencePerSecond = choose(entry.Video.ReferencePerSecond, v.AppliedMarkup.ReferencePerSecond, cost.ReferencePerSecond, markup.ReferencePerSecond)
 	}
 	v.ResolutionPrices = map[string]float64{}
@@ -339,7 +349,7 @@ func (s *OpenAIGatewayService) refreshVideoPrices(ctx context.Context, force, ap
 	if err != nil {
 		return state, err
 	}
-	if !force && !cfg.AutoSync {
+	if !force && !cfg.AutoSync && !cfg.AutoImportAccountModels {
 		return state, nil
 	}
 	if at, e := time.Parse(time.RFC3339, state.LastPriceSyncAttempt); !force && e == nil && time.Since(at) < time.Duration(cfg.IntervalSeconds)*time.Second {
@@ -388,26 +398,20 @@ func (s *OpenAIGatewayService) refreshVideoPrices(ctx context.Context, force, ap
 				}
 				for _, g := range groups {
 					after = g.ID
-					next := append([]ChannelModelPricing(nil), g.Pricing...)
-					changes := []VideoPriceChange{}
-					for i, entry := range next {
-						if entry.Video == nil || entry.PerRequestPrice == nil || !entry.Video.AutoPrice || entry.Video.PriceSource == "manual" || len(entry.Models) != 1 {
-							continue
+					var bindings []VideoAccountModelBinding
+					if cfg.AutoImportAccountModels {
+						accountRepo, ok := s.usageLogRepo.(VideoAccountModelRepository)
+						if !ok {
+							return state, errors.New("账号模型同步存储不可用")
 						}
-						cost, exists := models[entry.Models[0]]
-						if !exists {
-							state.LastError = "部分型号缺价，保留其最后有效价格"
-							continue
-						}
-						updated, e := repriceVideoEntry(entry, cost, cfg, now, false)
+						bindings, e = accountRepo.ListVideoAccountModelBindings(ctx, g.ID)
 						if e != nil {
-							state.LastError = "部分型号计费规则变化，保留其最后有效价格"
-							continue
+							return state, e
 						}
-						next[i] = updated
-						if *entry.PerRequestPrice != *updated.PerRequestPrice || entry.Video.ReferencePerSecond != updated.Video.ReferencePerSecond || !reflect.DeepEqual(entry.Video.ResolutionPrices, updated.Video.ResolutionPrices) {
-							changes = append(changes, VideoPriceChange{At: now, GroupID: g.ID, Model: entry.Models[0], Old: *entry.PerRequestPrice, New: *updated.PerRequestPrice, OldReference: entry.Video.ReferencePerSecond, NewReference: updated.Video.ReferencePerSecond})
-						}
+					}
+					next, warning := reconcileVideoAccountPricing(g.Pricing, bindings, models, cfg, now, cfg.AutoSync || force)
+					if warning {
+						state.LastError = "部分账号型号缺价、映射冲突或计费变化；已保留有效售价，请检查账号与分组价格"
 					}
 					if !reflect.DeepEqual(g.Pricing, next) {
 						applied, e := repo.CompareAndSwapVideoPricing(ctx, g.ID, g.Pricing, next)
@@ -415,12 +419,17 @@ func (s *OpenAIGatewayService) refreshVideoPrices(ctx context.Context, force, ap
 							return state, e
 						}
 						if applied {
-							state.Changes = append(state.Changes, changes...)
 							s.invalidateVideoPricingCache(ctx, g.ID)
 						}
 					}
 				}
 			}
+		}
+	}
+	if repo, ok := s.usageLogRepo.(VideoPricingRepository); ok && applyPrices {
+		state.Changes, err = repo.ListVideoPriceChanges(ctx)
+		if err != nil {
+			return state, err
 		}
 	}
 	if len(state.Changes) > 500 {

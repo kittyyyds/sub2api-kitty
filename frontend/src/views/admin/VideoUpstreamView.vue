@@ -46,6 +46,7 @@ onMounted(() => perform(load))
         <h2 class="font-semibold">自动跟价与加价</h2>
         <div class="flex flex-wrap gap-6 text-sm">
           <label><input v-model="settings.auto_sync" type="checkbox"> 自动同步价格</label>
+          <label><input v-model="settings.auto_import_account_models" type="checkbox"> 按账号模型自动补齐分组</label>
           <label><input v-model="settings.follow_increase" type="checkbox"> 上游涨价时跟涨</label>
           <label><input v-model="settings.follow_decrease" type="checkbox"> 上游降价时跟降</label>
         </div>
@@ -57,6 +58,7 @@ onMounted(() => perform(load))
         </div>
         <p class="text-xs text-gray-500">金额与本站视频余额同一口径。按条、按秒分别适用，不重复叠加。参考秒加价只用于已确认参考视频另收费的型号。单模型覆盖请到分组价格编辑。读价失败时继续沿用最后有效价格。</p>
         <h2 class="font-semibold">临时参考素材与并发</h2>
+        <p class="text-xs text-gray-500">自动补齐以绑定账号中配置的全部确切模型为准，遵守账号的分组模型限制；在下个同步周期内生效。已有手动售价优先，新型号沿用加价设置；首次缺价的型号不会免费接单。</p>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <label class="text-sm">保留时间（小时）<input v-model.number="settings.reference_retention_hours" class="input mt-2" type="number" min="1" max="168" required></label>
           <label class="text-sm">每个用户视频任务并发<input v-model.number="settings.max_concurrent_tasks" class="input mt-2" type="number" min="1" max="100" required></label>

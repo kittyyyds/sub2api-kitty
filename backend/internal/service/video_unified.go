@@ -18,6 +18,8 @@ import (
 var unifiedVideoSpecData []byte
 
 type UnifiedVideoSpec struct {
+	Generic               bool     `json:"generic,omitempty"`
+	ReferencePricePending bool     `json:"reference_price_pending,omitempty"`
 	Supported             bool     `json:"supported"`
 	Reason                string   `json:"reason,omitempty"`
 	MinSeconds            int      `json:"min_seconds"`
@@ -52,6 +54,17 @@ var unifiedVideoSpecs = func() map[string]UnifiedVideoSpec {
 func UnifiedVideoSpecification(model string) (UnifiedVideoSpec, bool) {
 	v, ok := unifiedVideoSpecs[model]
 	return v, ok
+}
+
+// Transport bounds for an administrator-selected ID absent from the static
+// catalog. These are not a claim about that model's provider-specific limits.
+func genericVideoSpecification() UnifiedVideoSpec {
+	return UnifiedVideoSpec{Supported: true, Generic: true,
+		Reason: "使用通用视频接口，具体参数范围由上游校验", MinSeconds: 1, MaxSeconds: 120,
+		Resolutions: []string{"480p", "720p", "768p", "1080p", "2k", "4k"},
+		Ratios:      []string{"16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "adaptive"},
+		MaxImages:   30, MaxVideos: 10, MaxAudios: 10, MaxReferenceSeconds: 120,
+		AllowAudioOnly: true, Face: true, GenerateAudio: true}
 }
 
 func (s UnifiedVideoSpec) Validate() error {
@@ -269,7 +282,7 @@ func PrepareUnifiedVideoInput(body []byte, contentType string, spec UnifiedVideo
 
 func (v *VideoModelConfig) Capability() CanvasModelCapability {
 	s := v.Spec
-	return CanvasModelCapability{MediaType: "video", Supported: s.Supported, Provider: SuanliSpecialVideoProvider, Family: "unified",
+	return CanvasModelCapability{MediaType: "video", Supported: s.Supported, Generic: s.Generic, Provider: SuanliSpecialVideoProvider, Family: "unified",
 		Seconds: &CanvasCountRange{Min: s.MinSeconds, Max: s.MaxSeconds}, SecondOptions: s.Seconds, Resolutions: s.Resolutions, AspectRatios: s.Ratios,
 		ReferenceImages: &CanvasCountRange{Min: s.MinImages, Max: s.MaxImages}, ReferenceVideos: &CanvasCountRange{Max: s.MaxVideos}, ReferenceAudios: &CanvasCountRange{Max: s.MaxAudios},
 		MaxReferenceSeconds: s.MaxReferenceSeconds, InputTransport: []string{"public_url", "temporary_upload"}, Operations: []string{"text_to_video", "image_to_video", "reference_to_video"},

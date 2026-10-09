@@ -54,6 +54,16 @@ function mountContent(groups: ModelPlazaGroup[]) {
 describe('customer video model price catalog', () => {
   beforeEach(() => copyToClipboard.mockReset())
 
+  it.each(['4k', '480p', '720p'])('shows capability tier %s for a single video price without a resolution price map', (resolution) => {
+    const video = model(`test-${resolution}`)
+    video.capabilities!.resolutions = [resolution]
+    const wrapper = mountContent([group(25, [video])])
+    const cells = wrapper.get('tbody tr').findAll('td')
+    expect(cells[0].text()).toBe(resolution)
+    expect(wrapper.get('.price-primary').text()).toBe('$0.78 / 秒')
+    wrapper.unmount()
+  })
+
   it('keeps Grok and dedicated video groups in the existing video tab, including empty video groups', async () => {
     const grok = { ...model('grok-imagine-video-1.5'), platform: 'grok', capabilities: undefined, description: undefined }
     grok.pricing!.final_unit_price = undefined

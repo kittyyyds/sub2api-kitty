@@ -2,6 +2,7 @@ import { apiClient } from '../client'
 
 export interface VideoMarkup { output_per_second: number; reference_per_second: number; per_request: number }
 export interface VideoSpec {
+  generic?: boolean; reference_price_pending?: boolean
   supported: boolean; reason?: string; min_seconds: number; max_seconds: number; seconds?: number[]
   resolutions: string[]; ratios: string[]; min_images: number; max_images: number; max_videos: number; max_audios: number
   max_reference_seconds: number; max_combined_seconds?: number; requires_visual_or_audio?: boolean
@@ -13,12 +14,14 @@ export interface VideoSupplierPrice {
   resolution_prices?: Record<string, number>; spec?: VideoSpec; unavailable_reason?: string
 }
 export interface VideoModelConfig {
+  account_synced?: boolean
   price_source?: 'upstream' | 'manual'
   auto_price: boolean; markup?: VideoMarkup; follow_increase?: boolean; follow_decrease?: boolean
   reference_per_second: number; resolution_prices?: Record<string, number>; spec: VideoSpec
   cost?: VideoSupplierPrice; synced_at?: string
 }
 export interface VideoRuntimeSettings {
+  auto_import_account_models?: boolean
   auto_sync: boolean; follow_increase: boolean; follow_decrease: boolean; interval_seconds: number; markup: VideoMarkup
   reference_retention_hours: number; max_concurrent_tasks: number; reference_user_mb: number; reference_total_mb: number
 }

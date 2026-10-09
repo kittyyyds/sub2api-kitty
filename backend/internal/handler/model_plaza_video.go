@@ -48,6 +48,13 @@ func toModelPlazaPricing(p *service.ChannelModelPricing) *modelPlazaPricing {
 // Describe only the implemented input contract. Spec.Reason can be edited by an
 // operator; do not publish it or infer speed, reliability or real-run acceptance.
 func modelPlazaVideoDescription(spec service.UnifiedVideoSpec) string {
+	if spec.Generic {
+		text := "通用视频接口；型号由管理员开放，具体时长、分辨率和素材限制以上游为准"
+		if spec.ReferencePricePending {
+			text += "；参考视频价格未提供，暂不接受参考视频"
+		}
+		return text
+	}
 	duration := fmt.Sprintf("时长 %d–%d 秒", spec.MinSeconds, spec.MaxSeconds)
 	if len(spec.Seconds) > 0 {
 		options := make([]string, len(spec.Seconds))
@@ -62,6 +69,8 @@ func modelPlazaVideoDescription(spec service.UnifiedVideoSpec) string {
 		fmt.Sprintf("参考图片 %d–%d 张，视频最多 %d 个，音频最多 %d 个", spec.MinImages, spec.MaxImages, spec.MaxVideos, spec.MaxAudios)}
 	if spec.MaxVideos > 0 {
 		parts = append(parts, fmt.Sprintf("参考视频总时长不超过 %g 秒，按测得时长和参考秒价计费", spec.MaxReferenceSeconds))
+	} else if spec.ReferencePricePending {
+		parts = append(parts, "参考视频价格未提供，暂不接受参考视频")
 	} else {
 		parts = append(parts, "不接受参考视频")
 	}

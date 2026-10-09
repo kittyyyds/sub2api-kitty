@@ -5,6 +5,7 @@ import "strings"
 // CanvasModelCapability describes only contracts implemented by this gateway.
 // A model appearing in a supplier's catalog is not proof of these capabilities.
 type CanvasModelCapability struct {
+	Generic             bool              `json:"generic,omitempty"`
 	SecondOptions       []int             `json:"second_options,omitempty"`
 	ReferenceVideos     *CanvasCountRange `json:"reference_videos,omitempty"`
 	MaxReferenceSeconds float64           `json:"max_reference_seconds,omitempty"`
