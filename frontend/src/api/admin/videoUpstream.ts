@@ -9,9 +9,11 @@ export interface VideoSpec {
 }
 export interface VideoSupplierPrice {
   model: string; billing_mode: 'per_request' | 'video'; unit_price: number; reference_per_second: number
+  reference_price_known?: boolean
   resolution_prices?: Record<string, number>; spec?: VideoSpec; unavailable_reason?: string
 }
 export interface VideoModelConfig {
+  price_source?: 'upstream' | 'manual'
   auto_price: boolean; markup?: VideoMarkup; follow_increase?: boolean; follow_decrease?: boolean
   reference_per_second: number; resolution_prices?: Record<string, number>; spec: VideoSpec
   cost?: VideoSupplierPrice; synced_at?: string
@@ -28,6 +30,7 @@ export interface VideoCatalog {
 export const videoUpstreamAPI = {
   get: async () => (await apiClient.get<{ settings: VideoRuntimeSettings; catalog: VideoCatalog }>('/admin/video-upstream')).data,
   save: async (settings: VideoRuntimeSettings) => (await apiClient.put('/admin/video-upstream', settings)).data,
+  probe: async () => (await apiClient.post<VideoCatalog>('/admin/video-upstream/probe', {}, { timeout: 30000 })).data,
   sync: async () => (await apiClient.post<VideoCatalog>('/admin/video-upstream/sync', {}, { timeout: 30000 })).data,
   import: async (group_id: number, models: string[]) => (await apiClient.post('/admin/video-upstream/import', { group_id, models })).data,
 }

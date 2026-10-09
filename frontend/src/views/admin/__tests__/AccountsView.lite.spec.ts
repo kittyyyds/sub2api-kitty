@@ -7,6 +7,7 @@ import UpstreamBillingRateCell from '@/components/account/UpstreamBillingRateCel
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
 
 const {
+  getSettings,
   listAccounts,
   listWithEtag,
   getById,
@@ -21,6 +22,7 @@ const {
   showError,
   showWarning
 } = vi.hoisted(() => ({
+  getSettings: vi.fn(),
   listAccounts: vi.fn(),
   listWithEtag: vi.fn(),
   getById: vi.fn(),
@@ -38,7 +40,7 @@ const {
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
-    settings: { getSettings: vi.fn().mockResolvedValue({}) },
+    settings: { getSettings },
     accounts: {
       getManagementCapabilities,
       list: listAccounts,
@@ -172,6 +174,7 @@ const fullAccount = {
 describe('admin AccountsView lite account list', () => {
   beforeEach(() => {
     localStorage.clear()
+    getSettings.mockReset().mockResolvedValue({})
     listAccounts.mockReset().mockResolvedValue({ items: [listRow], total: 1, page: 1, page_size: 20, pages: 1 })
     listWithEtag.mockReset().mockResolvedValue({ notModified: true, etag: 'compact-etag', data: null })
     getById.mockReset().mockResolvedValue(fullAccount)
@@ -190,6 +193,49 @@ describe('admin AccountsView lite account list', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('does not apply video snapshots to account rates during manual or periodic refresh', async () => {
+    const snapshot = { kind: 'video_model_prices', status: 'ok', synced_rate_multiplier: 99 }
+    const row = { ...listRow, platform: 'video', type: 'apikey', rate_multiplier: 1.25, extra: {} }
+    listAccounts.mockResolvedValue({ items: [row], total: 1, page: 1, page_size: 20, pages: 1 })
+    probeUpstreamBilling.mockResolvedValue({ account_id: row.id, snapshot })
+    getUpstreamBillingRatesWithEtag.mockResolvedValue({ notModified: false, data: {
+      items: [{ account_id: row.id, snapshot: { ...snapshot, synced_rate_multiplier: 98 } }], total: 1
+    } })
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.findComponent(UpstreamBillingRateCell).vm.$emit('probe')
+    await flushPromises()
+    expect(getUpstreamBillingRatesWithEtag).toHaveBeenCalled()
+    expect(wrapper.findComponent(UpstreamBillingRateCell).props('account').rate_multiplier).toBe(1.25)
+    expect(wrapper.findComponent(UpstreamBillingRateCell).props('account').extra?.upstream_billing_probe?.kind).toBe('video_model_prices')
+    wrapper.unmount()
+  })
+
+  it('disables rate sorting for video filters and clears a previously selected rate sort', async () => {
+    localStorage.setItem('account-table-sort', JSON.stringify({ key: 'upstream_billing_rate', order: 'desc' }))
+    const wrapper = mountView()
+    await flushPromises()
+    const filters = wrapper.findComponent({ name: 'AccountTableFilters' })
+    filters.vm.$emit('update:filters', { platform: 'video' })
+    filters.vm.$emit('change')
+    await flushPromises()
+    expect(filters.props('filters')).toMatchObject({ sort_by: 'name', sort_order: 'asc' })
+    const table = wrapper.findComponent(DataTableStub)
+    expect((table.vm.$attrs.columns as { key: string; sortable: boolean }[]).find(column => column.key === 'upstream_billing_rate')?.sortable).toBe(false)
+    // Trigger a normal sort to exercise the next request without waiting for debounce.
+    table.vm.$emit('sort', 'name', 'asc')
+    await flushPromises()
+    expect(listAccounts.mock.calls.at(-1)?.[2]).toMatchObject({ platform: 'video', sort_by: 'name', sort_order: 'asc' })
+    const callCount = listAccounts.mock.calls.length
+    table.vm.$emit('sort', 'upstream_billing_rate', 'desc')
+    await flushPromises()
+    expect(listAccounts).toHaveBeenCalledTimes(callCount)
+    filters.vm.$emit('update:filters', { platform: 'openai' })
+    await flushPromises()
+    expect((table.vm.$attrs.columns as { key: string; sortable: boolean }[]).find(column => column.key === 'upstream_billing_rate')?.sortable).toBe(true)
+    wrapper.unmount()
   })
 
   it('refreshes the saved cost after probing even with unchanged snapshot and default sorting', async () => {

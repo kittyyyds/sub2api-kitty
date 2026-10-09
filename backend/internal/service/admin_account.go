@@ -887,6 +887,14 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.Extra == nil {
 		account.Extra = prepareCodexFingerprintExtraForUpdate(account, account.Extra)
 	}
+	if account.Platform == PlatformVideo {
+		if requestedRateSyncEnabledUpdate != nil && *requestedRateSyncEnabledUpdate {
+			return nil, ErrVideoBillingRateSyncUnsupported
+		}
+		// Clear any legacy sync flag without changing the account's manual rate.
+		disabled := false
+		requestedRateSyncEnabledUpdate = &disabled
+	}
 	if requestedRateSyncEnabledUpdate != nil && *requestedRateSyncEnabledUpdate {
 		if requestedProbeEnabledUpdate != nil && !*requestedProbeEnabledUpdate {
 			return nil, infraerrors.BadRequest(
@@ -1398,7 +1406,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		}
 		syncEnabledCount := 0
 		for _, account := range cachedTargets {
-			if account == nil || account.Extra == nil {
+			if account == nil || account.Extra == nil || account.Platform == PlatformVideo {
 				continue
 			}
 			enabled, _ := account.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)

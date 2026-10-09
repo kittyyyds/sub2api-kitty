@@ -78,6 +78,9 @@ var (
 	ErrUpstreamBillingProbeAccountInvalid = infraerrors.BadRequest(
 		"UPSTREAM_BILLING_PROBE_ACCOUNT_INVALID", "account is not an API key account",
 	)
+	ErrVideoBillingRateSyncUnsupported = infraerrors.BadRequest(
+		"VIDEO_BILLING_RATE_SYNC_UNSUPPORTED", "video accounts support model price probing, not billing rate sync",
+	)
 	ErrUpstreamBillingProbeIdentityChanged = infraerrors.Conflict(
 		"UPSTREAM_BILLING_PROBE_IDENTITY_CHANGED", "account identity changed during upstream billing probe; retry the probe",
 	)
@@ -106,15 +109,19 @@ type UpstreamBillingProbeSettings struct {
 // UpstreamBillingProbeSnapshot is persisted in accounts.extra. Data is kept as
 // a sanitized map so future response fields do not require a database change.
 type UpstreamBillingProbeSnapshot struct {
-	Status        string         `json:"status"`
-	Data          map[string]any `json:"data,omitempty"`
-	ReceivedAt    *time.Time     `json:"received_at,omitempty"`
-	FreshUntil    *time.Time     `json:"fresh_until,omitempty"`
-	LastAttemptAt time.Time      `json:"last_attempt_at"`
-	NextProbeAt   time.Time      `json:"next_probe_at"`
-	FailureCount  int            `json:"failure_count,omitempty"`
-	HTTPStatus    int            `json:"http_status,omitempty"`
-	LastError     string         `json:"last_error,omitempty"`
+	// Kind is absent for the existing token billing contract. Video prices are
+	// observations only and never supply account multipliers or group prices.
+	Kind          string                `json:"kind,omitempty"`
+	VideoPricing  *VideoSupplierCatalog `json:"video_pricing,omitempty"`
+	Status        string                `json:"status"`
+	Data          map[string]any        `json:"data,omitempty"`
+	ReceivedAt    *time.Time            `json:"received_at,omitempty"`
+	FreshUntil    *time.Time            `json:"fresh_until,omitempty"`
+	LastAttemptAt time.Time             `json:"last_attempt_at"`
+	NextProbeAt   time.Time             `json:"next_probe_at"`
+	FailureCount  int                   `json:"failure_count,omitempty"`
+	HTTPStatus    int                   `json:"http_status,omitempty"`
+	LastError     string                `json:"last_error,omitempty"`
 	// SyncedRateMultiplier records the value this probe wrote into
 	// accounts.rate_multiplier. It is only set when the account opted into rate
 	// sync and the declared value passed the write-back range check, so the
@@ -622,13 +629,16 @@ func (s *UpstreamBillingProbeService) SetAccountEnabled(ctx context.Context, acc
 		return ErrUpstreamBillingProbeAccountInvalid
 	}
 	updates := map[string]any{UpstreamBillingProbeEnabledExtraKey: enabled}
-	if !enabled {
+	if !enabled || account.Platform == PlatformVideo {
 		updates[UpstreamBillingRateSyncEnabledExtraKey] = false
 	}
 	return s.accountRepo.UpdateExtra(ctx, accountID, updates)
 }
 
 func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, account *Account, intervalMinutes int) (*UpstreamBillingProbeSnapshot, error) {
+	if account.Platform == PlatformVideo {
+		return s.probeVideoModelPrices(ctx, account, intervalMinutes)
+	}
 	now := s.currentTime().UTC()
 	if s.accountTestService == nil || s.accountTestService.httpUpstream == nil {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "transport_unavailable", 0)
@@ -707,6 +717,9 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 type upstreamBillingProbeTarget struct {
 	apiKey   string
 	proxyURL string
+	// Public supplier prices must not receive any account authentication or
+	// header overrides, even when those overrides include credentials.
+	publicPricing bool
 }
 
 // upstreamBillingProbeHTTPResult is one upstream GET. failure is set when no
@@ -740,8 +753,10 @@ func (s *UpstreamBillingProbeService) fetchUpstreamProbeBody(
 	reqCtx := WithHTTPUpstreamProfile(req.Context(), profile)
 	req = req.WithContext(WithHTTPUpstreamRedirectsDisabled(reqCtx))
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+target.apiKey)
-	account.ApplyHeaderOverrides(req.Header)
+	if !target.publicPricing {
+		req.Header.Set("Authorization", "Bearer "+target.apiKey)
+		account.ApplyHeaderOverrides(req.Header)
+	}
 	var tlsProfile *tlsfingerprint.Profile
 	if s.accountTestService.tlsFPProfileService != nil {
 		tlsProfile = s.accountTestService.tlsFPProfileService.ResolveTLSProfile(account)
@@ -874,6 +889,18 @@ func upstreamBillingProbeFailureSnapshot(
 		FailureCount:  failureCount,
 		HTTPStatus:    statusCode,
 		LastError:     reason,
+	}
+	if account != nil && account.Platform == PlatformVideo {
+		snapshot.Kind = UpstreamBillingProbeKindVideoModelPrices
+		if previous != nil && previous.Kind == UpstreamBillingProbeKindVideoModelPrices && previous.VideoPricing != nil {
+			catalog := *previous.VideoPricing
+			catalog.LastAttempt = now.Format(time.RFC3339)
+			catalog.LastError = reason
+			snapshot.VideoPricing = &catalog
+			snapshot.ReceivedAt = previous.ReceivedAt
+			snapshot.FreshUntil = previous.FreshUntil
+		}
+		return snapshot
 	}
 	if previous != nil {
 		snapshot.Data = previous.Data
@@ -1128,7 +1155,14 @@ func IsUpstreamBillingProbeIdentity(platform, accountType string) bool {
 }
 
 func isUpstreamBillingProbeAccount(account *Account) bool {
-	return account != nil && IsUpstreamBillingProbeIdentity(account.Platform, account.Type)
+	return account != nil && IsAccountUpstreamProbeIdentity(account.Platform, account.Type)
+}
+
+// IsAccountUpstreamProbeIdentity includes video model-price observations while
+// IsUpstreamBillingProbeIdentity remains the unchanged token-rate eligibility.
+func IsAccountUpstreamProbeIdentity(platform, accountType string) bool {
+	return IsUpstreamBillingProbeIdentity(platform, accountType) ||
+		(platform == PlatformVideo && accountType == AccountTypeAPIKey)
 }
 
 // upstreamBillingProbeOfficialAPIDomains lists the root domains of official
@@ -1196,7 +1230,7 @@ func upstreamBillingProbeEnabled(account *Account) bool {
 // authority: the repository CAS re-checks both switches against the row it
 // updates, so a switch flipped between load and write can never sneak a rate in.
 func upstreamBillingRateSyncEnabled(account *Account) bool {
-	if account == nil || account.Extra == nil {
+	if account == nil || account.Extra == nil || account.Platform == PlatformVideo {
 		return false
 	}
 	enabled, ok := account.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)

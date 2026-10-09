@@ -144,6 +144,17 @@ describe('BulkEditAccountModal', () => {
     } as any)
   })
 
+  it.each([['video'], ['video', 'openai']])('uses model-price wording for bulk targets %j and submits only the probe switch', async (...selectedPlatforms) => {
+    const wrapper = mountModal({ selectedPlatforms, selectedTypes: ['apikey'] })
+    const label = selectedPlatforms.length === 1 ? 'autoProbe' : 'mixedAutoProbe'
+    expect(wrapper.get('#bulk-edit-upstream-billing-auto-probe-label').text()).toBe(`admin.accounts.upstreamBilling.video.${label}`)
+    await wrapper.get('#bulk-edit-upstream-billing-auto-probe-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], { upstream_billing_probe_enabled: true })
+    wrapper.unmount()
+  })
+
   describe('Excel / BPS bulk settings', () => {
     const oauthProps = { selectedPlatforms: ['openai'], selectedTypes: ['oauth'] }
     const defaultExtra = {

@@ -41,6 +41,16 @@ func (h *OpenAIGatewayHandler) SyncVideoUpstreamPrices(c *gin.Context) {
 	}
 	response.Success(c, cat)
 }
+func (h *OpenAIGatewayHandler) ProbeVideoUpstreamPrices(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 25*time.Second)
+	defer cancel()
+	cat, err := h.gatewayService.ProbeVideoPrices(ctx)
+	if err != nil {
+		response.Error(c, 502, "读取上游价格失败，保留最后有效目录和分组售价")
+		return
+	}
+	response.Success(c, cat)
+}
 func (h *OpenAIGatewayHandler) ImportVideoUpstreamModels(c *gin.Context) {
 	var input struct {
 		GroupID int64    `json:"group_id"`

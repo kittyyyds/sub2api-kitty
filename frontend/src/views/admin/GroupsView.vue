@@ -4606,7 +4606,7 @@ import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffor
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
 import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
 import VideoGroupPricingEditor from "@/components/admin/channel/VideoGroupPricingEditor.vue";
-import { validateVideoGroupPricing } from "@/components/admin/channel/videoGroupPricing";
+import { validateVideoGroupPricing, videoConfigToAPI } from "@/components/admin/channel/videoGroupPricing";
 import type { PricingFormEntry } from "@/components/admin/channel/types";
 import {
   apiIntervalsToForm,
@@ -4758,7 +4758,7 @@ const groupPricingToAPI = (
       image_input_price: mTokToPerToken(entry.image_input_price),
       image_output_price: mTokToPerToken(entry.image_output_price),
       per_request_price: toNullableNumber(entry.per_request_price),
-      video: entry.video ? JSON.parse(JSON.stringify(entry.video)) : undefined,
+      video: videoConfigToAPI(entry.video),
       intervals:
         entry.billing_mode === "token"
           ? []

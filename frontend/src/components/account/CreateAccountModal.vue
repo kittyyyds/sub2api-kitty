@@ -1462,15 +1462,15 @@
           class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
         >
           <div>
-            <label class="input-label mb-0">{{ t('admin.accounts.upstreamBilling.autoProbe') }}</label>
+            <label class="input-label mb-0">{{ t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe') }}</label>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.upstreamBilling.autoProbeHint') }}
+              {{ t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbeHint' : 'admin.accounts.upstreamBilling.autoProbeHint') }}
             </p>
           </div>
           <Toggle
             v-model="upstreamBillingAutoProbeEnabled"
             data-testid="upstream-billing-auto-probe"
-            :aria-label="t('admin.accounts.upstreamBilling.autoProbe')"
+            :aria-label="t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe')"
           />
         </div>
 
@@ -3012,7 +3012,7 @@
             class="input"
             data-testid="account-cost-multiplier"
           />
-          <p class="input-hint">{{ t('admin.accounts.costMultiplierHint') }}</p>
+          <p class="input-hint">{{ t(form.platform === 'video' ? 'admin.accounts.upstreamBilling.video.costMultiplierHint' : 'admin.accounts.costMultiplierHint') }}</p>
         </div>
       </div>
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -5335,9 +5335,14 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
       payload.upstream_billing_probe_enabled === true
     ) {
       try {
-        await adminAPI.accounts.probeUpstreamBilling(account.id)
+        const result = await adminAPI.accounts.probeUpstreamBilling(account.id)
+        if (payload.platform === 'video' && (result.error || (result.snapshot && result.snapshot.status !== 'ok'))) {
+          appStore.showWarning(t('admin.accounts.upstreamBilling.video.savedProbeFailed'))
+        }
       } catch {
-        appStore.showWarning(t('admin.accounts.upstreamBilling.probeFailed'))
+        appStore.showWarning(t(payload.platform === 'video'
+          ? 'admin.accounts.upstreamBilling.video.savedProbeFailed'
+          : 'admin.accounts.upstreamBilling.probeFailed'))
       }
     }
     appStore.showSuccess(t('admin.accounts.accountCreated'))

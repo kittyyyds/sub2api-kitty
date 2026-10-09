@@ -12,7 +12,40 @@
           </span>
         </template>
         <div class="space-y-1">
-          <template v-if="hasEffectiveRate && data">
+          <template v-if="isVideoPricing">
+            <p class="max-w-sm whitespace-normal text-amber-300" data-testid="video-pricing-public-default">
+              {{ t('admin.accounts.upstreamBilling.video.publicDefault') }}
+            </p>
+            <div v-if="videoModels.length" class="max-h-72 overflow-auto">
+              <table class="w-full text-left text-xs" data-testid="video-pricing-models">
+                <thead>
+                  <tr>
+                    <th class="p-1">{{ t('admin.accounts.upstreamBilling.video.model') }}</th>
+                    <th class="p-1">{{ t('admin.accounts.upstreamBilling.video.cost') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="model in videoModels" :key="model.name">
+                    <td class="p-1 align-top break-all">{{ model.name }}</td>
+                    <td class="p-1">
+                      <p>{{ model.cost }}</p>
+                      <p v-if="model.reference">{{ t('admin.accounts.upstreamBilling.video.referenceCost', { value: model.reference }) }}</p>
+                      <p v-for="price in model.resolutions" :key="price.resolution">{{ price.resolution }}: {{ price.cost }}</p>
+                      <p v-if="model.unavailable" class="text-amber-300">{{ model.unavailable }}</p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else>{{ statusLabel || t('admin.accounts.upstreamBilling.video.noPrices') }}</p>
+            <p data-testid="video-pricing-updated-at">{{ t('admin.accounts.upstreamBilling.updatedAt', { value: formatDate(videoCatalog?.last_success || snapshot?.received_at) }) }}</p>
+            <p v-if="videoCatalog?.version">{{ t('admin.accounts.upstreamBilling.video.version', { value: videoCatalog.version }) }}</p>
+            <p v-if="stale && videoModels.length" class="text-amber-300">{{ t('admin.accounts.upstreamBilling.video.lastKnownPrices') }}</p>
+            <p v-if="videoFailure" class="max-w-sm whitespace-normal break-words text-red-400" data-testid="video-pricing-error">
+              {{ t('admin.accounts.upstreamBilling.video.lastError', { value: videoFailure }) }}
+            </p>
+          </template>
+          <template v-else-if="hasEffectiveRate && data">
             <p>{{ t('admin.accounts.upstreamBilling.groupRate', { value: data.group_rate_multiplier }) }}</p>
             <p v-if="data.user_rate_multiplier != null">
               {{ t('admin.accounts.upstreamBilling.userRate', { value: data.user_rate_multiplier }) }}
@@ -66,15 +99,15 @@
           </p>
         </div>
       </HelpTooltip>
-      <span v-if="hasEffectiveRate && statusLabel" :class="statusClass" class="whitespace-nowrap text-[10px] font-medium">
+      <span v-if="(hasEffectiveRate || (isVideoPricing && videoModels.length)) && statusLabel" :class="statusClass" class="whitespace-nowrap text-[10px] font-medium">
         {{ statusLabel }}
       </span>
       <button
         type="button"
         class="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
         :disabled="probing"
-        :aria-label="t('admin.accounts.upstreamBilling.manualProbe')"
-        :title="t('admin.accounts.upstreamBilling.manualProbe')"
+        :aria-label="t(isVideoPricing ? 'admin.accounts.upstreamBilling.video.manualProbe' : 'admin.accounts.upstreamBilling.manualProbe')"
+        :title="t(isVideoPricing ? 'admin.accounts.upstreamBilling.video.manualProbe' : 'admin.accounts.upstreamBilling.manualProbe')"
         data-testid="upstream-billing-probe"
         @click="$emit('probe')"
       >
@@ -177,7 +210,32 @@ const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000
 // 探测资格已放宽到全部 API-key 平台（上游是 sub2api 即可应答）。
 const eligible = computed(() => props.account.type === 'apikey')
 const snapshot = computed<UpstreamBillingProbeSnapshot | undefined>(() => props.account.extra?.upstream_billing_probe)
-const data = computed(() => snapshot.value?.data)
+const isVideoPricing = computed(() => props.account.platform === 'video' || snapshot.value?.kind === 'video_model_prices')
+const videoCatalog = computed(() => snapshot.value?.kind === 'video_model_prices' ? snapshot.value.video_pricing : undefined)
+// A catalog must never be interpreted as a token rate, including retained legacy data.
+const data = computed(() => isVideoPricing.value ? undefined : snapshot.value?.data)
+const formatVideoPrice = (value: unknown, mode: string) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || !['per_request', 'video'].includes(mode)) return '-'
+  const amount = String(value)
+  return t(mode === 'per_request'
+    ? 'admin.accounts.upstreamBilling.video.perRequest'
+    : 'admin.accounts.upstreamBilling.video.perSecond', { value: amount })
+}
+const videoModels = computed(() => Object.entries(videoCatalog.value?.models ?? {})
+  .filter(([, price]) => price && typeof price === 'object')
+  .sort(([left], [right]) => left.localeCompare(right))
+  .map(([name, price]) => ({
+    name,
+    cost: formatVideoPrice(price.unit_price, price.billing_mode),
+    reference: price.billing_mode === 'video' ? formatVideoPrice(price.reference_per_second, 'video') : '',
+    resolutions: Object.entries(price.resolution_prices ?? {}).map(([resolution, value]) => ({
+      resolution,
+      cost: formatVideoPrice(value, price.billing_mode)
+    })),
+    unavailable: price.unavailable_reason
+  })))
+const videoFailure = computed(() => snapshot.value?.last_error || videoCatalog.value?.last_error ||
+  (snapshot.value?.status === 'failed' ? t('admin.accounts.upstreamBilling.failed') : ''))
 const probeEnabled = computed(() => props.account.extra?.upstream_billing_probe_enabled === true)
 const nextProbeAt = computed(() => {
   const value = snapshot.value?.next_probe_at
@@ -266,6 +324,7 @@ const effectiveRate = computed(() => {
 const statusLabel = computed(() => {
   if (!snapshot.value) return t('admin.accounts.upstreamBilling.notProbed')
   if (snapshot.value.status === 'unsupported') return t('admin.accounts.upstreamBilling.unsupported')
+  if (isVideoPricing.value && videoFailure.value) return t('admin.accounts.upstreamBilling.failed')
   if (stale.value) return t('admin.accounts.upstreamBilling.stale')
   if (snapshot.value.status === 'failed') return t('admin.accounts.upstreamBilling.failed')
   return ''
@@ -273,12 +332,17 @@ const statusLabel = computed(() => {
 const statusClass = computed(() => {
   if (!snapshot.value) return 'text-gray-400 dark:text-gray-500'
   if (snapshot.value.status === 'unsupported') return 'text-gray-500 dark:text-gray-400'
+  if (isVideoPricing.value && videoFailure.value) return 'text-red-600 dark:text-red-400'
   if (stale.value) return 'text-amber-600 dark:text-amber-400'
   if (snapshot.value.status === 'failed') return 'text-red-600 dark:text-red-400'
   return ''
 })
 const hasEffectiveRate = computed(() => effectiveRate.value !== '-')
-const primaryValue = computed(() => hasEffectiveRate.value ? effectiveRate.value : statusLabel.value || '-')
+const primaryValue = computed(() => isVideoPricing.value
+  ? videoModels.value.length
+    ? t('admin.accounts.upstreamBilling.video.modelCount', { count: videoModels.value.length })
+    : statusLabel.value || t('admin.accounts.upstreamBilling.video.noPrices')
+  : hasEffectiveRate.value ? effectiveRate.value : statusLabel.value || '-')
 const formatDate = (value?: string) => value
   ? new Date(value).toLocaleString(undefined, {
       month: '2-digit',

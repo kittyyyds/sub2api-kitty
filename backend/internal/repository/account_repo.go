@@ -632,6 +632,9 @@ func lockAndMergeAccountProbeExtra(
 	explicitProbeEnabled *bool,
 	explicitRateSyncEnabled *bool,
 ) (map[string]any, error) {
+	if account.Platform == service.PlatformVideo && explicitRateSyncEnabled != nil && *explicitRateSyncEnabled {
+		return nil, service.ErrVideoBillingRateSyncUnsupported
+	}
 	credentials, err := json.Marshal(normalizeJSONMap(account.Credentials))
 	if err != nil {
 		return nil, err
@@ -780,7 +783,7 @@ func lockAndMergeAccountProbeExtra(
 	} {
 		delete(extra, key)
 	}
-	probeAccount := service.IsUpstreamBillingProbeIdentity(account.Platform, account.Type)
+	probeAccount := service.IsAccountUpstreamProbeIdentity(account.Platform, account.Type)
 	probeEnabled := false
 	probeEnabledPresent := false
 	if probeAccount {
@@ -817,6 +820,9 @@ func lockAndMergeAccountProbeExtra(
 		// 缺失"的僵尸记录在任意一次无关编辑时静默打开周期性外呼。需要同时打开两个
 		// 开关的调用方（管理端编辑）自己显式传 explicitProbeEnabled=true。
 		if !probeEnabled {
+			rateSyncEnabled = false
+		}
+		if account.Platform == service.PlatformVideo {
 			rateSyncEnabled = false
 		}
 		if probeEnabledPresent {
@@ -3086,7 +3092,8 @@ func (r *accountRepository) UpdateUpstreamBillingProbeSnapshot(
 	if account == nil || snapshot == nil {
 		return service.ErrAccountNilInput
 	}
-	if snapshot.Status != service.UpstreamBillingProbeStatusOK {
+	if snapshot.Status != service.UpstreamBillingProbeStatusOK || account.Platform == service.PlatformVideo ||
+		snapshot.Kind == service.UpstreamBillingProbeKindVideoModelPrices {
 		rateMultiplier = nil
 	}
 	if dbent.TxFromContext(ctx) == nil {
@@ -3120,7 +3127,7 @@ func (r *accountRepository) updateUpstreamBillingProbeSnapshotInTx(
 	rateMultiplier *float64,
 ) error {
 	updates := map[string]any{service.UpstreamBillingProbeExtraKey: snapshot}
-	if service.IsUpstreamBillingProbeIdentity(account.Platform, account.Type) {
+	if service.IsUpstreamBillingProbeIdentity(account.Platform, account.Type) && snapshot.Kind != service.UpstreamBillingProbeKindVideoModelPrices {
 		if cost, ok := snapshot.CostMultiplierToSync(); ok {
 			updates[service.AccountCostMultiplierExtraKey] = cost
 		}

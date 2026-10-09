@@ -1160,10 +1160,10 @@
               class="input-label mb-0"
               for="bulk-edit-upstream-billing-auto-probe-enabled"
             >
-              {{ t('admin.accounts.upstreamBilling.autoProbe') }}
+              {{ t(billingProbeLabelKey) }}
             </label>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.upstreamBilling.autoProbeHint') }}
+              {{ t(billingProbeHintKey) }}
             </p>
           </div>
           <input
@@ -1699,6 +1699,17 @@ const allBillingProbeCapable = computed(() => {
     targetSelectedTypes.value.every(t => t === 'apikey')
   )
 })
+
+const billingProbeLabelKey = computed(() => targetSelectedPlatforms.value.includes('video')
+  ? targetSelectedPlatforms.value.length === 1
+    ? 'admin.accounts.upstreamBilling.video.autoProbe'
+    : 'admin.accounts.upstreamBilling.video.mixedAutoProbe'
+  : 'admin.accounts.upstreamBilling.autoProbe')
+const billingProbeHintKey = computed(() => targetSelectedPlatforms.value.includes('video')
+  ? targetSelectedPlatforms.value.length === 1
+    ? 'admin.accounts.upstreamBilling.video.autoProbeHint'
+    : 'admin.accounts.upstreamBilling.video.mixedAutoProbeHint'
+  : 'admin.accounts.upstreamBilling.autoProbeHint')
 
 // 是否全部为支持请求头覆写的平台/账号类型
 // 所选平台 × 所选类型的全组合均需具备覆写资格（实际选中账号是该组合的子集，

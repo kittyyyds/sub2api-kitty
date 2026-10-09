@@ -357,7 +357,7 @@
             <span class="inline-flex items-center gap-1 text-sm font-mono text-gray-700 dark:text-gray-300">
               <span>{{ formatMultiplier(row.rate_multiplier ?? 1) }}x</span>
               <span
-                v-if="row.extra?.upstream_billing_rate_sync_enabled === true"
+                v-if="row.platform !== 'video' && row.extra?.upstream_billing_probe?.kind !== 'video_model_prices' && row.extra?.upstream_billing_rate_sync_enabled === true"
                 class="inline-flex cursor-help text-emerald-600 dark:text-emerald-400"
                 :aria-label="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
                 :title="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
@@ -371,7 +371,7 @@
             <div class="flex items-center gap-1">
               <span>{{ column.label }}</span>
               <span @click.stop>
-                <HelpTooltip :content="t('admin.accounts.upstreamBilling.trustWarning')" width-class="w-80" />
+                <HelpTooltip :content="t(params.platform === 'video' ? 'admin.accounts.upstreamBilling.video.publicDefault' : 'admin.accounts.upstreamBilling.trustWarning')" width-class="w-80" />
               </span>
             </div>
           </template>
@@ -1106,6 +1106,12 @@ const syncAccountListDerivedParams = () => {
   // Keep every load path, including auto-refresh and sorting, aligned with the current column visibility.
   const requestParams = params as any
   requestParams.include_scheduler_score = shouldIncludeSchedulerScore() ? '1' : '0'
+  if (requestParams.platform === 'video' && sortState.sort_by === 'upstream_billing_rate') {
+    sortState.sort_by = 'name'
+    sortState.sort_order = 'asc'
+    requestParams.sort_by = 'name'
+    requestParams.sort_order = 'asc'
+  }
 }
 
 const {
@@ -1283,7 +1289,7 @@ const applyUpstreamBillingRateSnapshots = async (
     else delete nextExtra.upstream_billing_probe
     const nextAccount = {
       ...account,
-      ...(typeof nextSnapshot?.synced_rate_multiplier === 'number'
+      ...(account.platform !== 'video' && nextSnapshot?.kind !== 'video_model_prices' && typeof nextSnapshot?.synced_rate_multiplier === 'number'
         ? { rate_multiplier: nextSnapshot.synced_rate_multiplier }
         : {}),
       extra: nextExtra
@@ -1367,6 +1373,7 @@ const handlePageSizeChange = (size: number) => {
 }
 
 const handleSort = (key: string, order: AccountSortOrder) => {
+  if (params.platform === 'video' && key === 'upstream_billing_rate') return
   sortState.sort_by = key
   sortState.sort_order = order
   const requestParams = params as any
@@ -1874,7 +1881,7 @@ const allColumns = computed(() => {
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
     { key: 'scheduler_score', label: t('admin.accounts.columns.schedulerScore'), sortable: false },
     { key: 'rate_multiplier', label: t('admin.accounts.columns.billingRateMultiplier'), sortable: true },
-    { key: 'upstream_billing_rate', label: t('admin.accounts.columns.upstreamBillingRate'), sortable: true },
+    { key: 'upstream_billing_rate', label: t('admin.accounts.columns.upstreamBillingRate'), sortable: params.platform !== 'video' },
     { key: 'last_used_at', label: t('admin.accounts.columns.lastUsed'), sortable: true },
     { key: 'created_at', label: t('admin.accounts.columns.createdAt'), sortable: true },
     { key: 'expires_at', label: t('admin.accounts.columns.expiresAt'), sortable: true },
@@ -2298,7 +2305,7 @@ const patchUpstreamBillingSnapshot = (accountID: number, snapshot: UpstreamBilli
   upstreamBillingNow.value = Date.now()
   patchAccountInList({
     ...account,
-    ...(typeof snapshot.synced_rate_multiplier === 'number'
+    ...(account.platform !== 'video' && snapshot.kind !== 'video_model_prices' && typeof snapshot.synced_rate_multiplier === 'number'
       ? { rate_multiplier: snapshot.synced_rate_multiplier }
       : {}),
     extra: { ...account.extra, upstream_billing_probe: snapshot }
@@ -2320,7 +2327,7 @@ const handleProbeUpstreamBilling = async (account: Account) => {
     }
   } catch (error) {
     console.error('Failed to probe upstream billing:', error)
-    appStore.showError(extractApiErrorMessage(error, t('admin.accounts.upstreamBilling.probeFailed')))
+    appStore.showError(extractApiErrorMessage(error, t(account.platform === 'video' ? 'admin.accounts.upstreamBilling.video.probeFailed' : 'admin.accounts.upstreamBilling.probeFailed')))
   } finally {
     probingUpstreamBilling.delete(account.id)
   }

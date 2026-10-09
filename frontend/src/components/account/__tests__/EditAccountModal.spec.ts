@@ -8,8 +8,10 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 
 enableAutoUnmount(afterEach)
 
-const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, authIsSimpleMode, probeVideoPricesMock, showInfoMock } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
+  probeVideoPricesMock: vi.fn(),
+  showInfoMock: vi.fn(),
   checkMixedChannelRiskMock: vi.fn(),
   authIsSimpleMode: { value: true }
 }))
@@ -18,7 +20,7 @@ vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError: vi.fn(),
     showSuccess: vi.fn(),
-    showInfo: vi.fn()
+    showInfo: showInfoMock
   })
 }))
 
@@ -34,6 +36,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       update: updateAccountMock,
+      probeUpstreamBilling: probeVideoPricesMock,
       getOpenAIRequestTimezones: vi.fn().mockResolvedValue({ default: 'Asia/Singapore', timezones: ['Asia/Singapore', 'America/New_York'] }),
       checkMixedChannelRisk: checkMixedChannelRiskMock
     },
@@ -1888,6 +1891,40 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_responses_mode).toBe('force_responses')
     expect(updateAccountMock.mock.calls[0]?.[1]?.extra?.openai_responses_supported).toBe(false)
+  })
+
+  it.each(['failed', 'transport', 'disabled'])('keeps video saving independent of price probing (%s) and drops legacy rate sync', async (outcome) => {
+    const account = { ...buildAccount(), platform: 'video', credentials: { api_key: 'test-video-key', base_url: 'https://video.example.com' },
+      extra: { upstream_billing_probe_enabled: true, upstream_billing_rate_sync_enabled: true } }
+    const snapshot = { kind: 'video_model_prices', status: 'failed', last_error: 'network_error' }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    showInfoMock.mockClear()
+    probeVideoPricesMock.mockReset()
+    if (outcome === 'transport') probeVideoPricesMock.mockRejectedValue(new Error('offline'))
+    else probeVideoPricesMock.mockResolvedValue({ snapshot })
+    const wrapper = mountModal(account)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="upstream-billing-rate-sync"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="account-cost-auto-sync"]').exists()).toBe(false)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="account-rate-multiplier"]').element.disabled).toBe(false)
+    expect(wrapper.get('[data-testid="upstream-billing-auto-probe"]').attributes('aria-label')).toBe('admin.accounts.upstreamBilling.video.autoProbe')
+    if (outcome === 'disabled') await wrapper.get('[data-testid="upstream-billing-auto-probe"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = updateAccountMock.mock.calls[0]?.[1]
+    expect(payload.upstream_billing_probe_enabled).toBe(outcome !== 'disabled')
+    expect(payload).not.toHaveProperty('upstream_billing_rate_sync_enabled')
+    expect(payload.extra).not.toHaveProperty('upstream_billing_rate_sync_enabled')
+    expect(payload.extra).not.toHaveProperty('cost_multiplier_auto_sync')
+    expect(payload).toHaveProperty('rate_multiplier')
+    expect(wrapper.emitted('updated')).toHaveLength(1)
+    if (outcome === 'disabled') expect(probeVideoPricesMock).not.toHaveBeenCalled()
+    else {
+      expect(probeVideoPricesMock).toHaveBeenCalledWith(account.id)
+      expect(showInfoMock).toHaveBeenCalledWith('admin.accounts.upstreamBilling.video.savedProbeFailed')
+    }
+    if (outcome === 'failed') expect((wrapper.emitted('updated')![0][0] as any).extra.upstream_billing_probe).toEqual(snapshot)
   })
 
   it('submits the account upstream billing auto-probe setting', async () => {

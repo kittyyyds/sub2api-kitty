@@ -41,6 +41,7 @@ func RegisterAdminRoutes(
 	admin.GET("/video-upstream", h.OpenAIGateway.VideoUpstreamSettings)
 	admin.PUT("/video-upstream", h.OpenAIGateway.UpdateVideoUpstreamSettings)
 	admin.POST("/video-upstream/sync", h.OpenAIGateway.SyncVideoUpstreamPrices)
+	admin.POST("/video-upstream/probe", h.OpenAIGateway.ProbeVideoUpstreamPrices)
 	admin.POST("/video-upstream/import", h.OpenAIGateway.ImportVideoUpstreamModels)
 	admin.GET("/video-tasks", h.OpenAIGateway.ListAdminVideoTasks)
 	admin.GET("/video-tasks/stats", h.OpenAIGateway.AdminVideoTaskStats)

@@ -126,7 +126,7 @@ func (r *upstreamBillingProbeAccountRepo) UpdateUpstreamBillingProbeSnapshot(
 		account.Extra = make(map[string]any)
 	}
 	account.Extra[UpstreamBillingProbeExtraKey] = snapshot
-	if isUpstreamBillingProbeAccount(account) && account.CostMultiplierAutoSyncEnabled() {
+	if IsUpstreamBillingProbeIdentity(account.Platform, account.Type) && account.CostMultiplierAutoSyncEnabled() {
 		if cost, ok := snapshot.CostMultiplierToSync(); ok {
 			account.Extra[AccountCostMultiplierExtraKey] = cost
 		}
@@ -228,6 +228,18 @@ func (r *upstreamBillingProbeSettingRepo) Set(_ context.Context, key, value stri
 	}
 	r.values[key] = value
 	return nil
+}
+
+func (r *upstreamBillingProbeSettingRepo) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	values := make(map[string]string, len(keys))
+	for _, key := range keys {
+		if value, ok := r.values[key]; ok {
+			values[key] = value
+		}
+	}
+	return values, nil
 }
 
 func newUpstreamBillingProbeTestService(

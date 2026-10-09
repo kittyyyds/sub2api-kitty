@@ -402,7 +402,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig).Enabled {
 		return nil, infraerrors.New(http.StatusBadRequest, "INVALID_CODEX_MODELS_MANIFEST_CONFIG", "codex models manifest config cannot be enabled at group creation; configure it after creation in the group editor")
 	}
-	modelPricing, err := normalizeGroupModelPricing(platform, input.ModelPricing)
+	modelPricing, err := s.normalizeSavedGroupModelPricing(ctx, platform, input.ModelPricing, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -837,7 +837,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		group.LongContextPricingEnabled = *input.LongContextPricingEnabled
 	}
 	if input.ModelPricing != nil {
-		modelPricing, normalizeErr := normalizeGroupModelPricing(group.Platform, *input.ModelPricing)
+		modelPricing, normalizeErr := s.normalizeSavedGroupModelPricing(ctx, group.Platform, *input.ModelPricing, group.ModelPricing)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}

@@ -33,9 +33,12 @@ type UnifiedVideoSpec struct {
 	MaxCombinedSeconds    float64  `json:"max_combined_seconds,omitempty"`
 	RequiresVisualOrAudio bool     `json:"requires_visual_or_audio,omitempty"`
 	AllowAudioOnly        bool     `json:"allow_audio_only,omitempty"`
-	ReferenceBilled       bool     `json:"reference_billed,omitempty"`
-	Face                  bool     `json:"face"`
-	GenerateAudio         bool     `json:"generate_audio"`
+	// Legacy evidence for the per_second reference/output same-rate fallback.
+	// Do not set this merely because video_multi supplies a reference price;
+	// that price must be read independently from the current supplier response.
+	ReferenceBilled bool `json:"reference_billed,omitempty"`
+	Face            bool `json:"face"`
+	GenerateAudio   bool `json:"generate_audio"`
 }
 
 var unifiedVideoSpecs = func() map[string]UnifiedVideoSpec {
@@ -63,7 +66,7 @@ func (s UnifiedVideoSpec) Validate() error {
 		}
 	}
 	for _, v := range s.Resolutions {
-		if !slices.Contains([]string{"480p", "720p", "768p", "1080p", "2k"}, strings.ToLower(v)) {
+		if !slices.Contains([]string{"480p", "720p", "768p", "1080p", "2k", "4k"}, strings.ToLower(v)) {
 			return errors.New("不支持的分辨率")
 		}
 	}
@@ -197,7 +200,9 @@ func PrepareUnifiedVideoInput(body []byte, contentType string, spec UnifiedVideo
 	if input.Resolution == "" && len(spec.Resolutions) == 1 {
 		input.Resolution = strings.ToLower(spec.Resolutions[0])
 	}
-	if !slices.Contains(spec.Resolutions, input.Resolution) {
+	if !slices.ContainsFunc(spec.Resolutions, func(resolution string) bool {
+		return strings.EqualFold(resolution, input.Resolution)
+	}) {
 		return input, errors.New("请选择当前型号支持的分辨率")
 	}
 	input.AspectRatio, _ = p["aspect_ratio"].(string)

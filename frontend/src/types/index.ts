@@ -2,6 +2,8 @@
  * Core Type Definitions for Sub2API Frontend
  */
 
+import type { VideoCatalog } from '@/api/admin/videoUpstream'
+
 // ==================== Common Types ====================
 
 export interface SelectOption {
@@ -1243,7 +1245,11 @@ export interface UpstreamBalanceSnapshot {
   last_error?: string
 }
 
+export type VideoSupplierCatalog = VideoCatalog
+
 export interface UpstreamBillingProbeSnapshot {
+  kind?: 'video_model_prices'
+  video_pricing?: VideoSupplierCatalog
   status: UpstreamBillingProbeStatus
   data?: UpstreamBillingData
   received_at?: string

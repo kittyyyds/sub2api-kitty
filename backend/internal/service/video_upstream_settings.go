@@ -83,6 +83,9 @@ func (s *SettingService) SaveVideoRuntime(ctx context.Context, cfg VideoRuntimeS
 // VideoModelConfig is stored in the existing group's model_pricing JSON. Old
 // entries without this field keep their legacy provider and billing contract.
 type VideoModelConfig struct {
+	// Empty preserves the pre-controls contract. New entries explicitly separate
+	// a supplier-derived effective price from an administrator's fixed price.
+	PriceSource        string              `json:"price_source,omitempty"`
 	AutoPrice          bool                `json:"auto_price"`
 	Markup             *VideoMarkup        `json:"markup,omitempty"`
 	FollowIncrease     *bool               `json:"follow_increase,omitempty"`
@@ -96,13 +99,14 @@ type VideoModelConfig struct {
 }
 
 type VideoSupplierPrice struct {
-	Model              string             `json:"model"`
-	BillingMode        BillingMode        `json:"billing_mode"`
-	UnitPrice          float64            `json:"unit_price"`
-	ReferencePerSecond float64            `json:"reference_per_second"`
-	ResolutionPrices   map[string]float64 `json:"resolution_prices,omitempty"`
-	Spec               *UnifiedVideoSpec  `json:"spec,omitempty"`
-	UnavailableReason  string             `json:"unavailable_reason,omitempty"`
+	Model               string             `json:"model"`
+	BillingMode         BillingMode        `json:"billing_mode"`
+	UnitPrice           float64            `json:"unit_price"`
+	ReferencePerSecond  float64            `json:"reference_per_second"`
+	ReferencePriceKnown bool               `json:"reference_price_known,omitempty"`
+	ResolutionPrices    map[string]float64 `json:"resolution_prices,omitempty"`
+	Spec                *UnifiedVideoSpec  `json:"spec,omitempty"`
+	UnavailableReason   string             `json:"unavailable_reason,omitempty"`
 }
 type VideoPriceChange struct {
 	At           string  `json:"at"`
@@ -114,12 +118,13 @@ type VideoPriceChange struct {
 	NewReference float64 `json:"new_reference"`
 }
 type VideoSupplierCatalog struct {
-	Version     string                        `json:"version"`
-	LastAttempt string                        `json:"last_attempt"`
-	LastSuccess string                        `json:"last_success"`
-	LastError   string                        `json:"last_error"`
-	Models      map[string]VideoSupplierPrice `json:"models"`
-	Changes     []VideoPriceChange            `json:"changes"`
+	Version              string                        `json:"version"`
+	LastAttempt          string                        `json:"last_attempt"`
+	LastPriceSyncAttempt string                        `json:"last_price_sync_attempt,omitempty"`
+	LastSuccess          string                        `json:"last_success"`
+	LastError            string                        `json:"last_error"`
+	Models               map[string]VideoSupplierPrice `json:"models"`
+	Changes              []VideoPriceChange            `json:"changes"`
 }
 
 func (s *SettingService) GetVideoCatalog(ctx context.Context) (VideoSupplierCatalog, error) {
@@ -192,7 +197,15 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 			}
 			p.UnitPrice = *row.Video.Output
 			p.ReferencePerSecond = *row.Video.Reference
-			p.ResolutionPrices = row.Video.Resolution
+			p.ReferencePriceKnown = spec.MaxVideos > 0
+			p.ResolutionPrices = make(map[string]float64, len(row.Video.Resolution))
+			for raw, price := range row.Video.Resolution {
+				resolution := strings.ToLower(strings.TrimSpace(raw))
+				if _, duplicate := p.ResolutionPrices[resolution]; duplicate {
+					return nil, "", errors.New("上游分辨率价格重复")
+				}
+				p.ResolutionPrices[resolution] = price
+			}
 		default:
 			p.UnavailableReason = "视频Token或未知计费方式尚未核实，不能开放"
 		}
@@ -200,6 +213,7 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 		// even though the public API only labels them per_second.
 		if row.Mode == "per_second" && spec.ReferenceBilled {
 			p.ReferencePerSecond = p.UnitPrice
+			p.ReferencePriceKnown = true
 		}
 		if spec.MaxVideos > 0 && row.Mode == "per_second" && !spec.ReferenceBilled {
 			p.UnavailableReason = "参考视频计费依据未明确，需要核实后开放"
@@ -236,6 +250,9 @@ type VideoPricingRepository interface {
 var videoPriceSyncMu sync.Mutex
 
 func repriceVideoEntry(entry ChannelModelPricing, cost VideoSupplierPrice, cfg VideoRuntimeSettings, at string, initial bool) (ChannelModelPricing, error) {
+	if entry.Video != nil && entry.Video.PriceSource == "manual" {
+		return entry, nil // A fixed selling price always wins, including explicit zero.
+	}
 	if entry.Video == nil || len(entry.Models) != 1 || cost.UnavailableReason != "" {
 		return entry, errors.New("型号能力或计费规则尚未核实")
 	}
@@ -276,7 +293,7 @@ func repriceVideoEntry(entry ChannelModelPricing, cost VideoSupplierPrice, cfg V
 	entry.PerRequestPrice = &unit
 	entry.BillingMode = cost.BillingMode
 	v.ReferencePerSecond = 0
-	if cost.BillingMode == BillingModeVideo && (entry.Video.Spec.ReferenceBilled || entry.Video.ReferencePerSecond > 0 || cost.Spec != nil && cost.Spec.ReferenceBilled || cost.ReferencePerSecond > 0) {
+	if cost.BillingMode == BillingModeVideo && (cost.ReferencePriceKnown || entry.Video.Spec.ReferenceBilled || entry.Video.ReferencePerSecond > 0 || cost.Spec != nil && cost.Spec.ReferenceBilled || cost.ReferencePerSecond > 0) {
 		v.ReferencePerSecond = choose(entry.Video.ReferencePerSecond, v.AppliedMarkup.ReferencePerSecond, cost.ReferencePerSecond, markup.ReferencePerSecond)
 	}
 	v.ResolutionPrices = map[string]float64{}
@@ -300,6 +317,16 @@ func repriceVideoEntry(entry ChannelModelPricing, cost VideoSupplierPrice, cfg V
 // The only network target is the provider's public read-only price API. No
 // customer/supplier credential or configurable URL is sent to this endpoint.
 func (s *OpenAIGatewayService) SyncVideoPrices(ctx context.Context, force bool) (VideoSupplierCatalog, error) {
+	return s.refreshVideoPrices(ctx, force, true)
+}
+
+// ProbeVideoPrices only refreshes the supplier catalog. Reading costs from an
+// account or group editor must never reprice unrelated groups.
+func (s *OpenAIGatewayService) ProbeVideoPrices(ctx context.Context) (VideoSupplierCatalog, error) {
+	return s.refreshVideoPrices(ctx, true, false)
+}
+
+func (s *OpenAIGatewayService) refreshVideoPrices(ctx context.Context, force, applyPrices bool) (VideoSupplierCatalog, error) {
 	if !videoPriceSyncMu.TryLock() {
 		return VideoSupplierCatalog{}, errors.New("价格同步正在进行，请稍后查看结果")
 	}
@@ -315,11 +342,14 @@ func (s *OpenAIGatewayService) SyncVideoPrices(ctx context.Context, force bool) 
 	if !force && !cfg.AutoSync {
 		return state, nil
 	}
-	if at, e := time.Parse(time.RFC3339, state.LastAttempt); !force && e == nil && time.Since(at) < time.Duration(cfg.IntervalSeconds)*time.Second {
+	if at, e := time.Parse(time.RFC3339, state.LastPriceSyncAttempt); !force && e == nil && time.Since(at) < time.Duration(cfg.IntervalSeconds)*time.Second {
 		return state, nil
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	state.LastAttempt = now
+	if applyPrices {
+		state.LastPriceSyncAttempt = now
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://suanliai.top/api/pricing", nil)
 	if err != nil {
 		return state, err
@@ -347,7 +377,7 @@ func (s *OpenAIGatewayService) SyncVideoPrices(ctx context.Context, force bool) 
 		state.LastError = "价格同步失败，继续使用最后有效价格"
 	} else {
 		state.Models, state.Version, state.LastSuccess, state.LastError = models, version, now, ""
-		if repo, ok := s.usageLogRepo.(VideoPricingRepository); ok {
+		if repo, ok := s.usageLogRepo.(VideoPricingRepository); ok && applyPrices {
 			for after := int64(0); ; {
 				groups, e := repo.ListVideoPricingGroups(ctx, after, 50)
 				if e != nil {
@@ -361,7 +391,7 @@ func (s *OpenAIGatewayService) SyncVideoPrices(ctx context.Context, force bool) 
 					next := append([]ChannelModelPricing(nil), g.Pricing...)
 					changes := []VideoPriceChange{}
 					for i, entry := range next {
-						if entry.Video == nil || entry.PerRequestPrice == nil || !entry.Video.AutoPrice || len(entry.Models) != 1 {
+						if entry.Video == nil || entry.PerRequestPrice == nil || !entry.Video.AutoPrice || entry.Video.PriceSource == "manual" || len(entry.Models) != 1 {
 							continue
 						}
 						cost, exists := models[entry.Models[0]]
@@ -464,7 +494,7 @@ func (s *OpenAIGatewayService) ImportVideoPricing(ctx context.Context, groupID i
 		if !ok || cost.Spec == nil || cost.UnavailableReason != "" || !cost.Spec.Supported {
 			return fmt.Errorf("型号 %s 的参数或计费尚未核实", model)
 		}
-		p := ChannelModelPricing{Platform: PlatformVideo, Models: []string{model}, BillingMode: cost.BillingMode, Video: &VideoModelConfig{AutoPrice: true, Spec: *cost.Spec}}
+		p := ChannelModelPricing{Platform: PlatformVideo, Models: []string{model}, BillingMode: cost.BillingMode, Video: &VideoModelConfig{PriceSource: "upstream", AutoPrice: true, Spec: *cost.Spec}}
 		p, err = repriceVideoEntry(p, cost, cfg, time.Now().UTC().Format(time.RFC3339), true)
 		if err != nil {
 			return err

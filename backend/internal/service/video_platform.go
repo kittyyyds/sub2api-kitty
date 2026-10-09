@@ -76,6 +76,9 @@ func validateVideoGroupPricing(pricing []ChannelModelPricing) error {
 	seen := make(map[string]struct{})
 	for _, entry := range pricing {
 		if entry.Video != nil {
+			if entry.Video.PriceSource != "" && entry.Video.PriceSource != "manual" && entry.Video.PriceSource != "upstream" {
+				return fmt.Errorf("未知的视频定价方式")
+			}
 			if len(entry.Models) != 1 {
 				return infraerrors.BadRequest("INVALID_VIDEO_CONFIG", "统一视频价格每项必须只有一个型号")
 			}

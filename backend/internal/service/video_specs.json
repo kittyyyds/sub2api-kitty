@@ -4616,7 +4616,9 @@
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
-    "resolutions": [],
+    "resolutions": [
+      "4k"
+    ],
     "ratios": [
       "16:9",
       "9:16"
@@ -4632,7 +4634,7 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "上游仅提供输出秒价，参考视频计费未明确，暂不开放"
   },
   "官转稳定-sd2-480p(933满血卡脸)": {
     "supported": true,
@@ -4711,7 +4713,9 @@
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
-    "resolutions": [],
+    "resolutions": [
+      "4k"
+    ],
     "ratios": [
       "16:9",
       "9:16"
@@ -4727,7 +4731,7 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "上游仅提供输出秒价，参考视频计费未明确，暂不开放"
   },
   "SD2.0-720P(9图不卡脸不排队云端过彩铅)": {
     "supported": true,
@@ -5603,7 +5607,7 @@
     "requires_visual_or_audio": false
   },
   "官方直连sd2.0(满血全参不排队480P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
@@ -5625,10 +5629,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.0(满血全参不排队720P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
@@ -5650,10 +5654,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.0(满血全参不排队1080P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
@@ -5675,33 +5679,35 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.0(满血全参不排队4K)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
-    "resolutions": [],
+    "resolutions": [
+      "4k"
+    ],
     "ratios": [
       "16:9",
       "9:16"
     ],
     "min_images": 0,
     "max_images": 9,
-    "max_videos": 3,
+    "max_videos": 0,
     "max_audios": 3,
-    "max_reference_seconds": 15,
+    "max_reference_seconds": 0,
     "max_combined_seconds": 0,
     "reference_billed": false,
     "face": false,
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "支持文生/参考图及音频；参考视频计费未明确，暂不接受视频参考；未真实生成验收"
   },
   "官方直连sd2.0(mini全参不排队480P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
@@ -5723,10 +5729,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.0(mini全参不排队720P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
@@ -5748,10 +5754,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.0(fast全参不排队480P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
@@ -5773,10 +5779,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.0(fast全参不排队720P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 15,
     "seconds": [],
@@ -5798,10 +5804,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.5(满血全参不排队480P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 30,
     "seconds": [],
@@ -5823,10 +5829,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.5(满血全参不排队720P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 30,
     "seconds": [],
@@ -5848,10 +5854,10 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官方直连sd2.5(满血全参不排队1080P)": {
-    "supported": false,
+    "supported": true,
     "min_seconds": 4,
     "max_seconds": 30,
     "seconds": [],
@@ -5873,7 +5879,7 @@
     "generate_audio": false,
     "allow_audio_only": false,
     "requires_visual_or_audio": false,
-    "reason": "参数表存在未确认或额外限制，暂不开放"
+    "reason": "按上游文档适配，尚未完成真实生成验收"
   },
   "官转sd2.0(903不卡脸不排队720P)": {
     "supported": false,

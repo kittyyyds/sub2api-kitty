@@ -68,6 +68,75 @@ describe('UpstreamBillingRateCell', () => {
     vi.useRealTimers()
   })
 
+  it('shows video model costs, units, reference and resolution prices, time and public-price scope', async () => {
+    const wrapper = mount(UpstreamBillingRateCell, {
+      attachTo: document.body,
+      props: { account: makeAccount({ platform: 'video', extra: { upstream_billing_probe_enabled: true, upstream_billing_probe: {
+        kind: 'video_model_prices', status: 'ok', data: billingData, synced_rate_multiplier: 0.1,
+        received_at: '2026-07-13T00:00:00Z', fresh_until: '2026-07-13T01:00:00Z',
+        last_attempt_at: '2026-07-13T00:00:00Z', next_probe_at: '2026-07-13T01:00:00Z',
+        video_pricing: { version: 'catalog-v2', last_attempt: '2026-07-13T00:00:00Z', last_success: '2026-07-12T23:59:00Z', last_error: '', changes: [], models: {
+          'video-seconds': { model: 'video-seconds', billing_mode: 'video', unit_price: 0.012345, reference_per_second: 0.003, resolution_prices: { '720p': 0.01, '1080p': 0.02 } },
+          'video-task': { model: 'video-task', billing_mode: 'per_request', unit_price: 0.25, reference_per_second: 0 }
+        } }
+      } } }), now: Date.now() }
+    })
+    expect(wrapper.get('[data-testid="upstream-billing-rate"]').text()).toBe('admin.accounts.upstreamBilling.video.modelCount:2')
+    await wrapper.get('[data-testid="upstream-billing-details"]').trigger('mouseenter')
+    await flushPromises()
+    const tooltip = document.body.querySelector('[role="tooltip"]')!
+    expect(tooltip.querySelector('[data-testid="video-pricing-public-default"]')?.textContent).toContain('admin.accounts.upstreamBilling.video.publicDefault')
+    const prices = tooltip.querySelector('[data-testid="video-pricing-models"]')!.textContent!
+    expect(prices).toContain('video-seconds')
+    expect(prices).toContain('admin.accounts.upstreamBilling.video.perSecond:0.012345')
+    expect(prices).toContain('admin.accounts.upstreamBilling.video.referenceCost:admin.accounts.upstreamBilling.video.perSecond:0.003')
+    expect(prices).toContain('720p: admin.accounts.upstreamBilling.video.perSecond:0.01')
+    expect(prices).toContain('1080p: admin.accounts.upstreamBilling.video.perSecond:0.02')
+    expect(prices).toContain('admin.accounts.upstreamBilling.video.perRequest:0.25')
+    expect(tooltip.textContent).toContain('catalog-v2')
+    expect(tooltip.querySelector('[data-testid="video-pricing-updated-at"]')?.textContent).toContain(
+      new Date('2026-07-12T23:59:00Z').toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    )
+    expect(tooltip.textContent).not.toContain('admin.accounts.upstreamBilling.groupRate')
+    expect(tooltip.textContent).not.toContain('admin.accounts.upstreamBilling.effectiveRate')
+    await wrapper.get('[data-testid="upstream-billing-probe"]').trigger('click')
+    expect(wrapper.emitted('probe')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('keeps last video prices after failure, marks stale data and never falls back to token rates', async () => {
+    const snapshot = {
+      kind: 'video_model_prices' as const, status: 'failed' as const, data: billingData,
+      received_at: '2026-07-13T00:00:00Z', fresh_until: '2026-07-13T00:10:00Z',
+      last_attempt_at: '2026-07-13T00:20:00Z', next_probe_at: '2026-07-13T01:00:00Z', last_error: 'network_error',
+      video_pricing: { version: 'old', last_attempt: '', last_success: '2026-07-13T00:00:00Z', last_error: 'network_error', changes: [], models: {
+        'old-video': { model: 'old-video', billing_mode: 'per_request' as const, unit_price: 0, reference_per_second: 0 }
+      } }
+    }
+    const wrapper = mount(UpstreamBillingRateCell, {
+      attachTo: document.body,
+      props: { account: makeAccount({ platform: 'video', extra: { upstream_billing_probe: snapshot } }), now: Date.now() }
+    })
+    expect(wrapper.text()).toContain('admin.accounts.upstreamBilling.video.modelCount:1')
+    expect(wrapper.text()).toContain('admin.accounts.upstreamBilling.failed')
+    await wrapper.get('[data-testid="upstream-billing-details"]').trigger('mouseenter')
+    await flushPromises()
+    const tooltip = document.body.querySelector('[role="tooltip"]')!
+    expect(tooltip.textContent).toContain('old-video')
+    expect(tooltip.textContent).toContain('admin.accounts.upstreamBilling.video.perRequest:0')
+    expect(tooltip.textContent).toContain('admin.accounts.upstreamBilling.video.lastKnownPrices')
+    expect(tooltip.querySelector('[data-testid="video-pricing-error"]')?.textContent).toContain('network_error')
+    await wrapper.setProps({ account: makeAccount({ platform: 'openai', extra: { upstream_billing_probe: snapshot } }) })
+    expect(wrapper.text()).not.toContain('0.60x')
+    await wrapper.setProps({ account: makeAccount({ platform: 'video', extra: { upstream_billing_probe: { ...snapshot, video_pricing: undefined } } }) })
+    expect(wrapper.get('[data-testid="upstream-billing-rate"]').text()).toBe('admin.accounts.upstreamBilling.failed')
+    expect(tooltip.querySelector('[data-testid="video-pricing-models"]')).toBeNull()
+    await wrapper.setProps({ account: makeAccount({ platform: 'video', extra: { upstream_billing_probe: { ...snapshot, kind: undefined, status: 'ok', fresh_until: '2026-07-13T01:00:00Z', last_error: undefined, video_pricing: undefined } } }) })
+    expect(wrapper.get('[data-testid="upstream-billing-rate"]').text()).toBe('admin.accounts.upstreamBilling.video.noPrices')
+    expect(tooltip.textContent).not.toContain('admin.accounts.upstreamBilling.lastDetectedRate')
+    wrapper.unmount()
+  })
+
   it('recomputes the current effective rate and keeps the icon-only probe action', async () => {
     const wrapper = mount(UpstreamBillingRateCell, {
       props: {

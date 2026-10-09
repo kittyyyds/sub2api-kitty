@@ -538,6 +538,46 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     )
   })
 
+  it.each(['success', 'failed', 'unsupported', 'transport'])('saves video accounts with a price probe (%s), without rate sync', async (outcome) => {
+    if (outcome === 'transport') probeUpstreamBillingMock.mockRejectedValue(new Error('probe offline'))
+    else probeUpstreamBillingMock.mockResolvedValue({ snapshot: { kind: 'video_model_prices', status: outcome === 'success' ? 'ok' : outcome } })
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
+    await flushPromises()
+    const toggle = wrapper.get('[data-testid="upstream-billing-auto-probe"]')
+    expect(toggle.attributes('aria-label')).toBe('admin.accounts.upstreamBilling.video.autoProbe')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(wrapper.text()).not.toContain('admin.accounts.upstreamBilling.syncRate')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video supplier')
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue('https://video.example.com')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-video-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = createAccountMock.mock.calls[0]?.[0]
+    expect(payload).toMatchObject({ platform: 'video', type: 'apikey', upstream_billing_probe_enabled: true })
+    expect(payload).not.toHaveProperty('upstream_billing_rate_sync_enabled')
+    expect(payload.extra).not.toHaveProperty('upstream_billing_rate_sync_enabled')
+    expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
+    expect(createAccountMock.mock.invocationCallOrder[0]).toBeLessThan(probeUpstreamBillingMock.mock.invocationCallOrder[0])
+    expect(wrapper.emitted('created')).toHaveLength(1)
+    if (outcome === 'success') expect(showWarningMock).not.toHaveBeenCalled()
+    else expect(showWarningMock).toHaveBeenCalledWith('admin.accounts.upstreamBilling.video.savedProbeFailed')
+  })
+
+  it('can disable video price probing before creating the account', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="upstream-billing-auto-probe"]').trigger('click')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video supplier')
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue('https://video.example.com')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-video-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.upstream_billing_probe_enabled).toBe(false)
+    expect(probeUpstreamBillingMock).not.toHaveBeenCalled()
+  })
+
   it('enables upstream billing probes by default for new OpenAI API key accounts', async () => {
     await submitApiKeyAccount('openai')
 

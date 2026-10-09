@@ -1769,7 +1769,7 @@
             }}
           </p>
           <div
-            v-if="account?.type === 'apikey'"
+            v-if="account?.type === 'apikey' && account.platform !== 'video'"
             class="mt-3 flex items-center justify-between gap-3"
           >
             <div class="min-w-0">
@@ -1791,7 +1791,7 @@
         <div>
           <div class="mb-2 flex items-center justify-between gap-1">
             <label class="input-label mb-0" for="account-cost-multiplier">{{ t('admin.accounts.costMultiplier') }}</label>
-            <div v-if="account?.type === 'apikey'" class="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+            <div v-if="account?.type === 'apikey' && account.platform !== 'video'" class="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
               <span>{{ t('admin.accounts.costMultiplierAutoSync') }}</span>
               <Toggle
                 v-model="costMultiplierAutoSync"
@@ -1811,7 +1811,7 @@
             class="input"
             data-testid="account-cost-multiplier"
           />
-          <p class="input-hint">{{ t('admin.accounts.costMultiplierHint') }}</p>
+          <p class="input-hint">{{ t(account?.platform === 'video' ? 'admin.accounts.upstreamBilling.video.costMultiplierHint' : 'admin.accounts.costMultiplierHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.groupBillingRateMultiplier') }}</label>
@@ -2237,15 +2237,15 @@
         class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div>
-          <label class="input-label mb-0">{{ t('admin.accounts.upstreamBilling.autoProbe') }}</label>
+          <label class="input-label mb-0">{{ t(account?.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe') }}</label>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {{ t('admin.accounts.upstreamBilling.autoProbeHint') }}
+            {{ t(account?.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbeHint' : 'admin.accounts.upstreamBilling.autoProbeHint') }}
           </p>
         </div>
         <Toggle
           :model-value="upstreamBillingAutoProbeEnabled"
           data-testid="upstream-billing-auto-probe"
-          :aria-label="t('admin.accounts.upstreamBilling.autoProbe')"
+          :aria-label="t(account?.platform === 'video' ? 'admin.accounts.upstreamBilling.video.autoProbe' : 'admin.accounts.upstreamBilling.autoProbe')"
           @update:model-value="handleUpstreamBillingAutoProbeChange"
         />
       </div>
@@ -4544,7 +4544,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 		typeof extra?.auto_reset_credit_7d_threshold === 'number' ? extra.auto_reset_credit_7d_threshold * 100 : 100
 	upstreamBillingAutoProbeEnabled.value = extra?.upstream_billing_probe_enabled === true
   upstreamBillingRateSyncEnabled.value =
-    upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
+    newAccount.platform !== 'video' && upstreamBillingAutoProbeEnabled.value && extra?.upstream_billing_rate_sync_enabled === true
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   excelBPSEnabled.value = false
@@ -5549,12 +5549,23 @@ const saveAutoBPSRule = async (accountID: number) => {
 }
 
 const submitUpdateAccount = async (accountID: number, updatePayload: Record<string, unknown>) => {
-  if (updatePayload.extra && typeof updatePayload.extra === 'object') {
-  }
   submitting.value = true
   try {
     let updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))
     updatedAccount = await persistGrokMediaEligibility(accountID, updatedAccount)
+    if (props.account?.platform === 'video' && props.account.type === 'apikey' && updatePayload.upstream_billing_probe_enabled === true) {
+      try {
+        const result = await adminAPI.accounts.probeUpstreamBilling(accountID)
+        if (result.snapshot) {
+          updatedAccount = { ...updatedAccount, extra: { ...updatedAccount.extra, upstream_billing_probe: result.snapshot } }
+        }
+        if (result.error || (result.snapshot && result.snapshot.status !== 'ok')) {
+          appStore.showInfo(t('admin.accounts.upstreamBilling.video.savedProbeFailed'))
+        }
+      } catch {
+        appStore.showInfo(t('admin.accounts.upstreamBilling.video.savedProbeFailed'))
+      }
+    }
     appStore.showSuccess(t('admin.accounts.accountUpdated'))
     if (autoBPSSupported.value) await saveAutoBPSRule(accountID)
     emit('updated', updatedAccount)
@@ -5629,7 +5640,9 @@ const handleSubmit = async () => {
     updatePayload.group_allowed_models = buildGroupAllowedModelsPayload(form.group_ids, groupAllowedModels.value)
     if (props.account.type === 'apikey') {
       updatePayload.upstream_billing_probe_enabled = upstreamBillingAutoProbeEnabled.value
-      updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
+      if (props.account.platform !== 'video') {
+        updatePayload.upstream_billing_rate_sync_enabled = upstreamBillingRateSyncEnabled.value
+      }
       if (upstreamBillingRateSyncEnabled.value) {
         delete updatePayload.rate_multiplier
       }
@@ -6450,7 +6463,7 @@ const handleSubmit = async () => {
     } else {
       delete costExtra.cost_multiplier
     }
-    if (props.account.type === 'apikey' && costMultiplierAutoSync.value !== (props.account.extra?.cost_multiplier_auto_sync !== false)) {
+    if (props.account.type === 'apikey' && props.account.platform !== 'video' && costMultiplierAutoSync.value !== (props.account.extra?.cost_multiplier_auto_sync !== false)) {
       costExtra.cost_multiplier_auto_sync = costMultiplierAutoSync.value
     } else {
       delete costExtra.cost_multiplier_auto_sync
