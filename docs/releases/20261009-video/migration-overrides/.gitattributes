@@ -1,0 +1,2 @@
+# Historical SQL checksums include line endings. Preserve the exact source bytes.
+**/*.sql -text
