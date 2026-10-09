@@ -1,0 +1,80 @@
+{
+  "version": "2.9.9-kitty.15",
+  "runtime_commit": "4d9de60d158351d7f64a80dd1827d537ce85ca63",
+  "checked_at": "2026-10-09T19:13:48.464875+00:00",
+  "sites": {
+    "kittyapi": {
+      "phase": "completed",
+      "at": "2026-10-09T19:13:49.306260+00:00",
+      "account_id": 12396,
+      "group_id": 50,
+      "selected_models": 31,
+      "observed_prices": 31,
+      "public_models": 31,
+      "account": {
+        "id": 12396,
+        "status": "active",
+        "schedulable": true,
+        "rate_multiplier": 1.0,
+        "cost_multiplier": null,
+        "probe_enabled": "true",
+        "rate_sync_enabled": "false"
+      },
+      "image_settings": {
+        "auto_sync": true,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": 0
+      },
+      "catalog_last_success": "2026-10-09T19:13:40Z",
+      "catalog_last_sync_attempt": "2026-10-09T19:13:40Z",
+      "catalog_error": "",
+      "probe_last_success": "2026-10-09T19:13:17Z",
+      "global_account_probe_enabled": true,
+      "existing_settings_and_prices_preserved": true,
+      "paid_requests": 0
+    },
+    "kittyyyds": {
+      "phase": "completed",
+      "at": "2026-10-09T19:13:50.179152+00:00",
+      "account_id": 276,
+      "group_id": 36,
+      "selected_models": 31,
+      "observed_prices": 31,
+      "public_models": 31,
+      "account": {
+        "id": 276,
+        "status": "active",
+        "schedulable": true,
+        "rate_multiplier": 1.0,
+        "cost_multiplier": null,
+        "probe_enabled": "true",
+        "rate_sync_enabled": "false"
+      },
+      "image_settings": {
+        "auto_sync": true,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": 0
+      },
+      "catalog_last_success": "2026-10-09T19:13:27Z",
+      "catalog_last_sync_attempt": "2026-10-09T19:13:27Z",
+      "catalog_error": "",
+      "probe_last_success": "2026-10-09T19:13:24Z",
+      "global_account_probe_enabled": true,
+      "existing_settings_and_prices_preserved": true,
+      "paid_requests": 0
+    }
+  },
+  "build_manifest_sha256": "c4460a13018522a273badee1b448abf5aadb234a6bb100ffb9e9f65cb0f189ff",
+  "schema_count": 363,
+  "canvas_changed": false,
+  "production_paid_requests": 0,
+  "frontend_tests": 229,
+  "source_branch": "codex/image-account-price-probe-20261010",
+  "github_archive": "pending"
+}
