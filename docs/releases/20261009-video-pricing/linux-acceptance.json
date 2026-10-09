@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-09T06:45:10.734894+00:00",
+  "run_id": "pricing-v11-20261009064510-85fbc9",
+  "identity": {
+    "build-manifest.json": "26e4772ecc24c5309a6bc13fd13525271849f42e72d90bdcac43c04daf49597d",
+    "preflight.json": "b1d41e5f22dc54df5ac181ff7f6ac9ad2a16a25039e0db0cd9145e58370cba3f",
+    "recovery/manifest.json": "1e59e45e53be7ee1fc017d8a1ec441b61bcc07416430f9bf480b9ba203745f6a",
+    "previous-build-manifest.json": "476c6449e8fdf54545a153712bcc83fc36b40f740b979906a3f6d85ebe30c33b"
+  },
+  "passed": true,
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.11",
+      "schema_count": 362,
+      "ledger_unchanged": true,
+      "empty_group_saved": true,
+      "upstream_empty_price_saved": true,
+      "manual_zero_saved": true,
+      "account_saved": true,
+      "account_kind": "video_model_prices",
+      "probe_preserved_prices": true,
+      "quote_did_not_charge": true,
+      "managed_handoff": true,
+      "rollback_checked": false
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.11",
+      "schema_count": 362,
+      "ledger_unchanged": true,
+      "empty_group_saved": true,
+      "upstream_empty_price_saved": true,
+      "manual_zero_saved": true,
+      "account_saved": true,
+      "account_kind": "video_model_prices",
+      "probe_preserved_prices": true,
+      "quote_did_not_charge": true,
+      "managed_handoff": true,
+      "rollback_checked": false
+    }
+  },
+  "external_network": false,
+  "paid_requests": 0,
+  "production_database_changes": false,
+  "tool_sha256": "6ab339768fcfd0300f63c360407f0876d478b2cac47db2289a98dacafcdd0895",
+  "common_sha256": "b95594b8f22c5a26c04565db0649f58e41e8895db79e7b181af859dae94e7d5a"
+}

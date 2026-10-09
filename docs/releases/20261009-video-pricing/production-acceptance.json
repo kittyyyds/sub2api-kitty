@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-09T07:01:12.211958+00:00",
+  "identity": {
+    "build-manifest.json": "26e4772ecc24c5309a6bc13fd13525271849f42e72d90bdcac43c04daf49597d",
+    "preflight.json": "b1d41e5f22dc54df5ac181ff7f6ac9ad2a16a25039e0db0cd9145e58370cba3f",
+    "recovery/manifest.json": "1e59e45e53be7ee1fc017d8a1ec441b61bcc07416430f9bf480b9ba203745f6a",
+    "previous-build-manifest.json": "476c6449e8fdf54545a153712bcc83fc36b40f740b979906a3f6d85ebe30c33b"
+  },
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.11",
+      "binary_sha256": "bc5f038b1c16e2f840dd9a05329622ddfb730a931035d3ce44ae3dc7b046816e",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 0,
+      "old_active_ws": 0,
+      "old_retire_ready": true
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.11",
+      "binary_sha256": "24e1b7de64739f3234b71129f8dbec7045a81a92cf4b1becd9efe61e56bbdcb8",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 6,
+      "old_active_ws": 6,
+      "old_retire_ready": false
+    }
+  },
+  "passed": true,
+  "paid_requests": 0
+}
