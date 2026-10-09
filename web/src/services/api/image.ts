@@ -1,5 +1,6 @@
 
-import { KITTY_MODE, kittyHeaders, loadKittyBootstrap } from "@/lib/kitty";
+import { KITTY_MODE, kittyCapability, kittyHeaders, loadKittyBootstrap } from "@/lib/kitty";
+import { requestKittyImage, kittyImageSize } from "./kitty-image";
 import axios from "axios";
 import { executeParameterTranslation, findParameterTranslation, translationBody, translationHeaders, type TranslationInput } from "./channel-parameter-translation";
 
@@ -959,6 +960,20 @@ async function requestAndParseImages(config: AiConfig, endpoint: string, request
 }
 
 async function requestImages(config: AiConfig & { seedIndex?: number; seedCount?: number }, prompt: string, references: ReferenceImage[]): Promise<GeneratedImage[]> {
+	if (KITTY_MODE && kittyCapability(config.model, config.imageChannelId)?.provider === "suanli") {
+		const refs = await Promise.all(references.map(image => imageToDataUrl(image)));
+		const count = normalizeBoundedInteger(config.count, 1, 1, 15);
+		const result: GeneratedImage[] = [];
+		// A visible batch is a sequence of single-image tasks. Stop on failure;
+		// never silently replay a submission with an uncertain supplier result.
+		for (let i=0;i<count;i++) {
+			try {
+				const payload = await requestKittyImage(config, withPromptGuard(config, withSystemPrompt(config, prompt)), refs, kittyImageSize(config.quality, config.size));
+				result.push(...parseImagePayload(payload, IMAGE_MIME));
+			} catch(error) {if(result.length) return result;throw error}
+		}
+		return result;
+	}
 	const translation = await findParameterTranslation(config);
 	if (translation) {
 		const input = await imageTranslationInput(config,prompt,references,createImageRequestParams(config));
