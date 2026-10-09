@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-09T09:59:11.617655+00:00",
+  "run_id": "plaza-v12-20261009095911-95188d",
+  "identity": {
+    "build-manifest.json": "a007f3ab1f378d7ee5c0a89a671c2139e8666b3c9cf05887172523eba4b1cca6",
+    "build-preflight.json": "421c68b6a79aa97447baec574721d5aeb930ca1f4ae4e8417067e34ad3996da7",
+    "preflight.json": "421c68b6a79aa97447baec574721d5aeb930ca1f4ae4e8417067e34ad3996da7",
+    "recovery/manifest.json": "2d754efb689c125e7325c88c9a1ca8565b84ce3edb546d7ad9542ba82d27d229",
+    "recovery/verified.json": "d469b879478dc2eec77b3494f21609a2a8fe188341967b299a3ed52a29dd2455",
+    "previous-build-manifest.json": "26e4772ecc24c5309a6bc13fd13525271849f42e72d90bdcac43c04daf49597d"
+  },
+  "passed": true,
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.12",
+      "schema_count": 362,
+      "ledger_unchanged": true,
+      "empty_group_saved": true,
+      "upstream_empty_price_saved": true,
+      "manual_zero_saved": true,
+      "account_saved": true,
+      "account_kind": "video_model_prices",
+      "probe_preserved_prices": true,
+      "quote_did_not_charge": true,
+      "managed_handoff": true,
+      "previous_version": "2.9.9-kitty.11",
+      "plaza_final_reference_resolution_quote_match": true,
+      "unsupported_resolution_rejected": true,
+      "plaza_no_cost_or_markup": true,
+      "unpriced_group_hidden": true
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.12",
+      "schema_count": 362,
+      "ledger_unchanged": true,
+      "empty_group_saved": true,
+      "upstream_empty_price_saved": true,
+      "manual_zero_saved": true,
+      "account_saved": true,
+      "account_kind": "video_model_prices",
+      "probe_preserved_prices": true,
+      "quote_did_not_charge": true,
+      "managed_handoff": true,
+      "previous_version": "2.9.9-kitty.11",
+      "plaza_final_reference_resolution_quote_match": true,
+      "unsupported_resolution_rejected": true,
+      "plaza_no_cost_or_markup": true,
+      "unpriced_group_hidden": true
+    }
+  },
+  "external_network": false,
+  "paid_requests": 0,
+  "production_database_changes": false,
+  "tool_sha256": "3f1c17cdb6e8d720932281580e8e8857bafcd1ba3b98556c0dbf08fb93116fb3",
+  "common_sha256": "7aac96cb77da687be459c75a002151eda190535b9f632e6e74f83a94d1fb23aa"
+}

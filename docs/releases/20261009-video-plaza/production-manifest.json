@@ -1,0 +1,61 @@
+{
+  "version": "2.9.9-kitty.12",
+  "runtime_commit": "fed815940110a3bc77dd1453ba18529737727241",
+  "production_verified_at": "2026-10-09T10:06:12.947047+00:00",
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.12",
+      "binary_sha256": "308faa2a4e4433ad17b09ff2493442b4ad955693f3fc7ae9fdc43480f8ee92b9",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 0,
+      "old_active_ws": 0,
+      "old_retire_ready": true
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.12",
+      "binary_sha256": "149d8312c57ce033f65fd1f447b1ae893b501a9b17fa84cac104b52982de8e1d",
+      "schema_count": 362,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 2,
+      "old_active_ws": 2,
+      "old_retire_ready": false
+    }
+  },
+  "schema_count": 362,
+  "added_migrations": [],
+  "canvas_changed": false,
+  "canvas_version": "v0.8.0-kitty.2",
+  "canvas_runtime_commit": "1673403705f0918e93b9f08f288ce620dab7089a",
+  "build_migration_overrides": {
+    "kittyapi": {
+      "241_add_typesafe_platform.sql": "174c693fde33cfd6f24c0cf3fc40a0eec1afa808c20e149a9347863abfe6a9c9",
+      "263_kitty_typesafe_video_platforms.sql": "4ada281e7ddf495ed6bbdcbfe7cf7aa41e8f1ff56c38c0c566a22e387676c3c4",
+      "264_retire_kitty_manual_prism.sql": "440800427c437c67349159be8c99895d6cef33f77d46d32f1f9871d073a80f05"
+    },
+    "kittyyyds": {
+      "241_add_typesafe_platform.sql": "174c693fde33cfd6f24c0cf3fc40a0eec1afa808c20e149a9347863abfe6a9c9",
+      "263_kitty_typesafe_video_platforms.sql": "4ada281e7ddf495ed6bbdcbfe7cf7aa41e8f1ff56c38c0c566a22e387676c3c4",
+      "264_retire_kitty_manual_prism.sql": "440800427c437c67349159be8c99895d6cef33f77d46d32f1f9871d073a80f05"
+    }
+  },
+  "server_backups_verified": true,
+  "offsite_backups_verified": false,
+  "previous_11_offsite_verified": true,
+  "paid_generation_requests": 0,
+  "linux_acceptance_passed": true,
+  "source_commit_tested": "fed815940110a3bc77dd1453ba18529737727241",
+  "selected_import": {
+    "site": "kittyyyds",
+    "group_id": 25,
+    "count": 0,
+    "public_prices_and_descriptions_verified": false,
+    "status": "pending_model_selection_after_account_replacement"
+  }
+}
