@@ -1,4 +1,5 @@
 import { readFileAsDataUrl } from "@/lib/image-utils";
+import { KITTY_MODE } from "@/lib/kitty";
 import { audioMimeType } from "@/lib/audio-generation";
 import { modelChannelAttributionHeaders } from "@/lib/model-channel";
 import { translationPrograms, translationVariableNames, type TranslationVariables } from "@/lib/channel-parameter-translation";
@@ -13,6 +14,8 @@ export type TranslationResult = { status: string; progress: number; taskIds?: st
 type RequestPlan = { url: string; headers?: Record<string, unknown>; params?: Record<string, unknown>; body?: unknown; format?: string; responseType?: string };
 
 export async function findParameterTranslation(config: AiConfig): Promise<MatchedTranslation | null> {
+    // Kitty delegates through the selected Key's SUB routes and billing contract.
+    if (KITTY_MODE) return null;
     const { user, token } = useUserStore.getState();
     const channelId = config.channelMode === "remote" ? channelIdForActiveModel(config) : localChannelForActiveModel(config)?.id || "";
     if (!channelId) return null;

@@ -14,7 +14,9 @@ function loadModule(file, globals = {}, modules = {}) {
         globals={...globals,fetch:async(url,options)=>url.startsWith('/canvas-api/v1/videos/')&&!url.endsWith('/content') ? {ok:true,json:async()=>({status:'done'})} : contentFetch(url,options)};
     }
     if (file.endsWith('/kitty-quote.ts')) modules['@/lib/kitty-unified-video'] = loadModule('../src/lib/kitty-unified-video.ts');
-    const code = ts.transpileModule(readFileSync(new URL(file, import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
+    // The worker URL is inert in these boundary tests; no Worker is created.
+    const source = readFileSync(new URL(file, import.meta.url), "utf8").replaceAll("import.meta.url", JSON.stringify(new URL(file, import.meta.url).href));
+    const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
     vm.runInNewContext(code, { exports, require: (id) => modules[id] ?? require(id), process: { env: { NEXT_PUBLIC_KITTY_MODE: "true" } }, URL, Date, Map, Set, ...globals }, { filename: file });
     return exports;
 }
@@ -22,6 +24,19 @@ const video = loadModule("../src/lib/kitty-suanli-video.ts");
 const imageURL = "https://fixtures.example/reference.png";
 const audioURL = "https://fixtures.example/reference.mp3";
 const normalized = (value) => JSON.parse(JSON.stringify(value));
+
+test("Kitty generation ignores stale upstream translation settings and uses the SUB Key contract", async () => {
+    const forbidden = () => { throw new Error("upstream channel state must not be read in Kitty mode"); };
+    const modules = new Proxy({
+        "@/lib/kitty": { KITTY_MODE: true },
+        "@/stores/use-user-store": { useUserStore: { getState: forbidden } },
+        "@/stores/use-channel-translation-store": { useChannelTranslationStore: { getState: forbidden } },
+    }, { get: (target, name) => target[name] ?? {} });
+    const translation = loadModule("../src/services/api/channel-parameter-translation.ts", {}, modules);
+    for (const channelMode of ["local", "remote"]) {
+        assert.equal(await translation.findParameterTranslation({ channelMode, model: "fixture", publicChannels: [{ id: "kitty-key-11", parameterTranslationModels: ["fixture"] }] }), null);
+    }
+});
 
 test("all nine video models build their documented JSON family without FormData", () => {
     assert.equal(video.SUANLI_VIDEO_MODELS.length, 9);
