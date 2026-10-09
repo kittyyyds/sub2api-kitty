@@ -245,8 +245,24 @@ func reconcileImageAccountPricing(old ImagePricingGroup, bindings []VideoAccount
 			cp.AppliedPrices[k] = v
 		}
 		p.Image = &cp
-		// Any edit outside this synchronizer turns this model into a manual price.
-		if !reflect.DeepEqual(next.Prices[key], cp.AppliedPrices) {
+		// Clearing the model's override means inherit automatic pricing. Older
+		// editors incorrectly marked these empty rows manual; repair them too.
+		// Keep explicit values (including zero) as manual overrides.
+		if len(next.Prices[key]) == 0 {
+			cp.AutoPrice = true
+			next.Prices[key] = map[string]float64{}
+			for tier, price := range cp.AppliedPrices {
+				next.Prices[key][tier] = price
+			}
+			if len(cp.AppliedPrices) == 0 {
+				price := math.Round((cost.UnitPrice+cfg.Markup)*1e8) / 1e8
+				for _, tier := range []string{"1K", "2K", "4K"} {
+					cp.AppliedPrices[tier] = price
+					next.Prices[key][tier] = price
+				}
+				cp.AppliedMarkup = cfg.Markup
+			}
+		} else if !reflect.DeepEqual(next.Prices[key], cp.AppliedPrices) {
 			cp.AutoPrice = false
 		}
 		if cp.AutoPrice && reprice {
@@ -260,6 +276,13 @@ func reconcileImageAccountPricing(old ImagePricingGroup, bindings []VideoAccount
 				cp.AppliedPrices[tier] = target
 			}
 			cp.AppliedMarkup = cfg.Markup
+		}
+		// Keep the per-request projection in step with the authoritative cells.
+		// A partial/manual tier set must not acquire an invented fallback price.
+		if cp.AutoPrice {
+			if price, ok := next.Prices[key]["1K"]; ok {
+				p.PerRequestPrice = &price
+			}
 		}
 		cp.Cost = cost.UnitPrice
 		cp.Description = cost.Description
@@ -349,6 +372,8 @@ func (s *OpenAIGatewayService) SaveImageModelPrice(ctx context.Context, groupID 
 		if price != nil {
 			value = *price
 		}
+		value = math.Round(value*1e8) / 1e8
+		p.PerRequestPrice = &value
 		tiers := map[string]float64{"1K": value, "2K": value, "4K": value}
 		p.Image.AutoPrice = price == nil
 		p.Image.Cost = cost.UnitPrice

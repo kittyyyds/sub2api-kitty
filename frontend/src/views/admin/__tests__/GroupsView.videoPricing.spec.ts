@@ -244,6 +244,8 @@ describe('GroupsView video pricing payloads', () => {
     await wrapper.get('[data-testid="group-row"]').findAll('button').find(button => button.text() === 'common.edit')!.trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="image-group-pricing"]').text()).toContain('0.08')
+    expect(wrapper.find('[data-testid="edit-openai-image-model-prices"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="image-group-pricing"]').text()).toContain('无需在分组重复填写')
     await wrapper.get('#edit-group-form').trigger('submit')
     await flushPromises()
     expect(mocks.showError).not.toHaveBeenCalled()

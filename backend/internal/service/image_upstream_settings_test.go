@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -46,6 +47,54 @@ func TestImageAccountSyncMissingCostAndProviderConflict(t *testing.T) {
 	next, warn = reconcileImageAccountPricing(old, bindings, costs, cfg, true)
 	require.True(t, warn)
 	require.Empty(t, next.Pricing)
+}
+
+func TestImageAccountClearedRowsRecoverMarkupTiersAndFinalPrice(t *testing.T) {
+	cfg := DefaultImageRuntimeSettings()
+	cfg.AutoImportAccountModels, cfg.AutoSync = true, true
+	bindings := []VideoAccountModelBinding{{BaseURL: "https://suanliai.top", Models: map[string]string{"exact-model": "upstream"}}}
+	costs := map[string]ImageSupplierPrice{"upstream": {UnitPrice: .095}}
+	initial, _ := reconcileImageAccountPricing(ImagePricingGroup{ID: 1}, bindings, costs, cfg, true)
+	cfg.Markup = .02
+	marked, _ := reconcileImageAccountPricing(initial, bindings, costs, cfg, true)
+	require.InDelta(t, .115, *marked.Pricing[0].PerRequestPrice, 1e-8)
+	for _, legacyManual := range []bool{false, true} {
+		t.Run(fmt.Sprint(legacyManual), func(t *testing.T) {
+			old := ImagePricingGroup{ID: 1, Pricing: append([]ChannelModelPricing(nil), marked.Pricing...)}
+			im := *old.Pricing[0].Image
+			im.AutoPrice = !legacyManual
+			old.Pricing[0].Image = &im
+			recovered, warn := reconcileImageAccountPricing(old, bindings, costs, cfg, true)
+			require.False(t, warn)
+			require.True(t, recovered.Pricing[0].Image.AutoPrice)
+			require.Equal(t, map[string]float64{"1K": .115, "2K": .115, "4K": .115}, recovered.Prices["exact-model"])
+			require.InDelta(t, .115, *recovered.Pricing[0].PerRequestPrice, 1e-8)
+			require.Empty(t, old.Prices)
+			g := &Group{Platform: PlatformOpenAI, AllowImageGeneration: true, ModelPricing: recovered.Pricing, ImageModelPrices: recovered.Prices}
+			display := plazaImageDisplayPricing(&g.ModelPricing[0], g, "exact-model")
+			require.Len(t, display.Intervals, 3)
+			require.Len(t, plazaFinalImagePriceTiers(g, "exact-model"), 3)
+			for _, tier := range display.Intervals {
+				require.Equal(t, LookupImageModelPrice(g.ImageModelPrices, "exact-model", tier.TierLabel), tier.PerRequestPrice)
+			}
+			again, _ := reconcileImageAccountPricing(recovered, bindings, costs, cfg, true)
+			require.Equal(t, recovered, again)
+		})
+	}
+	// Explicit zero remains a manual override, even when other tiers are blank.
+	marked.Prices["exact-model"] = map[string]float64{"2K": 0}
+	manual, _ := reconcileImageAccountPricing(marked, bindings, costs, cfg, true)
+	require.False(t, manual.Pricing[0].Image.AutoPrice)
+	require.Equal(t, map[string]float64{"2K": 0}, manual.Prices["exact-model"])
+	// Missing costs cannot create free tiers or show a stale billable fallback.
+	missing := ImagePricingGroup{ID: 1, Pricing: marked.Pricing}
+	unchanged, warning := reconcileImageAccountPricing(missing, bindings, nil, cfg, true)
+	require.True(t, warning)
+	require.Empty(t, unchanged.Prices)
+	g := &Group{Platform: PlatformOpenAI, AllowImageGeneration: true, ModelPricing: unchanged.Pricing}
+	display := plazaImageDisplayPricing(&g.ModelPricing[0], g, "exact-model")
+	require.Nil(t, display.PerRequestPrice)
+	require.Empty(t, display.Intervals)
 }
 func TestImageSupplierPricingFailsClosedAndSupportsFutureNames(t *testing.T) {
 	body := []byte(`{"success":true,"pricing_version":"v1","group_ratio":{"default":1},"data":[{"model_name":"任意新型号","model_price":0.123,"billing_mode":"per_request"},{"model_name":"video","model_price":1,"billing_mode":"per_second"}]}`)

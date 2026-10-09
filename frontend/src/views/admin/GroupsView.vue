@@ -1050,7 +1050,7 @@
             </div>
           </div>
           <div
-            v-if="supportsImageModelPricingPlatform(createForm.platform)"
+            v-if="supportsImageModelPricingPlatform(createForm.platform) && imageModelPriceRows(createForm.image_model_prices, createForm.platform, createForm.model_pricing).length > 0"
             class="mt-4 border-t border-dashed border-gray-200 pt-4 dark:border-dark-700"
             :data-testid="`create-${createForm.platform}-image-model-prices`"
           >
@@ -1062,7 +1062,7 @@
             </p>
             <div class="mt-3 space-y-3">
               <div
-                v-for="model in imageModelPriceRows(createForm.image_model_prices, createForm.platform)"
+                v-for="model in imageModelPriceRows(createForm.image_model_prices, createForm.platform, createForm.model_pricing)"
                 :key="model.key"
                 class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,7rem))] lg:items-end"
               >
@@ -1093,7 +1093,7 @@
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
             {{ t(imagePricingI18nKey(createForm.platform, "modeHint")) }}
           </p>
-          <div class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          <div v-if="!supportsImageModelPricingPlatform(createForm.platform) || imageModelPriceRows(createForm.image_model_prices, createForm.platform, createForm.model_pricing).length > 0" class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
             <div class="mb-1 font-medium">
               {{ t(imagePricingI18nKey(createForm.platform, "finalPricePreview")) }}
             </div>
@@ -2827,7 +2827,7 @@
             </div>
           </div>
           <div
-            v-if="supportsImageModelPricingPlatform(editForm.platform)"
+            v-if="supportsImageModelPricingPlatform(editForm.platform) && imageModelPriceRows(editForm.image_model_prices, editForm.platform, editForm.model_pricing).length > 0"
             class="mt-4 border-t border-dashed border-gray-200 pt-4 dark:border-dark-700"
             :data-testid="`edit-${editForm.platform}-image-model-prices`"
           >
@@ -2839,7 +2839,7 @@
             </p>
             <div class="mt-3 space-y-3">
               <div
-                v-for="model in imageModelPriceRows(editForm.image_model_prices, editForm.platform)"
+                v-for="model in imageModelPriceRows(editForm.image_model_prices, editForm.platform, editForm.model_pricing)"
                 :key="model.key"
                 class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,7rem))] lg:items-end"
               >
@@ -2870,7 +2870,7 @@
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
             {{ t(imagePricingI18nKey(editForm.platform, "modeHint")) }}
           </p>
-          <div class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+          <div v-if="!supportsImageModelPricingPlatform(editForm.platform) || imageModelPriceRows(editForm.image_model_prices, editForm.platform, editForm.model_pricing).length > 0" class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
             <div class="mb-1 font-medium">
               {{ t(imagePricingI18nKey(editForm.platform, "finalPricePreview")) }}
             </div>
@@ -5742,6 +5742,7 @@ type ImagePricingFormState = {
   image_price_2k: number | string | null;
   image_price_4k: number | string | null;
   image_model_prices: ImageModelPricesForm;
+  model_pricing?: PricingFormEntry[];
   peak_rate_enabled: boolean;
   peak_start: string;
   peak_end: string;
@@ -5831,7 +5832,7 @@ const buildImageFinalPricePreview = (form: ImagePricingFormState) => {
 
 const buildImageModelFinalPricePreview = (form: ImagePricingFormState) => {
   const multiplier = getImagePreviewMultiplier(form);
-  return imageModelPriceRows(form.image_model_prices, form.platform).map((model) => ({
+  return imageModelPriceRows(form.image_model_prices, form.platform, form.model_pricing).map((model) => ({
     key: model.key,
     label: model.label,
     prices: imagePricingTiers.map((tier) => {

@@ -12,6 +12,14 @@ import {
 } from '../groupsImageModelPricing'
 
 describe('Grok image model pricing form', () => {
+  it('hides account-driven inputs without deleting their saved tiers or manual zero', () => {
+    const prices = { 'exact-image': { '1K': .115, '2K': .115, '4K': .115 }, 'other': { '2K': 0 } }
+    const form = createImageModelPricesForm(prices)
+    const pricing = [{ models: ['Exact-Image'], image: { provider: 'suanli' } }]
+    expect(imageModelPriceRows(form, 'openai', pricing)).toEqual([{ key: 'other', label: 'other' }])
+    expect(serializeImageModelPrices(form)).toEqual(prices)
+    expect(serializeImageModelPrices(createImageModelPricesForm({ 'x': { '2K': '' as unknown as number } }))).toEqual({})
+  })
   it('provides independent rows for every supported Grok image model', () => {
     const form = createImageModelPricesForm()
 

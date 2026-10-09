@@ -457,6 +457,17 @@ func plazaImageDisplayPricing(p *ChannelModelPricing, g *Group, model string) *C
 	hasModelPrice := modelPrices[ImageBillingSize1K] != nil ||
 		modelPrices[ImageBillingSize2K] != nil || modelPrices[ImageBillingSize4K] != nil
 	hasFlatPrice := g.ImagePrice1K != nil || g.ImagePrice2K != nil || g.ImagePrice4K != nil
+	if !hasModelPrice && ImageGroupModelConfig(g, model) != nil {
+		// Supplier image billing requires exact model cells. Never advertise a
+		// stale channel fallback while a cleared override awaits synchronization.
+		clone := ChannelModelPricing{BillingMode: BillingModeImage}
+		if p != nil {
+			clone = *p
+		}
+		clone.PerRequestPrice = nil
+		clone.Intervals = nil
+		return &clone
+	}
 	if !hasModelPrice && (p == nil || p.BillingMode != BillingModeImage || !hasFlatPrice) {
 		return p
 	}
