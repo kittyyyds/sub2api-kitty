@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-09T16:19:33.077076+00:00",
+  "identity": {
+    "build-manifest.json": "8a482cce8a125d89533e2b64f2564e7a3484f08faadba74093fa738c657a8b17",
+    "build-preflight.json": "10646d4a8f59ef9881124f65d14f43c033e72ec44df082799a0ea30d1c01df17",
+    "preflight.json": "10646d4a8f59ef9881124f65d14f43c033e72ec44df082799a0ea30d1c01df17",
+    "recovery/manifest.json": "8fa2d8036a4f5696cabc45b17d5eaa83db9d5fab750a4345b197559412f53e2e",
+    "recovery/verified.json": "712d4503da12f5bc90c0ee5adcab0e6dbb0dc69abce032e3e104c699b80e70fb",
+    "previous-build-manifest.json": "04846e64a7588a1de965ea216d9f5fe68454f8655c0a82cb9a4ec2aeec3c2373"
+  },
+  "sites": {
+    "kittyyyds": {
+      "version": "2.9.9-kitty.14",
+      "binary_sha256": "c946849dab3270a4173ec1840ebfc04a273afa14546be677b9a733e813a4db42",
+      "schema_count": 363,
+      "price_digest_unchanged": true,
+      "leader_healthy": true,
+      "canvas_unchanged": true,
+      "old_running": true,
+      "old_active_requests": 4,
+      "old_active_ws": 0,
+      "old_retire_ready": false
+    }
+  },
+  "passed": true,
+  "paid_requests": 0
+}

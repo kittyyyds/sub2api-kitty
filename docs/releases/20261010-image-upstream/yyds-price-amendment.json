@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-09T16:17:08.415581+00:00",
+  "identity": {
+    "build-manifest.json": "8a482cce8a125d89533e2b64f2564e7a3484f08faadba74093fa738c657a8b17",
+    "build-preflight.json": "10646d4a8f59ef9881124f65d14f43c033e72ec44df082799a0ea30d1c01df17",
+    "preflight.json": "10646d4a8f59ef9881124f65d14f43c033e72ec44df082799a0ea30d1c01df17",
+    "recovery/manifest.json": "8fa2d8036a4f5696cabc45b17d5eaa83db9d5fab750a4345b197559412f53e2e",
+    "recovery/verified.json": "712d4503da12f5bc90c0ee5adcab0e6dbb0dc69abce032e3e104c699b80e70fb",
+    "previous-build-manifest.json": "04846e64a7588a1de965ea216d9f5fe68454f8655c0a82cb9a4ec2aeec3c2373"
+  },
+  "site": "kittyyyds",
+  "original_video_price_digest": "6e71fbd1cf91372d69dc790e88f0ec80",
+  "video_price_digest": "e8b8592878f2f84718c64a51c3a2492a",
+  "protected": {
+    "groups_sha256": "86b44dd81fab301949bb9ff5e63819d9699b65a5f90c0476561be390fdc6b5bd",
+    "settings_sha256": "59446776585a3ffcad5cfbf1a76af5196d2fa12137011091495a6cfcd2ba7eef",
+    "plugins_sha256": "8dfc91488bcd69ed0492c0b497d9e78771b93b49235e50b0e50d1b0c3d5544dd"
+  },
+  "only_change": {
+    "group": 35,
+    "model": "\u5168\u80fdsd2.0(\u6ee1\u8840\u539f\u751f\u8fc7\u8138-933-480p)",
+    "old_cost": 2.85,
+    "new_cost": 3.2,
+    "old_price": 3.35,
+    "new_price": 3.7,
+    "markup": 0.5
+  },
+  "reverse_normalization_matches_original_all_groups": true,
+  "public_supplier_verified": true,
+  "production_writes": false
+}

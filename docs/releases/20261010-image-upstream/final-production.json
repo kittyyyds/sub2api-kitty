@@ -1,0 +1,88 @@
+{
+  "at": "2026-10-09T16:31:47.222446+00:00",
+  "production_paid_test_requests": 0,
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.14",
+      "runtime_sha256": "21507fc8f3262f4afe295312e1a1a60c910de6314ae15c559db79e097b34ea1e",
+      "canvas_version": "v0.8.0-kitty.3",
+      "canvas_image": "sha256:ac1bb760dd0799ae589807be7b7c020c863b8a066de2b521997a1b0fb969a9b7",
+      "video_groups": [],
+      "image_settings_saved": false,
+      "image_defaults_verified": true,
+      "video_settings": {
+        "auto_sync": false,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": {
+          "output_per_second": 0,
+          "reference_per_second": 0,
+          "per_request": 0
+        },
+        "reference_retention_hours": 24,
+        "max_concurrent_tasks": 2,
+        "reference_user_mb": 256,
+        "reference_total_mb": 2048
+      },
+      "image_tasks": {},
+      "suanli_image_accounts": 0,
+      "public_hosts": [
+        "kittyapi.xyz",
+        "cdn.kittyapi.xyz"
+      ],
+      "old_running": true,
+      "old_requests": 0,
+      "old_websockets": 0
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.14",
+      "runtime_sha256": "c946849dab3270a4173ec1840ebfc04a273afa14546be677b9a733e813a4db42",
+      "canvas_version": "v0.8.0-kitty.3",
+      "canvas_image": "sha256:ac1bb760dd0799ae589807be7b7c020c863b8a066de2b521997a1b0fb969a9b7",
+      "video_groups": [
+        {
+          "id": 25,
+          "models": 18
+        },
+        {
+          "id": 34,
+          "models": 6
+        },
+        {
+          "id": 35,
+          "models": 25
+        }
+      ],
+      "image_settings_saved": false,
+      "image_defaults_verified": true,
+      "video_settings": {
+        "auto_sync": true,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": {
+          "output_per_second": 0.1,
+          "reference_per_second": 0.1,
+          "per_request": 0.5
+        },
+        "reference_retention_hours": 24,
+        "max_concurrent_tasks": 50,
+        "reference_user_mb": 256,
+        "reference_total_mb": 2048
+      },
+      "image_tasks": {},
+      "suanli_image_accounts": 0,
+      "public_hosts": [
+        "kittyyyds.xyz",
+        "cdn.kittyyyds.xyz"
+      ],
+      "old_running": true,
+      "old_requests": 0,
+      "old_websockets": 0
+    }
+  },
+  "passed": true
+}

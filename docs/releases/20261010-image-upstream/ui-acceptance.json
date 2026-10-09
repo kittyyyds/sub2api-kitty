@@ -1,0 +1,148 @@
+{
+  "passed": true,
+  "independent_save": true,
+  "draft_survives_tab_switch": true,
+  "readonly_price_lookup": true,
+  "dimensions": {
+    "viewport": 390,
+    "document": 390
+  },
+  "requests": [
+    {
+      "p": "/api/v1/auth/me",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/compliance",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/compliance",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/subscriptions/active",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/announcements",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/settings",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/payment/config",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/system/check-updates",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/keys",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/image-upstream",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/video-upstream",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/groups",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/settings/public",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/image-upstream",
+      "method": "PUT"
+    },
+    {
+      "p": "/api/v1/admin/image-upstream/sync",
+      "method": "POST"
+    },
+    {
+      "p": "/api/v1/admin/image-upstream",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/auth/me",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/compliance",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/compliance",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/subscriptions/active",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/announcements",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/settings",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/payment/config",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/system/check-updates",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/keys",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/image-upstream",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/video-upstream",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/admin/groups",
+      "method": "GET"
+    },
+    {
+      "p": "/api/v1/settings/public",
+      "method": "GET"
+    }
+  ],
+  "writes": [
+    {
+      "p": "/api/v1/admin/image-upstream",
+      "method": "PUT",
+      "body": {
+        "auto_sync": false,
+        "auto_import_account_models": false,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": 0.17
+      }
+    },
+    {
+      "p": "/api/v1/admin/image-upstream/sync",
+      "method": "POST",
+      "body": {}
+    }
+  ],
+  "errors": []
+}

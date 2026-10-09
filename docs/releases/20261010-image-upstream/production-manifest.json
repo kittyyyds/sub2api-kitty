@@ -1,0 +1,104 @@
+{
+  "version": "2.9.9-kitty.14",
+  "runtime_commit": "0d68bd04e3d49e8fbebc9d45d4911c38f72309f3",
+  "canvas_runtime_commit": "cb5f6418a5fc7447182363c87dae6d2bcc1a10c1",
+  "canvas_version": "v0.8.0-kitty.3",
+  "accepted_at": "2026-10-09T16:31:47.222446+00:00",
+  "sites": {
+    "kittyapi": {
+      "version": "2.9.9-kitty.14",
+      "runtime_sha256": "21507fc8f3262f4afe295312e1a1a60c910de6314ae15c559db79e097b34ea1e",
+      "canvas_version": "v0.8.0-kitty.3",
+      "canvas_image": "sha256:ac1bb760dd0799ae589807be7b7c020c863b8a066de2b521997a1b0fb969a9b7",
+      "video_groups": [],
+      "image_settings_saved": false,
+      "image_defaults_verified": true,
+      "video_settings": {
+        "auto_sync": false,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": {
+          "output_per_second": 0,
+          "reference_per_second": 0,
+          "per_request": 0
+        },
+        "reference_retention_hours": 24,
+        "max_concurrent_tasks": 2,
+        "reference_user_mb": 256,
+        "reference_total_mb": 2048
+      },
+      "image_tasks": {},
+      "suanli_image_accounts": 0,
+      "public_hosts": [
+        "kittyapi.xyz",
+        "cdn.kittyapi.xyz"
+      ],
+      "old_running": true,
+      "old_requests": 0,
+      "old_websockets": 0
+    },
+    "kittyyyds": {
+      "version": "2.9.9-kitty.14",
+      "runtime_sha256": "c946849dab3270a4173ec1840ebfc04a273afa14546be677b9a733e813a4db42",
+      "canvas_version": "v0.8.0-kitty.3",
+      "canvas_image": "sha256:ac1bb760dd0799ae589807be7b7c020c863b8a066de2b521997a1b0fb969a9b7",
+      "video_groups": [
+        {
+          "id": 25,
+          "models": 18
+        },
+        {
+          "id": 34,
+          "models": 6
+        },
+        {
+          "id": 35,
+          "models": 25
+        }
+      ],
+      "image_settings_saved": false,
+      "image_defaults_verified": true,
+      "video_settings": {
+        "auto_sync": true,
+        "auto_import_account_models": true,
+        "follow_increase": true,
+        "follow_decrease": false,
+        "interval_seconds": 60,
+        "markup": {
+          "output_per_second": 0.1,
+          "reference_per_second": 0.1,
+          "per_request": 0.5
+        },
+        "reference_retention_hours": 24,
+        "max_concurrent_tasks": 50,
+        "reference_user_mb": 256,
+        "reference_total_mb": 2048
+      },
+      "image_tasks": {},
+      "suanli_image_accounts": 0,
+      "public_hosts": [
+        "kittyyyds.xyz",
+        "cdn.kittyyyds.xyz"
+      ],
+      "old_running": true,
+      "old_requests": 0,
+      "old_websockets": 0
+    }
+  },
+  "schema_count": 363,
+  "real_paid_test_requests": 0,
+  "recovery_root": "/opt/kitty-recovery-20261009/image-upstream-release/recovery",
+  "offsite_full_backup_completed": false,
+  "evidence": {
+    "final-production.json": "92f7a814c45b283683013219fe20a35d5264a23762db267ef746b804b8540115",
+    "linux-acceptance.json": "33208e16bbf29e5934ad318ff80e00eea8fc8ed8f1192e9881b0e85092a3f8c6",
+    "canvas-linux-acceptance.json": "c3b443e0c2f3645628914b4904307d85a09d271ee8237c26d8a0f2ab69dc6021",
+    "backend-acceptance-kittyapi.json": "a812332171725bf79d7fed36b8023b7a9b261c3c5c5061e2ae7d9f3379baedf6",
+    "backend-acceptance-kittyyyds.json": "d64ac87b1d8cfb34914f4cc69a686105178f0a9379f4e79b50f438e5c810b222",
+    "yyds-price-amendment.json": "02b5a4398dcb06de5ea4011b8057d15910d4c73c9d57d4aca54f99b07b9a1655",
+    "build-manifest.json": "8a482cce8a125d89533e2b64f2564e7a3484f08faadba74093fa738c657a8b17",
+    "ui-acceptance.json": "d1ad69e5c2bec41f52fb032a4a2232b1bba5db8f4dd93c9fddea28a1c940aadb"
+  }
+}
