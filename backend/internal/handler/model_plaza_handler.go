@@ -284,7 +284,7 @@ func selectModelPlazaModels(g *service.PlazaGroup) []service.PlazaModel {
 		}
 		switch platform {
 		case service.PlatformOpenAI:
-			if isModelPlazaTextModel(&model) {
+			if isModelPlazaTextModel(&model) || (model.Pricing != nil && model.Pricing.Image != nil && model.Pricing.Image.Provider == "suanli") {
 				models = append(models, model)
 			}
 		case service.PlatformGrok:
@@ -320,6 +320,11 @@ func selectModelPlazaModels(g *service.PlazaGroup) []service.PlazaModel {
 func openAIImageCatalogTiers(g *service.PlazaGroup) ([]string, bool) {
 	if g == nil || !strings.EqualFold(strings.TrimSpace(g.Platform), service.PlatformOpenAI) {
 		return nil, false
+	}
+	for _, m := range g.Models {
+		if m.Pricing != nil && m.Pricing.Image != nil && m.Pricing.Image.Provider == "suanli" {
+			return nil, false
+		}
 	}
 	name := strings.ToLower(strings.TrimSpace(g.Name))
 	if !strings.Contains(name, "image") || !strings.Contains(name, "生图") {

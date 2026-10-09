@@ -264,7 +264,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		g := groupEnt[gid]
 		for j := range pg.Models {
 			s.fillDisplayPricing(ctx, &pg.Models[j], g)
-			if g.Platform != PlatformVideo {
+			if g.Platform != PlatformVideo && ImageGroupModelConfig(g, pg.Models[j].Name) == nil {
 				pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
 			}
 		}
@@ -360,7 +360,15 @@ func plazaConfiguredModelNames(g *Group) []string {
 	if g.Platform == PlatformVideo {
 		return VideoGroupModelIDs(g)
 	}
-	names := append([]string(nil), g.ModelAllowlist.Models...)
+	names := []string{}
+	// Keep supplier display IDs intact; billing lookup may canonicalize, but
+	// customers must copy the exact model name accepted by the upstream.
+	for _, p := range g.ModelPricing {
+		if p.Image != nil && p.Image.Provider == "suanli" {
+			names = append(names, p.Models...)
+		}
+	}
+	names = append(names, g.ModelAllowlist.Models...)
 
 	imageNames := make([]string, 0, len(g.ImageModelPrices))
 	for model, tiers := range g.ImageModelPrices {
