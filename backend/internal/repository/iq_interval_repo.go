@@ -24,9 +24,9 @@ func (r *scheduledTestPlanRepository) FinishIQ(ctx context.Context, p *service.S
 }
 func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int64) ([]service.IQSummary, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT p.account_id,p.id,p.enabled,p.model_id,p.pelican_config,p.running_until,p.next_run_at,
- h.id,h.status,LEFT(h.response_text,256),h.finished_at,h.pelican_config
+ h.id,h.status,LEFT(h.response_text,256),LEFT(h.error_message,4096),h.finished_at,h.pelican_config
  FROM scheduled_test_plans p JOIN accounts a ON a.id=p.account_id AND a.deleted_at IS NULL
- LEFT JOIN LATERAL(SELECT id,status,response_text,finished_at,pelican_config FROM scheduled_test_results WHERE plan_id=p.id ORDER BY id DESC LIMIT 20) h ON true
+ LEFT JOIN LATERAL(SELECT id,status,response_text,error_message,finished_at,pelican_config FROM scheduled_test_results WHERE plan_id=p.id ORDER BY id DESC LIMIT 20) h ON true
  WHERE p.account_id=ANY($1) AND p.pelican_config->>'schedule_mode'='completion_interval'
  ORDER BY p.account_id,h.id DESC`, pq.Array(ids))
 	if err != nil {
@@ -39,9 +39,9 @@ func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int
 		var s service.IQSummary
 		var cfg, rcfg []byte
 		var id sql.NullInt64
-		var status, answer sql.NullString
+		var status, answer, message sql.NullString
 		var finished sql.NullTime
-		if err = rows.Scan(&s.AccountID, &s.PlanID, &s.Enabled, &s.Model, &cfg, &s.RunningUntil, &s.NextRunAt, &id, &status, &answer, &finished, &rcfg); err != nil {
+		if err = rows.Scan(&s.AccountID, &s.PlanID, &s.Enabled, &s.Model, &cfg, &s.RunningUntil, &s.NextRunAt, &id, &status, &answer, &message, &finished, &rcfg); err != nil {
 			return nil, err
 		}
 		index, exists := indices[s.AccountID]
@@ -72,7 +72,7 @@ func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int
 				}
 			}
 			if result.Verdict == "error" {
-				result.Error = "请求失败，请查看测试详情"
+				result.Error = service.IQErrorSummary(message.String)
 			}
 			out[index].Results = append(out[index].Results, result)
 		}
