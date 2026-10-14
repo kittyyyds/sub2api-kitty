@@ -50,7 +50,7 @@ func TestIQIntervalPersistsVerdictAfterRunnerSnapshot(t *testing.T) {
 
 func TestIQAnswerMismatchIsCompletedAnswer(t *testing.T) {
 	for _, answer := range []string{"29", "32", "21 or 29"} {
-		message := intelligenceTestOutputError(&PelicanTestConfig{QuestionKind: "candy"}, answer)
+		message := intelligenceTestOutputError(&PelicanTestConfig{QuestionKind: "candy", Prompt: CandyPrompt}, answer)
 		require.Equal(t, "answer_mismatch: expected 21", message)
 		require.Equal(t, "other", IQAnswerVerdict("failed", answer, message))
 	}
@@ -64,7 +64,7 @@ func TestIQIntervalPersistsRealMismatchStatus(t *testing.T) {
 	results := &pelicanResults{}
 	runner := &ScheduledTestRunnerService{planRepo: plans, scheduledSvc: NewScheduledTestService(plans, results)}
 	runner.runPelican = func(context.Context, int64, string, *PelicanTestConfig) (*ScheduledTestResult, error) {
-		return &ScheduledTestResult{Status: "failed", ResponseText: "29", ErrorMessage: intelligenceTestOutputError(&PelicanTestConfig{QuestionKind: "candy"}, "29")}, nil
+		return &ScheduledTestResult{Status: "failed", ResponseText: "29", ErrorMessage: intelligenceTestOutputError(&PelicanTestConfig{QuestionKind: "candy", Prompt: CandyPrompt}, "29")}, nil
 	}
 	p := pelicanPlan()
 	p.PelicanConfig.ScheduleMode = IQCompletionInterval
