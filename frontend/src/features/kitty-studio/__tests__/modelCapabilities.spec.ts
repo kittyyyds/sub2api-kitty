@@ -11,6 +11,14 @@ import {
 } from '../modelCapabilities'
 
 describe('Kitty Studio model catalog', () => {
+  it('uses only advertised exact video models without enabling image modes', () => {
+    const models = ['Custom-Video', 'Custom-Video', '*', 'other-video']
+    const options = studioModelOptions('video', models, 'text-video')
+    expect(options.map(option => option.id)).toEqual(['Custom-Video', 'other-video'])
+    expect(options.every(option => option.strategy === 'video-gateway')).toBe(true)
+    expect(studioModelOptions('video', models, 'text-image')).toEqual([])
+    expect(studioModelOptions('video', [], 'image-video')).toEqual([])
+  })
   it('keeps Image 2 for groups which only advertise the old model', () => {
     expect(studioModelOptions('openai', ['gpt-5.6', GPT_IMAGE_MODEL], 'text-image').map((item) => item.id))
       .toEqual([GPT_IMAGE_MODEL])

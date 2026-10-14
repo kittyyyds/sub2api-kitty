@@ -28,8 +28,14 @@ type APIKey struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID int64 `json:"user_id,omitempty"`
+	// API key concurrency limit (0 = no additional limit)
+	ConcurrencyLimit int `json:"concurrency_limit,omitempty"`
 	// Key holds the value of the "key" field.
 	Key string `json:"key,omitempty"`
+	// KeyHash holds the value of the "key_hash" field.
+	KeyHash string `json:"-"`
+	// KeyPrefix holds the value of the "key_prefix" field.
+	KeyPrefix string `json:"key_prefix,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// GroupID holds the value of the "group_id" field.
@@ -125,9 +131,9 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case apikey.FieldQuota, apikey.FieldQuotaUsed, apikey.FieldRateLimit5h, apikey.FieldRateLimit1d, apikey.FieldRateLimit7d, apikey.FieldUsage5h, apikey.FieldUsage1d, apikey.FieldUsage7d:
 			values[i] = new(sql.NullFloat64)
-		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
+		case apikey.FieldID, apikey.FieldUserID, apikey.FieldConcurrencyLimit, apikey.FieldGroupID:
 			values[i] = new(sql.NullInt64)
-		case apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
+		case apikey.FieldKey, apikey.FieldKeyHash, apikey.FieldKeyPrefix, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
 		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldLastUsedAt, apikey.FieldExpiresAt, apikey.FieldWindow5hStart, apikey.FieldWindow1dStart, apikey.FieldWindow7dStart:
 			values[i] = new(sql.NullTime)
@@ -177,11 +183,29 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UserID = value.Int64
 			}
+		case apikey.FieldConcurrencyLimit:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field concurrency_limit", values[i])
+			} else if value.Valid {
+				_m.ConcurrencyLimit = int(value.Int64)
+			}
 		case apikey.FieldKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field key", values[i])
 			} else if value.Valid {
 				_m.Key = value.String
+			}
+		case apikey.FieldKeyHash:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field key_hash", values[i])
+			} else if value.Valid {
+				_m.KeyHash = value.String
+			}
+		case apikey.FieldKeyPrefix:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field key_prefix", values[i])
+			} else if value.Valid {
+				_m.KeyPrefix = value.String
 			}
 		case apikey.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -366,8 +390,16 @@ func (_m *APIKey) String() string {
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
 	builder.WriteString(", ")
+	builder.WriteString("concurrency_limit=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ConcurrencyLimit))
+	builder.WriteString(", ")
 	builder.WriteString("key=")
 	builder.WriteString(_m.Key)
+	builder.WriteString(", ")
+	builder.WriteString("key_hash=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("key_prefix=")
+	builder.WriteString(_m.KeyPrefix)
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)

@@ -43,6 +43,7 @@ type channelMonitorCreateRequest struct {
 	Provider         string            `json:"provider" binding:"required,oneof=openai anthropic gemini grok antigravity kimi zhipu deepseek minimax opencode_go"`
 	APIMode          string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
 	Endpoint         string            `json:"endpoint" binding:"omitempty,max=500"`
+	RequestPath      string            `json:"request_path" binding:"omitempty,max=500"`
 	APIKey           string            `json:"api_key" binding:"omitempty,max=2000"`
 	PrimaryModel     string            `json:"primary_model" binding:"max=200"`
 	ExtraModels      []string          `json:"extra_models"`
@@ -67,6 +68,7 @@ type channelMonitorUpdateRequest struct {
 	Provider         *string            `json:"provider" binding:"omitempty,oneof=openai anthropic gemini grok antigravity kimi zhipu deepseek minimax opencode_go"`
 	APIMode          *string            `json:"api_mode" binding:"omitempty,oneof=chat_completions responses"`
 	Endpoint         *string            `json:"endpoint" binding:"omitempty,max=500"`
+	RequestPath      *string            `json:"request_path" binding:"omitempty,max=500"`
 	APIKey           *string            `json:"api_key" binding:"omitempty,max=2000"`
 	PrimaryModel     *string            `json:"primary_model" binding:"omitempty,max=200"`
 	ExtraModels      *[]string          `json:"extra_models"`
@@ -91,6 +93,7 @@ type channelMonitorResponse struct {
 	Provider            string                               `json:"provider"`
 	APIMode             string                               `json:"api_mode"`
 	Endpoint            string                               `json:"endpoint"`
+	RequestPath         string                               `json:"request_path"`
 	APIKeyMasked        string                               `json:"api_key_masked"`
 	APIKeyDecryptFailed bool                                 `json:"api_key_decrypt_failed"`
 	PrimaryModel        string                               `json:"primary_model"`
@@ -167,6 +170,7 @@ func channelMonitorToResponse(m *service.ChannelMonitor) *channelMonitorResponse
 		Provider:            m.Provider,
 		APIMode:             m.APIMode,
 		Endpoint:            m.Endpoint,
+		RequestPath:         m.RequestPath,
 		APIKeyMasked:        maskAPIKey(m.APIKey),
 		APIKeyDecryptFailed: m.APIKeyDecryptFailed,
 		PrimaryModel:        m.PrimaryModel,
@@ -340,6 +344,7 @@ func (h *ChannelMonitorHandler) Create(c *gin.Context) {
 		Provider:         req.Provider,
 		APIMode:          req.APIMode,
 		Endpoint:         req.Endpoint,
+		RequestPath:      req.RequestPath,
 		APIKey:           req.APIKey,
 		PrimaryModel:     req.PrimaryModel,
 		ExtraModels:      req.ExtraModels,
@@ -436,6 +441,7 @@ func (h *ChannelMonitorHandler) Update(c *gin.Context) {
 		Provider:         req.Provider,
 		APIMode:          req.APIMode,
 		Endpoint:         req.Endpoint,
+		RequestPath:      req.RequestPath,
 		APIKey:           req.APIKey,
 		PrimaryModel:     req.PrimaryModel,
 		ExtraModels:      req.ExtraModels,

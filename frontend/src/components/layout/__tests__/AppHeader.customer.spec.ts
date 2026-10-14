@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AppHeader from '../AppHeader.vue'
 
-const shortcutSource = readFileSync(resolve(__dirname, '../CustomerHeaderShortcuts.vue'), 'utf8')
 const contactSource = readFileSync(resolve(__dirname, '../CustomerContactActions.vue'), 'utf8')
 const announcementSource = readFileSync(resolve(__dirname, '../../common/AnnouncementBell.vue'), 'utf8')
 
@@ -59,7 +58,6 @@ vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   const messages: Record<string, string> = {
     'nav.gettingStartedHeader': '新手必看',
-    'nav.resetRadar': 'GPT智力测评',
     'nav.modelPlaza': '模型价格',
     'nav.customerShortcuts': '快捷功能'
   }
@@ -76,8 +74,8 @@ function createTestRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/dashboard', component: { template: '<div />' } },
+      { path: '/custom/billing-rules', component: { template: '<div />' } },
       { path: '/custom/docs', component: { template: '<div />' } },
-      { path: '/custom/reset-radar', component: { template: '<div />' } },
       { path: '/model-plaza', component: { template: '<div />' } }
     ]
   })
@@ -123,49 +121,29 @@ beforeEach(() => {
 })
 
 describe('AppHeader customer shortcuts', () => {
-  it('keeps feature shortcuts and customer actions together while moving the guide to the docs position', async () => {
+  it('keeps announcements and billing rules without the retired capability shortcut', async () => {
     const { router, wrapper } = await mountHeader('user')
-    const shortcuts = wrapper.findAll('[data-header-shortcut]')
-    const guide = wrapper.get('[data-customer-header-guide]')
-    const intelligence = wrapper.get('a[href="/custom/reset-radar"]')
-    const pricing = wrapper.get('a[href="/model-plaza?embedded=1"]')
-    const toolbar = wrapper.get('[data-customer-header-toolbar]')
-    const contacts = wrapper.get('[data-testid="customer-contact-actions"]')
-    const bell = wrapper.get('[data-testid="announcement-bell"]')
-
-    expect(toolbar.element.contains(contacts.element)).toBe(true)
-    expect(toolbar.element.contains(bell.element)).toBe(true)
-    expect(contacts.element.nextElementSibling).toBe(bell.element)
-    expect(shortcuts.map((item) => item.attributes('data-header-shortcut'))).toEqual([
-      'gpt-intelligence',
-      'model-pricing'
-    ])
-    expect(guide.classes()).toContain('app-header-getting-started')
-    expect(intelligence.classes()).toContain('customer-header-shortcut--intelligence')
-    expect(pricing.classes()).toContain('customer-header-shortcut--pricing')
-    expect(guide.attributes('aria-label')).toBe('新手必看')
-    expect(shortcuts.map((item) => item.text())).toEqual([
-      '🧠GPT智力测评',
-      '💰模型价格'
-    ])
-
-    await intelligence.trigger('click')
+    expect(wrapper.find('[data-customer-header-toolbar]').exists()).toBe(false)
+    expect(wrapper.find('[data-header-shortcut]').exists()).toBe(false)
+    expect(wrapper.find('[data-customer-header-guide]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="customer-contact-actions"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="announcement-bell"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/custom/billing-rules"]').exists()).toBe(true)
+    expect(wrapper.findAll('.console-media-link').map(link => link.attributes('href'))).toEqual([])
+    expect(wrapper.find('details').exists()).toBe(false)
+    expect(wrapper.find('a[href="/intelligence-test"]').exists()).toBe(false)
+    const billingRules = wrapper.get('a[href="/custom/billing-rules"]')
+    expect(billingRules.classes()).toContain('console-intelligence-button')
+    await billingRules.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/custom/reset-radar')
-
-    await pricing.trigger('click')
-    await flushPromises()
-    expect(router.currentRoute.value.fullPath).toBe('/model-plaza?embedded=1')
+    expect(router.currentRoute.value.path).toBe('/custom/billing-rules')
     wrapper.unmount()
   })
 
-  it('hides model pricing when its feature flag is disabled', async () => {
-    appStore.cachedPublicSettings.model_plaza_enabled = false
+  it('does not duplicate pricing or documentation links in the customer header', async () => {
     const { wrapper } = await mountHeader('user')
-
     expect(wrapper.find('a[href="/model-plaza?embedded=1"]').exists()).toBe(false)
-    expect(wrapper.find('[data-customer-header-guide]').exists()).toBe(true)
-    expect(wrapper.find('a[href="/custom/reset-radar"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/custom/docs"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -175,17 +153,22 @@ describe('AppHeader customer shortcuts', () => {
     expect(admin.wrapper.find('[data-header-shortcut]').exists()).toBe(false)
     expect(admin.wrapper.find('[data-testid="customer-contact-actions"]').exists()).toBe(false)
     expect(admin.wrapper.find('[data-testid="announcement-bell"]').exists()).toBe(true)
+    const adminPricing = admin.wrapper.get('a[href="/model-plaza?embedded=1"]')
+    expect(adminPricing.classes()).toContain('flex')
+    expect(adminPricing.classes()).not.toContain('hidden')
+    expect(adminPricing.find('[data-icon="grid"]').exists()).toBe(true)
     admin.wrapper.unmount()
 
     const visitor = await mountHeader(null)
     expect(visitor.wrapper.find('[data-header-shortcut]').exists()).toBe(false)
+    expect(visitor.wrapper.find('a[href="/model-plaza?embedded=1"]').exists()).toBe(false)
     visitor.wrapper.unmount()
   })
 
   it('uses the internal guide for customers and keeps external docs for administrators', async () => {
     const customer = await mountHeader('user')
     expect(customer.wrapper.find('a[href="https://docs.example.test/"]').exists()).toBe(false)
-    expect(customer.wrapper.get('[data-customer-header-guide]').attributes('href')).toBe('/custom/docs')
+    expect(customer.wrapper.find('[data-customer-header-guide]').exists()).toBe(false)
     customer.wrapper.unmount()
 
     const { wrapper } = await mountHeader('admin')
@@ -196,7 +179,6 @@ describe('AppHeader customer shortcuts', () => {
   })
 
   it('never hides customer action labels at narrower desktop widths', () => {
-    expect(shortcutSource).not.toMatch(/customer-header-shortcut__label\s*\{[^}]*display:\s*none/s)
     expect(contactSource).not.toMatch(/customer-contact-action__label\s*\{[^}]*display:\s*none/s)
     expect(announcementSource).not.toMatch(/announcement-header-button__label\s*\{[^}]*display:\s*none/s)
   })

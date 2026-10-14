@@ -10,6 +10,8 @@ const {
   savePluginConfig,
   createUISession,
   stepUpRun,
+  listGroups,
+  groupModels,
 } = vi.hoisted(() => ({
   listPlugins: vi.fn(),
   uploadPlugin: vi.fn(),
@@ -17,10 +19,13 @@ const {
   savePluginConfig: vi.fn(),
   createUISession: vi.fn(),
   stepUpRun: vi.fn((action: () => Promise<unknown>) => action()),
+  listGroups: vi.fn(),
+  groupModels: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
+    groups: { getAllIncludingInactive: listGroups, getAvailableModels: groupModels },
     plugins: {
       list: listPlugins,
       upload: uploadPlugin,
@@ -111,6 +116,7 @@ const plugin = {
 
 function mountView() {
   return mount(PluginsView, {
+    attachTo: document.body,
     global: {
       stubs: {
         AppLayout: { template: '<div><slot /></div>' },
@@ -165,5 +171,37 @@ describe('管理员插件页二次验证', () => {
 
     expect(stepUpRun).toHaveBeenCalledTimes(1)
     expect(uploadPlugin).toHaveBeenCalledTimes(1)
+  })
+
+  it('分组桥接校验窗口与令牌并只返回必要字段', async () => {
+    listPlugins.mockResolvedValue([{...plugin, manifest:{...plugin.manifest, capabilities:[{id:'gateway.request_transform.v1',platform:'gateway',account_type:'any'}]}}])
+    listGroups.mockResolvedValue([{id:12,name:'测试分组',status:'active',billing_secret:'must-not-leak'}])
+    groupModels.mockResolvedValue(['client-model'])
+    const wrapper=mountView(); await flushPromises()
+    const button=wrapper.findAll('button').find(item=>item.text().includes('admin.plugins.configure'))
+    expect(button).toBeDefined(); await button!.trigger('click'); await flushPromises()
+    const frame=wrapper.get('iframe').element as HTMLIFrameElement
+    const reply=vi.spyOn(frame.contentWindow!, 'postMessage')
+    const send=async(type:string,id:string,token='bridge',source:Window|null=frame.contentWindow)=>{
+      window.dispatchEvent(new MessageEvent('message',{source,origin:'null',data:{source:'sub2api-plugin-ui',bridge_token:token,type,request_id:id,group_id:12}}));await flushPromises()
+    }
+    await send('groups.list','bad-token','wrong');await send('groups.list','wrong-frame','bridge',window)
+    expect(listGroups).not.toHaveBeenCalled()
+    await send('groups.list','list')
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ok:true,groups:[{id:12,name:'测试分组',status:'active'}]}),'*')
+    await send('groups.models','models')
+    expect(groupModels).toHaveBeenCalledWith(12)
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ok:true,models:['client-model']}),'*')
+    wrapper.unmount()
+  })
+
+  it('未声明改写能力的插件不能读取分组', async () => {
+    const wrapper=mountView();await flushPromises()
+    await wrapper.findAll('button').find(item=>item.text().includes('admin.plugins.configure'))!.trigger('click');await flushPromises()
+    const frame=wrapper.get('iframe').element as HTMLIFrameElement
+    const reply=vi.spyOn(frame.contentWindow!,'postMessage')
+    window.dispatchEvent(new MessageEvent('message',{source:frame.contentWindow,origin:'null',data:{source:'sub2api-plugin-ui',bridge_token:'bridge',type:'groups.list',request_id:'denied'}}));await flushPromises()
+    expect(listGroups).not.toHaveBeenCalled();expect(reply).toHaveBeenCalledWith(expect.objectContaining({ok:false}),'*')
+    wrapper.unmount()
   })
 })

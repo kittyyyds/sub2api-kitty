@@ -1,20 +1,26 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, shallowRef } from 'vue'
+import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
-import { useEndpointLatency } from '@/composables/useEndpointLatency'
+import { classifyEndpointLatency, useEndpointLatency } from '@/composables/useEndpointLatency'
 import type { EndpointLatencyResult } from '@/composables/useEndpointLatency'
 import type { CustomEndpoint } from '@/types'
 
 interface DisplayEndpoint extends CustomEndpoint {
   isDefault: boolean
+  isRecommended: boolean
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   apiBaseUrl: string
   customEndpoints: CustomEndpoint[]
-}>()
+  defaultEndpointDescription?: string
+  autoTest?: boolean
+}>(), {
+  defaultEndpointDescription: '',
+  autoTest: true,
+})
 
 const { t } = useI18n()
 const { copyToClipboard } = useClipboard()
@@ -47,8 +53,9 @@ const allEndpoints = computed<DisplayEndpoint[]>(() => {
     items.push({
       name: t('keys.endpoints.title'),
       endpoint: resolvedApiBaseUrl.value,
-      description: '',
+      description: props.defaultEndpointDescription.trim(),
       isDefault: true,
+      isRecommended: !props.customEndpoints.some(endpoint => endpoint.recommended),
     })
   }
 
@@ -60,6 +67,7 @@ const allEndpoints = computed<DisplayEndpoint[]>(() => {
       name: endpoint.name.trim() || normalizedEndpoint,
       endpoint: normalizedEndpoint,
       isDefault: false,
+      isRecommended: endpoint.recommended === true,
     })
   }
 
@@ -70,10 +78,27 @@ const endpointUrls = computed(() => allEndpoints.value.map(item => item.endpoint
 const {
   states,
   testingAll,
-  recommendedEndpoint,
   testEndpoint,
   testAll,
 } = useEndpointLatency(endpointUrls)
+
+const configuredEndpointsReady = computed(() =>
+  Boolean(
+    props.apiBaseUrl.trim()
+    || props.customEndpoints.some(endpoint => endpoint.endpoint.trim()),
+  ),
+)
+const autoTestStarted = shallowRef(false)
+
+watch(
+  [() => props.autoTest, configuredEndpointsReady],
+  ([autoTest, ready]) => {
+    if (!autoTest || !ready || autoTestStarted.value) return
+    autoTestStarted.value = true
+    void testAll()
+  },
+  { immediate: true, flush: 'post' },
+)
 
 async function copy(url: string) {
   const success = await copyToClipboard(url, t('keys.endpoints.copied'))
@@ -114,8 +139,16 @@ function resultLabel(result: EndpointLatencyResult | undefined): string {
 
 function resultClasses(result: EndpointLatencyResult | undefined): string {
   switch (result?.status) {
-    case 'success':
-      return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800'
+    case 'success': {
+      switch (classifyEndpointLatency(result.latencyMs)) {
+        case 'fast':
+          return 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800'
+        case 'moderate':
+          return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-800'
+        default:
+          return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-800'
+      }
+    }
     case 'testing':
       return 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-800'
     case 'timeout':
@@ -124,6 +157,11 @@ function resultClasses(result: EndpointLatencyResult | undefined): string {
     default:
       return 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-dark-700 dark:text-gray-400 dark:ring-dark-600'
   }
+}
+
+function resultLevel(result: EndpointLatencyResult | undefined): string {
+  if (result?.status === 'success') return classifyEndpointLatency(result.latencyMs)
+  return result?.status ?? 'idle'
 }
 
 function resultIcon(result: EndpointLatencyResult | undefined) {
@@ -151,74 +189,39 @@ onBeforeUnmount(() => {
 <template>
   <section
     v-if="allEndpoints.length > 0"
-    class="endpoint-panel card w-full overflow-hidden"
+    class="endpoint-panel"
     :aria-label="t('keys.endpoints.title')"
   >
-    <div class="flex min-h-11 items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/80 px-3 py-2 dark:border-dark-700 dark:bg-dark-800/80">
-      <div class="flex min-w-0 items-center gap-2">
-        <Icon name="server" size="sm" class="shrink-0 text-primary-500 dark:text-primary-400" />
-        <h3 class="truncate text-xs font-semibold text-gray-700 dark:text-gray-200">
-          {{ t('keys.endpoints.title') }}
-        </h3>
-        <span class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] tabular-nums text-gray-500 dark:bg-dark-700 dark:text-gray-400">
-          {{ allEndpoints.length }}
-        </span>
-      </div>
-
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm h-7 shrink-0 gap-1.5 px-2 text-xs"
-        :disabled="testingAll"
-        @click="testAll"
-      >
-        <Icon
-          name="refresh"
-          size="xs"
-          :class="testingAll ? 'animate-spin' : ''"
-          :stroke-width="2"
-        />
-        {{ testingAll ? t('keys.endpoints.testingAll') : t('keys.endpoints.speedTestAll') }}
-      </button>
-    </div>
-
-    <div class="endpoint-list divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
-      <div
-        v-for="item in allEndpoints"
-        :key="item.endpoint"
-        class="endpoint-row flex min-w-0 flex-col gap-2 px-3 py-2 transition-colors sm:flex-row sm:items-center"
-      >
-        <div class="flex w-full min-w-0 flex-1 items-center gap-1.5">
-          <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500 dark:bg-primary-400"></span>
-          <span class="shrink-0 text-xs font-medium text-gray-700 dark:text-gray-200">
-            {{ item.name }}
+    <div class="endpoint-list">
+      <div v-for="item in allEndpoints" :key="item.endpoint" class="endpoint-row">
+        <div class="endpoint-title">
+          <span class="endpoint-name" :title="item.description || item.name">
+            {{ item.isDefault && item.description ? item.description : item.name }}
           </span>
-          <span
-            v-if="item.isDefault"
-            class="shrink-0 rounded bg-primary-50 px-1 py-px text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-          >
+          <span v-if="item.isDefault" class="endpoint-tag endpoint-tag-default">
             {{ t('keys.endpoints.default') }}
           </span>
-          <span
-            v-if="recommendedEndpoint === item.endpoint"
-            class="shrink-0 rounded bg-emerald-50 px-1 py-px text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-          >
+          <span v-if="item.isRecommended" class="endpoint-tag endpoint-tag-recommended">
             {{ t('keys.endpoints.recommended') }}
           </span>
-          <span class="text-gray-300 dark:text-dark-500">|</span>
-          <button
-            type="button"
-            class="min-w-0 truncate font-mono text-[11px] text-gray-500 hover:text-primary-600 focus:outline-none focus-visible:underline dark:text-gray-400 dark:hover:text-primary-400"
-            :title="item.description || item.endpoint"
-            @click="copy(item.endpoint)"
-          >
-            {{ item.endpoint }}
-          </button>
         </div>
 
-        <div class="flex shrink-0 items-center justify-end gap-1 sm:justify-start">
+        <button
+          type="button"
+          class="endpoint-url"
+          :title="item.description || item.endpoint"
+          @click="copy(item.endpoint)"
+        >
+          {{ item.endpoint }}
+        </button>
+
+        <div class="endpoint-actions">
           <span
-            class="inline-flex h-6 min-w-[4.5rem] items-center justify-center gap-1 rounded px-1.5 text-[10px] font-medium tabular-nums ring-1 ring-inset"
+            class="endpoint-latency inline-flex items-center justify-center gap-1 rounded text-[10px] font-medium tabular-nums ring-1 ring-inset"
             :class="resultClasses(states[item.endpoint])"
+            :data-latency-level="resultLevel(states[item.endpoint])"
+            role="status"
+            aria-live="polite"
           >
             <Icon
               :name="resultIcon(states[item.endpoint])"
@@ -228,25 +231,19 @@ onBeforeUnmount(() => {
             />
             {{ resultLabel(states[item.endpoint]) }}
           </span>
-
           <button
             type="button"
-            class="inline-flex h-6 w-6 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-200 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-gray-500 dark:hover:bg-dark-700 dark:hover:text-primary-400"
-            :class="copiedEndpoint === item.endpoint ? 'text-emerald-500 dark:text-emerald-400' : ''"
+            class="endpoint-action"
+            :class="{ 'endpoint-action-copied': copiedEndpoint === item.endpoint }"
             :title="copyHint(item.endpoint)"
             :aria-label="copyHint(item.endpoint)"
             @click="copy(item.endpoint)"
           >
-            <Icon
-              :name="copiedEndpoint === item.endpoint ? 'check' : 'copy'"
-              size="xs"
-              :stroke-width="2"
-            />
+            <Icon :name="copiedEndpoint === item.endpoint ? 'check' : 'copy'" size="xs" :stroke-width="2" />
           </button>
-
           <button
             type="button"
-            class="inline-flex h-6 w-6 items-center justify-center rounded text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-wait disabled:opacity-60 dark:text-gray-500 dark:hover:bg-amber-950/40 dark:hover:text-amber-300"
+            class="endpoint-action"
             :disabled="states[item.endpoint]?.status === 'testing'"
             :title="speedTestHint(item)"
             :aria-label="speedTestHint(item)"
@@ -256,6 +253,66 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </div>
+      <button
+        type="button"
+        class="endpoint-action endpoint-test-all"
+        :disabled="testingAll"
+        :title="testingAll ? t('keys.endpoints.testingAll') : t('keys.endpoints.speedTestAll')"
+        :aria-label="testingAll ? t('keys.endpoints.testingAll') : t('keys.endpoints.speedTestAll')"
+        @click="testAll"
+      >
+        <Icon name="refresh" size="xs" :class="testingAll ? 'animate-spin' : ''" :stroke-width="2" />
+      </button>
     </div>
   </section>
 </template>
+
+<style scoped>
+.endpoint-panel { min-width: 0; }
+.endpoint-list { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.endpoint-row {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-height: 34px;
+  gap: 8px;
+  padding: 4px 7px 4px 10px;
+  border: 1px solid var(--kc-line, #e5e7eb);
+  border-radius: 8px;
+  color: var(--kc-muted, #606662);
+  background: var(--kc-panel, #fff);
+}
+.endpoint-title, .endpoint-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.endpoint-name { font-size: 12px; font-weight: 500; white-space: nowrap; }
+.endpoint-tag { border-radius: 4px; padding: 1px 4px; font-size: 10px; line-height: 1.5; white-space: nowrap; }
+.endpoint-tag-default { color: var(--kc-warm, #98601d); background: color-mix(in srgb, var(--kc-warm, #98601d) 8%, transparent); }
+.endpoint-tag-recommended { color: var(--kc-accent, #c45100); background: var(--kc-accent-soft, #fef8f4); }
+.endpoint-url {
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 1px solid var(--kc-line, #e5e7eb);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  color: var(--kc-muted, #606662);
+}
+.endpoint-url:hover, .endpoint-action:hover { color: var(--kc-accent, #c45100); }
+.endpoint-url:focus-visible, .endpoint-action:focus-visible { outline: 2px solid var(--kc-accent, #c45100); outline-offset: 2px; }
+.endpoint-latency { min-width: 62px; height: 23px; padding: 0 5px; white-space: nowrap; }
+.endpoint-latency[data-latency-level="idle"] { color: var(--kc-muted, #606662); background: var(--kc-panel-muted, #f7f7f3); --tw-ring-color: var(--kc-line, #e5e7eb); }
+.endpoint-action { display: inline-flex; height: 24px; width: 24px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 5px; color: var(--kc-muted, #606662); transition: color .15s, background .15s; }
+.endpoint-action:hover { background: var(--kc-hover, #f3f6f2); }
+.endpoint-action:disabled { cursor: wait; opacity: .55; }
+.endpoint-action-copied { color: var(--kc-accent, #c45100); }
+.endpoint-test-all { height: 32px; width: 32px; }
+@media (max-width: 639px) {
+  .endpoint-row { flex: 1 1 100%; flex-wrap: wrap; gap: 6px; padding: 7px 9px; }
+  .endpoint-title { order: 0; }
+  .endpoint-actions { order: 1; margin-left: auto; }
+  .endpoint-url { order: 2; flex-basis: 100%; padding: 0; border: 0; }
+}
+</style>

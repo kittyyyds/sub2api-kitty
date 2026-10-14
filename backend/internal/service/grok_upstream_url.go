@@ -13,7 +13,7 @@ import (
 )
 
 func grokBaseURLValidator(account *Account, cfg *config.Config) (xai.BaseURLValidator, error) {
-	if account == nil || !account.IsGrok() {
+	if !account.IsGrokMediaAccount() {
 		return nil, fmt.Errorf("grok account is required")
 	}
 	switch account.Type {
@@ -117,6 +117,18 @@ func buildGrokMediaURL(account *Account, cfg *config.Config, endpoint GrokMediaE
 		return "", err
 	}
 	baseURL := account.GetGrokMediaBaseURL()
+	if account.IsSuanliSpecialVideo() {
+		switch endpoint {
+		case GrokMediaEndpointVideosGenerations:
+			// Reuse the existing validator and canonical /v1 base handling.
+			generationURL, err := xai.BuildVideosGenerationsURLWithValidator(baseURL, validator)
+			return strings.TrimSuffix(generationURL, "/generations"), err
+		case GrokMediaEndpointVideoStatus, GrokMediaEndpointVideoContent:
+			// Both providers share the lookup path, but not the response shape.
+		default:
+			return "", newGrokMediaRequestValidationError("suanli_special only supports video generation and lookup")
+		}
+	}
 	switch endpoint {
 	case GrokMediaEndpointImagesGenerations:
 		return xai.BuildImagesGenerationsURLWithValidator(baseURL, validator)

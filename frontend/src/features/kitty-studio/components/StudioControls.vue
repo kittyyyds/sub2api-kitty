@@ -48,7 +48,7 @@ const resolutionOptions = computed(() => (
     : ['1k', '2k', '4k'] as const
 ))
 const videoResolutionOptions = computed(() => (
-  props.form.model === GROK_VIDEO_15_MODEL
+  props.selectedPlatform === 'video' || props.form.model === GROK_VIDEO_15_MODEL
     ? ['480p', '720p', '1080p'] as const
     : ['480p', '720p'] as const
 ))
@@ -90,7 +90,7 @@ function handleFiles(event: Event): void {
 
     <div class="mode-switch" role="tablist" aria-label="生成模式">
       <button
-        v-for="item in modeOptions"
+        v-for="item in modeOptions.filter(option => selectedPlatform !== 'video' || option.value.endsWith('-video'))"
         :key="item.value"
         type="button"
         role="tab"

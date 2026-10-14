@@ -42,6 +42,12 @@ export default {
 
     // Proxies
     proxies: {
+      managementSections: 'Proxy management sections',
+      proxyList: 'Static proxies / IP pool',
+      subscriptions: 'Subscriptions',
+      dynamicProxies: 'Dynamic proxies',
+      nodes: 'Nodes',
+      kernelRules: 'Kernel and rules',
       title: 'Proxy Management',
       description: 'Manage proxy servers for accounts',
       createProxy: 'Create Proxy',
@@ -159,10 +165,12 @@ export default {
       standardAdd: 'Standard Add',
       batchAdd: 'Quick Add',
       batchInput: 'Proxy List',
+      batchDefaultProtocol: 'Default protocol for bare entries',
+      batchDefaultProtocolHint: 'Entries without a scheme are completed with this protocol.',
       batchInputPlaceholder:
         "Enter one proxy per line in the following formats:\nsocks5://user:pass{'@'}192.168.1.1:1080\nhttp://192.168.1.1:8080\nhttps://user:pass{'@'}proxy.example.com:443",
       batchInputHint:
-        "Supports http, https, socks5 protocols. Format: protocol://[user:pass{'@'}]host:port",
+        "Mixed input is supported: host:port:user:pass, user:pass{'@'}host:port, user:pass:host:port, and scheme URLs. Bare entries use the selected protocol above.",
       parsedCount: '{count} valid',
       invalidCount: '{count} invalid',
       duplicateCount: '{count} duplicate',
@@ -231,12 +239,14 @@ export default {
       nDays: '{days}d',
       expiryDaysPlaceholder: 'Custom days, empty = never',
       expiryWarnDays: 'Expiry warning (days)',
-      fallbackMode: 'Expiry fallback',
+      fallbackMode: 'Failure / expiry fallback',
+      fallbackModeHint: 'Applies the selected policy on expiry. For eligible OpenAI HTTP connection failures, runtime fallback requires confirmation that the request has not been sent; streams with output are not replayed by this fallback. Direct connections use the network of the environment running Sub2API.',
       fallbackNone: 'No fallback',
       fallbackProxy: 'Backup proxy',
       fallbackDirect: 'Direct connection',
       backupProxy: 'Backup proxy',
-    },
+
+  },
 
     // Redeem Codes
     redeem: {
@@ -420,9 +430,18 @@ export default {
         conditionType: 'Condition type',
         conditionSubscription: 'Subscription',
         conditionBalance: 'Balance',
+        conditionUser: 'Specific users',
         operator: 'Operator',
         balanceValue: 'Balance threshold',
-        selectPackages: 'Select packages'
+        selectPackages: 'Select packages',
+        targetingUsers: 'Specific users',
+        targetingUsersHint: 'Only the selected users can see this announcement, e.g. to remind or warn one user. With the Popup notify mode it pops up after they sign in or reload the page, until they mark it as read.',
+        selectUsers: 'Select users',
+        selectUsersRequired: 'Select at least one user',
+        searchUsersPlaceholder: 'Search by email or username',
+        noUsersFound: 'No matching users',
+        noUsersSelected: 'No users selected yet',
+        userUnavailable: 'User not found'
       },
       operators: {
         gt: '>',
@@ -433,6 +452,7 @@ export default {
       },
       targetingSummaryAll: 'All users',
       targetingSummaryCustom: 'Custom ({groups} groups)',
+      targetingSummaryUsers: 'Specific users ({count})',
       timeImmediate: 'Immediate',
       timeNever: 'Never',
       readStatus: 'Read Status',
@@ -557,6 +577,7 @@ export default {
 	  upstreamModelMismatchOnly: 'Mismatched only',
 	  upstreamModelMatchedOnly: 'Matched only',
       audit: {
+        localEstimateDisabled: 'Local cross-check disabled',
         statusFilter: 'Audit result',
         allStatuses: 'All audit results',
         exportCSV: 'Export CSV',
@@ -636,6 +657,7 @@ export default {
         rawUsage: 'Raw usage',
         noRawUsage: 'Raw usage was not captured',
         reasonsMap: {
+          local_estimate_disabled: 'Local cross-check disabled; upstream usage and normal billing are retained',
           raw_usage_not_captured: 'Raw usage was not captured',
           response_capture_truncated: 'Response exceeded the capture limit',
           local_input_unavailable: 'Local input estimate unavailable',
@@ -702,4 +724,42 @@ export default {
     },
 
     // Ops Monitoring
+
+  tieredRouting: {
+      title: 'Tiered Routing',
+      description: 'Premium users prefer premium-pool accounts; everyone else uses all accounts. Mark accounts in the account editor.',
+      enable: 'Enable tiered routing',
+      premiumUserIds: 'Premium user IDs',
+      premiumUserIdsPlaceholder: 'e.g. 12, 34, 56',
+      premiumUserIdsHint: 'Comma/space separated user IDs. These users always route premium.',
+      minBalance: 'Min balance for premium ($)',
+      minBalanceHint: 'Users with balance at or above this are premium. 0 disables the balance rule.',
+      poolHint: 'Set an account pool to premium in the account editor (proxy section). Unmatched premium users fall back to all accounts.',
+      loadFailed: 'Failed to load tiered routing settings',
+      saveFailed: 'Failed to save tiered routing settings',
+      saveSuccess: 'Tiered routing settings saved',
+      invalidBalance: 'Min balance must be a non-negative number',
+    },
+
+  tickets: {
+      title: 'Support Tickets',
+      description: 'Reply to user questions and close resolved tickets.',
+      user: 'User',
+      subject: 'Subject',
+      status: 'Status',
+      open: 'Open',
+      answered: 'Answered',
+      closed: 'Closed',
+      all: 'All',
+      support: 'Support',
+      replyPlaceholder: 'Write your reply...',
+      sendReply: 'Send reply',
+      closeTicket: 'Close ticket',
+      noTickets: 'No tickets.',
+      replySuccess: 'Reply sent',
+      closeSuccess: 'Ticket closed',
+      loadFailed: 'Failed to load tickets',
+      saveFailed: 'Operation failed',
+      openCount: '{count} open',
+    },
 }

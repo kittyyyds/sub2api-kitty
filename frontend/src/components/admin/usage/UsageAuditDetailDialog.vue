@@ -22,7 +22,9 @@ const { t, te } = useI18n()
 const audit = computed(() => props.row?.usage_audit ?? null)
 const status = computed<AuditRowStatus>(() => audit.value?.status ?? 'missing')
 
-const statusLabel = computed(() => t(`admin.usage.audit.status.${status.value}`))
+const statusLabel = computed(() => audit.value?.reasons?.includes('local_estimate_disabled')
+  ? t('admin.usage.audit.localEstimateDisabled')
+  : t(`admin.usage.audit.status.${status.value}`))
 
 const statusClass = computed(() => {
   switch (status.value) {

@@ -24,11 +24,9 @@ func RegisterUserRoutes(
 	authenticated.Use(panelRateLimiter.Global())
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
 	authenticated.Use(gin.HandlerFunc(auditLog))
+	authenticated.GET("/video-tasks", h.OpenAIGateway.ListMyVideoTasks)
+	authenticated.GET("/video-tasks/stats", h.OpenAIGateway.MyVideoTaskStats)
 	{
-		if h.CandyTest != nil {
-			authenticated.GET("/candy-tests", h.CandyTest.List)
-			authenticated.GET("/candy-tests/:id/history", h.CandyTest.History)
-		}
 		// 用户接口
 		user := authenticated.Group("/user")
 		{
@@ -80,6 +78,8 @@ func RegisterUserRoutes(
 		keys := authenticated.Group("/keys")
 		{
 			keys.GET("", h.APIKey.List)
+			// 必须在动态 /:id 路由之前注册，避免被参数路由吞掉。
+			keys.GET("/concurrency", h.APIKey.GetConcurrencyQueue)
 			keys.GET("/:id", h.APIKey.GetByID)
 			keys.POST("", h.APIKey.Create)
 			keys.PUT("/:id", h.APIKey.Update)
@@ -143,6 +143,22 @@ func RegisterUserRoutes(
 			apps.POST("/runs/:run_id/cancel", h.ApplicationCenter.CancelRun)
 			apps.POST("/runs/:run_id/retry", h.ApplicationCenter.RetryRun)
 		}
+		// 工单
+		tickets := authenticated.Group("/tickets")
+		{
+			tickets.GET("", h.Admin.Ticket.ListMine)
+			tickets.POST("", h.Admin.Ticket.Create)
+			tickets.GET("/:id", h.Admin.Ticket.GetMine)
+			tickets.POST("/:id/replies", h.Admin.Ticket.ReplyMine)
+			tickets.POST("/:id/close", h.Admin.Ticket.CloseMine)
+		}
+
+		// 账单：月账单与用量导出
+		billingReports := authenticated.Group("/billing")
+		{
+			billingReports.GET("/statement", h.Admin.BillingExport.Statement)
+			billingReports.GET("/export", h.Admin.BillingExport.Export)
+		}
 
 		// 卡密兑换
 		redeem := authenticated.Group("/redeem")
@@ -167,6 +183,13 @@ func RegisterUserRoutes(
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
 
+		// 鹈鹕测智展示（用户只读；功能关闭时返回空画廊）
+		showcase := authenticated.Group("/pelican-showcase")
+		{
+			showcase.GET("", h.PelicanShowcase.List)
+			showcase.GET("/items/:id", h.PelicanShowcase.GetItem)
+		}
+
 		// V2 passive views require feature on + mode=v2.
 		monitorV2 := authenticated.Group("/channel-monitor-v2")
 		monitorV2.Use(panelRateLimiter.Heavy())
@@ -178,6 +201,15 @@ func RegisterUserRoutes(
 			monitorV2.GET("/matrix", h.ChannelMonitorV2.Matrix)
 			monitorV2.GET("/errors", h.ChannelMonitorV2.Errors)
 			monitorV2.GET("/users", h.ChannelMonitorV2.Users)
+		}
+
+		// V3 component status page requires feature on + mode=v3.
+		monitorV3 := authenticated.Group("/channel-monitor-v3")
+		monitorV3.Use(panelRateLimiter.Heavy())
+		monitorV3.Use(channelMonitorModeV3Guard(settingService))
+		{
+			monitorV3.GET("/status", h.ChannelMonitorV3.Status)
+			monitorV3.GET("/incidents", h.ChannelMonitorV3.Incidents)
 		}
 	}
 }

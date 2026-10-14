@@ -6,13 +6,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"sync"
+	"time"
 )
+
+// Other instances and maintenance tools cannot invoke this process's settings
+// update callback. Periodically refresh injected public settings as a fallback.
+const htmlCacheTTL = 30 * time.Second
 
 // HTMLCache manages the cached index.html with injected settings
 type HTMLCache struct {
 	mu              sync.RWMutex
 	cachedHTML      []byte
 	etag            string
+	expiresAt       time.Time
 	baseHTMLHash    string // Hash of the original index.html (immutable after build)
 	settingsVersion uint64 // Incremented when settings change
 }
@@ -52,7 +58,7 @@ func (c *HTMLCache) Get() *CachedHTML {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if c.cachedHTML == nil {
+	if c.cachedHTML == nil || !time.Now().Before(c.expiresAt) {
 		return nil
 	}
 	return &CachedHTML{
@@ -68,6 +74,7 @@ func (c *HTMLCache) Set(html []byte, settingsJSON []byte) {
 
 	c.cachedHTML = html
 	c.etag = c.generateETag(settingsJSON)
+	c.expiresAt = time.Now().Add(htmlCacheTTL)
 }
 
 // generateETag creates an ETag from base HTML hash + settings hash

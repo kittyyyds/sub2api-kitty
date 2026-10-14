@@ -73,6 +73,7 @@ type usageLogBestEffortWriter interface {
 
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
+	PrepaidVideoTaskID    string
 	Cost                  *CostBreakdown
 	User                  *User
 	APIKey                *APIKey
@@ -380,8 +381,10 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	}
 
 	if result.APIKeyQuotaExhausted {
-		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey != nil && p.APIKey.Key != "" {
-			invalidator.InvalidateAuthCacheByKey(billingCtx, p.APIKey.Key)
+		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey != nil {
+			if key := p.APIKey.AuthCacheInvalidationKey(); key != "" {
+				invalidator.InvalidateAuthCacheByKey(billingCtx, key)
+			}
 		}
 	}
 
@@ -434,7 +437,7 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 			deps.billingCacheService.IncrementUserPlatformQuotaUsage(p.User.ID, p.Platform, p.Cost.ActualCost)
 			if deps.cfg == nil || !deps.cfg.Database.UserPlatformQuotaFlusherEnabled {
 				// 降级路径:flusher 未启用时保留原有异步直写 DB
-				dbCtx, dbCancel := detachUpstreamContext(ctx)
+				dbCtx, dbCancel := detachedBillingContext(ctx)
 				userID, platform, cost := p.User.ID, p.Platform, p.Cost.ActualCost
 				go func() {
 					defer func() {
@@ -466,6 +469,14 @@ func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingPara
 	if p == nil || p.Cost == nil || p.User == nil || deps == nil || deps.billingCacheService == nil {
 		return
 	}
+	if p.PrepaidVideoTaskID != "" {
+		// Admission already deducted the available balance. Capture must not
+		// subtract it a second time from Redis after the SQL hold is consumed.
+		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
+			slog.Warn("invalidate prepaid video balance cache failed", "user_id", p.User.ID)
+		}
+		return
+	}
 	if result != nil && result.ExpiredBonusAmount > 0 {
 		if err := deps.billingCacheService.InvalidateUserBalance(ctx, p.User.ID); err != nil {
 			slog.Warn("invalidate balance cache after bonus expiry failed", "user_id", p.User.ID, "error", err)
@@ -482,6 +493,16 @@ func syncBalanceCacheAfterDeduction(ctx context.Context, p *postUsageBillingPara
 			)
 		}
 		return
+	}
+	if deps.billingCacheService.InflightReservationEnabled() {
+		// 在途预留开启时同步扣减余额缓存：计费任务结束后才会释放预留，
+		// 必须保证此时准入读取的缓存余额已反映本次扣费，否则释放与扣减之间
+		// 仍存在「在途=0 且余额未扣」的窗口。本函数运行在计费 worker 中，不在请求热路径。
+		err := deps.billingCacheService.DeductBalanceCache(ctx, p.User.ID, p.Cost.ActualCost)
+		if err == nil {
+			return
+		}
+		logger.LegacyPrintf("service.gateway", "Warning: sync deduct balance cache failed for user %d, falling back to queue: %v", p.User.ID, err)
 	}
 	deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
 }
@@ -573,14 +594,14 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	if !stream {
 		return ctx, func() {}
 	}
-	return context.WithoutCancel(ctx), func() {}
+	return detachAPIKeyUpstreamContext(ctx)
 }
 
 func detachUpstreamContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		return context.Background(), func() {}
 	}
-	return context.WithoutCancel(ctx), func() {}
+	return detachAPIKeyUpstreamContext(ctx)
 }
 
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
@@ -614,6 +635,13 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	}
 	usageCtx, cancel := detachedBillingContext(ctx)
 	defer cancel()
+	defer func() {
+		if recorder, ok := repo.(interface {
+			RecordRequestTiming(context.Context, string, int64)
+		}); ok {
+			recorder.RecordRequestTiming(ctx, usageLog.RequestID, usageLog.APIKeyID)
+		}
+	}()
 
 	if writer, ok := repo.(usageLogBestEffortWriter); ok {
 		if err := writer.CreateBestEffort(usageCtx, usageLog); err != nil {
@@ -640,12 +668,6 @@ func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usage
 	}
 }
 
-// recordUsageOpts parameterizes billing behavior for general and long-context usage paths.
-type recordUsageOpts struct {
-	LongContextThreshold  int
-	LongContextMultiplier float64
-}
-
 // RecordUsage 记录使用量并扣费（或更新订阅用量）
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
 	if input != nil && input.Result != nil {
@@ -668,57 +690,6 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		APIKeyService:      input.APIKeyService,
 		QuotaPlatform:      input.QuotaPlatform,
 		ChannelUsageFields: input.ChannelUsageFields,
-	}, &recordUsageOpts{})
-}
-
-// RecordUsageLongContextInput 记录使用量的输入参数（支持长上下文双倍计费）
-type RecordUsageLongContextInput struct {
-	Result                *ForwardResult
-	APIKey                *APIKey
-	User                  *User
-	Account               *Account
-	Subscription          *UserSubscription  // 可选：订阅信息
-	PricingAt             time.Time          // token 售价固定时刻；零值保持既有的记录时刻语义
-	InboundEndpoint       string             // 入站端点（客户端请求路径）
-	UpstreamEndpoint      string             // 上游端点（标准化后的上游路径）
-	UserAgent             string             // 请求的 User-Agent
-	IPAddress             string             // 请求的客户端 IP 地址
-	SessionID             string             // 客户端显式会话标识（session_id / X-Session-Id 等请求头），仅用于用量行会话关联
-	RequestPayloadHash    string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
-	LongContextThreshold  int                // 长上下文阈值（如 200000）
-	LongContextMultiplier float64            // 超出阈值部分的倍率（如 2.0）
-	ForceCacheBilling     bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
-	APIKeyService         APIKeyQuotaUpdater // API Key 配额服务（可选）
-	QuotaPlatform         string             // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
-
-	ChannelUsageFields // 渠道映射信息（由 handler 在 Forward 前解析）
-}
-
-// RecordUsageWithLongContext 记录使用量并扣费，支持长上下文双倍计费（用于 Gemini）
-func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *RecordUsageLongContextInput) error {
-	if input != nil && input.Result != nil {
-		ensureGatewayUsageAudit(input.Result, input.InboundEndpoint)
-	}
-	return s.recordUsageCore(ctx, &recordUsageCoreInput{
-		Result:             input.Result,
-		APIKey:             input.APIKey,
-		User:               input.User,
-		Account:            input.Account,
-		Subscription:       input.Subscription,
-		PricingAt:          input.PricingAt,
-		InboundEndpoint:    input.InboundEndpoint,
-		UpstreamEndpoint:   input.UpstreamEndpoint,
-		UserAgent:          input.UserAgent,
-		IPAddress:          input.IPAddress,
-		SessionID:          input.SessionID,
-		RequestPayloadHash: input.RequestPayloadHash,
-		ForceCacheBilling:  input.ForceCacheBilling,
-		APIKeyService:      input.APIKeyService,
-		QuotaPlatform:      input.QuotaPlatform,
-		ChannelUsageFields: input.ChannelUsageFields,
-	}, &recordUsageOpts{
-		LongContextThreshold:  input.LongContextThreshold,
-		LongContextMultiplier: input.LongContextMultiplier,
 	})
 }
 
@@ -730,13 +701,7 @@ func ensureGatewayUsageAudit(result *ForwardResult, endpoint string) {
 		result.UsageAudit = NewNotApplicableUsageAudit("non_token_billing")
 		return
 	}
-	result.UsageAudit = NewUnverifiableUsageAudit(UsageAuditProtocolForEndpoint(endpoint), UsageAuditTokenSnapshot{
-		InputTokens:         usageAuditIntPtr(result.Usage.InputTokens),
-		TotalInputTokens:    usageAuditIntPtr(result.Usage.InputTokens + result.Usage.CacheCreationInputTokens + result.Usage.CacheReadInputTokens),
-		OutputTokens:        usageAuditIntPtr(result.Usage.OutputTokens),
-		CacheCreationTokens: usageAuditIntPtr(result.Usage.CacheCreationInputTokens),
-		CacheReadTokens:     usageAuditIntPtr(result.Usage.CacheReadInputTokens),
-	}, "capture_unavailable")
+	result.UsageAudit = BuildClaudeUsageAudit(endpoint, result.Usage)
 }
 
 // recordUsageCoreInput 是 recordUsageCore 的公共输入字段，从两种输入结构体中提取。
@@ -801,7 +766,8 @@ func responseModelBillingAdoptable(baseline, response *CostBreakdown, baselineCh
 	if baseline == nil || response == nil {
 		return false
 	}
-	if response.TotalCost > baseline.TotalCost+responseModelBillingCostEpsilon {
+	if response.TotalCost > baseline.TotalCost+responseModelBillingCostEpsilon ||
+		response.ActualCost > baseline.ActualCost+responseModelBillingCostEpsilon {
 		return false
 	}
 	if response.TotalCost <= 0 && baseline.TotalCost > 0 {
@@ -835,11 +801,7 @@ func logResponseModelBillingApplied(component string, account *Account, requestI
 }
 
 // recordUsageCore 是 RecordUsage 的核心实现。
-// LongContextThreshold > 0 时 Token 计费回退走 CalculateCostWithLongContext。
-func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsageCoreInput, opts *recordUsageOpts) error {
-	if opts == nil {
-		opts = &recordUsageOpts{}
-	}
+func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsageCoreInput) error {
 	result := input.Result
 	apiKey := input.APIKey
 	user := input.User
@@ -866,6 +828,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
+	// Keep candidate fallback, response-model selection and Free Fast on one policy snapshot.
+	ctx = withModelBillingConfig(ctx, s.settingService)
 	multiplier := 1.0
 	if s.cfg != nil {
 		multiplier = s.cfg.Default.RateMultiplier
@@ -874,6 +838,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		groupDefault := apiKey.Group.RateMultiplier
 		multiplier = s.ResolveUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
 	}
+	multiplier *= account.UserGroupRateMultiplier()
 	// token 倍率叠加高峰因子（token 计费含图片 token，图片按次倍率不受影响）。高峰因子按请求时刻现算，
 	// 不并入上面的 getUserGroupRateMultiplier，以免污染 user:group 倍率缓存。
 	pricingAt := input.PricingAt
@@ -909,7 +874,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// 计算费用
-	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, requestedModel, multiplier, imageMultiplier, pricingAt, opts)
+	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, requestedModel, multiplier, imageMultiplier, pricingAt)
 	// response_model：按上游成功响应自报的模型计费（渠道显式开启才生效）。
 	// 采纳条件见 responseModelBillingDeclaration + hasIdentifiedResponseModelPricing
 	// + responseModelBillingAdoptable。任一条件不满足都静默回落基线，即开启本模式前的
@@ -921,7 +886,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		result.ImageCount > 0 || result.AudioUsage != nil || result.SearchCount > 0,
 	); responseModel != "" && !strings.EqualFold(responseModel, strings.TrimSpace(billingModel)) {
 		if identified, responseChannelPriced := s.hasIdentifiedResponseModelPricing(ctx, responseModel, apiKey); identified {
-			responseCost := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, requestedModel, multiplier, imageMultiplier, pricingAt, opts)
+			responseCost := s.calculateRecordUsageCost(ctx, result, apiKey, responseModel, requestedModel, multiplier, imageMultiplier, pricingAt)
 			baselineChannelPriced := s.resolveChannelPricing(ctx, billingModel, apiKey) != nil
 			if responseModelBillingAdoptable(cost, responseCost, baselineChannelPriced, responseChannelPriced) {
 				// billingModel 到此为止只是定价查表的入参，后续流程只消费 cost，
@@ -943,6 +908,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	accountRateMultiplier, _ := account.EffectiveBillingRateMultiplierAt(time.Now())
 	usageLog := s.buildRecordUsageLog(ctx, input, result, apiKey, user, account, subscription,
 		requestedModel, multiplier, imageMultiplier, accountRateMultiplier, billingType, cacheTTLOverridden, cost)
+	usageLog.RateMultiplier *= costModelBillingMultiplier(cost)
 
 	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
 	if apiKey.GroupID != nil {
@@ -957,8 +923,16 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 				CacheReadTokens:     result.Usage.CacheReadInputTokens,
 				ImageOutputTokens:   result.Usage.ImageOutputTokens,
 			},
-			cost.TotalCost, pricingAt,
+			cost.accountStatsBaseTotal(), pricingAt,
+			accountStatsLongContextPricingEnabled(nil),
 		)
+	}
+	if cost.ContextBaseTotalCost != nil && usageLog.AccountStatsCost == nil {
+		v := *cost.ContextBaseTotalCost
+		usageLog.AccountStatsCost = &v
+	}
+	if cost.ContextRuleID > 0 {
+		logger.LegacyPrintf("service.context_pricing", "request=%s rule=%d revision=%d applied=%t", usageLog.RequestID, cost.ContextRuleID, cost.ContextRuleRevision, cost.LongContextBillingApplied)
 	}
 
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)
@@ -1014,12 +988,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 	multiplier float64,
 	imageMultiplier float64,
 	pricingAt time.Time,
-	optsList ...*recordUsageOpts,
 ) *CostBreakdown {
-	opts := &recordUsageOpts{}
-	if len(optsList) > 0 && optsList[0] != nil {
-		opts = optsList[0]
-	}
 	// 图片生成：渠道定价为 token 计费时走 token 路径，否则走图片计费
 	if result.ImageCount > 0 {
 		sizeTier := NormalizeImageBillingTierOrDefault(result.ImageSize)
@@ -1033,7 +1002,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 			return s.billingService.CalculateImageCost(model, sizeTier, result.ImageCount, imagePriceConfigFromAPIKey(apiKey), imageMultiplier)
 		}
 		if resolved := s.resolveChannelPricing(ctx, billingModel, apiKey); resolved != nil && resolved.Mode == BillingModeToken {
-			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt, opts)
+			return s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt)
 		}
 		return s.calculateImageCost(ctx, result, apiKey, billingModel, requestedModel, imageMultiplier)
 	}
@@ -1058,7 +1027,7 @@ func (s *GatewayService) calculateRecordUsageCost(
 	}
 
 	// Token 计费；SearchCount 为叠加 surcharge（不替代 token）。
-	tokenCost := s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt, opts)
+	tokenCost := s.calculateTokenCost(ctx, result, apiKey, billingModel, multiplier, pricingAt)
 	if result.SearchCount > 0 {
 		price := groupSearchPricePer1kFromAPIKey(apiKey)
 		if price != nil && *price == 0 {
@@ -1070,6 +1039,10 @@ func (s *GatewayService) calculateRecordUsageCost(
 				return searchCost
 			}
 			tokenCost.TotalCost += searchCost.TotalCost
+			if tokenCost.ContextBaseTotalCost != nil {
+				v := *tokenCost.ContextBaseTotalCost + searchCost.TotalCost
+				tokenCost.ContextBaseTotalCost = &v
+			}
 			tokenCost.ActualCost += searchCost.ActualCost
 		}
 	}
@@ -1194,7 +1167,7 @@ func (s *GatewayService) calculateImageCost(
 		return s.billingService.CalculateImageCost(model, sizeTier, result.ImageCount, groupConfig, multiplier)
 	}
 	resolved := s.resolveChannelPricing(ctx, billingModel, apiKey)
-	if resolved != nil && resolved.Source == PricingSourceGroup {
+	if resolved != nil && (resolved.Source == PricingSourceGroup) {
 		gid := apiKey.Group.ID
 		cost, err := s.billingService.CalculateCostUnified(CostInput{
 			Ctx: ctx, Model: billingModel, GroupID: &gid, Group: apiKey.Group,
@@ -1209,7 +1182,7 @@ func (s *GatewayService) calculateImageCost(
 	if apiKeyHasConfiguredImagePrice(apiKey, sizeTier) {
 		return s.billingService.CalculateImageCost(billingModel, sizeTier, result.ImageCount, groupConfig, multiplier)
 	}
-	if resolved != nil && resolved.Source == PricingSourceChannel {
+	if resolved != nil && (resolved.Source == PricingSourceChannel) {
 		tokens := UsageTokens{
 			InputTokens:       result.Usage.InputTokens,
 			OutputTokens:      result.Usage.OutputTokens,
@@ -1248,7 +1221,6 @@ func (s *GatewayService) calculateTokenCost(
 	billingModel string,
 	multiplier float64,
 	pricingAt time.Time,
-	opts *recordUsageOpts,
 ) *CostBreakdown {
 	tokens := UsageTokens{
 		InputTokens:           result.Usage.InputTokens,
@@ -1264,17 +1236,6 @@ func (s *GatewayService) calculateTokenCost(
 	if s.resolver != nil && apiKey.Group != nil {
 		gid := apiKey.Group.ID
 		resolved = s.resolver.Resolve(ctx, PricingInput{Model: billingModel, GroupID: &gid, Group: apiKey.Group})
-	}
-
-	if resolved == nil || (resolved.Source != PricingSourceGroup && resolved.Source != PricingSourceChannel) {
-		if opts != nil && opts.LongContextThreshold > 0 && (apiKey.Group == nil || apiKey.Group.LongContextPricingEnabled) {
-			cost, err := s.billingService.CalculateCostWithLongContext(billingModel, tokens, multiplier, opts.LongContextThreshold, opts.LongContextMultiplier)
-			if err != nil {
-				logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
-				return &CostBreakdown{ActualCost: 0}
-			}
-			return cost
-		}
 	}
 
 	cost, err := s.billingService.CalculateTokenCostForRequest(TokenCostRequest{
@@ -1293,6 +1254,7 @@ func (s *GatewayService) calculateTokenCost(
 		logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
 		return &CostBreakdown{ActualCost: 0}
 	}
+	applyModelBillingMultiplier(cost, s.settingService.modelBillingConfigForUsage(ctx), billingModel)
 	return cost
 }
 

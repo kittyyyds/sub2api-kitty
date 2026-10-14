@@ -29,6 +29,7 @@ func TestEveryGatewayPOSTRouteIsClassifiedForPromptAuditCoverage(t *testing.T) {
 
 	audited := map[string][]string{
 		"/messages":                 {"gateway_handler.go", "openai_gateway_handler.go"},
+		"/systemone":                {"gateway_systemone.go"},
 		"/responses":                {"gateway_handler_responses.go", "openai_gateway_handler.go"},
 		"/responses/*subpath":       {"gateway_handler_responses.go", "openai_gateway_handler.go"},
 		"/chat/completions":         {"gateway_handler_chat_completions.go", "openai_chat_completions.go"},
@@ -51,6 +52,8 @@ func TestEveryGatewayPOSTRouteIsClassifiedForPromptAuditCoverage(t *testing.T) {
 		"/x_search":                 {"gateway_web_search.go"},
 	}
 	excluded := map[string]string{
+		"/v1/video-references":       "reference media upload only; generation prompts are checked by the video request handler",
+		"/v1/videos/quote":           "video pricing quote only; it does not execute a model request",
 		"/messages/count_tokens":     "tokenization only; it does not execute a model request",
 		"/images/batches/:id/cancel": "control-plane cancellation with no user prompt",
 		"/stt":                       "speech transcription is not a text-generation prompt",
@@ -99,9 +102,17 @@ func TestResponsesWebSocketHasFirstAndSubsequentTurnPromptGates(t *testing.T) {
 	wsStart := strings.Index(string(handlerSource), `func (h *OpenAIGatewayHandler) ResponsesWebSocket`)
 	require.NotEqual(t, -1, wsStart)
 	wsSource := string(handlerSource)[wsStart:]
+	firstGate := strings.Index(wsSource, `"first_turn"`)
+	// Per-turn admission runs through admitOpenAIWSTurn, which performs the Key
+	// wait (WaitOpenAIWSKeyAdmission) before any user slot.
+	firstSlot := strings.Index(wsSource, `admitOpenAIWSTurn(`)
+	require.NotEqual(t, -1, firstGate, "first-turn prompt gate must exist")
+	require.NotEqual(t, -1, firstSlot, "WS user/key slot acquisition must exist")
+	require.Contains(t, string(handlerSource), `WaitOpenAIWSKeyAdmission`)
+	require.Contains(t, string(handlerSource), `TryAcquireUserSlot`)
 	require.Less(t,
-		strings.Index(wsSource, `"first_turn"`),
-		strings.Index(wsSource, `TryAcquireUserSlotForAPIKey`),
+		firstGate,
+		firstSlot,
 		"the first response.create gate must precede per-request user/account slots",
 	)
 }
@@ -121,7 +132,7 @@ func TestPromptAuditAdminRoutesRejectUnauthenticatedAndNonAdminRequests(t *testi
 	})
 	auditLog := servermiddleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() })
 	stepUp := servermiddleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() })
-	RegisterAdminRoutes(router.Group("/api/v1"), handlers, adminAuth, auditLog, stepUp, nil, nil)
+	RegisterAdminRoutes(router.Group("/api/v1"), handlers, adminAuth, auditLog, stepUp, nil, nil, nil)
 
 	for _, tc := range []struct {
 		name       string

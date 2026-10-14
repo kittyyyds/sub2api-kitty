@@ -53,7 +53,7 @@ describe('CustomerContactActions', () => {
     expect(popover.text()).toContain('1722345668')
     expect(popover.text()).toContain('ALe990411')
 
-    const group = wrapper.get('a[href="https://qm.qq.com/q/oRR8GUdEPK"]')
+    const group = wrapper.get('a[href="https://qm.qq.com/q/Wr3pNr9zMe"]')
     expect(group.text()).toContain('售后交流群')
     expect(group.find('[data-icon="users"]').exists()).toBe(true)
     expect(group.get('img').attributes('src')).toBe('/qq-group-qr.png')

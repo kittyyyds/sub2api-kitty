@@ -8,6 +8,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestUsageLogFromService_IncludesVideoReceiptForUserAndAdmin(t *testing.T) {
+	for _, mode := range []string{"video", "per_request"} {
+		t.Run(mode, func(t *testing.T) {
+			resolution, duration := "720p", 5
+			log := &service.UsageLog{VideoCount: 1, VideoResolution: &resolution,
+				VideoDurationSeconds: &duration, BillingMode: &mode, ActualCost: 3.75}
+			for _, value := range []any{UsageLogFromService(log), UsageLogFromServiceAdmin(log)} {
+				raw, err := json.Marshal(value)
+				require.NoError(t, err)
+				var payload map[string]any
+				require.NoError(t, json.Unmarshal(raw, &payload))
+				require.Equal(t, float64(1), payload["video_count"])
+				require.Equal(t, "720p", payload["video_resolution"])
+				require.Equal(t, float64(5), payload["video_duration_seconds"])
+				require.Equal(t, mode, payload["billing_mode"])
+				require.Equal(t, 3.75, payload["actual_cost"])
+			}
+		})
+	}
+	legacy := UsageLogFromService(&service.UsageLog{})
+	require.Zero(t, legacy.VideoCount)
+	require.Nil(t, legacy.VideoResolution)
+	require.Nil(t, legacy.VideoDurationSeconds, "missing historical units must not become default duration")
+}
+
 func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	t.Parallel()
 

@@ -26,6 +26,16 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('announcement fetch ownership', () => {
+  it('keeps visible history beyond twenty notices without expanding the automatic popup batch', async () => {
+    const store = useAnnouncementStore()
+    list.mockResolvedValueOnce(Array.from({ length: 27 }, (_, i) => notice(i + 1)))
+    await store.fetchAnnouncements()
+    expect(store.announcements).toHaveLength(27)
+    expect(store.announcements[26].id).toBe(27)
+    expect(store.unreadCount).toBe(27)
+    expect(store.fetchError).toBe(false)
+  })
+
   it('does not restore announcements or popups after logout resets the store', async () => {
     const store = useAnnouncementStore()
     const old = pendingList()

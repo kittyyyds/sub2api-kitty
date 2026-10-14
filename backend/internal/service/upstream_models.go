@@ -211,6 +211,11 @@ func (s *AccountTestService) SyncUpstreamModelCatalog(ctx context.Context, accou
 	models, body, err := s.fetchUpstreamModelList(ctx, account)
 	liveListAvailable := err == nil
 	if err != nil {
+		if account.IsVideo() {
+			// Video sync must report the supplier's live catalog. Reusing a local
+			// whitelist after an HTTP error would look like a successful sync.
+			return nil, err
+		}
 		configuredModels := configuredUpstreamModelsForCapabilitySync(account)
 		if !upstreamModelListEndpointUnsupported(err) || len(configuredModels) == 0 {
 			return nil, err
@@ -230,6 +235,12 @@ func (s *AccountTestService) SyncUpstreamModelCatalog(ctx context.Context, accou
 		if parseErr == nil {
 			catalog.Metadata = directMetadata
 		}
+	}
+	if account.IsVideo() {
+		// Video model IDs (including provider-specific Chinese names) are not
+		// Codex agent models and do not require reasoning/context metadata.
+		// Keep direct supplier metadata, without registry calls or warnings.
+		return catalog, nil
 	}
 
 	// Capability enrichment also covers concrete model_mapping targets. Admins may
@@ -627,7 +638,7 @@ func upstreamModelRegistryBaseURL(account *Account) string {
 	switch {
 	case account.IsOpenAI() || account.IsCNProvider() || account.IsOpenCodeGo():
 		return account.GetOpenAIFormatBaseURL()
-	case account.IsGrok():
+	case account.IsGrok() || account.IsVideo():
 		return account.GetGrokBaseURL()
 	case account.IsGemini():
 		return account.GetGeminiBaseURL(geminicli.AIStudioBaseURL)
@@ -747,6 +758,9 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 	}
 
 	proxyURL := upstreamModelsProxyURL(account)
+	if err := ValidateConfiguredAccountProxy(account, proxyURL); err != nil {
+		return nil, nil, newUpstreamModelSyncConfigError("Configured proxy is unavailable", err)
+	}
 	resp, err := s.doUpstreamModelsRequest(req, proxyURL, account)
 	if err != nil {
 		return nil, nil, newUpstreamModelSyncUpstreamError("Failed to request upstream model list", err)
@@ -790,7 +804,7 @@ func (s *AccountTestService) buildUpstreamModelsRequest(ctx context.Context, acc
 	switch {
 	case account.Platform == PlatformAntigravity:
 		return s.buildAntigravityAPIKeyModelsRequest(ctx, account)
-	case account.IsGrok():
+	case account.IsGrok() || account.IsVideo():
 		return s.buildGrokUpstreamModelsRequest(ctx, account)
 	case account.IsOpenAI() || account.IsCNProvider() || account.IsOpenCodeGo():
 		// 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）与 OpenCode Go
@@ -1056,14 +1070,10 @@ func (s *AccountTestService) buildOpenAIOAuthUpstreamModelsRequest(ctx context.C
 		)
 	}
 
-	clientVersion := CodexCanonicalClientVersion()
-	if version := credentialAccount.GetOpenAIClientVersion(); version != "" {
-		clientVersion = version
-	}
 	modelsURL, err := buildCodexModelsManifestURL(
 		chatgptCodexModelsURL,
 		false,
-		clientVersion,
+		CodexCanonicalClientVersion(),
 	)
 	if err != nil {
 		return nil, newUpstreamModelSyncConfigError("Invalid OpenAI Codex model list URL", err)
@@ -1105,8 +1115,6 @@ func (s *AccountTestService) buildOpenAIOAuthUpstreamModelsRequest(ctx context.C
 	setOpenAIChatGPTAccountHeaders(req.Header, credentialAccount)
 	credentialAccount.ApplyHeaderOverrides(req.Header)
 	enforceCodexIdentityHeadersWithUA(req.Header, credentialAccount.GetOpenAIUserAgent())
-	ApplyOpenAIClientProfileHeaders(req.Header, credentialAccount)
-	req = req.WithContext(WithOpenAIClientProfile(req.Context(), credentialAccount.GetOpenAIClientProfile()))
 	return req, nil
 }
 

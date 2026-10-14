@@ -63,7 +63,6 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
 		return
 	}
-	usageAuditCapture := beginUsageAuditCapture(c)
 
 	if !gjson.ValidBytes(body) {
 		logRequestBodyParseFailure(reqLog, body, nil)
@@ -129,7 +128,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	routingStart := time.Now()
 
-	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted, reqLog)
+	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, apiKey.ID, apiKey.ConcurrencyLimit, reqStream, &streamStarted, reqLog)
 	if !acquired {
 		return
 	}
@@ -147,15 +146,31 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
+	// 余额模式在途预留：防止并发请求在预检时看到同一份余额而集体透支。
+	inflightRelease, err := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, body))
+	if err != nil {
+		reqLog.Info("openai_chat_completions.inflight_reservation_rejected", zap.Error(err))
+		status, code, message, retryAfter := billingErrorDetails(err)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+		return
+	}
+	defer inflightRelease()
+
 	sessionHash := h.gatewayService.GenerateSessionHash(c, body)
 	promptCacheKey := h.gatewayService.ExtractSessionID(c, body)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
+	var forbiddenBudget grokForbiddenFailoverBudget
 	profitVetoCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var lastAdmissionErr error
+	var rpmAdmission openAIRPMAdmission
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 
 	// 分组利润控制：chat completions 文本入口请求级装门并固定 pricingAt。
@@ -182,6 +197,13 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			requestPlatform,
 		)
 		if err != nil {
+			err = rpmAdmission.selectionError(err)
+			if isOpenAIRPMError(err) {
+				rpmAdmission.retryAfter(c, err)
+				cls := classifySelectionFailureError(err, noAccountErrorClassification{})
+				h.handleStreamingAwareError(c, cls.Status, cls.ErrType, cls.Message, streamStarted)
+				return
+			}
 			if failoverClientGone(c) {
 				reqLog.Info("openai_chat_completions.account_select_aborted_client_disconnected", zap.Error(err))
 				return
@@ -199,7 +221,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				h.handleStreamingAwareError(c, cls.Status, cls.ErrType, cls.Message, streamStarted)
 				return
 			} else {
-				if lastFailoverErr != nil {
+				if lastAdmissionErr != nil && lastFailoverErr == nil {
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "admission_unavailable", "Account eligibility changed; please retry with complete context", streamStarted)
+				} else if lastFailoverErr != nil {
 					h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
 				} else {
 					h.handleStreamingAwareError(c, http.StatusBadGateway, "api_error", "Upstream request failed", streamStarted)
@@ -233,6 +257,15 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		if slotResult != openAISlotAcquireOK {
 			return
 		}
+		retryRPM, rpmErr := rpmAdmission.acquire(c.Request.Context(), h.gatewayService, account, accountReleaseFunc, failedAccountIDs)
+		if retryRPM {
+			continue
+		}
+		if rpmErr != nil {
+			cls := classifySelectionFailureError(rpmErr, noAccountErrorClassification{})
+			h.handleStreamingAwareError(c, cls.Status, cls.ErrType, cls.Message, streamStarted)
+			return
+		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
@@ -248,8 +281,16 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					accountReleaseFunc()
 				}
 			}()
-			return h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, promptCacheKey, "")
+			return h.gatewayService.ForwardAsChatCompletions(rpmAdmission.forwardContext(c.Request.Context(), account), c, account, forwardBody, promptCacheKey, "")
 		}()
+		if retryOpenAIInitialAdmission(c, err, result, body, account.ID, failedAccountIDs, &switchCount, maxAccountSwitches) {
+			lastAdmissionErr = err
+			reqLog.Info("openai_chat_completions.admission_reselecting", zap.Int64("account_id", account.ID), zap.Int("switch_count", switchCount))
+			continue
+		}
+		if h.handleOpenAIRPMForwardError(c, err, streamStarted, false) {
+			return
+		}
 		var cyberBlockBodyChat []byte
 		if service.GetOpsCyberPolicy(c) != nil {
 			cyberBlockBodyChat = body
@@ -277,7 +318,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			clientIP := ip.GetClientIP(c)
 			inboundEndpoint := GetInboundEndpoint(c)
 			upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account, res)
-			populateOpenAIUsageAudit(res, inboundEndpoint, reqModel, forwardBody, usageAuditCapture)
+			populateOpenAIUsageAudit(res, inboundEndpoint)
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 			sessionID := service.ExtractClientSessionID(c)
 			cyberBlocked := service.GetOpsCyberPolicy(c) != nil
@@ -311,6 +352,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			})
 		}
 		if err != nil {
+			if service.IsOpenAITurnAdmissionError(err) {
+				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "admission_unavailable", "Account eligibility changed; please retry with complete context", streamStarted)
+				return
+			}
 			if result != nil && result.ImageCount > 0 {
 				reqLog.Warn("openai_chat_completions.forward_partial_error_with_image_result",
 					zap.Int64("account_id", account.ID),
@@ -335,7 +380,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					if failoverErr.ShouldReportAccountScheduleFailure() {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, reqModel, false, nil), false, nil, err)
 					}
-					if !failoverErr.ShouldRetryNextAccount() {
+					if !forbiddenBudget.canRetry(failoverErr, switchCount) {
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}

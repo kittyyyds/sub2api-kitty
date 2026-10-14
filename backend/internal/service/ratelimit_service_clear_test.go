@@ -200,7 +200,7 @@ func TestRateLimitService_ClearRateLimit_WithoutTempUnschedCache(t *testing.T) {
 	require.Equal(t, 1, repo.clearTempUnschedCalls)
 }
 
-func TestRateLimitService_RecoverAccountAfterSuccessfulTest_ClearsErrorAndRateLimitRelatedState(t *testing.T) {
+func TestRateLimitService_RecoverAccountAfterSuccessfulTest_PreservesOtherAndConcurrentLimits(t *testing.T) {
 	now := time.Now()
 	repo := &rateLimitClearRepoStub{
 		getByIDAccount: &Account{
@@ -226,10 +226,10 @@ func TestRateLimitService_RecoverAccountAfterSuccessfulTest_ClearsErrorAndRateLi
 	result, err := svc.RecoverAccountAfterSuccessfulTest(context.Background(), 42)
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	require.True(t, result.ClearedError)
-	require.True(t, result.ClearedRateLimit)
+	require.False(t, result.ClearedError)
+	require.False(t, result.ClearedRateLimit)
 
-	require.Equal(t, 1, repo.getByIDCalls)
+	require.Equal(t, 2, repo.getByIDCalls)
 	require.Equal(t, 1, repo.clearErrorCalls)
 	require.Equal(t, 1, repo.clearRateLimitCalls)
 	require.Equal(t, 1, repo.clearAntigravityCalls)
@@ -266,7 +266,7 @@ func TestRateLimitService_RecoverAccountAfterSuccessfulTest_NoRecoverableStateIs
 	require.Empty(t, cache.deletedIDs)
 }
 
-func TestRateLimitService_RecoverAccountAfterSuccessfulTest_ClearErrorFailed(t *testing.T) {
+func TestRateLimitService_RecoverAccountAfterSuccessfulTest_DoesNotInvokeRecovery(t *testing.T) {
 	repo := &rateLimitClearRepoStub{
 		getByIDAccount: &Account{
 			ID:     9,
@@ -277,10 +277,10 @@ func TestRateLimitService_RecoverAccountAfterSuccessfulTest_ClearErrorFailed(t *
 	svc := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
 
 	result, err := svc.RecoverAccountAfterSuccessfulTest(context.Background(), 9)
-	require.Error(t, err)
-	require.Nil(t, result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
 	require.Equal(t, 1, repo.getByIDCalls)
-	require.Equal(t, 1, repo.clearErrorCalls)
+	require.Zero(t, repo.clearErrorCalls)
 	require.Equal(t, 0, repo.clearRateLimitCalls)
 }
 

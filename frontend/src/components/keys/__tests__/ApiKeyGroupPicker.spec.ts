@@ -101,6 +101,18 @@ describe('ApiKeyGroupPicker', () => {
     vi.clearAllMocks()
   })
 
+  it('closes only the picker on Escape without bubbling to its containing dialog', async () => {
+    const wrapper = mountPicker()
+    const dialogKeydown = vi.fn()
+    wrapper.element.addEventListener('keydown', dialogKeydown)
+    await wrapper.get('button[aria-haspopup="listbox"]').trigger('click')
+    await wrapper.get('input[type="search"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(dialogKeydown).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('groups choices by their real platform and renders platform icons', async () => {
     const wrapper = mountPicker()
 
@@ -111,6 +123,8 @@ describe('ApiKeyGroupPicker', () => {
       'anthropicClaude',
       'geminiGemini',
       'grokGrok',
+      'deepseekkeys.providers.domestic',
+      'videokeys.providers.video',
       'gridOther'
     ])
     expect(wrapper.text()).toContain('Codex Pro|openai|Stable coding group')
@@ -146,6 +160,15 @@ describe('ApiKeyGroupPicker', () => {
 
     expect(wrapper.emitted('update:modelValue')).toEqual([[2]])
     expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+  })
+
+  it('keeps independent video groups in their own edit category', async () => {
+    const wrapper = mountPicker()
+    await wrapper.setProps({ groups: [...groups, makeGroup(6, 'Video test', 'video', 'Video provider')], modelValue: 6 })
+    await wrapper.get('button[aria-haspopup="listbox"]').trigger('click')
+    expect(wrapper.get('[data-category="video"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.findAll('[data-group-id]').map(item => item.attributes('data-group-id'))).toEqual(['6'])
+    wrapper.unmount()
   })
 
   it('shows every supplied platform without tabs and searches and selects across them', async () => {

@@ -99,6 +99,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
 		return
 	}
+	requireAPIKeyQueueCapability(c, service.APIKeyQueueCapabilityImageGeneration)
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIImages, requestModel, parsed.ModerationBody()); decision != nil && !decision.AllowNextStage {
 		h.openAISecurityAuditError(c, decision)
 		return
@@ -121,11 +122,17 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	}
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	if parsed.Suanli {
+		parsed.SuanliIPAddress, parsed.SuanliUserAgent = ip.GetClientIP(c), c.GetHeader("User-Agent")
+		if subscription != nil {
+			parsed.SuanliSubscriptionID = &subscription.ID
+		}
+	}
 
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
 	routingStart := time.Now()
 
-	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, parsed.Stream, &streamStarted, reqLog)
+	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, apiKey.ID, apiKey.ConcurrencyLimit, parsed.Stream, &streamStarted, reqLog)
 	if !acquired {
 		return
 	}
@@ -143,6 +150,23 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		return
 	}
 
+	// 余额模式在途预留（与计费同口径估算；计费任务扣减余额缓存后才释放）。
+	inflightDone, inflightErr := func() (func(), error) {
+		if parsed.Suanli {
+			return func() {}, nil
+		} // durable task owns the exact-price reservation
+		return reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, service.InflightEstimateRequest{Model: routingModel, BodyBytes: len(body), Kind: service.InflightEstimateImage, Units: parsed.N})
+	}()
+	if inflightErr != nil {
+		status, code, message, retryAfter := billingErrorDetails(inflightErr)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+		return
+	}
+	defer inflightDone()
+
 	sessionHash := h.gatewayService.GenerateExplicitSessionHash(c, body)
 	requestCtx := service.WithOpenAIImagesEndpoint(service.WithOpenAIImageGenerationIntent(c.Request.Context()))
 
@@ -152,6 +176,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var rpmAdmission openAIRPMAdmission
 	stopJSONKeepalive := func() {}
 	jsonKeepaliveStarted := false
 	defer func() { stopJSONKeepalive() }()
@@ -168,6 +193,13 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			parsed.RequiredCapabilityForModel(channelMapping.MappedModel),
 		)
 		if err != nil {
+			err = rpmAdmission.selectionError(err)
+			if isOpenAIRPMError(err) {
+				rpmAdmission.retryAfter(c, err)
+				cls := classifySelectionFailureError(err, noAccountErrorClassification{})
+				h.handleStreamingAwareError(c, cls.Status, cls.ErrType, cls.Message, streamStarted)
+				return
+			}
 			if failoverClientGone(c) {
 				reqLog.Info("openai.images.account_select_aborted_client_disconnected", zap.Error(err))
 				return
@@ -234,6 +266,15 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		if slotResult != openAISlotAcquireOK {
 			return
 		}
+		retryRPM, rpmErr := rpmAdmission.acquire(c.Request.Context(), h.gatewayService, account, accountReleaseFunc, failedAccountIDs)
+		if retryRPM {
+			continue
+		}
+		if rpmErr != nil {
+			cls := classifySelectionFailureError(rpmErr, noAccountErrorClassification{})
+			h.handleStreamingAwareError(c, cls.Status, cls.ErrType, cls.Message, streamStarted)
+			return
+		}
 
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		if !parsed.Stream && !jsonKeepaliveStarted {
@@ -248,8 +289,34 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 					accountReleaseFunc()
 				}
 			}()
-			return h.gatewayService.ForwardImages(requestCtx, c, account, body, parsed, channelMapping.MappedModel)
+			return h.gatewayService.ForwardImages(rpmAdmission.forwardContext(requestCtx, account), c, account, body, parsed, channelMapping.MappedModel)
 		}()
+		if h.handleOpenAIRPMForwardError(c, err, streamStarted, false) {
+			return
+		}
+		if err == nil && result != nil && result.SuanliImageTaskID != "" {
+			billingCtx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), 20*time.Second)
+			defer cancel()
+			task, e := h.gatewayService.GetSuanliImageTask(billingCtx, result.SuanliImageTaskID, service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID}, h.apiKeyService)
+			if e != nil {
+				h.errorResponse(c, 503, "api_error", "图片结果待结算，请用相同 Idempotency-Key 重试查询，勿创建新任务")
+				return
+			}
+			c.Header("Cache-Control", "no-store")
+			c.Header("X-Image-Task-ID", task.ID)
+			if task.Status == service.ImageTaskStatusCompleted && len(task.Result) > 0 {
+				c.Data(http.StatusOK, "application/json", task.Result)
+				return
+			}
+			if task.Status == service.ImageTaskStatusFailed || task.Status == "needs_review" {
+				c.JSON(http.StatusConflict, gin.H{"error": task.Error, "task_id": task.ID})
+				return
+			}
+			c.Header("Location", "/v1/images/tasks/"+task.ID)
+			c.Header("Retry-After", "3")
+			c.JSON(http.StatusAccepted, task)
+			return
+		}
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
 		responseLatencyMs := forwardDurationMs
@@ -347,7 +414,9 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 					)
 					continue
 				}
-				h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, requestModel, false, result), false, nil, err)
+				if !service.IsOpenAITurnAdmissionError(err) {
+					h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, requestModel, false, result), false, nil, err)
+				}
 				upstreamErrorAlreadyCommunicated := openAIForwardErrorAlreadyCommunicated(c, writerSizeBeforeForward, err)
 				wroteFallback := false
 				if !upstreamErrorAlreadyCommunicated {

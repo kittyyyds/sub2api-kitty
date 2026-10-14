@@ -13,24 +13,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ChannelMonitorV2Handler struct {
-	service       *service.ChannelMonitorV2Service
-	apiKeyService channelMonitorV2GroupAuthorizer
-}
-
-type channelMonitorV2GroupAuthorizer interface {
+type channelMonitorGroupAuthorizer interface {
 	GetAvailableGroups(ctx context.Context, userID int64) ([]service.Group, error)
 }
 
+type ChannelMonitorV2Handler struct {
+	service         *service.ChannelMonitorV2Service
+	groupAuthorizer channelMonitorGroupAuthorizer
+}
+
 func NewChannelMonitorV2Handler(svc *service.ChannelMonitorV2Service, apiKeyService *service.APIKeyService) *ChannelMonitorV2Handler {
-	return &ChannelMonitorV2Handler{service: svc, apiKeyService: apiKeyService}
+	if apiKeyService == nil {
+		return newChannelMonitorV2Handler(svc, nil)
+	}
+	return newChannelMonitorV2Handler(svc, apiKeyService)
+}
+
+func newChannelMonitorV2Handler(svc *service.ChannelMonitorV2Service, groupAuthorizer channelMonitorGroupAuthorizer) *ChannelMonitorV2Handler {
+	return &ChannelMonitorV2Handler{service: svc, groupAuthorizer: groupAuthorizer}
 }
 
 // channelMonitorV2IsAdmin is true when the request already passed admin auth
 // (shared Dimensions/Errors handlers serve both user and admin route groups).
 func channelMonitorV2IsAdmin(c *gin.Context) bool {
 	role, ok := middleware.GetUserRoleFromContext(c)
-	return ok && role == service.RoleAdmin
+	return ok && service.IsAdminRole(role)
 }
 
 func (h *ChannelMonitorV2Handler) GetConfig(c *gin.Context) {
@@ -190,11 +197,14 @@ func (h *ChannelMonitorV2Handler) users(c *gin.Context, admin bool) {
 	response.Success(c, result)
 }
 
+// scopeFilter applies the authenticated user's server-derived group scope to
+// every read endpoint. Administrators retain the complete configured scope;
+// ordinary viewers fail closed when the authorization dependency is absent.
 func (h *ChannelMonitorV2Handler) scopeFilter(c *gin.Context, filter *service.ChannelMonitorV2Filter, admin bool) bool {
 	if admin {
 		return true
 	}
-	if h.apiKeyService == nil {
+	if h.groupAuthorizer == nil {
 		response.Error(c, http.StatusInternalServerError, "channel monitor group authorization unavailable")
 		return false
 	}
@@ -203,7 +213,7 @@ func (h *ChannelMonitorV2Handler) scopeFilter(c *gin.Context, filter *service.Ch
 		response.Unauthorized(c, "user not found in context")
 		return false
 	}
-	groups, err := h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
+	groups, err := h.groupAuthorizer.GetAvailableGroups(c.Request.Context(), subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return false

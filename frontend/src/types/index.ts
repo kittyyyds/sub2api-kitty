@@ -2,6 +2,9 @@
  * Core Type Definitions for Sub2API Frontend
  */
 
+import type { ImageCatalog } from '@/api/admin/imageUpstream'
+import type { VideoCatalog } from '@/api/admin/videoUpstream'
+
 // ==================== Common Types ====================
 
 export interface SelectOption {
@@ -84,7 +87,7 @@ export interface User {
   linuxdo_bound?: boolean
   oidc_bound?: boolean
   wechat_bound?: boolean
-  role: 'admin' | 'user' // User role for authorization
+  role: 'super_admin' | 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -203,6 +206,7 @@ export interface CustomEndpoint {
   name: string
   endpoint: string
   description: string
+  recommended?: boolean
 }
 
 export interface LoginAgreementDocument {
@@ -239,6 +243,7 @@ export interface PublicSettings {
   site_logo: string
   site_subtitle: string
   api_base_url: string
+  api_base_url_description?: string
   contact_info: string
   doc_url: string
   home_content: string
@@ -271,7 +276,7 @@ export interface PublicSettings {
   balance_low_notify_threshold: number
   channel_monitor_enabled: boolean
   /** Exclusive mode: v1 active probes or v2 passive aggregation. Default v2. */
-  channel_monitor_mode?: 'v1' | 'v2'
+  channel_monitor_mode?: 'v1' | 'v2' | 'v3'
   channel_monitor_default_interval_seconds: number
   /** When true, user monitor hides RPM/TPM so scale cannot be reverse-estimated. */
   channel_monitor_hide_throughput?: boolean
@@ -280,6 +285,8 @@ export interface PublicSettings {
   /** When true, user monitor hides the user ranking tab and /users payload. */
   channel_monitor_hide_user_ranking?: boolean
   available_channels_enabled: boolean
+  /** Opt-in user gallery of scheduled Pelican HTML results (sidebar「鹈鹕测智」). */
+  pelican_showcase_enabled?: boolean
   /** When false, the whole user-facing subscription surface is hidden. Default true. */
   subscription_enabled: boolean
   /** Mirrors payment config BALANCE_PAYMENT_DISABLED; true = balance top-up closed (subscription-only site). */
@@ -290,6 +297,8 @@ export interface PublicSettings {
   service_quota_enabled: boolean
   affiliate_enabled: boolean
   allow_user_view_error_requests?: boolean
+  /** Usage 表中长上下文计费 x2 徽标的展示开关（后端默认开启，缺失时按开启处理） */
+  usage_show_long_context_badge?: boolean
 }
 
 export interface AuthResponse {
@@ -340,7 +349,7 @@ export interface UpdateSubscriptionRequest {
 export type AnnouncementStatus = 'draft' | 'active' | 'archived'
 export type AnnouncementNotifyMode = 'silent' | 'popup'
 
-export type AnnouncementConditionType = 'subscription' | 'balance'
+export type AnnouncementConditionType = 'subscription' | 'balance' | 'user'
 
 export type AnnouncementOperator = 'in' | 'gt' | 'gte' | 'lt' | 'lte' | 'eq'
 
@@ -348,6 +357,7 @@ export interface AnnouncementCondition {
   type: AnnouncementConditionType
   operator: AnnouncementOperator
   group_ids?: number[]
+  user_ids?: number[]
   value?: number
 }
 
@@ -541,7 +551,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'composite'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'video' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'typesafe' | 'composite'
 
 export type VideoModelPrices = Record<string, Record<string, number>>
 export type ImageModelPrices = Record<string, Record<string, number>>
@@ -615,6 +625,9 @@ export interface Group {
   claude_code_only: boolean
   fallback_group_id: number | null
   fallback_group_id_on_invalid_request: number | null
+  // 专属代理 ID（用户侧 DTO 不返回；管理端经 AdminGroup 获取）
+  proxy_id?: number | null
+  proxy_name?: string
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
   // OpenAI Live 接口开关
@@ -636,11 +649,10 @@ export interface AccountGroup {
 }
 
 export interface AdminGroup extends Group {
-  grok_prompt_enabled: boolean
-  grok_prompt_mode: 'prepend' | 'append'
-  grok_prompt_content: string
   force_openai_fast: boolean
   free_openai_fast: boolean
+  // 仅允许流式请求（管理端请求策略，用户侧分组不返回）
+  stream_only: boolean
   model_pricing: import('@/api/admin/channels').ChannelModelPricing[]
 
   // 分组利润控制（openai/anthropic/gemini/grok/antigravity 分组可启用；margin/buffer 为小数存储）。
@@ -672,6 +684,15 @@ export interface AdminGroup extends Group {
 
   // 分组排序
   sort_order: number
+
+  // 专属代理（仅管理员可见）
+  proxy_id: number | null
+  proxy_name?: string
+
+  // 分组安全策略（仅管理员可见）
+  security_policy_enabled: boolean
+  security_policy_mode: string
+  security_policy_email_enabled: boolean
 }
 
 export interface ModelAllowlist {
@@ -747,6 +768,9 @@ export interface ApiKey {
   id: number
   user_id: number
   key: string
+  /** 脱敏展示（prefix + ********），列表/详情统一用它；完整 key 仅创建响应返回一次 */
+  key_display: string
+  key_prefix: string
   name: string
   group_id: number | null
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
@@ -760,6 +784,7 @@ export interface ApiKey {
   created_at: string
   updated_at: string
   current_concurrency: number
+  concurrency_limit: number // 0 = no additional key limit
   group?: Group
   rate_limit_5h: number
   rate_limit_1d: number
@@ -775,8 +800,21 @@ export interface ApiKey {
   reset_7d_at: string | null
 }
 
+export interface ApiKeyConcurrencySnapshot {
+  queue_policy: {
+    max_waiting: number
+    timeout_seconds: number
+  }
+  items: Array<{
+    id: number
+    current_concurrency: number
+    current_waiting: number
+  }>
+}
+
 export interface CreateApiKeyRequest {
   name: string
+  concurrency_limit?: number // 0 = no additional key limit
   group_id?: number | null
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
@@ -790,6 +828,7 @@ export interface CreateApiKeyRequest {
 
 export interface UpdateApiKeyRequest {
   name?: string
+  concurrency_limit?: number // Omitted = no change, 0 = no additional key limit
   group_id?: number | null
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
@@ -816,6 +855,7 @@ export interface CreateGroupRequest {
   long_context_pricing_enabled?: boolean
   force_openai_fast?: boolean
   free_openai_fast?: boolean
+  stream_only?: boolean
   model_pricing?: import('@/api/admin/channels').ChannelModelPricing[]
   allow_image_generation?: boolean
   allow_batch_image_generation?: boolean
@@ -849,6 +889,12 @@ export interface CreateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
+  // 专属代理 ID；nil 不设置，<=0 清除
+  proxy_id?: number | null
+  // 分组安全策略（默认关闭）
+  security_policy_enabled?: boolean
+  security_policy_mode?: string
+  security_policy_email_enabled?: boolean
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
@@ -863,9 +909,6 @@ export interface CreateGroupRequest {
   max_reasoning_effort?: string
   max_reasoning_effort_over_limit?: string
   reasoning_effort_mappings?: ReasoningEffortMapping[]
-  grok_prompt_enabled?: boolean
-  grok_prompt_mode?: 'prepend' | 'append'
-  grok_prompt_content?: string
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   // 从指定分组复制账号
@@ -886,6 +929,7 @@ export interface UpdateGroupRequest {
   long_context_pricing_enabled?: boolean
   force_openai_fast?: boolean
   free_openai_fast?: boolean
+  stream_only?: boolean
   model_pricing?: import('@/api/admin/channels').ChannelModelPricing[]
   allow_image_generation?: boolean
   allow_batch_image_generation?: boolean
@@ -919,6 +963,12 @@ export interface UpdateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   fallback_group_id_on_invalid_request?: number | null
+  // 专属代理 ID；nil 不修改，<=0 清除
+  proxy_id?: number | null
+  // 分组安全策略；nil 不修改
+  security_policy_enabled?: boolean
+  security_policy_mode?: string
+  security_policy_email_enabled?: boolean
   mcp_xml_inject?: boolean
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
@@ -933,17 +983,83 @@ export interface UpdateGroupRequest {
   max_reasoning_effort?: string
   max_reasoning_effort_over_limit?: string
   reasoning_effort_mappings?: ReasoningEffortMapping[]
-  grok_prompt_enabled?: boolean
-  grok_prompt_mode?: 'prepend' | 'append'
-  grok_prompt_content?: string
   require_oauth_only?: boolean
   require_privacy_set?: boolean
   copy_accounts_from_group_ids?: number[]
 }
 
+// ==================== Security Policy Types ====================
+
+export interface SecurityPolicyKeyword {
+  id: number
+  group_id: number | null
+  keyword: string
+  category: string
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SecurityPolicyKeywordSeed {
+  keyword: string
+  category: string
+}
+
+// ==================== Tiered Routing Types ====================
+
+export interface TieredRoutingSettings {
+  enabled: boolean
+  premium_user_ids: number[]
+  min_balance_for_premium: number
+}
+
+// ==================== Support Ticket Types ====================
+
+export interface TicketReply {
+  id: number
+  ticket_id: number
+  author: string
+  author_id: number
+  body: string
+  created_at: string
+}
+
+export interface SupportTicket {
+  id: number
+  user_id: number
+  user_email?: string
+  subject: string
+  status: string
+  created_at: string
+  updated_at: string
+  closed_at?: string | null
+  replies?: TicketReply[]
+}
+
+// ==================== Billing Export Types ====================
+
+export interface BillingStatementRow {
+  model: string
+  requests: number
+  input_tokens: number
+  output_tokens: number
+  cache_tokens: number
+  total_tokens: number
+  cost: number
+}
+
+export interface BillingStatement {
+  user_id: number
+  year: number
+  month: number
+  rows: BillingStatementRow[]
+  requests: number
+  cost: number
+}
+
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'video' | 'kimi' | 'zhipu' | 'deepseek' | 'minimax' | 'opencode_go' | 'typesafe'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey' | 'upstream' | 'bedrock' | 'service_account'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
@@ -1092,7 +1208,50 @@ export interface UpstreamBillingData {
 
 export type UpstreamBillingProbeStatus = 'ok' | 'unsupported' | 'failed'
 
+// A spending window reported by the upstream /v1/usage endpoint: subscription
+// limits use daily/weekly/monthly, key rate limits use 5h/1d/7d.
+export interface UpstreamBalanceWindow {
+  window: string
+  limit: number
+  used?: number
+  reset_at?: string
+}
+
+// Sanitized balance fields of the upstream /v1/usage response.
+export interface UpstreamBalanceData {
+  is_valid: boolean
+  mode?: 'unrestricted' | 'quota_limited'
+  key_status?: string
+  plan_name?: string
+  unit?: string
+  // Wallet balance, the smallest subscription headroom, or the key quota
+  // headroom, depending on how the upstream bills the key.
+  remaining?: number
+  wallet_balance?: number
+  // Subscription without any spending limit.
+  unlimited?: boolean
+  quota_limit?: number
+  quota_used?: number
+  expires_at?: string
+  windows?: UpstreamBalanceWindow[]
+}
+
+export interface UpstreamBalanceSnapshot {
+  status: UpstreamBillingProbeStatus
+  data?: UpstreamBalanceData
+  received_at?: string
+  fresh_until?: string
+  last_attempt_at: string
+  http_status?: number
+  last_error?: string
+}
+
+export type VideoSupplierCatalog = VideoCatalog
+
 export interface UpstreamBillingProbeSnapshot {
+  kind?: 'video_model_prices' | 'image_model_prices'
+  image_pricing?: ImageCatalog
+  video_pricing?: VideoSupplierCatalog
   status: UpstreamBillingProbeStatus
   data?: UpstreamBillingData
   received_at?: string
@@ -1105,6 +1264,9 @@ export interface UpstreamBillingProbeSnapshot {
   // Value this probe wrote into the account rate multiplier; absent when the
   // probe did not sync a rate.
   synced_rate_multiplier?: number
+  // Upstream balance read by the same probe; its status is independent of the
+  // rate status above.
+  balance?: UpstreamBalanceSnapshot
 }
 
 export interface UpstreamBillingProbeSettings {
@@ -1119,6 +1281,7 @@ export interface UpstreamBillingProbeResult {
 }
 
 export interface UpstreamBillingRateSnapshotItem {
+  cost_multiplier?: number
   account_id: number
   snapshot?: UpstreamBillingProbeSnapshot | null
 }
@@ -1221,6 +1384,10 @@ export interface OpenCodeGoUsageSettings {
 }
 
 export interface Account {
+  anti_degradation?: boolean
+  protection_scope?: 'codex_v3' | 'generic_v1' | 'legacy' | 'disabled'
+  /** Concrete strategy: mode1, mode2, legacy, generic, or disabled. */
+  protection_mode?: 'mode1' | 'mode2' | 'legacy' | 'generic' | 'disabled' | string
   id: number
   name: string
   notes?: string | null
@@ -1233,6 +1400,16 @@ export interface Account {
   credentials?: Record<string, unknown>
   credentials_status?: Record<string, boolean>
   ollama_cloud_usage?: OllamaCloudUsageState
+  codex_turn_tickets?: Array<{
+    standby_expires_at?: string
+    probe?: { result: string; http_status?: number; checked_at: string; next_probe_at?: string }
+    model: string
+    length?: number
+    ready: boolean
+    remaining_seconds: number
+    blocked: boolean
+    expires_at?: string
+  }>
   opencode_go_usage?: OpenCodeGoUsageState
   // Extra fields including Codex usage, OpenAI compact capability, and model-level rate limits.
   extra?: (CodexUsageSnapshot & OpenAICompactState & {
@@ -1279,6 +1456,7 @@ export interface Account {
   scheduler_scores?: AccountSchedulerGroupScore[] | null
   priority: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
+  group_rate_multiplier?: number // Account-level multiplier applied to group billing
   status: 'active' | 'inactive' | 'error'
   error_message: string | null
   last_used_at: string | null
@@ -1289,7 +1467,7 @@ export interface Account {
   proxy?: Proxy
   group_ids?: number[] // Groups this account belongs to
   groups?: Group[] // Preloaded group objects
-  account_groups?: AccountGroup[] // Group memberships with per-group scheduling priority
+  account_groups?: AccountGroupBinding[] // Per-group binding settings (detail responses only)
 
   // Rate limit & scheduling fields
   schedulable: boolean
@@ -1356,6 +1534,8 @@ export interface Account {
   current_window_cost?: number | null // 当前窗口费用
   active_sessions?: number | null // 当前活跃会话数
   current_rpm?: number | null // 当前分钟 RPM 计数
+  rpm_paused?: boolean
+  rpm_reset_at?: number | null
 
   // 影子账号关系（spark 维度影子）
   parent_account_id?: number | null
@@ -1389,6 +1569,8 @@ export interface WindowStats {
   cost: number // Account cost (account multiplier)
   standard_cost?: number
   user_cost?: number
+  lifetime_tokens?: number // All-time totals (no time filter)
+  lifetime_cost?: number
 }
 
 export interface UsageProgress {
@@ -1556,11 +1738,22 @@ export interface CreateAccountRequest {
   load_factor?: number | null
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
+  group_rate_multiplier?: number
   group_ids?: number[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
   upstream_billing_probe_enabled?: boolean
   confirm_mixed_channel_risk?: boolean
+}
+
+// AccountGroupBinding is one account-to-group binding and its per-group settings.
+export interface AccountGroupBinding {
+  account_id: number
+  group_id: number
+  priority: number
+  // Models the account may serve in this group; omitted means no limit.
+  allowed_models?: string[]
+  created_at: string
 }
 
 export interface UpdateAccountRequest {
@@ -1577,6 +1770,8 @@ export interface UpdateAccountRequest {
   schedulable?: boolean
   status?: 'active' | 'inactive' | 'error'
   group_ids?: number[]
+  // Replaces the per-group model limits; groups not listed become unrestricted.
+  group_allowed_models?: Record<number, string[]>
   expires_at?: number | null
   auto_pause_on_expired?: boolean
   upstream_billing_probe_enabled?: boolean
@@ -1693,6 +1888,8 @@ export interface AdminDataImportResult {
 }
 
 export interface CodexSessionImportRequest {
+  /** Skip matching accounts without replacing their credentials or settings. */
+  skip_existing?: boolean
   content?: string
   contents?: string[]
   name?: string
@@ -1850,6 +2047,11 @@ export interface UsageLog {
   image_input_cost: number
   image_output_tokens: number
   image_output_cost: number
+
+  // Missing on older API responses; do not infer unknown historical units.
+  video_count?: number
+  video_resolution?: string | null
+  video_duration_seconds?: number | null
 
   // User-Agent
   user_agent: string | null
@@ -2143,7 +2345,7 @@ export interface UpdateUserRequest {
   password?: string
   username?: string
   notes?: string
-  role?: 'admin' | 'user'
+  role?: 'super_admin' | 'admin' | 'user'
   balance?: number
   concurrency?: number
   rpm_limit?: number
@@ -2504,7 +2706,71 @@ export interface TotpLogin2FARequest {
 
 // ==================== Scheduled Test Types ====================
 
+export interface QualityJudgeConfig {
+  group_id: number
+  model_id: string
+  prompt: string
+}
+export interface QualityJudgment {
+  verdict: 'correct' | 'incorrect' | 'unknown'
+  reason: string
+  account_id?: number
+  group_id?: number
+  model_id?: string
+}
+// 「降智开 BPS」规则：何时开（连续降智次数 / 用量百分比，0 = 不按该条件）和开成什么样（与账号 BPS 选项一一对应）。
+export interface QualityBPSPolicy {
+  failure_threshold: number
+  usage_percent: number
+  require_all: boolean
+  all_models: boolean
+  models: string[]
+  omit_unsupported_tools: boolean
+  ignore_encrypted_content: boolean
+  auto_disable_on_403: boolean
+  auto_recover_on_403?: boolean
+  recovery_interval_minutes?: number
+  auto_move_on_403: boolean
+  target_group_id: number
+  session_proxy: boolean
+  proxy_source: 'mihomo' | 'ip_pool' | ''
+  cache_creation_as_input: boolean
+  // 规则开了 auto_restore 时：连续满血几轮才关 BPS；按用量开启时用量仍高是否先不关。
+  pass_threshold: number
+  hold_on_usage: boolean
+}
+export interface QualityPolicy {
+  judge?: QualityJudgeConfig
+  expected_answer: string
+  action: 'remove_groups' | 'remove_models' | 'disable_scheduling' | 'enable_bps' | 'observe_only'
+  remove_group_ids: number[]
+  remove_models?: string[]
+  recovery_concurrency?: number
+  auto_restore: boolean
+  bps?: QualityBPSPolicy
+}
+
+export interface PelicanTestConfig {
+  schedule_mode?: 'completion_interval'
+  interval_seconds?: number
+  iq_verdict?: 'correct' | 'other' | 'error'
+  quality_model_outcomes?: Record<string, 'passed' | 'failed' | 'inconclusive' | 'skipped'>
+  quality_model_actions?: Record<string, string>
+  trigger_source?: string
+  quality?: QualityPolicy
+  question_kind?: 'candy' | 'pelican' | 'state_probe'
+  test_channel?: 'account' | 'bps'
+  prompt: string
+  reasoning_effort: string
+  parallel_count: number
+  model_id?: string
+  model_ids?: string[]
+}
+
 export interface ScheduledTestPlan {
+  account_name?: string
+  pelican_config?: PelicanTestConfig
+  running_until?: string | null
   id: number
   account_id: number
   model_id: string
@@ -2519,6 +2785,10 @@ export interface ScheduledTestPlan {
 }
 
 export interface ScheduledTestResult {
+  quality_judgment?: QualityJudgment
+  quality_round_id?: string
+  quality_action?: string
+  pelican_config?: PelicanTestConfig
   id: number
   plan_id: number
   status: string
@@ -2531,6 +2801,7 @@ export interface ScheduledTestResult {
 }
 
 export interface CreateScheduledTestPlanRequest {
+  pelican_config?: PelicanTestConfig
   account_id: number
   model_id: string
   cron_expression: string
@@ -2540,6 +2811,7 @@ export interface CreateScheduledTestPlanRequest {
 }
 
 export interface UpdateScheduledTestPlanRequest {
+  pelican_config?: PelicanTestConfig
   model_id?: string
   cron_expression?: string
   enabled?: boolean

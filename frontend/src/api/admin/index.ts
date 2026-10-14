@@ -33,10 +33,12 @@ import channelMonitorTemplateAPI from './channelMonitorTemplate'
 import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
+import securityPolicyAPI from './securityPolicy'
+import tieredRoutingAPI from './tieredRouting'
+import adminTicketsAPI from './tickets'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
 import pluginsAPI from './plugins'
-import modelCapabilityAuditAPI from './modelCapabilityAudit'
 
 /**
  * Unified admin API object for convenient access
@@ -72,10 +74,12 @@ export const adminAPI = {
   payment: adminPaymentAPI,
   affiliates: affiliatesAPI,
   riskControl: riskControlAPI,
+  securityPolicy: securityPolicyAPI,
+  tieredRouting: tieredRoutingAPI,
+  tickets: adminTicketsAPI,
   compliance: adminComplianceAPI,
   audit: auditAPI,
   plugins: pluginsAPI,
-  modelCapabilityAudit: modelCapabilityAuditAPI
 }
 
 export {
@@ -109,10 +113,12 @@ export {
   adminPaymentAPI,
   affiliatesAPI,
   riskControlAPI,
+  securityPolicyAPI,
+  tieredRoutingAPI,
+  adminTicketsAPI,
   adminComplianceAPI,
   auditAPI,
   pluginsAPI,
-  modelCapabilityAuditAPI
 }
 
 export default adminAPI
@@ -121,11 +127,6 @@ export default adminAPI
 export type { AuditLog, AuditLogQuery, AuditLogListResponse } from './audit'
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
-export type {
-  ModelCapabilityProbeProtocol,
-  ModelCapabilityProbeResult,
-  ModelCapabilityProbeResponse,
-} from './accounts'
 export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
 export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'
@@ -135,24 +136,3 @@ export type {
   PluginUISession,
   PluginTestResult
 } from './plugins'
-export type {
-  CapabilityAuditProtocol,
-  CapabilityAuditStatus,
-  CapabilityAuditCapabilityStatus,
-  CapabilityAuditIdentityStatus,
-  CapabilityAuditEvidence,
-  CapabilityAuditRow,
-  CapabilityAuditStats,
-  CapabilityAuditSummary,
-  CapabilityAuditRun,
-  CapabilityAuditRunDetail,
-  CapabilityAuditProbeRequest,
-  CapabilityAuditEstimate,
-  CapabilityAuditSummaryParams,
-  CapabilityAuditRunsParams,
-  BehaviorAuditRequest,
-  BehaviorAuditEstimate,
-  BehaviorAuditRun,
-  BehaviorAuditResult,
-  BehaviorAuditDetail
-} from './modelCapabilityAudit'

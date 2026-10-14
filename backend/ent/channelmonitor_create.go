@@ -113,6 +113,20 @@ func (_c *ChannelMonitorCreate) SetEndpoint(v string) *ChannelMonitorCreate {
 	return _c
 }
 
+// SetRequestPath sets the "request_path" field.
+func (_c *ChannelMonitorCreate) SetRequestPath(v string) *ChannelMonitorCreate {
+	_c.mutation.SetRequestPath(v)
+	return _c
+}
+
+// SetNillableRequestPath sets the "request_path" field if the given value is not nil.
+func (_c *ChannelMonitorCreate) SetNillableRequestPath(v *string) *ChannelMonitorCreate {
+	if v != nil {
+		_c.SetRequestPath(*v)
+	}
+	return _c
+}
+
 // SetAPIKeyEncrypted sets the "api_key_encrypted" field.
 func (_c *ChannelMonitorCreate) SetAPIKeyEncrypted(v string) *ChannelMonitorCreate {
 	_c.mutation.SetAPIKeyEncrypted(v)
@@ -339,6 +353,10 @@ func (_c *ChannelMonitorCreate) defaults() {
 		v := channelmonitor.DefaultAPIMode
 		_c.mutation.SetAPIMode(v)
 	}
+	if _, ok := _c.mutation.RequestPath(); !ok {
+		v := channelmonitor.DefaultRequestPath
+		_c.mutation.SetRequestPath(v)
+	}
 	if _, ok := _c.mutation.ExtraModels(); !ok {
 		v := channelmonitor.DefaultExtraModels
 		_c.mutation.SetExtraModels(v)
@@ -411,6 +429,14 @@ func (_c *ChannelMonitorCreate) check() error {
 	if v, ok := _c.mutation.Endpoint(); ok {
 		if err := channelmonitor.EndpointValidator(v); err != nil {
 			return &ValidationError{Name: "endpoint", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.endpoint": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RequestPath(); !ok {
+		return &ValidationError{Name: "request_path", err: errors.New(`ent: missing required field "ChannelMonitor.request_path"`)}
+	}
+	if v, ok := _c.mutation.RequestPath(); ok {
+		if err := channelmonitor.RequestPathValidator(v); err != nil {
+			return &ValidationError{Name: "request_path", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.request_path": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.APIKeyEncrypted(); !ok {
@@ -528,6 +554,10 @@ func (_c *ChannelMonitorCreate) createSpec() (*ChannelMonitor, *sqlgraph.CreateS
 	if value, ok := _c.mutation.Endpoint(); ok {
 		_spec.SetField(channelmonitor.FieldEndpoint, field.TypeString, value)
 		_node.Endpoint = value
+	}
+	if value, ok := _c.mutation.RequestPath(); ok {
+		_spec.SetField(channelmonitor.FieldRequestPath, field.TypeString, value)
+		_node.RequestPath = value
 	}
 	if value, ok := _c.mutation.APIKeyEncrypted(); ok {
 		_spec.SetField(channelmonitor.FieldAPIKeyEncrypted, field.TypeString, value)
@@ -771,6 +801,18 @@ func (u *ChannelMonitorUpsert) SetEndpoint(v string) *ChannelMonitorUpsert {
 // UpdateEndpoint sets the "endpoint" field to the value that was provided on create.
 func (u *ChannelMonitorUpsert) UpdateEndpoint() *ChannelMonitorUpsert {
 	u.SetExcluded(channelmonitor.FieldEndpoint)
+	return u
+}
+
+// SetRequestPath sets the "request_path" field.
+func (u *ChannelMonitorUpsert) SetRequestPath(v string) *ChannelMonitorUpsert {
+	u.Set(channelmonitor.FieldRequestPath, v)
+	return u
+}
+
+// UpdateRequestPath sets the "request_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsert) UpdateRequestPath() *ChannelMonitorUpsert {
+	u.SetExcluded(channelmonitor.FieldRequestPath)
 	return u
 }
 
@@ -1126,6 +1168,20 @@ func (u *ChannelMonitorUpsertOne) SetEndpoint(v string) *ChannelMonitorUpsertOne
 func (u *ChannelMonitorUpsertOne) UpdateEndpoint() *ChannelMonitorUpsertOne {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateEndpoint()
+	})
+}
+
+// SetRequestPath sets the "request_path" field.
+func (u *ChannelMonitorUpsertOne) SetRequestPath(v string) *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetRequestPath(v)
+	})
+}
+
+// UpdateRequestPath sets the "request_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertOne) UpdateRequestPath() *ChannelMonitorUpsertOne {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateRequestPath()
 	})
 }
 
@@ -1680,6 +1736,20 @@ func (u *ChannelMonitorUpsertBulk) SetEndpoint(v string) *ChannelMonitorUpsertBu
 func (u *ChannelMonitorUpsertBulk) UpdateEndpoint() *ChannelMonitorUpsertBulk {
 	return u.Update(func(s *ChannelMonitorUpsert) {
 		s.UpdateEndpoint()
+	})
+}
+
+// SetRequestPath sets the "request_path" field.
+func (u *ChannelMonitorUpsertBulk) SetRequestPath(v string) *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.SetRequestPath(v)
+	})
+}
+
+// UpdateRequestPath sets the "request_path" field to the value that was provided on create.
+func (u *ChannelMonitorUpsertBulk) UpdateRequestPath() *ChannelMonitorUpsertBulk {
+	return u.Update(func(s *ChannelMonitorUpsert) {
+		s.UpdateRequestPath()
 	})
 }
 

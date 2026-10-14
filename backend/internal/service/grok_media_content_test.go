@@ -84,7 +84,8 @@ func TestForwardGrokMediaContentUsesUpstreamCredentialAndStreamsRange(t *testing
 					`attachment; filename="task-1.mp4"`,
 				},
 			},
-			Body: io.NopCloser(strings.NewReader("video-payload")),
+			ContentLength: 13, // HTTP transport populates this from the response body framing.
+			Body:          io.NopCloser(strings.NewReader("video-payload")),
 		}},
 	}
 	svc := &OpenAIGatewayService{cfg: &config.Config{}, httpUpstream: upstream}
@@ -159,7 +160,8 @@ func TestForwardGrokMediaContentPreservesRangeNotSatisfiable(t *testing.T) {
 				"Content-Range":  []string{"bytes */100"},
 				"Accept-Ranges":  []string{"bytes"},
 			},
-			Body: io.NopCloser(strings.NewReader("bad-range!!")),
+			ContentLength: 11, // HTTP transport populates this from the response body framing.
+			Body:          io.NopCloser(strings.NewReader("bad-range!!")),
 		}},
 	}
 	svc := &OpenAIGatewayService{cfg: &config.Config{}, httpUpstream: upstream}
@@ -193,7 +195,8 @@ func TestForwardGrokMediaContentFetchesValidatedSignedURLWithoutCredentials(t *t
 					"Content-Length": []string{"13"},
 					"Content-Range":  []string{"bytes 0-12/100"},
 				},
-				Body: io.NopCloser(strings.NewReader("video-payload")),
+				ContentLength: 13, // HTTP transport populates this from the response body framing.
+				Body:          io.NopCloser(strings.NewReader("video-payload")),
 			},
 		},
 	}
@@ -235,9 +238,10 @@ func TestForwardGrokMediaContentFollowsAuthenticatedSub2APIRelay(t *testing.T) {
 				responses: []*http.Response{
 					grokMediaContentStatusResponse(`{"status":"completed","video":{"url":"` + statusURL + `"}}`),
 					{
-						StatusCode: http.StatusOK,
-						Header:     http.Header{"Content-Type": []string{"video/mp4"}},
-						Body:       io.NopCloser(strings.NewReader("video-payload")),
+						StatusCode:    http.StatusOK,
+						Header:        http.Header{"Content-Type": []string{"video/mp4"}},
+						ContentLength: 13, // HTTP transport populates this from the response body framing.
+						Body:          io.NopCloser(strings.NewReader("video-payload")),
 					},
 				},
 			}

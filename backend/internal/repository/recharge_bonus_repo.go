@@ -93,7 +93,7 @@ func (r *rechargeBonusRepository) MatchRule(ctx context.Context, rechargeAmount 
 }
 
 func (r *rechargeBonusRepository) SnapshotOrder(ctx context.Context, exec service.RechargeBonusSQLExecutor, orderID int64, rule *service.RechargeBonusRule) error {
-	if exec == nil || rule == nil || rule.BonusAmount <= 0 || rule.ValidityDays <= 0 {
+	if exec == nil || rule == nil || rule.BonusAmount <= 0 || rule.ValidityDays < 0 {
 		return nil
 	}
 	_, err := exec.ExecContext(ctx, `
@@ -129,11 +129,17 @@ func (r *rechargeBonusRepository) GrantForOrder(ctx context.Context, orderID, us
 	if err != nil {
 		return nil, err
 	}
-	if bonusAmount <= 0 || validityDays <= 0 {
+	if bonusAmount <= 0 || validityDays < 0 {
 		return &service.RechargeBonusGrantResult{}, nil
 	}
 
-	expiresAt := now.AddDate(0, 0, validityDays)
+	// NULL expresses permanent credit without inventing a distant expiry date.
+	// The order snapshot, never the current campaign rule, controls fulfillment.
+	var expiresAt *time.Time
+	if validityDays > 0 {
+		finiteExpiry := now.AddDate(0, 0, validityDays)
+		expiresAt = &finiteExpiry
+	}
 	var grantID int64
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO recharge_bonus_grants
@@ -204,7 +210,8 @@ func (r *rechargeBonusRepository) GetUserSummary(ctx context.Context, userID int
 		SELECT COALESCE(SUM(remaining_amount), 0)::double precision,
 		       MIN(expires_at), COUNT(*)
 		FROM recharge_bonus_grants
-		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0 AND expires_at > $2
+		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0
+		  AND (expires_at IS NULL OR expires_at > $2)
 	`, userID, now).Scan(&summary.AvailableAmount, &nextExpiry, &summary.ActiveGrants)
 	if err != nil {
 		return nil, err
@@ -315,7 +322,7 @@ func (r *rechargeBonusRepository) expireDueForUser(ctx context.Context, now time
 	query := `
 		SELECT id, user_id, remaining_amount::double precision
 		FROM recharge_bonus_grants
-		WHERE status = 'active' AND remaining_amount > 0 AND expires_at <= $1`
+		WHERE status = 'active' AND remaining_amount > 0 AND expires_at IS NOT NULL AND expires_at <= $1`
 	args := []any{now}
 	if userID != nil {
 		query += " AND user_id = $2"
@@ -389,7 +396,7 @@ func (r *rechargeBonusRepository) expireUserInTx(ctx context.Context, tx *sql.Tx
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_amount::double precision
 		FROM recharge_bonus_grants
-		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0 AND expires_at <= $2
+		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0 AND expires_at IS NOT NULL AND expires_at <= $2
 		ORDER BY expires_at ASC, id ASC
 		FOR UPDATE
 	`, userID, now)
@@ -453,8 +460,9 @@ func (r *rechargeBonusRepository) consumeInTx(ctx context.Context, tx *sql.Tx, u
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_amount::double precision
 		FROM recharge_bonus_grants
-		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0 AND expires_at > $2
-		ORDER BY expires_at ASC, id ASC
+		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0
+		  AND (expires_at IS NULL OR expires_at > $2)
+		ORDER BY expires_at ASC NULLS LAST, id ASC
 		FOR UPDATE
 	`, userID, now)
 	if err != nil {
@@ -529,8 +537,9 @@ func (r *rechargeBonusRepository) reserveForBatchInTx(ctx context.Context, tx *s
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_amount::double precision
 		FROM recharge_bonus_grants
-		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0 AND expires_at > $2
-		ORDER BY expires_at ASC, id ASC
+		WHERE user_id = $1 AND status = 'active' AND remaining_amount > 0
+		  AND (expires_at IS NULL OR expires_at > $2)
+		ORDER BY expires_at ASC NULLS LAST, id ASC
 		FOR UPDATE
 	`, userID, now)
 	if err != nil {
@@ -599,7 +608,7 @@ func (r *rechargeBonusRepository) settleBatchInTx(ctx context.Context, tx *sql.T
 		FROM recharge_bonus_batch_holds h
 		JOIN recharge_bonus_grants g ON g.id = h.grant_id
 		WHERE h.batch_id = $1 AND h.user_id = $2 AND h.status = 'held'
-		ORDER BY g.expires_at ASC, h.id ASC
+		ORDER BY g.expires_at ASC NULLS LAST, h.id ASC
 		FOR UPDATE OF h, g
 	`, batchID, userID)
 	if err != nil {
@@ -609,7 +618,7 @@ func (r *rechargeBonusRepository) settleBatchInTx(ctx context.Context, tx *sql.T
 		id        int64
 		grantID   int64
 		held      float64
-		expiresAt time.Time
+		expiresAt sql.NullTime
 	}
 	allocations := make([]allocation, 0)
 	for rows.Next() {
@@ -637,7 +646,7 @@ func (r *rechargeBonusRepository) settleBatchInTx(ctx context.Context, tx *sql.T
 		restored := 0.0
 		expired := 0.0
 		if unused > 0 {
-			if item.expiresAt.After(now) {
+			if !item.expiresAt.Valid || item.expiresAt.Time.After(now) {
 				restored = unused
 				if _, err := tx.ExecContext(ctx, `
 					UPDATE recharge_bonus_grants

@@ -579,7 +579,10 @@ type AccountSelectionResult struct {
 	Account     *Account
 	Acquired    bool
 	ReleaseFunc func()
-	WaitPlan    *AccountWaitPlan // nil means no wait allowed
+	// AccountRequestID is the exact Redis member acquired for Acquired results.
+	// Live transfer moves it into the Live lease instead of double counting.
+	AccountRequestID string
+	WaitPlan         *AccountWaitPlan // nil means no wait allowed
 	// stickySessionHit 标记账号来自会话粘性绑定命中，供非高级调度路径回填决策标签。
 	stickySessionHit bool
 	// profitGate 携带本次选号真实生效的利润门（无门为 nil）。门安装在调度栈的
@@ -722,9 +725,10 @@ func (e *UpstreamFailoverError) IsCredentialFailure() bool {
 
 // ShouldReportAccountScheduleFailure prevents provider- and request-scoped
 // credential failures from being misattributed to the selected account. Legacy
-// and inference failures retain their existing scheduler-health behavior.
+// and inference failures retain their existing scheduler-health behavior,
+// except an Excel BPS 429: it only cools the account's BPS route.
 func (e *UpstreamFailoverError) ShouldReportAccountScheduleFailure() bool {
-	if e == nil {
+	if e == nil || e.Reason == ExcelBPSRateLimitedReason || e.Reason == GrokUnknownForbiddenReason {
 		return false
 	}
 	return !e.IsCredentialFailure() || e.Scope == GatewayFailureScopeAccount
@@ -1354,7 +1358,9 @@ func (s *GatewayService) DoGrokNativeResponsesJSON(ctx context.Context, account 
 		proxyURL = account.Proxy.URL()
 	}
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	s.rateLimitService.observeQualityResponse(upstreamReq.Context(), account, resp, err)
 	if err != nil {
+
 		return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway, Reason: GatewayFailureReason("grok_search_transport")}
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -1434,18 +1440,15 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	hasAnyMapping := false
 
 	for _, acc := range accounts {
-		// Passthrough routing accepts models independently of model_mapping. A stale
-		// mapping on any eligible passthrough account therefore cannot define the
-		// public whitelist; return nil so the handler uses its default model set.
-		if platform == PlatformOpenAI && acc.IsOpenAIPassthroughEnabled() {
-			if s.modelsListCache != nil {
-				s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
-				modelsListCacheStoreTotal.Add(1)
-			}
-			return nil
-		}
-
+		// Passthrough routing accepts models independently of model_mapping, so a
+		// stale mapping on a passthrough account must not narrow the public list.
+		// Treat it like an unmapped account: skip its mapping here and let
+		// supplementUnmappedOpenAIModels contribute the default set. Mappings on
+		// the ordinary accounts in the same group still count.
 		mapping := acc.GetModelMapping()
+		if platform == PlatformOpenAI && acc.IsOpenAIPassthroughEnabled() {
+			mapping = nil
+		}
 		for model := range mapping {
 			if acc.Platform == PlatformGrok && xai.IsMediaCompatibilityAlias(model) {
 				continue
@@ -1456,8 +1459,22 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 			if platform != "" && acc.Platform != platform && !mixedListingModelAllowed(platform, model) {
 				continue
 			}
+			// 账号在本分组里被限制了可用模型时，只公布允许的那部分。
+			if !acc.IsModelAllowedInGroup(groupID, model) {
+				continue
+			}
 			modelSet[model] = struct{}{}
 			hasAnyMapping = true
+		}
+		// 没有映射的账号默认支持全部模型；在本分组被限制时改为公布限制清单里的具体模型名。
+		if len(mapping) == 0 {
+			for _, model := range groupAllowedConcreteModels(&acc, groupID) {
+				if platform != "" && acc.Platform != platform && !mixedListingModelAllowed(platform, model) {
+					continue
+				}
+				modelSet[model] = struct{}{}
+				hasAnyMapping = true
+			}
 		}
 	}
 
@@ -1478,7 +1495,7 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	sort.Strings(models)
 
 	if platform == PlatformOpenAI {
-		models = supplementUnmappedOpenAIModels(accounts, models)
+		models = supplementUnmappedOpenAIModels(accounts, groupID, models)
 	}
 
 	if s.modelsListCache != nil {

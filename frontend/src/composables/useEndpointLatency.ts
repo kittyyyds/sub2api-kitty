@@ -16,6 +16,17 @@ interface UseEndpointLatencyOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000
+export const ENDPOINT_LATENCY_FAST_MAX_MS = 800
+export const ENDPOINT_LATENCY_MODERATE_MAX_MS = 1_500
+
+export type EndpointLatencyLevel = 'fast' | 'moderate' | 'slow' | 'unknown'
+
+export function classifyEndpointLatency(latencyMs: number | null): EndpointLatencyLevel {
+  if (latencyMs === null || !Number.isFinite(latencyMs) || latencyMs < 0) return 'unknown'
+  if (latencyMs <= ENDPOINT_LATENCY_FAST_MAX_MS) return 'fast'
+  if (latencyMs <= ENDPOINT_LATENCY_MODERATE_MAX_MS) return 'moderate'
+  return 'slow'
+}
 
 function idleResult(): EndpointLatencyResult {
   return {
@@ -110,6 +121,8 @@ export function useEndpointLatency(
     try {
       const response = await fetcher(endpointHealthUrl(normalizedEndpoint), {
         method: 'GET',
+        mode: 'cors',
+        redirect: 'error',
         cache: 'no-store',
         credentials: 'omit',
         signal: controller.signal,

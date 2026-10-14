@@ -41,14 +41,14 @@ describe('resolveRouteDocumentTitle', () => {
   it('原生客户功能使用固定本地化标题，不依赖后台自定义菜单', () => {
     const route = {
       name: 'CustomPage',
-      params: { id: 'reset-radar' },
+      params: { id: 'billing-rules' },
       meta: {
         title: 'Custom Page',
         titleKey: 'customPage.title'
       }
     }
 
-    expect(resolveRouteDocumentTitle(route, 'KittyAPI')).toBe('GPT智力测评 - KittyAPI')
+    expect(resolveRouteDocumentTitle(route, 'KittyAPI')).toBe('计费规则 - KittyAPI')
   })
 
   it('自定义页面菜单加载后，使用菜单名称作为标题', () => {

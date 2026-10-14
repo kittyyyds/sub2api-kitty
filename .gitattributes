@@ -1,5 +1,6 @@
 # 确保所有 SQL 迁移文件使用 LF 换行符
 backend/migrations/*.sql text eol=lf
+backend/migrations/history/*.sql text eol=lf
 
 # Go 源代码文件
 *.go text eol=lf
@@ -24,3 +25,6 @@ Dockerfile text eol=lf
 # Embedded moderation assets have byte-level SHA-256 manifests.
 backend/resources/content-moderation/**/*.txt text eol=lf
 backend/resources/content-moderation/**/*.json text eol=lf
+
+# Explicit ticket schema package uses the same byte checksums on every host.
+deploy/kitty-updater/ticket-schema-sql/*.sql text eol=lf

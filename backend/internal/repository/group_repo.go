@@ -77,10 +77,10 @@ func newGroupRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor) *groupRep
 }
 
 func (r *groupRepository) Create(ctx context.Context, groupIn *service.Group) error {
-	if err := createGroupRecord(ctx, r.client, groupIn); err != nil {
+	if err := createGroupRecord(ctx, clientFromContext(ctx, r.client), groupIn); err != nil {
 		return err
 	}
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &groupIn.ID, nil); err != nil {
+	if err := enqueueSchedulerOutbox(ctx, txAwareSQLExecutor(ctx, r.sql, r.client), service.SchedulerOutboxEventGroupChanged, nil, &groupIn.ID, nil); err != nil {
 		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group create failed: group=%d err=%v", groupIn.ID, err)
 	}
 	return nil
@@ -101,6 +101,9 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetSortOrder(groupIn.SortOrder).
 		SetIsExclusive(groupIn.IsExclusive).
+		SetSecurityPolicyEnabled(groupIn.SecurityPolicyEnabled).
+		SetSecurityPolicyMode(service.NormalizeSecurityPolicyMode(groupIn.SecurityPolicyMode)).
+		SetSecurityPolicyEmailEnabled(groupIn.SecurityPolicyEmailEnabled).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetNillableDailyLimitUsd(groupIn.DailyLimitUSD).
@@ -131,6 +134,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetModelPricing(modelPricing).
 		SetDefaultValidityDays(groupIn.DefaultValidityDays).
 		SetClaudeCodeOnly(groupIn.ClaudeCodeOnly).
+		SetStreamOnly(groupIn.StreamOnly).
 		SetNillableFallbackGroupID(groupIn.FallbackGroupID).
 		SetNillableFallbackGroupIDOnInvalidRequest(groupIn.FallbackGroupIDOnInvalidRequest).
 		SetModelRoutingEnabled(groupIn.ModelRoutingEnabled).
@@ -149,9 +153,6 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetMaxReasoningEffort(groupIn.MaxReasoningEffort).
 		SetMaxReasoningEffortOverLimit(groupIn.MaxReasoningEffortOverLimit).
 		SetReasoningEffortMappings(groupIn.ReasoningEffortMappings).
-		SetGrokPromptEnabled(groupIn.GrokPromptEnabled).
-		SetGrokPromptMode(groupIn.GrokPromptMode).
-		SetGrokPromptContent(groupIn.GrokPromptContent).
 		SetPeakRateEnabled(groupIn.PeakRateEnabled).
 		SetPeakStart(groupIn.PeakStart).
 		SetPeakEnd(groupIn.PeakEnd).
@@ -200,7 +201,8 @@ func (r *groupRepository) FindByDuplicateOperationID(ctx context.Context, operat
 }
 
 // CreateFromSource atomically persists a copied group, clones the source
-// account bindings with their exact priorities, and writes its scheduler event.
+// account bindings with their exact priorities and per-group model limits,
+// and writes its scheduler event.
 func (r *groupRepository) CreateFromSource(ctx context.Context, groupIn *service.Group, sourceGroupID int64) error {
 	if groupIn == nil {
 		return errors.New("group is nil")
@@ -224,8 +226,8 @@ func (r *groupRepository) CreateFromSource(ctx context.Context, groupIn *service
 	}
 	result, err := txClient.ExecContext(
 		ctx,
-		`INSERT INTO account_groups (account_id, group_id, priority, created_at)
-		 SELECT ag.account_id, $2, ag.priority, NOW()
+		`INSERT INTO account_groups (account_id, group_id, priority, allowed_models, created_at)
+		 SELECT ag.account_id, $2, ag.priority, ag.allowed_models, NOW()
 		 FROM account_groups ag
 		 JOIN accounts a ON a.id = ag.account_id
 		 WHERE ag.group_id = $1
@@ -292,6 +294,9 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
 		SetIsExclusive(groupIn.IsExclusive).
+		SetSecurityPolicyEnabled(groupIn.SecurityPolicyEnabled).
+		SetSecurityPolicyMode(service.NormalizeSecurityPolicyMode(groupIn.SecurityPolicyMode)).
+		SetSecurityPolicyEmailEnabled(groupIn.SecurityPolicyEmailEnabled).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
 		SetNillableDailyLimitUsd(groupIn.DailyLimitUSD).
@@ -317,6 +322,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetModelPricing(modelPricing).
 		SetDefaultValidityDays(groupIn.DefaultValidityDays).
 		SetClaudeCodeOnly(groupIn.ClaudeCodeOnly).
+		SetStreamOnly(groupIn.StreamOnly).
 		SetModelRoutingEnabled(groupIn.ModelRoutingEnabled).
 		SetMcpXMLInject(groupIn.MCPXMLInject).
 		SetAllowMessagesDispatch(groupIn.AllowMessagesDispatch).
@@ -333,9 +339,6 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetMaxReasoningEffort(groupIn.MaxReasoningEffort).
 		SetMaxReasoningEffortOverLimit(groupIn.MaxReasoningEffortOverLimit).
 		SetReasoningEffortMappings(groupIn.ReasoningEffortMappings).
-		SetGrokPromptEnabled(groupIn.GrokPromptEnabled).
-		SetGrokPromptMode(groupIn.GrokPromptMode).
-		SetGrokPromptContent(groupIn.GrokPromptContent).
 		SetPeakRateEnabled(groupIn.PeakRateEnabled).
 		SetPeakStart(groupIn.PeakStart).
 		SetPeakEnd(groupIn.PeakEnd).
@@ -1096,6 +1099,9 @@ func (r *groupRepository) BindAccountsToGroup(ctx context.Context, groupID int64
 		exec = tx.Client()
 	}
 	if err := lockLiveGroups(ctx, exec, []int64{groupID}); err != nil {
+		return err
+	}
+	if err := validateVideoGroupBindingPlatforms(ctx, exec, accountIDs, []int64{groupID}); err != nil {
 		return err
 	}
 

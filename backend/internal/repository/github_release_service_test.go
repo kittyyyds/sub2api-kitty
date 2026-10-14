@@ -125,7 +125,7 @@ func TestGitHubReleaseClientDoesNotAuthorizeDownloads(t *testing.T) {
 
 	dest := filepath.Join(t.TempDir(), "asset")
 	require.NoError(t, client.DownloadFile(context.Background(), "https://objects.githubusercontent.com/asset", dest, 100))
-	_, err := client.FetchChecksumFile(context.Background(), "https://github.com/test/repo/releases/download/v1/checksums.txt")
+	_, err := client.FetchChecksumFile(context.Background(), "https://objects.githubusercontent.com/checksums.txt")
 	require.NoError(t, err)
 	require.Len(t, headers, 2)
 	for _, header := range headers {

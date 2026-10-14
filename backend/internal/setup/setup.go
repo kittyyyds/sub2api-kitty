@@ -422,7 +422,7 @@ func createAdminUser(cfg *SetupConfig) (bool, string, error) {
 		return false, "", err
 	}
 	var adminUsers int64
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM users WHERE role = $1", service.RoleAdmin).Scan(&adminUsers); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM users WHERE role IN ($1, $2)", service.RoleAdmin, service.RoleSuperAdmin).Scan(&adminUsers); err != nil {
 		return false, "", err
 	}
 	decision := decideAdminBootstrap(totalUsers, adminUsers)
@@ -442,7 +442,7 @@ func createAdminUser(cfg *SetupConfig) (bool, string, error) {
 
 	admin := &service.User{
 		Email:       cfg.Admin.Email,
-		Role:        service.RoleAdmin,
+		Role:        service.RoleSuperAdmin,
 		Status:      service.StatusActive,
 		Balance:     0,
 		Concurrency: setupDefaultAdminConcurrency(),
@@ -495,10 +495,6 @@ func writeConfigFile(cfg *SetupConfig) error {
 			APIKeyPrefix    string  `yaml:"api_key_prefix"`
 			RateMultiplier  float64 `yaml:"rate_multiplier"`
 		} `yaml:"default"`
-		RateLimit struct {
-			RequestsPerMinute int `yaml:"requests_per_minute"`
-			BurstSize         int `yaml:"burst_size"`
-		} `yaml:"rate_limit"`
 		Timezone string `yaml:"timezone"`
 	}{
 		Server:   cfg.Server,
@@ -521,13 +517,6 @@ func writeConfigFile(cfg *SetupConfig) error {
 			UserBalance:     0,
 			APIKeyPrefix:    "sk-",
 			RateMultiplier:  1.0,
-		},
-		RateLimit: struct {
-			RequestsPerMinute int `yaml:"requests_per_minute"`
-			BurstSize         int `yaml:"burst_size"`
-		}{
-			RequestsPerMinute: 60,
-			BurstSize:         10,
 		},
 		Timezone: tz,
 	}

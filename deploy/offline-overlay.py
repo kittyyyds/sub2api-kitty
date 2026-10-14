@@ -43,8 +43,11 @@ def main():
             if sep:
                 if value.startswith('"') and value.endswith('"'):value=json.loads(value)
                 settings[key]=value
-    required={'GOOS':'linux','GOARCH':'amd64','CGO_ENABLED':'0','-tags':'embed','-trimpath':'true','vcs.revision':commit,'vcs.modified':'false'}
+    required={'GOOS':'linux','GOARCH':'amd64','CGO_ENABLED':'0','-trimpath':'true','vcs.revision':commit,'vcs.modified':'false'}
     if any(settings.get(k)!=v for k,v in required.items()):raise RuntimeError('Binary build settings mismatch')
+    # Static builds may embed the IANA timezone database for minimal runtime
+    # images. Permit only this explicit addition to the required frontend tag.
+    if settings.get('-tags') not in ('embed','embed,timetzdata'):raise RuntimeError('Binary build tags mismatch')
     # Go intentionally omits -ldflags from build info under -trimpath (issue
     # 52372). Bind the recorded invocation to this exact binary's SHA below;
     # production acceptance must additionally execute the Linux --version probe.

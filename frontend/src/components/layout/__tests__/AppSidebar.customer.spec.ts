@@ -59,7 +59,8 @@ vi.mock('@/utils/featureFlags', () => ({
     modelPlaza: 'modelPlaza',
     affiliate: 'affiliate',
     riskControl: 'riskControl',
-    pluginManagement: 'pluginManagement'
+    pluginManagement: 'pluginManagement',
+    pelicanShowcase: 'pelicanShowcase'
   },
   makeSidebarFlag: () => () => true,
   resolveFeatureFlag: () => true
@@ -75,7 +76,7 @@ vi.mock('vue-i18n', async () => {
   }
   return {
     ...actual,
-    useI18n: () => ({ t: (key: string) => messages[key] ?? key })
+    useI18n: () => ({ t: (key: string) => messages[key] ?? key, locale: ref('zh') })
   }
 })
 
@@ -91,7 +92,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('AppSidebar customer flat navigation', () => {
+describe('AppSidebar customer grouped navigation', () => {
   it('keeps the current route visible and active in collapsed and expanded states', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
@@ -129,6 +130,7 @@ describe('AppSidebar customer flat navigation', () => {
     appStore.sidebarCollapsed = false
     appStore.cachedPublicSettings = {
       custom_menu_items: [
+        { id: 'reset-radar', label: 'Retired radar', icon_svg: '', url: 'https://legacy.example.test/radar', visibility: 'user', sort_order: 0 },
         {
           id: 'image-generator',
           label: 'Kitty媒体',
@@ -153,44 +155,35 @@ describe('AppSidebar customer flat navigation', () => {
     expect(wrapper.find('a[href="/custom/image-generator"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Kitty媒体')
     expect(wrapper.find('a[href="/custom/reset-radar"]').exists()).toBe(false)
-    expect(wrapper.find('a[href="/model-plaza?embedded=1"]').exists()).toBe(false)
-    expect(wrapper.find('a[href="/custom/billing-rules"]').exists()).toBe(true)
-    expect(wrapper.find('a[href="/custom/docs"]').exists()).toBe(false)
+    expect(wrapper.findAll('a[href="/model-plaza?embedded=1"]')).toHaveLength(1)
+    expect(wrapper.find('a[href="/custom/billing-rules"]').exists()).toBe(false)
+    expect(wrapper.findAll('a[href="/custom/docs"]')).toHaveLength(1)
 
-    const appsLink = wrapper.get('a[href="/apps"]')
-    expect(appsLink.text()).toContain('Kitty生图')
-    expect(wrapper.get('a[href="/chat"]').text()).toContain('在线聊天')
-    const hotBadge = appsLink.get('[data-sidebar-promo="hot"]')
-    expect(hotBadge.text()).toContain('🔥')
-    expect(hotBadge.text()).toContain('火爆推荐')
-    const dealBadge = wrapper.get('a[href="/purchase"] [data-sidebar-promo="deal"]')
-    expect(dealBadge.text()).toContain('🎁')
-    expect(dealBadge.text()).toContain('nav.limitedOffer')
-    const rebateBadge = wrapper.get('a[href="/affiliate"] [data-sidebar-promo="rebate"]')
-    expect(rebateBadge.text()).toContain('💸')
-    expect(rebateBadge.text()).toContain('返利')
-
-    const directUserPaths = wrapper
-      .findAll('.sidebar-nav > .sidebar-section > a')
-      .map((link) => link.attributes('href'))
-    expect(directUserPaths).toEqual([
-      '/dashboard',
-      '/keys',
-      '/chat',
-      '/batch-image',
-      '/usage',
-      '/apps',
-      '/available-channels',
-      '/monitor',
-      '/candy-test',
-      '/custom/billing-rules',
-      '/subscriptions',
-      '/purchase',
-      '/orders',
-      '/redeem',
-      '/affiliate',
-      '/profile'
-    ])
+    for (const retiredMenu of ['/chat','/subscriptions','/billing','/available-channels']) {
+      expect(wrapper.find(`a[href="${retiredMenu}"]`).exists()).toBe(false)
+    }
+    const paths = (section: string) => wrapper.findAll(`[data-customer-section="${section}"] > div > a`).map(link => link.attributes('href'))
+    expect(paths('api')).toEqual(['/keys','/usage','/model-plaza?embedded=1','/monitor','/custom/docs'])
+    expect(wrapper.findAll('[data-customer-section]').map(section => section.attributes('data-customer-section'))).toEqual(['overview', 'api', 'media', 'billing', 'other'])
+    expect(paths('billing')).toEqual(['/purchase','/orders','/redeem','/affiliate'])
+    expect(paths('media')).toEqual(['/apps','/canvas/canvas?kitty_version=test','/video-tasks'])
+    const canvasLink = wrapper.get('a[href="/canvas/canvas?kitty_version=test"]')
+    expect(router.resolve(canvasLink.attributes('href')!).matched[0]?.path).toBe('/:pathMatch(.*)*')
+    const push = vi.spyOn(router, 'push')
+    const canvasClick = new MouseEvent('click', { bubbles: true, cancelable: true })
+    canvasLink.element.dispatchEvent(canvasClick)
+    await wrapper.vm.$nextTick()
+    expect(canvasClick.defaultPrevented).toBe(false)
+    expect(push).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/dashboard')
+    push.mockRestore()
+    expect(paths('other')).toEqual(['/profile','/tickets','/pelican-showcase'])
+    expect(wrapper.find('button.sidebar-category').exists()).toBe(false)
+    for (const section of ['api', 'billing', 'media', 'other']) expect(wrapper.get(`#sidebar-category-${section}`).isVisible()).toBe(true)
+    const contacts = wrapper.findAll('[data-customer-section="other"] > div > button')
+    expect(contacts.map(button => button.attributes('aria-label'))).toEqual(['nav.contactUs'])
+    await contacts[0]!.trigger('click')
+    expect(wrapper.findComponent({ name: 'CustomerContactDialog' }).props('initialTab')).toBe('service')
 
     wrapper.unmount()
   })
@@ -210,6 +203,31 @@ describe('AppSidebar customer flat navigation', () => {
     })
 
     expect(wrapper.find('a[href="/admin/profit-analysis"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/admin/harvest-flow"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/admin/candy-test"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/candy-test"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/admin/model-capability"]').exists()).toBe(false)
+
+    const canvasLink = wrapper.get('a[href="/canvas/canvas?kitty_version=test"]')
+    expect(router.resolve(canvasLink.attributes('href')!).matched[0]?.path).toBe('/:pathMatch(.*)*')
+    const push = vi.spyOn(router, 'push')
+    const canvasClick = new MouseEvent('click', { bubbles: true, cancelable: true })
+    canvasLink.element.dispatchEvent(canvasClick)
+    await wrapper.vm.$nextTick()
+    expect(canvasClick.defaultPrevented).toBe(false)
+    expect(push).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/dashboard')
+    push.mockRestore()
+
+    const smartOpsGroup = wrapper
+      .findAll('.sidebar-nav > .sidebar-section:first-child > button.sidebar-link')
+      .find((button) => button.text().includes('accountOps.smartTitle'))
+    expect(smartOpsGroup).toBeDefined()
+    expect(wrapper.find('a[href="/admin/account-quality"]').exists()).toBe(false)
+    await smartOpsGroup!.trigger('click')
+    for (const path of ['/admin/account-quality', '/admin/account-ops', '/admin/token-guard', '/admin/harvest-flow']) {
+      expect(wrapper.find(`a[href="${path}"]`).exists()).toBe(true)
+    }
 
     const orderGroup = wrapper
       .findAll('.sidebar-nav > .sidebar-section:first-child > button.sidebar-link')

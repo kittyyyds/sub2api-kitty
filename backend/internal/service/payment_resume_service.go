@@ -237,28 +237,21 @@ func CanonicalizeReturnURL(raw string, srcHost string, srcURL string) (string, e
 	if raw == "" {
 		return "", nil
 	}
-	parsed, err := url.Parse(raw)
-	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
-		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must be an absolute http/https URL")
+	parsed, err := parsePaymentReturnURL(raw)
+	if err != nil {
+		return "", err
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must use http or https")
-	}
-	parsed.Fragment = ""
-	if parsed.Path == "" {
-		parsed.Path = "/"
-	}
-	if parsed.Path != paymentResultReturnPath {
-		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must target the canonical internal payment result page")
-	}
-	if !allowedReturnURLHost(parsed.Host, srcHost, srcURL) {
+	if !allowedReturnURLHost(parsed, srcHost, srcURL) {
 		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must use the same host as the current site or browser origin")
 	}
 	return parsed.String(), nil
 }
 
-func allowedReturnURLHost(returnURLHost string, requestHost string, refererURL string) bool {
-	if sameOriginHost(returnURLHost, requestHost) {
+// The request host has no scheme. Keep this compatibility path for hosted UIs;
+// a separately hosted UI must match the full browser origin below. These inputs
+// are request metadata, not a substitute for a configured trusted-site allowlist.
+func allowedReturnURLHost(returnURL *url.URL, requestHost string, refererURL string) bool {
+	if sameOriginHost(returnURL.Host, requestHost) {
 		return true
 	}
 
@@ -267,10 +260,42 @@ func allowedReturnURLHost(returnURLHost string, requestHost string, refererURL s
 		return false
 	}
 	parsedReferer, err := url.Parse(refererURL)
-	if err != nil || parsedReferer.Host == "" {
+	if err != nil || !parsedReferer.IsAbs() || parsedReferer.Hostname() == "" || parsedReferer.User != nil || parsedReferer.Opaque != "" {
 		return false
 	}
-	return sameOriginHost(returnURLHost, parsedReferer.Host)
+	if parsedReferer.Scheme != returnURL.Scheme {
+		return false
+	}
+	return strings.EqualFold(returnURL.Hostname(), parsedReferer.Hostname()) && paymentReturnURLPort(returnURL) == paymentReturnURLPort(parsedReferer)
+}
+
+func paymentReturnURLPort(parsed *url.URL) string {
+	if port := parsed.Port(); port != "" {
+		return port
+	}
+	if parsed.Scheme == "https" {
+		return "443"
+	}
+	return "80"
+}
+
+// Rebuild the base from validated components so user query, userinfo, fragment
+// and alternate path encodings cannot enter a signed payment URL or resume token.
+func parsePaymentReturnURL(raw string) (*url.URL, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" || parsed.Opaque != "" {
+		return nil, infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must be an absolute http/https URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must use http or https")
+	}
+	if parsed.User != nil {
+		return nil, infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must not contain userinfo")
+	}
+	if parsed.Path != paymentResultReturnPath {
+		return nil, infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must target the canonical internal payment result page")
+	}
+	return &url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Path: paymentResultReturnPath}, nil
 }
 
 func buildPaymentReturnURL(base string, orderID int64, outTradeNo string, resumeToken string) (string, error) {
@@ -279,16 +304,12 @@ func buildPaymentReturnURL(base string, orderID int64, outTradeNo string, resume
 		return "", nil
 	}
 
-	parsed, err := url.Parse(canonical)
+	parsed, err := parsePaymentReturnURL(canonical)
 	if err != nil {
-		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must be a valid URL")
+		return "", err
 	}
-	if !parsed.IsAbs() || parsed.Host == "" {
-		return "", infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must be a valid absolute URL")
-	}
-	parsed.Fragment = ""
 
-	query := parsed.Query()
+	query := make(url.Values)
 	if orderID > 0 {
 		query.Set("order_id", strconv.FormatInt(orderID, 10))
 	}

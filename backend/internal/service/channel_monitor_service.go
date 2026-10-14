@@ -168,6 +168,7 @@ func (s *ChannelMonitorService) Create(ctx context.Context, p ChannelMonitorCrea
 		Provider:         p.Provider,
 		APIMode:          defaultAPIMode(p.APIMode),
 		Endpoint:         normalizeEndpoint(p.Endpoint),
+		RequestPath:      strings.TrimSpace(p.RequestPath),
 		APIKey:           encrypted, // 注意：传入 repository 时该字段为密文
 		PrimaryModel:     normalizeMonitorPrimaryModel(p.Provider, checkMode, p.PrimaryModel),
 		ExtraModels:      normalizeModels(p.ExtraModels),
@@ -235,6 +236,7 @@ func (s *ChannelMonitorService) Duplicate(
 		Provider:             source.Provider,
 		APIMode:              source.APIMode,
 		Endpoint:             source.Endpoint,
+		RequestPath:          source.RequestPath,
 		APIKey:               encryptedAPIKey,
 		PrimaryModel:         source.PrimaryModel,
 		ExtraModels:          append([]string{}, source.ExtraModels...),
@@ -370,6 +372,9 @@ func cloneChannelMonitorJSONMap(source map[string]any) (map[string]any, error) {
 // 按 check_mode 分支：probe 沿用 endpoint+api_key 必填；quota 只需关联账号；
 // quota_probe 两者皆需。
 func validateCreateParams(p ChannelMonitorCreateParams) error {
+	if err := validateMonitorRequestPath(p.RequestPath); err != nil {
+		return err
+	}
 	if err := validateProvider(p.Provider); err != nil {
 		return err
 	}
@@ -705,6 +710,7 @@ func (s *ChannelMonitorService) runChecksConcurrent(ctx context.Context, m *Chan
 	// 所有模型共用同一份 CheckOptions（来自监控的快照字段）。
 	opts := &CheckOptions{
 		APIMode:          m.APIMode,
+		RequestPath:      m.RequestPath,
 		ExtraHeaders:     m.ExtraHeaders,
 		BodyOverrideMode: m.BodyOverrideMode,
 		BodyOverride:     m.BodyOverride,
@@ -884,6 +890,12 @@ func (s *ChannelMonitorService) decryptInPlace(m *ChannelMonitor) {
 // 行数稍超过 30：这是逐字段平铺的 dispatcher，每个 if 都是 1-3 行的"非 nil 则覆盖"模式，
 // 拆分反而会增加跳转噪音、影响可读性，故保留为单函数。
 func applyMonitorUpdate(existing *ChannelMonitor, p ChannelMonitorUpdateParams) error {
+	if p.RequestPath != nil {
+		if err := validateMonitorRequestPath(*p.RequestPath); err != nil {
+			return err
+		}
+		existing.RequestPath = strings.TrimSpace(*p.RequestPath)
+	}
 	providerChanged := false
 	if p.Name != nil {
 		existing.Name = strings.TrimSpace(*p.Name)

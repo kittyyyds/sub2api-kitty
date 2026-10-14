@@ -1,0 +1,6125 @@
+{
+  "全能sd2.0(满血原生过脸-933-480p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.0(满血原生过脸-933-720p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.0(官转专线满血原生过脸-933-720p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.0(官转专线原生过脸fast-933-720p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.0(满血内置过脸-900-720p)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [
+      5,
+      10,
+      15
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.0(原生过脸mini-930-480p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.0(原生过脸mini2-930-480p)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.0(原生过脸满血930/480p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.0(mini内置过脸930/720p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.0(mini原生过脸933/720p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.0(不卡脸mini933-12s)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 12,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.5(满血内置过脸-30图-720p)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [
+      5,
+      10,
+      30
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "全能sd2.5(满血原生过脸30-10-10/480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(满血原生过脸30-10-10/720p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(原生过脸30-10-10/480p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(原生过脸30-10-10/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(全参原生过脸30-10-10/720p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(原生过脸30-10-10超分720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(原生过脸30-10-0/480p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 0,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(原生过脸30-10-0/720p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 0,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "全能sd2.5(内置过脸30-10-0/720p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 0,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "官转长期稳定全能sd2.5(只卡真人30-10-10/480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "官转长期稳定全能sd2.5(只卡真人30-10-10/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "MINIMAX-H3-2K(原生过脸9-3-3)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "MINIMAX-H3-769p(原生过脸9-3-3)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "Wan3-720p(满血原生过脸4-30秒10-5-5/720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "Wan3.0-1080p(满血原生过脸4-30秒10-5-5/720p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "veo-omni-video": {
+    "supported": true,
+    "min_seconds": 10,
+    "max_seconds": 10,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 7,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.0(933原生满血不卡脸4-15秒)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(933原生满血不卡脸5/10/15秒)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [
+      5,
+      10,
+      15
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(933原生满血720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(933原生不卡脸720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.0(933原生不卡脸5-15秒720P)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [
+      5,
+      10,
+      15
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(933满血不卡脸5/10/115秒720P)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [
+      5,
+      10,
+      15
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(9图不卡脸5/10/15秒720P)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [
+      5,
+      10,
+      15
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(933满血不卡脸480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(933满血不卡脸720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(933满血不卡脸1080P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.0(9图3音频不卡脸720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.0(9图3音频12秒不卡脸720P)": {
+    "supported": true,
+    "min_seconds": 12,
+    "max_seconds": 12,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.0(9图3音频15秒不卡脸480P)": {
+    "supported": true,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.5(30-0-10原生过人脸480p)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.5(30-0-10原生过人脸720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.5(30-10-10，满血高质量480p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.5(30-10-10原生过人脸满血720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.5(30-10-10满血原生5/10/15/30秒不卡脸720P)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [
+      5,
+      10,
+      15,
+      30
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.5(30-10-10/4-30秒720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.5(10-10-10/4-30秒720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.5(10图30秒30秒720P)": {
+    "supported": true,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "002系列/sd2.5(10图4-30秒720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "002系列/sd2.5(9图30秒720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/sd2.0(9-0-3/480P/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.0(9-0-3满血不卡脸480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.0(官转不卡脸9-0-3/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.0mini(9-0-3/不卡脸高并发480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.0(不卡脸903/720P12秒/480P15秒)": {
+    "supported": false,
+    "min_seconds": 12,
+    "max_seconds": 720,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "文档参数存在分辨率相关时长或未确认边界，待单独适配"
+  },
+  "003系列/sd2.0(9-3-3/4-15秒原生不卡脸720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/sd2.0(9-3-3/15秒720P)": {
+    "supported": false,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.0fast(9-3-3/15秒不卡脸720P)": {
+    "supported": false,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.0(卡脸933/15秒/720P)": {
+    "supported": false,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.5(9-0-0/5-30秒/不卡脸超高并发720P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/sd2.5(9-0-0/30秒720P)": {
+    "supported": false,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.5(9-0-0/30秒/720P)": {
+    "supported": false,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.5(卡脸9图30秒720P)": {
+    "supported": false,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.5(30-0-0/5-30秒720P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/sd2.5(30-0-0/30秒稳定720P卡脸)": {
+    "supported": false,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/sd2.5(30-10-10/4-30秒720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/sd2.5(不卡脸30-10-10/5-30秒/720P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/sd2.5(不卡脸5-30秒/30-10-10/720P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/sd2.5(官转不卡脸30-10-10/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "003系列/wan3.0(10-5-5原生不卡脸3-15秒1080P)": {
+    "supported": true,
+    "min_seconds": 3,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "003系列/grok(6-0-0/15秒/480P/720P)": {
+    "supported": false,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 6,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.0(933过人脸4-15秒)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": true,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.0(933/4-15秒支持过人脸720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": true,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/sd2.0(满血933过人脸4-15秒)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.0(933/480p最多15秒/720p最多12秒)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 720,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.0(fast933/5-15秒720P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/sd2.0(fast903固定15秒720P)": {
+    "supported": false,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.0(官渠903原生过真人速度快720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/sd2.5(30图4-30秒480P/720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:3",
+      "3:4",
+      "21:9"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": true,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/sd2.5(全参支持过人脸4-30秒/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": true,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.5(30-0-10卡脸4-30秒/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.5(全参30-10-10支持过人脸4-30秒/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.5(10-10-10支持过人脸4-30秒720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.5(全参过人脸720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/sd2.5-Pro(全参4-30秒/480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.5-Pro(全参4-30秒/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.5-Pro(全参过人脸480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/sd2.5-Pro(全参过人脸720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/minimax_h3(8图3音频)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 8,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/Minimax-H3(933/10-15秒768P)": {
+    "supported": false,
+    "min_seconds": 10,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "004系列/minimax-h3(933/4-15秒/768p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/minimax-h3(933/4-15秒/2K)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "004系列/grok(文生首尾帧图2-7图参考)": {
+    "supported": false,
+    "min_seconds": 6,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1"
+    ],
+    "min_images": 0,
+    "max_images": 7,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "005系列/sd2.0(9-0-0)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "005系列/sd2.0(9-3-3)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "005系列/sd2.0(fast原生过真人933/720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "005系列/sd2.0(mini9图3音频)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "005系列/sd2.5(9参考图)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "005系列/sd2.5(10参考图10音频)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "005系列/sd2.5(30图10音)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "006系列/sd2.0(满血933过人脸720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "006系列/sd2.0mini(933过人脸720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "007系列/sd2.5(9参考图4-30秒720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "007系列/sd2.5(10图10音频720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "007系列/sd2.5(30-10-10/4-30秒720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "专享sd2.0(fast933/4-15秒/720p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:3",
+      "3:4",
+      "21:9"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": true,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "专享sd2.5(30图10音/4-30秒/720p)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:3",
+      "3:4",
+      "21:9"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": true,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量sd2.0/(全参933原生过真人速度快720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量sd2.5/(全参30-10-10原生过真人速度快720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量sd2.5/(30图10音原生过真人速度快720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "高质量sd2.5/(30图10音原生过真人速度快720P按条)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "高质量sd2.5/(30图10音原生过真人速度快480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "高质量稳定系列h3(特价903/5-15秒/480P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": true
+  },
+  "高质量稳定系列h3(特价903/5-15秒/768P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": true
+  },
+  "高质量稳定系列h3(933/4-15秒/768P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "包含素材数量或比例附加收费，公开价格不足以准确计费"
+  },
+  "高质量稳定系列h3(933/4-15秒/1080P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列h3(优质903/4-15秒/720P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "高质量稳定系列h3(优质903/4-15秒/1080P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "高质量稳定系列h3(优质903/4-15秒/2K)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "高质量稳定系列h3/(特价503/4-15秒/720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 5,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列h3/(满血503/4-15秒/720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 5,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列sd2.0/(原生过真人9图3音/720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p",
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列sd2.0/(原生过真人9图3音/720按秒)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p",
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列sd2.5/(原生过真人30-10-10/720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p",
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定sd2.5/(原生过人脸30图10视频10音/720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:3",
+      "3:4",
+      "21:9"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列wan3.0-video(官转原生过人脸多参生视频)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16",
+      "adaptive"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列wan3.0-video-prime(官转原生过人脸多参生视频)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列wan3.0-image(官转原生过人脸图生视频)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列wan3.0-image-prime(官转原生过人脸图生视频)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列grok1.5(图生视频/3-15秒)": {
+    "supported": true,
+    "min_seconds": 3,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 7,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "高质量稳定系列grok1.5(文生视频/首帧选15秒/多图选10秒)": {
+    "supported": false,
+    "min_seconds": 1,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 7,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "图片数量与时长联动限制需独立适配"
+  },
+  "高质量稳定系列grok1.5(文生首帧生视频/1-15秒/480P/720P)": {
+    "supported": true,
+    "min_seconds": 1,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 1,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/官方h3-720p": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "特价/官方h3-1080p": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "特价/官方h3-2k": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "官转h3-720p(9图3音频)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "官转h3-1080p(9图3音频)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "官转h3-2k(9图3音频)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": true,
+    "requires_visual_or_audio": true
+  },
+  "特价/h3-480p（特惠）": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": true
+  },
+  "特价/h3-768p（特惠）": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": true
+  },
+  "特价/minimax_h3-768p": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/minimax_h3-1080p": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/minimax_h3-2K": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "minimax_h3-768p(4-15秒9-3-3)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "minimax_h3-1080p(4-15秒9-3-3)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "minimax_h3-2K(超分2K/4-15秒/933)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "特价/sd-2.5": {
+    "supported": true,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "sd-2.5-特价渠道": {
+    "supported": true,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "sd2.0(满血9-3-3不卡脸720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "支持文生/参考图及音频；参考视频是否包含在按条价内未明确，暂不接受视频参考；未真实生成验收"
+  },
+  "官转稳定sd2.0(933原生过真人480P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "支持文生/参考图及音频；参考视频计费未明确，暂不接受视频参考；未真实生成验收"
+  },
+  "官转稳定sd2.0(933原生过真人720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "支持文生/参考图及音频；参考视频计费未明确，暂不接受视频参考；未真实生成验收"
+  },
+  "sd2.5(满血30-10-10不卡脸720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "支持文生/参考图及音频；参考视频是否包含在按条价内未明确，暂不接受视频参考；未真实生成验收"
+  },
+  "官转稳定sd2.5(满血30-10-10不卡脸1080P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "支持文生/参考图及音频；参考视频计费未明确，暂不接受视频参考；未真实生成验收"
+  },
+  "官转稳定sd2.5(满血30图10音频不卡脸480P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "特价/wan3.0-video": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定wan3.0-video": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-video标准版(输出+视频参考-480p/720p/1080p)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-video-480p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-video-720p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-video-1080p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-video-prime": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定wan3.0-video-prime": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-video-prime高速版(输出+视频参考-480p/720p/1080p)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-video-prime-480p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-video-prime-720p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-video-prime-1080p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 30,
+    "reference_billed": true,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定wan3.0-image": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-image图生(图片+音频参考-480p/720p/1080p)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image-480p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image-720p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image-1080p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image-prime": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定wan3.0-image-prime": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-image-prime图生高速(图片+音参-480p/720p/1080p)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image-prime-480p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image-prime-720p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/wan3.0-image-prime-1080p": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 5,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/grok-imagine-video-1.5（按次）": {
+    "supported": true,
+    "min_seconds": 3,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 7,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "grok-imagine-video-1.5(7图3-15秒)": {
+    "supported": true,
+    "min_seconds": 3,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 7,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价/grok-imagine-video-1.5(fast)": {
+    "supported": false,
+    "min_seconds": 1,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p",
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 7,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "图片数量与时长联动限制需独立适配"
+  },
+  "推荐稳定sd2.0vip720p(933不卡脸不排队满血)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "稳定sd2.0vip1080p(9-3-3不排队卡真人)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "优质sd2.0vip4k(9-3-3不排队速度极快不卡脸4K满血)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "4k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "上游仅提供输出秒价，参考视频计费未明确，暂不开放"
+  },
+  "官转稳定-sd2-480p(933满血卡脸)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定-sd2-720p(933满血卡脸)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定-sd2-1080p(933满血卡脸)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定-sd2-4k(933满血卡脸4K)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "4k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "上游仅提供输出秒价，参考视频计费未明确，暂不开放"
+  },
+  "SD2.0-720P(9图不卡脸不排队云端过彩铅)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [
+      5,
+      10,
+      15
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "SD2.0-720p-fast(933不卡脸不排队)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "sd2-vip720p(900不排队云端彩绘过脸)": {
+    "supported": true,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "sd2-福利(8点-20点可用/4-3-1不卡脸不排队)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 4,
+    "max_videos": 3,
+    "max_audios": 1,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "特价稳定sdquan-2-miao(930不排队不卡脸满血)": {
+    "supported": true,
+    "min_seconds": 10,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 1,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": true
+  },
+  "特价稳定B-quannengship2.0(933不卡脸不排队满血)": {
+    "supported": true,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价稳定quanneng2.0(933不卡脸不排队满血)": {
+    "supported": true,
+    "min_seconds": 15,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "rd2.0-480p(933不排队速度极快概率卡真人不卡3D)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "优质rd2.0-720p(933不排队速度极快不卡脸满血)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "优质rd2.0-1080p(933不排队速度极快不卡脸满血)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "rd2.5-480p(30-10-10/4-30秒无限并发)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "rd2.5-720p(30-10-10/4-30秒无限并发)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "SD2.5-480p(30-10-10不卡脸4-30秒)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "热门稳定SD2.5-720p(30-10-10不卡脸/4-30秒)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "SD2.5-1080p(30-10-10不卡脸/4-30秒)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "sd2.5-720p-ch3(30-10-10不卡脸/4-30秒无限并发)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "长期稳定sd2.5-720p-ch2(30-10-10不卡脸满血不支持视频参考速度快)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "特价稳定sd2.5-720p-ch1(9图30秒小几率卡脸内置彩绘过脸)": {
+    "supported": true,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "sd2.5-cf-720p(30图10音不卡脸4-30秒超分模型)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 20,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定-sd2.5-480p(30-10-10/4-30秒卡真人无限并发速度极快)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定-sd2.5-720p(30-10-10/4-30秒卡真人无限并发速度极快)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官转稳定-sd2.5-1080p(30-10-10/4-30秒卡真人无限并发速度极快)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "优惠sd2.5(30图卡真人30秒/720p)": {
+    "supported": false,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "特价稳定-sp2.5(30图30秒720P)": {
+    "supported": true,
+    "min_seconds": 30,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "sp2.5-720p-15s(10图不卡脸4-30秒不支持视频音频参考)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "sp2.5-720p-30s(10图不卡脸4-30秒不支持视频音频参考)": {
+    "supported": true,
+    "min_seconds": 16,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-480p(10-5-5不卡脸30秒无限并发)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-720p(10-5-5不卡脸30秒无限并发)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-1080p(10-5-5不卡脸30秒无限并发)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "稳定-wan3.0-720p(10-5-5不卡脸30秒无限并发)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "wan3.0-1080p(10-5-5不卡脸无限并发)": {
+    "supported": true,
+    "min_seconds": 2,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "稳定minimax-h3-pro-768p(930不排队不卡脸)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "768p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "minimax-h3-pro-2k(9-3-3不排队速度极快2K)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "minimax-h3-4k(9-3-3不排队速度极快2K)": {
+    "supported": false,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "稳定hailuo-h3-2k(9图3音不排队速度极快2K)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "2k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "快乐马-kuaile1.0": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 15,
+    "seconds": [
+      5,
+      10,
+      15
+    ],
+    "resolutions": [
+      "720p",
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 5,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官方直连sd2.0(满血全参不排队480P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.0(满血全参不排队720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.0(满血全参不排队1080P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.0(满血全参不排队4K)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "4k"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "支持文生/参考图及音频；参考视频计费未明确，暂不接受视频参考；未真实生成验收"
+  },
+  "官方直连sd2.0(mini全参不排队480P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.0(mini全参不排队720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.0(fast全参不排队480P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.0(fast全参不排队720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 3,
+    "max_audios": 3,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.5(满血全参不排队480P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.5(满血全参不排队720P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官方直连sd2.5(满血全参不排队1080P)": {
+    "supported": true,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 10,
+    "max_audios": 10,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "按上游文档适配，尚未完成真实生成验收"
+  },
+  "官转sd2.0(903不卡脸不排队720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "官转sd2.0(mini903不卡脸不排队720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 15,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 3,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "官转sd2.5(30图10音不卡脸720P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "官转sd2.5(30图10音不卡脸1080P)": {
+    "supported": false,
+    "min_seconds": 4,
+    "max_seconds": 30,
+    "seconds": [],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 30,
+    "max_videos": 0,
+    "max_audios": 10,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  },
+  "特价稳定wan3.0(10-5-5不卡脸480P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      20,
+      25,
+      30
+    ],
+    "resolutions": [
+      "480p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官方直连wan3.0(10-5-5不卡脸720P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      20,
+      25,
+      30
+    ],
+    "resolutions": [
+      "720p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "官方直连wan3.0(10-5-5不卡脸1080P)": {
+    "supported": true,
+    "min_seconds": 5,
+    "max_seconds": 30,
+    "seconds": [
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      20,
+      25,
+      30
+    ],
+    "resolutions": [
+      "1080p"
+    ],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 10,
+    "max_videos": 5,
+    "max_audios": 5,
+    "max_reference_seconds": 15,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false
+  },
+  "manxue-900-10s-特价": {
+    "supported": false,
+    "min_seconds": 10,
+    "max_seconds": 10,
+    "seconds": [],
+    "resolutions": [],
+    "ratios": [
+      "16:9",
+      "9:16"
+    ],
+    "min_images": 0,
+    "max_images": 9,
+    "max_videos": 0,
+    "max_audios": 0,
+    "max_reference_seconds": 0,
+    "max_combined_seconds": 0,
+    "reference_billed": false,
+    "face": false,
+    "generate_audio": false,
+    "allow_audio_only": false,
+    "requires_visual_or_audio": false,
+    "reason": "参数表存在未确认或额外限制，暂不开放"
+  }
+}

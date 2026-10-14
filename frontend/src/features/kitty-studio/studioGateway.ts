@@ -231,7 +231,16 @@ function wait(delayMs: number, signal: AbortSignal): Promise<void> {
 
 async function generateGrokVideo(options: GenerateStudioOptions): Promise<GeneratedStudioAsset[]> {
   const image = options.form.mode === 'image-video' ? options.references[0] : undefined
-  const submission = await videoGenerationAPI.submit(options.apiKey, {
+  const submission = options.model.strategy === 'video-gateway'
+    ? await videoGenerationAPI.submitGateway(options.apiKey, '/v1/videos/generations', {
+      model: options.model.id,
+      prompt: options.form.prompt.trim(),
+      duration: Math.max(1, Math.min(15, Math.round(options.form.videoDuration))),
+      resolution: options.form.videoResolution,
+      aspect_ratio: options.form.ratio,
+      ...(image ? { image } : {}),
+    }, { signal: options.signal })
+    : await videoGenerationAPI.submit(options.apiKey, {
     model: options.model.id as GrokVideoModel,
     prompt: options.form.prompt.trim(),
     duration: Math.max(1, Math.min(15, Math.round(options.form.videoDuration))),
@@ -270,6 +279,7 @@ export async function generateStudioAsset(options: GenerateStudioOptions): Promi
     case 'gemini-image': return generateGeminiImage(options)
     case 'claude-svg': return generateClaudeSvg(options)
     case 'grok-video': return generateGrokVideo(options)
+    case 'video-gateway': return generateGrokVideo(options)
   }
 }
 

@@ -32,3 +32,19 @@ func TestSeedanceRejectsOtherPlatforms(t *testing.T) {
 		require.Equal(t, http.StatusForbidden, w.Code)
 	}
 }
+
+func TestDedicatedVideoKeyCannotUseSeedanceAliases(t *testing.T) {
+	router := newGatewayRoutesTestRouter(service.PlatformVideo)
+	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
+		for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+			path := prefix + "/contents/generations/tasks"
+			if method != http.MethodPost {
+				path += "/task-1"
+			}
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(method, path, strings.NewReader(`{"model":"seedance","content":[{}]}`)))
+			require.Equal(t, http.StatusNotFound, w.Code, method+" "+path)
+			require.Contains(t, w.Body.String(), "This video group only supports video endpoints")
+		}
+	}
+}

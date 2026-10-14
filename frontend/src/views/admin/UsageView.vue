@@ -124,6 +124,7 @@
 
         <div v-show="activeTab === 'usage'" class="overflow-hidden rounded-b-2xl">
           <UsageTable
+            enable-timing-details
             flat
             :data="usageLogs"
             :loading="loading"
@@ -330,13 +331,14 @@ const getNumericQueryValue = (value: string | null | Array<string | null> | unde
   const raw = getSingleQueryValue(value)
   if (!raw) return undefined
   const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : undefined
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 const applyRouteQueryFilters = () => {
   const queryStartDate = getSingleQueryValue(route.query.start_date)
   const queryEndDate = getSingleQueryValue(route.query.end_date)
   const queryUserId = getNumericQueryValue(route.query.user_id)
+  const queryAPIKeyId = getNumericQueryValue(route.query.api_key_id)
 
   if (queryStartDate) {
     startDate.value = queryStartDate
@@ -348,6 +350,7 @@ const applyRouteQueryFilters = () => {
   filters.value = {
     ...filters.value,
     user_id: queryUserId,
+    api_key_id: queryAPIKeyId,
     start_date: startDate.value,
     end_date: endDate.value
   }
@@ -731,7 +734,7 @@ const exportAudit = async (format: 'csv' | 'json') => {
 
 // Column visibility
 const ALWAYS_VISIBLE = ['user', 'created_at']
-const DEFAULT_HIDDEN_COLUMNS = ['reasoning_effort', 'request_id', 'upstream_request_id', 'user_agent']
+const DEFAULT_HIDDEN_COLUMNS = ['request_id', 'upstream_request_id', 'user_agent']
 const HIDDEN_COLUMNS_KEY = 'usage-hidden-columns'
 const HIDDEN_COLUMNS_VERSION_KEY = 'usage-hidden-columns-version'
 // 隐藏列版本链：每级只把当级新增列加入隐藏集，不重置用户已显式打开的列。

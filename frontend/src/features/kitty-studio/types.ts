@@ -3,7 +3,7 @@ export type StudioResultType = 'image' | 'video'
 export type StudioResolution = '1k' | '2k' | '4k'
 export type StudioVideoResolution = '480p' | '720p' | '1080p'
 export type StudioFormat = 'png' | 'jpeg' | 'webp'
-export type StudioModelStrategy = 'openai-image' | 'gemini-image' | 'claude-svg' | 'grok-video'
+export type StudioModelStrategy = 'openai-image' | 'gemini-image' | 'claude-svg' | 'grok-video' | 'video-gateway'
 
 export interface StudioModelOption {
   id: string

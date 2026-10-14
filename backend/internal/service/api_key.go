@@ -31,6 +31,8 @@ type APIKey struct {
 	ID          int64
 	UserID      int64
 	Key         string
+	KeyHash     string // Historical hash-only credentials, never returned by DTOs.
+	KeyPrefix   string
 	Name        string
 	GroupID     *int64
 	Status      string
@@ -46,6 +48,7 @@ type APIKey struct {
 	User                *User
 	Group               *Group
 	CurrentConcurrency  int
+	ConcurrencyLimit    int // 0 = no additional limit
 
 	// Quota fields
 	Quota     float64    // Quota limit in USD (0 = unlimited)

@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"io"
 	"log/slog"
 	"math"
@@ -76,6 +78,9 @@ var (
 	ErrUpstreamBillingProbeAccountInvalid = infraerrors.BadRequest(
 		"UPSTREAM_BILLING_PROBE_ACCOUNT_INVALID", "account is not an API key account",
 	)
+	ErrVideoBillingRateSyncUnsupported = infraerrors.BadRequest(
+		"VIDEO_BILLING_RATE_SYNC_UNSUPPORTED", "video accounts support model price probing, not billing rate sync",
+	)
 	ErrUpstreamBillingProbeIdentityChanged = infraerrors.Conflict(
 		"UPSTREAM_BILLING_PROBE_IDENTITY_CHANGED", "account identity changed during upstream billing probe; retry the probe",
 	)
@@ -104,21 +109,29 @@ type UpstreamBillingProbeSettings struct {
 // UpstreamBillingProbeSnapshot is persisted in accounts.extra. Data is kept as
 // a sanitized map so future response fields do not require a database change.
 type UpstreamBillingProbeSnapshot struct {
-	Status        string         `json:"status"`
-	Data          map[string]any `json:"data,omitempty"`
-	ReceivedAt    *time.Time     `json:"received_at,omitempty"`
-	FreshUntil    *time.Time     `json:"fresh_until,omitempty"`
-	LastAttemptAt time.Time      `json:"last_attempt_at"`
-	NextProbeAt   time.Time      `json:"next_probe_at"`
-	FailureCount  int            `json:"failure_count,omitempty"`
-	HTTPStatus    int            `json:"http_status,omitempty"`
-	LastError     string         `json:"last_error,omitempty"`
+	// Kind is absent for the existing token billing contract. Video prices are
+	// observations only and never supply account multipliers or group prices.
+	Kind          string                `json:"kind,omitempty"`
+	VideoPricing  *VideoSupplierCatalog `json:"video_pricing,omitempty"`
+	ImagePricing  *ImageSupplierCatalog `json:"image_pricing,omitempty"`
+	Status        string                `json:"status"`
+	Data          map[string]any        `json:"data,omitempty"`
+	ReceivedAt    *time.Time            `json:"received_at,omitempty"`
+	FreshUntil    *time.Time            `json:"fresh_until,omitempty"`
+	LastAttemptAt time.Time             `json:"last_attempt_at"`
+	NextProbeAt   time.Time             `json:"next_probe_at"`
+	FailureCount  int                   `json:"failure_count,omitempty"`
+	HTTPStatus    int                   `json:"http_status,omitempty"`
+	LastError     string                `json:"last_error,omitempty"`
 	// SyncedRateMultiplier records the value this probe wrote into
 	// accounts.rate_multiplier. It is only set when the account opted into rate
 	// sync and the declared value passed the write-back range check, so the
 	// stored snapshot always answers "did this probe move the account rate, and
 	// to what" without a separate history table.
 	SyncedRateMultiplier *float64 `json:"synced_rate_multiplier,omitempty"`
+	// Balance is the upstream balance queried by the same probe. The top-level
+	// status, failure count and schedule describe the rate request only.
+	Balance *UpstreamBalanceSnapshot `json:"balance,omitempty"`
 }
 
 // UpstreamBillingProbeResult is returned by manual probe endpoints.
@@ -132,8 +145,9 @@ type UpstreamBillingProbeResult struct {
 // account table's background refresh. It intentionally excludes credentials,
 // runtime counters, and usage data from the response.
 type UpstreamBillingRateSnapshotItem struct {
-	AccountID int64                         `json:"account_id"`
-	Snapshot  *UpstreamBillingProbeSnapshot `json:"snapshot"`
+	CostMultiplier float64                       `json:"cost_multiplier"`
+	AccountID      int64                         `json:"account_id"`
+	Snapshot       *UpstreamBillingProbeSnapshot `json:"snapshot"`
 }
 
 // BuildUpstreamBillingRateSnapshotItems projects account rows into the
@@ -150,8 +164,9 @@ func BuildUpstreamBillingRateSnapshotItems(accounts []Account) []UpstreamBilling
 			snapshot = decodeUpstreamBillingProbeSnapshot(account.Extra)
 		}
 		items = append(items, UpstreamBillingRateSnapshotItem{
-			AccountID: account.ID,
-			Snapshot:  snapshot,
+			AccountID:      account.ID,
+			CostMultiplier: account.CostMultiplier(),
+			Snapshot:       snapshot,
 		})
 	}
 	return items
@@ -298,10 +313,11 @@ func ProvideUpstreamBillingProbeService(
 	settingService *SettingService,
 	lockCache LeaderLockCache,
 	db *sql.DB,
+	cfg *config.Config,
 ) *UpstreamBillingProbeService {
 	svc := NewUpstreamBillingProbeService(accountRepo, accountTestService, settingService)
 	svc.SetLeaderLock(lockCache, db)
-	svc.Start()
+	startBackgroundService(cfg, svc)
 	return svc
 }
 
@@ -354,6 +370,12 @@ func (s *UpstreamBillingProbeService) runLoop() {
 
 // RunDue executes at most one bounded batch of due accounts.
 func (s *UpstreamBillingProbeService) RunDue(ctx context.Context) error {
+	ctx, managedDone, managedAllowed := managedinstance.Begin(ctx)
+	if !managedAllowed {
+		return nil
+	}
+	defer managedDone()
+
 	if s == nil || s.accountRepo == nil {
 		return nil
 	}
@@ -608,13 +630,19 @@ func (s *UpstreamBillingProbeService) SetAccountEnabled(ctx context.Context, acc
 		return ErrUpstreamBillingProbeAccountInvalid
 	}
 	updates := map[string]any{UpstreamBillingProbeEnabledExtraKey: enabled}
-	if !enabled {
+	if !enabled || isModelPriceProbeAccount(account) {
 		updates[UpstreamBillingRateSyncEnabledExtraKey] = false
 	}
 	return s.accountRepo.UpdateExtra(ctx, accountID, updates)
 }
 
 func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, account *Account, intervalMinutes int) (*UpstreamBillingProbeSnapshot, error) {
+	if account.Platform == PlatformVideo {
+		return s.probeVideoModelPrices(ctx, account, intervalMinutes)
+	}
+	if isSuanliImageAccount(account) {
+		return s.probeImageModelPrices(ctx, account, intervalMinutes)
+	}
 	now := s.currentTime().UTC()
 	if s.accountTestService == nil || s.accountTestService.httpUpstream == nil {
 		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "transport_unavailable", 0)
@@ -655,79 +683,21 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 		}
 		proxyURL = account.Proxy.URL()
 	}
-	probeURL := buildOpenAIEndpointURL(normalizedBaseURL, "/v1/sub2api/billing")
-	probeCtx, cancel := context.WithTimeout(ctx, upstreamBillingProbeRequestTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, probeURL, bytes.NewReader(nil))
-	if err != nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "request_build_failed", 0)
-	}
-	// OpenAI 账号保持官方 openai 传输画像；其他平台探测走默认画像。
-	profile := HTTPUpstreamProfileDefault
-	if account.Platform == PlatformOpenAI {
-		profile = HTTPUpstreamProfileOpenAI
-	}
-	reqCtx := WithHTTPUpstreamProfile(req.Context(), profile)
-	req = req.WithContext(WithHTTPUpstreamRedirectsDisabled(reqCtx))
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	account.ApplyHeaderOverrides(req.Header)
-	var tlsProfile *tlsfingerprint.Profile
-	if s.accountTestService.tlsFPProfileService != nil {
-		tlsProfile = s.accountTestService.tlsFPProfileService.ResolveTLSProfile(account)
-	}
-	resp, err := s.accountTestService.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, tlsProfile)
-	if err != nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "request_failed", 0)
-	}
-	if resp == nil || resp.Body == nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, 0, "empty_response", 0)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, upstreamBillingProbeMaxBodyBytes+1))
-	if readErr != nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "response_read_failed", retryAfter(resp.Header, now))
-	}
-	if len(body) > upstreamBillingProbeMaxBodyBytes {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "response_too_large", retryAfter(resp.Header, now))
-	}
-	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "unsupported", retryAfter(resp.Header, now))
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "http_error", retryAfter(resp.Header, now))
-	}
-	data, err := parseUpstreamBillingProbeResponse(body)
-	if err != nil {
-		return s.persistProbeFailure(ctx, account, intervalMinutes, now, resp.StatusCode, "invalid_response", retryAfter(resp.Header, now))
-	}
-	snapshot := &UpstreamBillingProbeSnapshot{
-		Status:        UpstreamBillingProbeStatusOK,
-		Data:          data,
-		ReceivedAt:    probeTimePtr(now),
-		FreshUntil:    probeTimePtr(now.Add(2 * time.Duration(intervalMinutes) * time.Minute)),
-		LastAttemptAt: now,
-		NextProbeAt:   now.Add(nextProbeDelay(intervalMinutes, 0)),
-		HTTPStatus:    resp.StatusCode,
-	}
-	// 账号级值域与精度只在真要写回时才有影响：只观察上游声明、未开启同步的
-	// 账号不因声明值不适配 accounts.rate_multiplier 而被记成探测失败并进入
-	// 指数退避——探测本身成功了，原始声明照常存进快照供展示。
-	var syncRate *float64
+	target := upstreamBillingProbeTarget{apiKey: apiKey, proxyURL: proxyURL}
+	rateResult := s.fetchUpstreamProbeBody(ctx, account, target,
+		buildOpenAIEndpointURL(normalizedBaseURL, "/v1/sub2api/billing"), upstreamBillingProbeMaxBodyBytes)
 	previousRate := account.BillingRateMultiplier()
-	if upstreamBillingRateSyncEnabled(account) {
-		if value, valid := upstreamBillingProbeSyncRate(data); valid {
-			syncRate = &value
-			snapshot.SyncedRateMultiplier = &value
-		} else {
-			declared, _ := resolveAccountExtraNumber(data, "resolved_rate_multiplier")
-			slog.Warn("upstream_billing_rate_sync_rejected",
-				"source", "upstream_billing_probe",
-				"account_id", account.ID,
-				"declared_resolved_rate_multiplier", declared,
-				"max_rate_multiplier", upstreamBillingRateSyncMaxMultiplier,
-				"current_rate_multiplier", previousRate,
-			)
+	snapshot, syncRate := upstreamBillingRateSnapshotFromResult(account, intervalMinutes, now, rateResult, previousRate)
+	if upstreamBalanceProbeAllowed(normalizedBaseURL, rateResult) {
+		balanceResult := s.fetchUpstreamProbeBody(ctx, account, target,
+			upstreamBalanceProbeURL(normalizedBaseURL, now), upstreamBalanceProbeMaxBodyBytes)
+		snapshot.Balance = upstreamBalanceSnapshotFromResult(balanceResult, snapshot.Balance, intervalMinutes, now)
+		// Sub2API upstreams that predate /v1/sub2api/billing still answer
+		// /v1/usage. The stretched unsupported delay is for upstreams that return
+		// nothing useful; stretching one with a readable balance would leave that
+		// balance stale for most of every cycle.
+		if snapshot.Status == UpstreamBillingProbeStatusUnsupported && snapshot.Balance.Status == UpstreamBillingProbeStatusOK {
+			snapshot.NextProbeAt = now.Add(nextProbeDelay(intervalMinutes, retryAfter(rateResult.header, now)))
 		}
 	}
 	if err := s.updateSnapshot(ctx, account, snapshot, syncRate); err != nil {
@@ -746,6 +716,141 @@ func (s *UpstreamBillingProbeService) probeLoadedAccount(ctx context.Context, ac
 	return snapshot, nil
 }
 
+// upstreamBillingProbeTarget is the credential and route one probe uses for
+// both of its upstream requests.
+type upstreamBillingProbeTarget struct {
+	apiKey   string
+	proxyURL string
+	// Public supplier prices must not receive any account authentication or
+	// header overrides, even when those overrides include credentials.
+	publicPricing bool
+}
+
+// upstreamBillingProbeHTTPResult is one upstream GET. failure is set when no
+// complete body was read; statusCode and header are kept whenever the
+// upstream answered at all.
+type upstreamBillingProbeHTTPResult struct {
+	statusCode int
+	header     http.Header
+	body       []byte
+	failure    string
+}
+
+func (s *UpstreamBillingProbeService) fetchUpstreamProbeBody(
+	ctx context.Context,
+	account *Account,
+	target upstreamBillingProbeTarget,
+	requestURL string,
+	maxBodyBytes int,
+) upstreamBillingProbeHTTPResult {
+	probeCtx, cancel := context.WithTimeout(ctx, upstreamBillingProbeRequestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, requestURL, bytes.NewReader(nil))
+	if err != nil {
+		return upstreamBillingProbeHTTPResult{failure: "request_build_failed"}
+	}
+	// OpenAI 账号保持官方 openai 传输画像；其他平台探测走默认画像。
+	profile := HTTPUpstreamProfileDefault
+	if account.Platform == PlatformOpenAI {
+		profile = HTTPUpstreamProfileOpenAI
+	}
+	reqCtx := WithHTTPUpstreamProfile(req.Context(), profile)
+	req = req.WithContext(WithHTTPUpstreamRedirectsDisabled(reqCtx))
+	req.Header.Set("Accept", "application/json")
+	if !target.publicPricing {
+		req.Header.Set("Authorization", "Bearer "+target.apiKey)
+		account.ApplyHeaderOverrides(req.Header)
+	}
+	var tlsProfile *tlsfingerprint.Profile
+	if s.accountTestService.tlsFPProfileService != nil {
+		tlsProfile = s.accountTestService.tlsFPProfileService.ResolveTLSProfile(account)
+	}
+	resp, err := s.accountTestService.httpUpstream.DoWithTLS(req, target.proxyURL, account.ID, account.Concurrency, tlsProfile)
+	if err != nil {
+		return upstreamBillingProbeHTTPResult{failure: "request_failed"}
+	}
+	if resp == nil || resp.Body == nil {
+		return upstreamBillingProbeHTTPResult{failure: "empty_response"}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	result := upstreamBillingProbeHTTPResult{statusCode: resp.StatusCode, header: resp.Header}
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, int64(maxBodyBytes)+1))
+	if readErr != nil {
+		result.failure = "response_read_failed"
+		return result
+	}
+	if len(body) > maxBodyBytes {
+		result.failure = "response_too_large"
+		return result
+	}
+	result.body = body
+	return result
+}
+
+// upstreamBillingRateSnapshotFromResult turns one /v1/sub2api/billing response
+// into the snapshot to store, plus the rate to write back when the account
+// opted into rate sync. The previous balance is carried over; the caller
+// replaces it when the same probe also reads the balance.
+func upstreamBillingRateSnapshotFromResult(
+	account *Account,
+	intervalMinutes int,
+	now time.Time,
+	result upstreamBillingProbeHTTPResult,
+	previousRate float64,
+) (*UpstreamBillingProbeSnapshot, *float64) {
+	reason := result.failure
+	if reason == "" {
+		switch {
+		case result.statusCode == http.StatusNotFound || result.statusCode == http.StatusMethodNotAllowed:
+			reason = "unsupported"
+		case result.statusCode < 200 || result.statusCode >= 300:
+			reason = "http_error"
+		}
+	}
+	var data map[string]any
+	if reason == "" {
+		var err error
+		if data, err = parseUpstreamBillingProbeResponse(result.body); err != nil {
+			reason = "invalid_response"
+		}
+	}
+	if reason != "" {
+		return upstreamBillingProbeFailureSnapshot(account, intervalMinutes, now, result.statusCode, reason, retryAfter(result.header, now)), nil
+	}
+	snapshot := &UpstreamBillingProbeSnapshot{
+		Status:        UpstreamBillingProbeStatusOK,
+		Data:          data,
+		ReceivedAt:    probeTimePtr(now),
+		FreshUntil:    probeTimePtr(now.Add(2 * time.Duration(intervalMinutes) * time.Minute)),
+		LastAttemptAt: now,
+		NextProbeAt:   now.Add(nextProbeDelay(intervalMinutes, 0)),
+		HTTPStatus:    result.statusCode,
+	}
+	if previous := decodeUpstreamBillingProbeSnapshot(account.Extra); previous != nil {
+		snapshot.Balance = previous.Balance
+	}
+	// 账号级值域与精度只在真要写回时才有影响：只观察上游声明、未开启同步的
+	// 账号不因声明值不适配 accounts.rate_multiplier 而被记成探测失败并进入
+	// 指数退避——探测本身成功了，原始声明照常存进快照供展示。
+	var syncRate *float64
+	if upstreamBillingRateSyncEnabled(account) {
+		if value, valid := upstreamBillingProbeSyncRate(data); valid {
+			syncRate = &value
+			snapshot.SyncedRateMultiplier = &value
+		} else {
+			declared, _ := resolveAccountExtraNumber(data, "resolved_rate_multiplier")
+			slog.Warn("upstream_billing_rate_sync_rejected",
+				"source", "upstream_billing_probe",
+				"account_id", account.ID,
+				"declared_resolved_rate_multiplier", declared,
+				"max_rate_multiplier", upstreamBillingRateSyncMaxMultiplier,
+				"current_rate_multiplier", previousRate,
+			)
+		}
+	}
+	return snapshot, syncRate
+}
+
 func (s *UpstreamBillingProbeService) persistProbeFailure(
 	ctx context.Context,
 	account *Account,
@@ -755,6 +860,21 @@ func (s *UpstreamBillingProbeService) persistProbeFailure(
 	reason string,
 	retryAfterDuration time.Duration,
 ) (*UpstreamBillingProbeSnapshot, error) {
+	snapshot := upstreamBillingProbeFailureSnapshot(account, intervalMinutes, now, statusCode, reason, retryAfterDuration)
+	if err := s.updateSnapshot(ctx, account, snapshot, nil); err != nil {
+		return nil, err
+	}
+	return snapshot, nil
+}
+
+func upstreamBillingProbeFailureSnapshot(
+	account *Account,
+	intervalMinutes int,
+	now time.Time,
+	statusCode int,
+	reason string,
+	retryAfterDuration time.Duration,
+) *UpstreamBillingProbeSnapshot {
 	previous := decodeUpstreamBillingProbeSnapshot(account.Extra)
 	failureCount := 1
 	if previous != nil {
@@ -774,6 +894,30 @@ func (s *UpstreamBillingProbeService) persistProbeFailure(
 		HTTPStatus:    statusCode,
 		LastError:     reason,
 	}
+	if account != nil && account.Platform == PlatformVideo {
+		snapshot.Kind = UpstreamBillingProbeKindVideoModelPrices
+		if previous != nil && previous.Kind == UpstreamBillingProbeKindVideoModelPrices && previous.VideoPricing != nil {
+			catalog := *previous.VideoPricing
+			catalog.LastAttempt = now.Format(time.RFC3339)
+			catalog.LastError = reason
+			snapshot.VideoPricing = &catalog
+			snapshot.ReceivedAt = previous.ReceivedAt
+			snapshot.FreshUntil = previous.FreshUntil
+		}
+		return snapshot
+	}
+	if isSuanliImageAccount(account) {
+		snapshot.Kind = UpstreamBillingProbeKindImageModelPrices
+		if previous != nil && previous.Kind == UpstreamBillingProbeKindImageModelPrices && previous.ImagePricing != nil {
+			catalog := *previous.ImagePricing
+			catalog.LastAttempt = now.Format(time.RFC3339)
+			catalog.LastError = reason
+			snapshot.ImagePricing = &catalog
+			snapshot.ReceivedAt = previous.ReceivedAt
+			snapshot.FreshUntil = previous.FreshUntil
+		}
+		return snapshot
+	}
 	if previous != nil {
 		snapshot.Data = previous.Data
 		snapshot.ReceivedAt = previous.ReceivedAt
@@ -781,11 +925,9 @@ func (s *UpstreamBillingProbeService) persistProbeFailure(
 		if snapshot.FreshUntil == nil && previous.Status == UpstreamBillingProbeStatusOK && previous.ReceivedAt != nil {
 			snapshot.FreshUntil = probeTimePtr(previous.ReceivedAt.Add(2 * time.Duration(intervalMinutes) * time.Minute))
 		}
+		snapshot.Balance = previous.Balance
 	}
-	if err := s.updateSnapshot(ctx, account, snapshot, nil); err != nil {
-		return nil, err
-	}
-	return snapshot, nil
+	return snapshot
 }
 
 func (s *UpstreamBillingProbeService) updateSnapshot(
@@ -987,12 +1129,19 @@ func decodeUpstreamBillingProbeSnapshot(extra map[string]any) *UpstreamBillingPr
 	if err := json.Unmarshal(raw, &snapshot); err != nil || snapshot.Status == "" {
 		return nil
 	}
-	if snapshot.Status != UpstreamBillingProbeStatusOK &&
-		snapshot.Status != UpstreamBillingProbeStatusUnsupported &&
-		snapshot.Status != UpstreamBillingProbeStatusFailed {
+	if !isUpstreamBillingProbeStatus(snapshot.Status) {
 		return nil
 	}
+	if snapshot.Balance != nil && !isUpstreamBillingProbeStatus(snapshot.Balance.Status) {
+		snapshot.Balance = nil
+	}
 	return &snapshot
+}
+
+func isUpstreamBillingProbeStatus(status string) bool {
+	return status == UpstreamBillingProbeStatusOK ||
+		status == UpstreamBillingProbeStatusUnsupported ||
+		status == UpstreamBillingProbeStatusFailed
 }
 
 // IsUpstreamBillingProbeIdentity reports whether an account identity may opt
@@ -1013,7 +1162,8 @@ func IsUpstreamBillingProbeIdentity(platform, accountType string) bool {
 	}
 	switch platform {
 	case PlatformOpenAI, PlatformAnthropic, PlatformGemini, PlatformAntigravity, PlatformGrok,
-		PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo:
+		PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo,
+		PlatformTypeSafe:
 		return true
 	default:
 		return false
@@ -1021,7 +1171,14 @@ func IsUpstreamBillingProbeIdentity(platform, accountType string) bool {
 }
 
 func isUpstreamBillingProbeAccount(account *Account) bool {
-	return account != nil && IsUpstreamBillingProbeIdentity(account.Platform, account.Type)
+	return account != nil && IsAccountUpstreamProbeIdentity(account.Platform, account.Type)
+}
+
+// IsAccountUpstreamProbeIdentity includes video model-price observations while
+// IsUpstreamBillingProbeIdentity remains the unchanged token-rate eligibility.
+func IsAccountUpstreamProbeIdentity(platform, accountType string) bool {
+	return IsUpstreamBillingProbeIdentity(platform, accountType) ||
+		(platform == PlatformVideo && accountType == AccountTypeAPIKey)
 }
 
 // upstreamBillingProbeOfficialAPIDomains lists the root domains of official
@@ -1052,6 +1209,7 @@ var upstreamBillingProbeOfficialAPIDomains = []string{
 	"bigmodel.cn",
 	"deepseek.com",
 	"opencode.ai",
+	"typesafe.ai",
 }
 
 func upstreamBillingProbeTargetIsOfficialAPI(baseURL string) bool {
@@ -1088,7 +1246,7 @@ func upstreamBillingProbeEnabled(account *Account) bool {
 // authority: the repository CAS re-checks both switches against the row it
 // updates, so a switch flipped between load and write can never sneak a rate in.
 func upstreamBillingRateSyncEnabled(account *Account) bool {
-	if account == nil || account.Extra == nil {
+	if account == nil || account.Extra == nil || isModelPriceProbeAccount(account) {
 		return false
 	}
 	enabled, ok := account.Extra[UpstreamBillingRateSyncEnabledExtraKey].(bool)

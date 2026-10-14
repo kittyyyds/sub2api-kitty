@@ -184,6 +184,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeySiteLogo,
 		SettingKeySiteSubtitle,
 		SettingKeyAPIBaseURL,
+		SettingKeyAPIBaseURLDescription,
 		SettingKeyContactInfo,
 		SettingKeyDocURL,
 		SettingKeyHomeContent,
@@ -235,6 +236,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyChannelMonitorShowQuota,
 		SettingKeyChannelMonitorHideUserRanking,
 		SettingKeyAvailableChannelsEnabled,
+		SettingKeyPelicanShowcaseEnabled,
 		SettingKeySubscriptionEnabled,
 		SettingKeyModelPlazaEnabled,
 		SettingKeyModelPlazaRequireAuth,
@@ -242,6 +244,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAffiliateEnabled,
 		SettingKeyRiskControlEnabled,
 		SettingKeyAllowUserViewErrorRequests,
+		SettingKeyUsageShowLongContextBadge,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -328,6 +331,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SiteLogo:                            settings[SettingKeySiteLogo],
 		SiteSubtitle:                        s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                          settings[SettingKeyAPIBaseURL],
+		APIBaseURLDescription:               settings[SettingKeyAPIBaseURLDescription],
 		ContactInfo:                         settings[SettingKeyContactInfo],
 		DocURL:                              settings[SettingKeyDocURL],
 		HomeContent:                         settings[SettingKeyHomeContent],
@@ -365,6 +369,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ChannelMonitorHideUserRanking:        isTrueSettingValue(settings[SettingKeyChannelMonitorHideUserRanking]),
 
 		AvailableChannelsEnabled: settings[SettingKeyAvailableChannelsEnabled] == "true",
+		PelicanShowcaseEnabled:   settings[SettingKeyPelicanShowcaseEnabled] == "true",
 
 		SubscriptionEnabled: !isFalseSettingValue(settings[SettingKeySubscriptionEnabled]),
 
@@ -377,6 +382,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		RiskControlEnabled: settings[SettingKeyRiskControlEnabled] == "true",
 
 		AllowUserViewErrorRequests: settings[SettingKeyAllowUserViewErrorRequests] == "true",
+
+		UsageShowLongContextBadge: settings[SettingKeyUsageShowLongContextBadge] != "false",
 	}, nil
 }
 
@@ -389,13 +396,15 @@ const (
 	defaultChannelMonitorMode      = ChannelMonitorModeV1
 )
 
-// normalizeChannelMonitorMode accepts only v1/v2; empty/invalid → v1 (safe default).
+// normalizeChannelMonitorMode accepts only v1/v2/v3; empty/invalid → v1 (safe default).
 func normalizeChannelMonitorMode(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case ChannelMonitorModeV1, "":
 		return ChannelMonitorModeV1
 	case ChannelMonitorModeV2:
 		return ChannelMonitorModeV2
+	case ChannelMonitorModeV3:
+		return ChannelMonitorModeV3
 	default:
 		return defaultChannelMonitorMode
 	}
@@ -429,7 +438,7 @@ func clampChannelMonitorInterval(v int) int {
 // consumed by the runner, V2 aggregator, and user-facing handlers.
 type ChannelMonitorRuntime struct {
 	Enabled                bool
-	Mode                   string // ChannelMonitorModeV1 or ChannelMonitorModeV2
+	Mode                   string // ChannelMonitorModeV1, ChannelMonitorModeV2 or ChannelMonitorModeV3
 	DefaultIntervalSeconds int
 	// HideThroughput: when true, user-facing V2 APIs omit RPM/TPM scale signals.
 	HideThroughput bool
@@ -447,9 +456,20 @@ func (r ChannelMonitorRuntime) ActiveProbesAllowed() bool {
 	return r.Enabled && r.Mode == ChannelMonitorModeV1
 }
 
-// PassiveAggregationAllowed reports whether V2 passive aggregation may run.
+// PassiveAggregationAllowed reports whether the passive aggregation of real
+// traffic may run: V2 shows it directly and V3 builds its status page on it.
 func (r ChannelMonitorRuntime) PassiveAggregationAllowed() bool {
+	return r.Enabled && (r.Mode == ChannelMonitorModeV2 || r.Mode == ChannelMonitorModeV3)
+}
+
+// V2Active reports whether the V2 views (and its candy probes) are the site's monitor.
+func (r ChannelMonitorRuntime) V2Active() bool {
 	return r.Enabled && r.Mode == ChannelMonitorModeV2
+}
+
+// V3Active reports whether the V3 component status page is the site's monitor.
+func (r ChannelMonitorRuntime) V3Active() bool {
+	return r.Enabled && r.Mode == ChannelMonitorModeV3
 }
 
 // GetChannelMonitorRuntime reads the channel monitor feature flags directly from
@@ -487,6 +507,25 @@ func (s *SettingService) GetChannelMonitorRuntime(ctx context.Context) ChannelMo
 		ShowQuota:              vals[SettingKeyChannelMonitorShowQuota] == "true",
 		HideUserRanking:        isTrueSettingValue(vals[SettingKeyChannelMonitorHideUserRanking]),
 	}
+}
+
+// SetChannelMonitorMode switches the exclusive monitor implementation and
+// nothing else, so the monitor page can flip it without a full settings save.
+func (s *SettingService) SetChannelMonitorMode(ctx context.Context, mode string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(mode))
+	switch normalized {
+	case ChannelMonitorModeV1, ChannelMonitorModeV2, ChannelMonitorModeV3:
+	default:
+		return "", ErrChannelMonitorInvalidMode
+	}
+	if err := s.settingRepo.Set(ctx, SettingKeyChannelMonitorMode, normalized); err != nil {
+		return "", fmt.Errorf("set channel monitor mode: %w", err)
+	}
+	if s.onUpdate != nil {
+		s.onUpdate() // injected public settings carry the mode
+	}
+	s.notifyChannelMonitorRuntimeListeners()
+	return normalized, nil
 }
 
 // AvailableChannelsRuntime is the lightweight view of the available-channels feature
@@ -587,6 +626,7 @@ type PublicSettingsInjectionPayload struct {
 	SiteLogo                            string                   `json:"site_logo"`
 	SiteSubtitle                        string                   `json:"site_subtitle"`
 	APIBaseURL                          string                   `json:"api_base_url"`
+	APIBaseURLDescription               string                   `json:"api_base_url_description"`
 	ContactInfo                         string                   `json:"contact_info"`
 	DocURL                              string                   `json:"doc_url"`
 	HomeContent                         string                   `json:"home_content"`
@@ -636,6 +676,7 @@ type PublicSettingsInjectionPayload struct {
 	ChannelMonitorHideUserRanking bool `json:"channel_monitor_hide_user_ranking"`
 	ChannelMonitorShowQuota       bool `json:"channel_monitor_show_quota"`
 	AvailableChannelsEnabled      bool `json:"available_channels_enabled"`
+	PelicanShowcaseEnabled        bool `json:"pelican_showcase_enabled"`
 	SubscriptionEnabled           bool `json:"subscription_enabled"`
 	ModelPlazaEnabled             bool `json:"model_plaza_enabled"`
 	ModelPlazaRequireAuth         bool `json:"model_plaza_require_auth"`
@@ -643,6 +684,7 @@ type PublicSettingsInjectionPayload struct {
 	AffiliateEnabled              bool `json:"affiliate_enabled"`
 	RiskControlEnabled            bool `json:"risk_control_enabled"`
 	AllowUserViewErrorRequests    bool `json:"allow_user_view_error_requests"`
+	UsageShowLongContextBadge     bool `json:"usage_show_long_context_badge"`
 }
 
 // GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection.
@@ -681,6 +723,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SiteLogo:                            settings.SiteLogo,
 		SiteSubtitle:                        settings.SiteSubtitle,
 		APIBaseURL:                          settings.APIBaseURL,
+		APIBaseURLDescription:               settings.APIBaseURLDescription,
 		ContactInfo:                         settings.ContactInfo,
 		DocURL:                              settings.DocURL,
 		HomeContent:                         settings.HomeContent,
@@ -720,6 +763,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ChannelMonitorShowQuota:              settings.ChannelMonitorShowQuota,
 		ChannelMonitorHideUserRanking:        settings.ChannelMonitorHideUserRanking,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
+		PelicanShowcaseEnabled:               settings.PelicanShowcaseEnabled,
 		SubscriptionEnabled:                  settings.SubscriptionEnabled,
 		ModelPlazaEnabled:                    settings.ModelPlazaEnabled,
 		ModelPlazaRequireAuth:                settings.ModelPlazaRequireAuth,
@@ -727,6 +771,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AffiliateEnabled:                     settings.AffiliateEnabled,
 		RiskControlEnabled:                   settings.RiskControlEnabled,
 		AllowUserViewErrorRequests:           settings.AllowUserViewErrorRequests,
+		UsageShowLongContextBadge:            settings.UsageShowLongContextBadge,
 	}, nil
 }
 

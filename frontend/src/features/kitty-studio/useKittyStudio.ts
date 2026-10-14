@@ -94,13 +94,14 @@ export function useKittyStudio() {
     && !!selectedKey.value
     && !!selectedModel.value
     && (!needsReference.value || references.value.length > 0)
-    && (!videoMode.value || videoResolutionAllowed(form.model, form.videoResolution)))
+    && (!videoMode.value || selectedPlatform.value === 'video' || videoResolutionAllowed(form.model, form.videoResolution)))
 
   function syncModel(): void {
+    if (selectedPlatform.value === 'video' && !isVideoMode(form.mode)) form.mode = 'text-video'
     if (!modelOptions.value.some((model) => model.id === form.model)) {
       form.model = modelOptions.value[0]?.id || ''
     }
-    if (videoMode.value && !videoResolutionAllowed(form.model, form.videoResolution)) {
+    if (videoMode.value && selectedPlatform.value !== 'video' && !videoResolutionAllowed(form.model, form.videoResolution)) {
       form.videoResolution = '720p'
     }
     if (form.model.startsWith('grok-imagine-image') && form.resolution === '4k') {
@@ -149,7 +150,7 @@ export function useKittyStudio() {
       const response = await keysAPI.list(1, 100, { status: 'active' })
       availableKeys.value = response.items.filter((key) => (
         key.status === 'active'
-        && key.group?.allow_image_generation === true
+        && (key.group?.platform === 'video' || key.group?.allow_image_generation === true)
       ))
       if (!availableKeys.value.some((key) => String(key.id) === form.keyId)) {
         form.keyId = availableKeys.value[0] ? String(availableKeys.value[0].id) : ''

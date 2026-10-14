@@ -22,7 +22,7 @@ interface PlatformBlueprint {
   platform: HomePricingPlatform
   label: string
   iconModel: string
-  preferredModels: RegExp[]
+  featuredModel: string
 }
 
 interface UseHomePricingPreviewOptions {
@@ -34,32 +34,30 @@ const platformBlueprints: PlatformBlueprint[] = [
     platform: 'openai',
     label: 'GPT / Codex',
     iconModel: 'gpt-5.6',
-    preferredModels: [/gpt-5\.6-sol/i, /gpt-5\.6/i, /gpt-5\.5/i],
+    featuredModel: 'gpt-5.6-sol',
   },
   {
     platform: 'anthropic',
     label: 'Claude / Kiro',
     iconModel: 'claude-sonnet',
-    preferredModels: [/claude-sonnet-5/i, /claude-sonnet/i, /claude-opus/i],
+    featuredModel: 'claude-fable-5',
+  },
+  {
+    platform: 'anthropic',
+    label: 'Claude / Kiro',
+    iconModel: 'claude-sonnet',
+    featuredModel: 'claude-sonnet-5',
   },
   {
     platform: 'grok',
     label: 'Grok',
     iconModel: 'grok-4.5',
-    preferredModels: [/grok-4\.5/i, /grok-4\.3/i, /grok-4/i],
+    featuredModel: 'grok-4.5',
   },
 ]
 
 function effectiveRate(group: ModelPlazaGroup): number {
   return group.user_rate_multiplier ?? group.rate_multiplier
-}
-
-function preferredModel(group: ModelPlazaGroup, patterns: RegExp[]): string {
-  for (const pattern of patterns) {
-    const matched = group.models.find((model) => pattern.test(model.name))
-    if (matched) return matched.name
-  }
-  return group.models[0]?.name ?? ''
 }
 
 function supportsBillingMode(group: ModelPlazaGroup, mode: 'image' | 'video'): boolean {
@@ -82,7 +80,11 @@ function effectiveMediaRate(group: ModelPlazaGroup, mode: 'image' | 'video'): nu
 export function buildHomePricingSummaries(groups: ModelPlazaGroup[]): HomePricingSummary[] {
   return platformBlueprints.flatMap((blueprint) => {
     const candidates = groups
-      .filter((group) => group.platform === blueprint.platform && effectiveRate(group) >= 0)
+      .filter((group) => (
+        group.platform === blueprint.platform &&
+        effectiveRate(group) >= 0 &&
+        group.models.some((model) => model.name.toLowerCase() === blueprint.featuredModel.toLowerCase())
+      ))
       .sort((left, right) => effectiveRate(left) - effectiveRate(right))
 
     const group = candidates[0]
@@ -96,7 +98,7 @@ export function buildHomePricingSummaries(groups: ModelPlazaGroup[]): HomePricin
       groupName: group.name,
       subscriptionType: group.subscription_type,
       modelCount: group.models.length,
-      featuredModel: preferredModel(group, blueprint.preferredModels),
+      featuredModel: blueprint.featuredModel,
       imageRateMultiplier: effectiveMediaRate(group, 'image'),
       videoRateMultiplier: effectiveMediaRate(group, 'video'),
     }]

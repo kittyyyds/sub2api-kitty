@@ -5,8 +5,29 @@ import { useI18n } from 'vue-i18n'
 import CustomerCodeBlock from '@/components/customer-console/CustomerCodeBlock.vue'
 import CustomerFeatureHeader from '@/components/customer-console/CustomerFeatureHeader.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { kittySite } from '@/config/site'
+import { useAppStore } from '@/stores/app'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
+const appStore = useAppStore()
+const apiBaseUrl = computed(() =>
+  (sanitizeUrl(appStore.apiBaseUrl) || kittySite.primaryUrl).replace(/\/+$/, '').replace(/\/v1$/i, '')
+)
+const compatibleApiBaseUrl = computed(() => `${apiBaseUrl.value}/v1`)
+const endpointDescription = computed(() =>
+  appStore.cachedPublicSettings?.api_base_url_description || t('native.docs.endpoints.description')
+)
+const additionalEndpoints = computed(() => {
+  const configured = (appStore.cachedPublicSettings?.custom_endpoints || [])
+    .map((endpoint) => ({ ...endpoint, endpoint: sanitizeUrl(endpoint.endpoint).replace(/\/+$/, '') }))
+    .filter((endpoint) => endpoint.endpoint)
+  return configured.length ? configured : [{
+    name: t('native.docs.endpoints.domestic'),
+    endpoint: kittySite.domesticUrl,
+    description: '',
+  }]
+})
 
 type GuideId = 'claude' | 'codex' | 'openai'
 type SdkId = 'curl' | 'node' | 'python'
@@ -45,51 +66,51 @@ const activeGuide = shallowRef<GuideId>('claude')
 const activeSystem = shallowRef<SystemId>('windows')
 const activeSdk = shallowRef<SdkId>('curl')
 
-const claudeCommands: Readonly<Record<SystemId, string>> = {
+const claudeCommands = computed<Readonly<Record<SystemId, string>>>(() => ({
   windows: [
     '# Windows PowerShell',
     '$env:ANTHROPIC_AUTH_TOKEN="sk-your-key"',
-    '$env:ANTHROPIC_BASE_URL="https://kittyapi.xyz"',
+    `$env:ANTHROPIC_BASE_URL="${apiBaseUrl.value}"`,
     'claude'
   ].join('\n'),
   linux: [
     '# Linux / Bash',
     'export ANTHROPIC_AUTH_TOKEN="sk-your-key"',
-    'export ANTHROPIC_BASE_URL="https://kittyapi.xyz"',
+    `export ANTHROPIC_BASE_URL="${apiBaseUrl.value}"`,
     'claude'
   ].join('\n'),
   macos: [
     '# macOS / zsh',
     'export ANTHROPIC_AUTH_TOKEN="sk-your-key"',
-    'export ANTHROPIC_BASE_URL="https://kittyapi.xyz"',
+    `export ANTHROPIC_BASE_URL="${apiBaseUrl.value}"`,
     'claude'
   ].join('\n')
-}
+}))
 
-const codexCommands: Readonly<Record<SystemId, string>> = {
+const codexCommands = computed<Readonly<Record<SystemId, string>>>(() => ({
   windows: [
     '# Windows PowerShell',
     '$env:OPENAI_API_KEY="sk-your-key"',
-    '$env:OPENAI_BASE_URL="https://kittyapi.xyz/v1"',
+    `$env:OPENAI_BASE_URL="${compatibleApiBaseUrl.value}"`,
     'codex'
   ].join('\n'),
   linux: [
     '# Linux / Bash',
     'export OPENAI_API_KEY="sk-your-key"',
-    'export OPENAI_BASE_URL="https://kittyapi.xyz/v1"',
+    `export OPENAI_BASE_URL="${compatibleApiBaseUrl.value}"`,
     'codex'
   ].join('\n'),
   macos: [
     '# macOS / zsh',
     'export OPENAI_API_KEY="sk-your-key"',
-    'export OPENAI_BASE_URL="https://kittyapi.xyz/v1"',
+    `export OPENAI_BASE_URL="${compatibleApiBaseUrl.value}"`,
     'codex'
   ].join('\n')
-}
+}))
 
 const openAiExamples = computed<Readonly<Record<SdkId, string>>>(() => ({
   curl: [
-    'curl https://kittyapi.xyz/v1/chat/completions \\',
+    `curl ${compatibleApiBaseUrl.value}/chat/completions \\`,
     '  -H "Authorization: Bearer sk-your-key" \\',
     '  -H "Content-Type: application/json" \\',
     "  -d '{",
@@ -105,7 +126,7 @@ const openAiExamples = computed<Readonly<Record<SdkId, string>>>(() => ({
     '',
     'const client = new OpenAI({',
     '  apiKey: "sk-your-key",',
-    '  baseURL: "https://kittyapi.xyz/v1",',
+    `  baseURL: "${compatibleApiBaseUrl.value}",`,
     '});',
     '',
     'const response = await client.chat.completions.create({',
@@ -120,7 +141,7 @@ const openAiExamples = computed<Readonly<Record<SdkId, string>>>(() => ({
     '',
     'client = OpenAI(',
     '    api_key="sk-your-key",',
-    '    base_url="https://kittyapi.xyz/v1"',
+    `    base_url="${compatibleApiBaseUrl.value}"`,
     ')',
     '',
     'response = client.chat.completions.create(',
@@ -132,30 +153,30 @@ const openAiExamples = computed<Readonly<Record<SdkId, string>>>(() => ({
   ].join('\n')
 }))
 
-const providerConfig = [
+const providerConfig = computed(() => [
   '{',
   '  "providers": {',
   '    "kitty-claude": {',
   '      "type": "anthropic",',
-  '      "base_url": "https://kittyapi.xyz",',
+  `      "base_url": "${apiBaseUrl.value}",`,
   '      "api_key": "sk-your-key"',
   '    },',
   '    "kitty-openai": {',
   '      "type": "openai",',
-  '      "base_url": "https://kittyapi.xyz/v1",',
+  `      "base_url": "${compatibleApiBaseUrl.value}",`,
   '      "api_key": "sk-your-key"',
   '    }',
   '  }',
   '}'
-].join('\n')
+].join('\n'))
 
 const currentGuide = computed(() =>
   guideTabs.value.find((guide) => guide.id === activeGuide.value) ?? guideTabs.value[0]
 )
 
 const currentCode = computed(() => {
-  if (activeGuide.value === 'claude') return claudeCommands[activeSystem.value]
-  if (activeGuide.value === 'codex') return codexCommands[activeSystem.value]
+  if (activeGuide.value === 'claude') return claudeCommands.value[activeSystem.value]
+  if (activeGuide.value === 'codex') return codexCommands.value[activeSystem.value]
   return openAiExamples.value[activeSdk.value]
 })
 
@@ -190,8 +211,8 @@ const codeBlockKey = computed(
       :description="t('native.docs.description')"
       icon="book"
       :metrics="[
-        { value: 'https://kittyapi.xyz', label: t('native.docs.metrics.claude') },
-        { value: 'https://kittyapi.xyz/v1', label: t('native.docs.metrics.compatible') },
+        { value: apiBaseUrl, label: t('native.docs.metrics.claude') },
+        { value: compatibleApiBaseUrl, label: t('native.docs.metrics.compatible') },
         { value: 'Bearer sk-your-key', label: t('native.docs.metrics.placeholder') }
       ]"
     />
@@ -234,20 +255,28 @@ const codeBlockKey = computed(
         <span class="docs-panel__index">02</span>
         <div>
           <h2 id="docs-endpoints-title">{{ t('native.docs.endpoints.title') }}</h2>
-          <p>{{ t('native.docs.endpoints.description') }}</p>
+          <p>{{ endpointDescription }}</p>
         </div>
       </div>
 
       <div class="endpoint-grid">
         <CustomerCodeBlock
-          code="https://kittyapi.xyz"
+          :code="apiBaseUrl"
           label="Claude Code Base URL"
           language="url"
           compact
         />
         <CustomerCodeBlock
-          code="https://kittyapi.xyz/v1"
+          :code="compatibleApiBaseUrl"
           label="Codex / OpenAI Compatible"
+          language="url"
+          compact
+        />
+        <CustomerCodeBlock
+          v-for="endpoint in additionalEndpoints"
+          :key="endpoint.endpoint"
+          :code="endpoint.endpoint"
+          :label="[endpoint.name || endpoint.endpoint, endpoint.description].filter(Boolean).join(' · ')"
           language="url"
           compact
         />
@@ -427,12 +456,12 @@ const codeBlockKey = computed(
           <div>
             <span>CLAUDE</span>
             <strong>{{ t('native.docs.multi.rootTitle') }}</strong>
-            <code>https://kittyapi.xyz</code>
+            <code>{{ apiBaseUrl }}</code>
           </div>
           <div>
             <span>OPENAI</span>
             <strong>{{ t('native.docs.multi.compatibleTitle') }}</strong>
-            <code>https://kittyapi.xyz/v1</code>
+            <code>{{ compatibleApiBaseUrl }}</code>
           </div>
           <div>
             <span>KEY</span>

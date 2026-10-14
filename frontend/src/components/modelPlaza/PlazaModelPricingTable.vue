@@ -13,7 +13,7 @@ import {
   REASONING_EFFORT_LEVELS,
   type BillingMode,
 } from '@/constants/channel'
-import { platformAccentColor, platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
+import { platformBadgeLightClass, platformLabel } from '@/utils/platformColors'
 import { resolveIntervalPrices } from '@/utils/pricing'
 
 import PlazaPricePair from './PlazaPricePair.vue'
@@ -23,10 +23,17 @@ const props = withDefaults(defineProps<{
   platform?: string
   rateMultiplier: number
   userRateMultiplier?: number | null
+  /** 非最终价图片档位使用独立倍率，不取分组/用户专属倍率。 */
   imageRateIndependent?: boolean
   imageRateMultiplier?: number | null
+  /** 非最终价视频档位使用独立倍率；video 平台始终显示配置的最终余额价。 */
   videoRateIndependent?: boolean
   videoRateMultiplier?: number | null
+  /**
+   * 高峰窗口描述(含倍率与服务器时区标注),空串/缺省 = 分组未启用高峰。
+   * 表格所有价格均为不含高峰因子的口径,该窗口仅用于分时时段行的 tooltip 披露:
+   * 与高峰重叠的部分实付还会再乘高峰倍率。
+   */
   peakWindow?: string
   peakRateMultiplier?: number | null
 }>(), {
@@ -43,9 +50,8 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const PER_MILLION = 1_000_000
 const VIDEO_DURATIONS = [5, 10, 15] as const
-const accentStyle = computed(() => ({ '--plaza-accent': platformAccentColor(props.platform ?? '') }))
 const usesPersonalTextRate = computed(() => (
-  props.userRateMultiplier != null
+  props.platform !== 'video' && props.userRateMultiplier != null
   && Math.abs(props.userRateMultiplier - props.rateMultiplier) > Number.EPSILON
 ))
 
@@ -56,11 +62,9 @@ interface PricePair {
 
 interface TokenPriceRow {
   key: string
-  model: string
-  platform: string
+  source: PlazaModel
   tier: string
   period: PlazaTimePricingPeriod | null
-  longContextBasis?: PlazaModel['long_context_basis']
   reasoningEffortMultipliers: [string, number][]
   input: PricePair
   output: PricePair
@@ -72,17 +76,12 @@ interface TokenPriceRow {
 
 interface UnitPriceRow {
   key: string
-  model: string
-  platform: string
+  source: PlazaModel
   tier: string
+  period: PlazaTimePricingPeriod | null
   price: PricePair
   finalPrice: boolean
   savings: number | null
-}
-
-interface TokenIntervalPair {
-  pricing: UserPricingInterval | null
-  official: UserPricingInterval | null
 }
 
 function price(value: number | null | undefined): number | null {
@@ -93,35 +92,27 @@ function billingMode(model: PlazaModel): BillingMode {
   return (model.pricing?.billing_mode || BILLING_MODE_TOKEN) as BillingMode
 }
 
-function billingModeRank(model: PlazaModel): number {
-  switch (billingMode(model)) {
-    case BILLING_MODE_TOKEN:
-      return 0
-    case BILLING_MODE_IMAGE:
-      return 1
-    case BILLING_MODE_VIDEO:
-      return 2
-    case BILLING_MODE_PER_REQUEST:
-      return 3
-    default:
-      return 4
-  }
+function isFinalVideoPrice(model: PlazaModel): boolean {
+  return (model.platform === 'video' || props.platform === 'video')
+    && (billingMode(model) === BILLING_MODE_VIDEO || billingMode(model) === BILLING_MODE_PER_REQUEST)
 }
 
-function effectiveRate(model: PlazaModel, period: PlazaTimePricingPeriod | null = null): number {
-  let rate = props.userRateMultiplier ?? props.rateMultiplier
+function effectiveRate(model: PlazaModel): number {
   switch (billingMode(model)) {
     case BILLING_MODE_IMAGE:
-      if (props.imageRateIndependent) rate = props.imageRateMultiplier ?? 1
+      if (props.imageRateIndependent) return props.imageRateMultiplier ?? 1
       break
     case BILLING_MODE_VIDEO:
-      if (props.videoRateIndependent) rate = props.videoRateMultiplier ?? 1
+      if (props.videoRateIndependent) return Math.max(0, props.videoRateMultiplier ?? 1)
       break
   }
-  if (period) {
-    return Math.round(rate * period.multiplier * 1000) / 1000
-  }
-  return rate
+  return props.userRateMultiplier ?? props.rateMultiplier
+}
+
+function rateFor(model: PlazaModel, period: PlazaTimePricingPeriod | null): number {
+  const rate = effectiveRate(model)
+  if (!period) return rate
+  return Math.round(rate * period.multiplier * 1000) / 1000
 }
 
 function pair(
@@ -153,45 +144,12 @@ function sortByContext(intervals: UserPricingInterval[]): UserPricingInterval[] 
   return [...intervals].sort((a, b) => a.min_tokens - b.min_tokens)
 }
 
-function tokenIntervals(model: PlazaModel): UserPricingInterval[] {
-  if (!model.pricing) return []
-  return sortByContext(model.pricing.intervals ?? []).map((interval) =>
-    resolveIntervalPrices(interval, model.pricing!)
-  )
-}
-
-function officialIntervals(model: PlazaModel): UserPricingInterval[] {
-  if (!model.official_pricing) return []
-  return sortByContext(model.official_pricing.intervals ?? []).map((interval) =>
-    resolveIntervalPrices(interval, model.official_pricing!)
-  )
-}
-
-function requestIntervals(model: PlazaModel): UserPricingInterval[] {
-  return (model.pricing?.intervals ?? []).filter((interval) => interval.per_request_price != null)
-}
-
-function tokenIntervalPairs(model: PlazaModel): TokenIntervalPair[] {
-  const pricing = tokenIntervals(model)
-  const official = officialIntervals(model)
-  if (pricing.length > 0) {
-    return pricing.map((interval, index) => ({ pricing: interval, official: official[index] ?? null }))
-  }
-  if (official.length > 0) {
-    return official.map((interval) => ({ pricing: null, official: interval }))
-  }
-  return [{ pricing: null, official: null }]
-}
-
 function tierLabel(interval: UserPricingInterval): string {
   if (interval.tier_label) return interval.tier_label
-  const { min_tokens: min, max_tokens: max } = interval
-  return max == null ? `>${formatTokenCount(min)}` : `≤${formatTokenCount(max)}`
-}
-
-function tokenPairLabel(pair: TokenIntervalPair): string {
-  const interval = pair.pricing ?? pair.official
-  return interval ? tierLabel(interval) : '-'
+  if (interval.max_tokens == null) {
+    return interval.min_tokens > 0 ? `>${formatTokenCount(interval.min_tokens)}` : '-'
+  }
+  return `<=${formatTokenCount(interval.max_tokens)}`
 }
 
 function formatTokenCount(value: number): string {
@@ -204,127 +162,138 @@ function trimNumber(value: number): string {
   return String(Math.round(value * 100) / 100)
 }
 
+function matchingOfficialInterval(
+  model: PlazaModel,
+  interval: UserPricingInterval | null
+): UserPricingInterval | null {
+  if (!interval) return null
+  const officialPricing = model.official_pricing
+  if (!officialPricing) return null
+  const officialIntervals = (officialPricing.intervals ?? []).map((candidate) =>
+    resolveIntervalPrices(candidate, officialPricing)
+  )
+  return officialIntervals.find((candidate) => (
+    candidate.min_tokens === interval.min_tokens
+    && candidate.max_tokens === interval.max_tokens
+  )) ?? officialIntervals.find((candidate) => (
+    candidate.tier_label != null
+    && candidate.tier_label === interval.tier_label
+  )) ?? null
+}
+
 function timePeriods(model: PlazaModel): PlazaTimePricingPeriod[] {
   return model.time_pricing?.periods ?? []
 }
 
-function timePricingRowHint(model: PlazaModel): string {
-  const key = model.time_pricing?.weekdays_only
-    ? 'modelPlaza.table.timePricingRowHintWeekdays'
-    : 'modelPlaza.table.timePricingRowHint'
-  let hint = t(key, { timezone: model.time_pricing?.timezone })
-  if (props.peakWindow) {
-    hint += t('modelPlaza.table.timePricingRowHintPeak', {
-      window: props.peakWindow,
-      multiplier: props.peakRateMultiplier ?? 1
-    })
-  }
-  return hint
-}
+function tokenRowsFor(model: PlazaModel): TokenPriceRow[] {
+  const pricing = model.pricing
+  const intervals = pricing
+    ? sortByContext(pricing.intervals ?? []).map((interval) =>
+        resolveIntervalPrices(interval, pricing)
+      )
+    : []
+  const sourceIntervals = intervals.length ? intervals : [null]
 
-function formatTimeWindow(period: PlazaTimePricingPeriod): string {
-  const clock = (value: string) => value.replace(/^(\d{2}:\d{2}):00$/, '$1')
-  return `${clock(period.start_time)}–${clock(period.end_time)}`
-}
-
-function buildTokenRow(
-  model: PlazaModel,
-  intervalPair: TokenIntervalPair,
-  index: number,
-  period: PlazaTimePricingPeriod | null
-): TokenPriceRow {
-  const pricing = intervalPair.pricing
-  const official = intervalPair.official
-  const rate = effectiveRate(model, period)
-  const input = pair(
-    pricing?.input_price ?? model.pricing?.input_price,
-    official?.input_price ?? model.official_pricing?.input_price,
-    rate
-  )
-  const output = pair(
-    pricing?.output_price ?? model.pricing?.output_price,
-    official?.output_price ?? model.official_pricing?.output_price,
-    rate
-  )
-  const cacheWrite = pair(
-    pricing?.cache_write_price ?? model.pricing?.cache_write_price,
-    official?.cache_write_price ?? model.official_pricing?.cache_write_price,
-    rate
-  )
-  const cacheWrite1h = pair(
-    pricing?.cache_write_1h_price ?? model.pricing?.cache_write_1h_price,
-    official?.cache_write_1h_price ?? model.official_pricing?.cache_write_1h_price,
-    rate
-  )
-  const cacheRead = pair(
-    pricing?.cache_read_price ?? model.pricing?.cache_read_price,
-    official?.cache_read_price ?? model.official_pricing?.cache_read_price,
-    rate
-  )
-  const periodKey = period ? `${period.start_time}-${period.end_time}-${period.multiplier}` : 'base'
-  return {
-    key: `${model.platform}:${model.name}:${periodKey}:${index}`,
-    model: model.name,
-    platform: model.platform,
-    tier: tokenPairLabel(intervalPair),
-    period,
-    longContextBasis: model.long_context_basis,
-    reasoningEffortMultipliers: REASONING_EFFORT_LEVELS.flatMap(effort => {
+  return sourceIntervals.flatMap((interval, index) => {
+    const officialInterval = matchingOfficialInterval(model, interval)
+    const buildRow = (period: PlazaTimePricingPeriod | null, suffix: string): TokenPriceRow => {
+      const rate = rateFor(model, period)
+      return {
+        key: `${model.platform}:${model.name}:${index}${suffix}`,
+        source: model,
+        tier: interval ? tierLabel(interval) : '-',
+        period,
+        reasoningEffortMultipliers: REASONING_EFFORT_LEVELS.flatMap(effort => {
       const multiplier = model.pricing?.reasoning_effort_multipliers?.[effort]
       return typeof multiplier === 'number' && Number.isFinite(multiplier) && multiplier > 0
         ? [[effort, multiplier] as [string, number]] : []
     }),
-    input,
-    output,
-    cacheWrite,
-    cacheWrite1h,
-    cacheRead,
-    savings: savingsFor(output, input, cacheRead, cacheWrite, cacheWrite1h),
-  }
-}
+        input: pair(
+          interval?.input_price ?? model.pricing?.input_price,
+          officialInterval?.input_price ?? model.official_pricing?.input_price,
+          rate
+        ),
+        output: pair(
+          interval?.output_price ?? model.pricing?.output_price,
+          officialInterval?.output_price ?? model.official_pricing?.output_price,
+          rate
+        ),
+        cacheWrite: pair(
+          interval?.cache_write_price ?? model.pricing?.cache_write_price,
+          officialInterval?.cache_write_price ?? model.official_pricing?.cache_write_price,
+          rate
+        ),
+        cacheWrite1h: pair(
+          interval?.cache_write_1h_price ?? model.pricing?.cache_write_1h_price,
+          officialInterval?.cache_write_1h_price ?? model.official_pricing?.cache_write_1h_price,
+          rate
+        ),
+        cacheRead: pair(
+          interval?.cache_read_price ?? model.pricing?.cache_read_price,
+          officialInterval?.cache_read_price ?? model.official_pricing?.cache_read_price,
+          rate
+        ),
+        savings: null,
+      }
+    }
 
-function tokenRowsFor(model: PlazaModel): TokenPriceRow[] {
-  const intervalPairs = tokenIntervalPairs(model)
-  const baseRows = intervalPairs.map((intervalPair, index) => buildTokenRow(model, intervalPair, index, null))
-  const periodRows = timePeriods(model).flatMap((period) =>
-    intervalPairs.map((intervalPair, index) => buildTokenRow(model, intervalPair, index, period))
-  )
-  return [...baseRows, ...periodRows]
+    const standard = buildRow(null, '')
+    standard.savings = savingsFor(
+      standard.output,
+      standard.input,
+      standard.cacheRead,
+      standard.cacheWrite,
+      standard.cacheWrite1h
+    )
+    return [standard, ...timePeriods(model).map((period, periodIndex) => {
+      const row = buildRow(period, `:time:${periodIndex}`)
+      row.savings = savingsFor(row.output, row.input, row.cacheRead, row.cacheWrite, row.cacheWrite1h)
+      return row
+    })]
+  })
 }
 
 function unitRowsFor(model: PlazaModel): UnitPriceRow[] {
-  const defaultRate = effectiveRate(model)
-  const finalTierValues = billingMode(model) === BILLING_MODE_VIDEO
+  const mode = billingMode(model)
+  const finalTierValues = mode === BILLING_MODE_VIDEO
     ? model.final_video_price_tiers
-    : model.final_image_price_tiers
+    : mode === BILLING_MODE_IMAGE
+      ? model.final_image_price_tiers
+      : []
   const finalTiers = new Set(
     (finalTierValues ?? []).map((tier) => tier.trim().toUpperCase())
   )
-  const intervals = requestIntervals(model)
-  const buildRow = (interval: UserPricingInterval | null, index: number): UnitPriceRow => {
+  const intervals = (model.pricing?.intervals ?? []).filter(
+    (interval) => interval.per_request_price != null
+  )
+  const sourceIntervals = intervals.length ? intervals : [null]
+
+  return sourceIntervals.flatMap((interval, index) => {
     const tier = interval ? tierLabel(interval) : '-'
-    const finalPrice = finalTiers.has(tier.trim().toUpperCase())
-    const rate = finalPrice ? 1 : defaultRate
+    const finalPrice = isFinalVideoPrice(model) || finalTiers.has(tier.trim().toUpperCase())
     const base = price(interval?.per_request_price ?? model.pricing?.per_request_price)
-    const pricePair = finalPrice
-      ? { reference: null, charged: base }
-      : pair(base, base, rate)
-    return {
-      key: `${model.platform}:${model.name}:${index}`,
-      model: model.name,
-      platform: model.platform,
-      tier,
-      price: pricePair,
-      finalPrice,
-      savings: savingsFor(pricePair),
+    const buildRow = (period: PlazaTimePricingPeriod | null, suffix: string): UnitPriceRow => {
+      const pricePair = finalPrice
+        ? { reference: null, charged: base }
+        : pair(base, base, rateFor(model, period))
+      return {
+        key: `${model.platform}:${model.name}:${index}${suffix}`,
+        source: model,
+        tier,
+        period,
+        price: pricePair,
+        finalPrice,
+        savings: savingsFor(pricePair),
+      }
     }
-  }
-  return intervals.length ? intervals.map(buildRow) : [buildRow(null, 0)]
+    return [
+      buildRow(null, ''),
+      ...(isFinalVideoPrice(model) ? [] : timePeriods(model)).map((period, periodIndex) => buildRow(period, `:time:${periodIndex}`)),
+    ]
+  })
 }
 
 const sortedModels = computed(() => [...props.models].sort((a, b) => {
-  const rank = billingModeRank(a) - billingModeRank(b)
-  if (rank !== 0) return rank
   const aPrice = a.official_pricing?.output_price ?? a.pricing?.output_price ?? null
   const bPrice = b.official_pricing?.output_price ?? b.pricing?.output_price ?? null
   if (aPrice != null && bPrice != null && aPrice !== bPrice) return bPrice - aPrice
@@ -355,26 +324,34 @@ const requestRows = computed(() => (
 ))
 
 const hasTextTiers = computed(() => textRows.value.some((row) => row.tier !== '-'))
+const hasText1hCache = computed(() => textRows.value.some((row) => (
+  row.cacheWrite1h.reference != null || row.cacheWrite1h.charged != null
+)))
 const hasImageTiers = computed(() => imageRows.value.some((row) => row.tier !== '-'))
 const hasVideoTiers = computed(() => videoRows.value.some((row) => row.tier !== '-'))
 const hasRequestTiers = computed(() => requestRows.value.some((row) => row.tier !== '-'))
 
-function rowModel(row: TokenPriceRow): PlazaModel | undefined {
-  return props.models.find((item) => item.name === row.model && item.platform === row.platform)
+function timePricingRowHint(model: PlazaModel): string {
+  const key = model.time_pricing?.weekdays_only
+    ? 'modelPlaza.table.timePricingRowHintWeekdays'
+    : 'modelPlaza.table.timePricingRowHint'
+  let hint = t(key, { timezone: model.time_pricing?.timezone })
+  if (props.peakWindow) {
+    hint += t('modelPlaza.table.timePricingRowHintPeak', {
+      window: props.peakWindow,
+      multiplier: props.peakRateMultiplier ?? 1,
+    })
+  }
+  return hint
 }
 
-function rowTimePricingHint(row: TokenPriceRow): string {
-  const model = rowModel(row)
-  return model ? timePricingRowHint(model) : ''
+function formatTimeWindow(period: PlazaTimePricingPeriod): string {
+  const clock = (value: string) => value.replace(/^(\d{2}:\d{2}):00$/, '$1')
+  return `${clock(period.start_time)}-${clock(period.end_time)}`
 }
 
-function rowIsWeekdaysOnly(row: TokenPriceRow): boolean {
-  return rowModel(row)?.time_pricing?.weekdays_only === true
-}
-
-function rowTierHint(row: TokenPriceRow): string | undefined {
-  if (row.tier === '-') return undefined
-  return row.longContextBasis === 'marginal'
+function tierHint(model: PlazaModel): string {
+  return model.long_context_basis === 'marginal'
     ? t('modelPlaza.table.tierHintMarginal')
     : t('modelPlaza.table.tierHint')
 }
@@ -388,7 +365,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
 </script>
 
 <template>
-  <div class="pricing-ledger" :style="accentStyle">
+  <div class="pricing-ledger">
     <div class="price-legend">
       <span>
         <i class="customer-swatch"></i>
@@ -420,6 +397,10 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <span>{{ t('modelPlaza.table.cacheWrite') }}</span>
                 <small>{{ t('modelPlaza.table.cnyPerMillion') }}</small>
               </th>
+              <th v-if="hasText1hCache">
+                <span>{{ t('modelPlaza.table.cacheWrite') }} (1h)</span>
+                <small>{{ t('modelPlaza.table.cnyPerMillion') }}</small>
+              </th>
               <th>
                 <span>{{ t('modelPlaza.table.cacheRead') }}</span>
                 <small>{{ t('modelPlaza.table.cnyPerMillion') }}</small>
@@ -431,7 +412,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
             <tr v-for="row in textRows" :key="row.key">
               <td class="model-name">
                 <div class="model-identity">
-                  <span>{{ row.model }}</span>
+                  <span>{{ row.source.name }}</span>
                   <span
                     v-for="([effort, multiplier]) in row.reasoningEffortMultipliers"
                     :key="effort"
@@ -443,34 +424,32 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                   </span>
                   <span
                     v-if="row.period"
-                    class="period-badge"
-                    :title="rowTimePricingHint(row)"
+                    class="time-period-badge"
+                    :title="timePricingRowHint(row.source)"
                   >
-                    <span v-if="rowIsWeekdaysOnly(row)">
-                      {{ t('modelPlaza.table.timePricingWeekdays') }}
-                    </span>
+                    <span v-if="row.source.time_pricing?.weekdays_only">{{ t('modelPlaza.table.timePricingWeekdays') }} </span>
                     {{ formatTimeWindow(row.period) }}
                   </span>
                   <span
-                    v-if="props.platform && row.platform !== props.platform"
-                    :class="['platform-badge', platformBadgeLightClass(row.platform)]"
+                    v-if="props.platform && row.source.platform !== props.platform"
+                    :class="['platform-badge', platformBadgeLightClass(row.source.platform)]"
                   >
-                    {{ platformLabel(row.platform) }}
+                    {{ platformLabel(row.source.platform) }}
                   </span>
                   <span
-                    v-if="row.longContextBasis === 'marginal'"
-                    class="context-badge"
-                    :title="t('modelPlaza.table.tierHintMarginal')"
+                    v-if="row.source.long_context_basis === 'marginal'"
+                    class="context-basis-badge"
+                    :title="tierHint(row.source)"
                   >
                     {{ t('modelPlaza.table.marginalBadge') }}
                   </span>
                 </div>
               </td>
-              <td v-if="hasTextTiers" class="tier-value">
-                <span :title="rowTierHint(row)">
-                  {{ row.tier }}
-                </span>
-              </td>
+              <td
+                v-if="hasTextTiers"
+                class="tier-value"
+                :title="row.tier === '-' ? undefined : tierHint(row.source)"
+              >{{ row.tier }}</td>
               <td class="price-cell">
                 <PlazaPricePair
                   :reference-price="row.input.reference"
@@ -486,24 +465,18 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 />
               </td>
               <td class="price-cell">
-                <div class="price-stack">
-                  <PlazaPricePair
-                    :reference-price="row.cacheWrite.reference"
-                    :charged-price="row.cacheWrite.charged"
-                    :scale="PER_MILLION"
-                  />
-                  <div
-                    v-if="row.cacheWrite1h.reference != null || row.cacheWrite1h.charged != null"
-                    class="sub-price"
-                  >
-                    <span>1h</span>
-                    <PlazaPricePair
-                      :reference-price="row.cacheWrite1h.reference"
-                      :charged-price="row.cacheWrite1h.charged"
-                      :scale="PER_MILLION"
-                    />
-                  </div>
-                </div>
+                <PlazaPricePair
+                  :reference-price="row.cacheWrite.reference"
+                  :charged-price="row.cacheWrite.charged"
+                  :scale="PER_MILLION"
+                />
+              </td>
+              <td v-if="hasText1hCache" class="price-cell">
+                <PlazaPricePair
+                  :reference-price="row.cacheWrite1h.reference"
+                  :charged-price="row.cacheWrite1h.charged"
+                  :scale="PER_MILLION"
+                />
               </td>
               <td class="price-cell">
                 <PlazaPricePair
@@ -543,11 +516,19 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
             <tr v-for="row in imageRows" :key="row.key">
               <td class="model-name">
                 <div class="model-identity">
-                  <span>{{ row.model }}</span>
+                  <span>{{ row.source.name }}</span>
                   <span
-                    v-if="props.platform && row.platform !== props.platform"
-                    :class="['platform-badge', platformBadgeLightClass(row.platform)]"
-                  >{{ platformLabel(row.platform) }}</span>
+                    v-if="row.period"
+                    class="time-period-badge"
+                    :title="timePricingRowHint(row.source)"
+                  >
+                    <span v-if="row.source.time_pricing?.weekdays_only">{{ t('modelPlaza.table.timePricingWeekdays') }} </span>
+                    {{ formatTimeWindow(row.period) }}
+                  </span>
+                  <span
+                    v-if="props.platform && row.source.platform !== props.platform"
+                    :class="['platform-badge', platformBadgeLightClass(row.source.platform)]"
+                  >{{ platformLabel(row.source.platform) }}</span>
                 </div>
               </td>
               <td v-if="hasImageTiers" class="tier-value">{{ row.tier }}</td>
@@ -592,11 +573,19 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
             <tr v-for="row in videoRows" :key="row.key">
               <td class="model-name">
                 <div class="model-identity">
-                  <span>{{ row.model }}</span>
+                  <span>{{ row.source.name }}</span>
                   <span
-                    v-if="props.platform && row.platform !== props.platform"
-                    :class="['platform-badge', platformBadgeLightClass(row.platform)]"
-                  >{{ platformLabel(row.platform) }}</span>
+                    v-if="row.period"
+                    class="time-period-badge"
+                    :title="timePricingRowHint(row.source)"
+                  >
+                    <span v-if="row.source.time_pricing?.weekdays_only">{{ t('modelPlaza.table.timePricingWeekdays') }} </span>
+                    {{ formatTimeWindow(row.period) }}
+                  </span>
+                  <span
+                    v-if="props.platform && row.source.platform !== props.platform"
+                    :class="['platform-badge', platformBadgeLightClass(row.source.platform)]"
+                  >{{ platformLabel(row.source.platform) }}</span>
                 </div>
               </td>
               <td v-if="hasVideoTiers" class="tier-value">{{ row.tier }}</td>
@@ -604,7 +593,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <PlazaPricePair
                   :reference-price="row.price.reference"
                   :charged-price="row.price.charged"
-                  price-currency="usd"
+                  :price-currency="isFinalVideoPrice(row.source) ? 'balance' : 'usd'"
                 />
                 <small class="video-price-unit">
                   {{ t(row.finalPrice ? 'modelPlaza.table.finalPerSecond' : 'modelPlaza.table.perSecondFallback') }}
@@ -614,7 +603,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <PlazaPricePair
                   :reference-price="durationPair(row, seconds).reference"
                   :charged-price="durationPair(row, seconds).charged"
-                  price-currency="usd"
+                  :price-currency="isFinalVideoPrice(row.source) ? 'balance' : 'usd'"
                 />
               </td>
               <td class="savings-cell">
@@ -632,7 +621,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
     <section v-if="requestRows.length" class="pricing-section">
       <header class="pricing-section-header">
         <strong>{{ t('modelPlaza.table.requestModels') }}</strong>
-        <span>{{ t('modelPlaza.table.cnyPerRequest') }}</span>
+        <span>{{ t(props.platform === 'video' ? 'videoModule.perVideoUnit' : 'modelPlaza.table.cnyPerRequest') }}</span>
       </header>
       <div class="pricing-scroll">
         <table class="pricing-table unit-table">
@@ -648,11 +637,19 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
             <tr v-for="row in requestRows" :key="row.key">
               <td class="model-name">
                 <div class="model-identity">
-                  <span>{{ row.model }}</span>
+                  <span>{{ row.source.name }}</span>
                   <span
-                    v-if="props.platform && row.platform !== props.platform"
-                    :class="['platform-badge', platformBadgeLightClass(row.platform)]"
-                  >{{ platformLabel(row.platform) }}</span>
+                    v-if="row.period"
+                    class="time-period-badge"
+                    :title="timePricingRowHint(row.source)"
+                  >
+                    <span v-if="row.source.time_pricing?.weekdays_only">{{ t('modelPlaza.table.timePricingWeekdays') }} </span>
+                    {{ formatTimeWindow(row.period) }}
+                  </span>
+                  <span
+                    v-if="props.platform && row.source.platform !== props.platform"
+                    :class="['platform-badge', platformBadgeLightClass(row.source.platform)]"
+                  >{{ platformLabel(row.source.platform) }}</span>
                 </div>
               </td>
               <td v-if="hasRequestTiers" class="tier-value">{{ row.tier }}</td>
@@ -660,6 +657,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
                 <PlazaPricePair
                   :reference-price="row.price.reference"
                   :charged-price="row.price.charged"
+                  :price-currency="isFinalVideoPrice(row.source) ? 'balance' : 'usd'"
                 />
               </td>
               <td class="savings-cell">
@@ -676,7 +674,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
 
     <footer class="pricing-footnote">
       <Icon name="infoCircle" size="xs" />
-      {{ t('modelPlaza.table.actualPriceNote') }}
+      {{ t(props.platform === 'video' ? 'videoModule.customerPriceHint' : 'modelPlaza.table.actualPriceNote') }}
     </footer>
   </div>
 </template>
@@ -752,10 +750,7 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
   font-size: 10px;
 }
 
-.text-table {
-  min-width: 920px;
-}
-
+.text-table,
 .video-table {
   min-width: 920px;
 }
@@ -827,13 +822,12 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
 }
 
 .platform-badge,
-.period-badge,
-.context-badge,
+.time-period-badge,
+.context-basis-badge,
 .reasoning-badge {
   display: inline-flex;
   min-height: 19px;
   align-items: center;
-  gap: 4px;
   border-radius: 4px;
   padding: 0 5px;
   font-family: ui-sans-serif, system-ui, sans-serif;
@@ -841,10 +835,11 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
   font-weight: 700;
 }
 
-.period-badge,
-.context-badge {
+.time-period-badge,
+.context-basis-badge {
+  border: 1px solid var(--plaza-line);
   color: var(--plaza-muted);
-  background: var(--plaza-surface-soft);
+  background: var(--plaza-surface-muted);
 }
 
 .reasoning-badge {
@@ -870,30 +865,6 @@ function durationPair(row: UnitPriceRow, seconds: number): PricePair {
 
 .price-cell :deep(.price-pair) {
   justify-items: center;
-}
-
-.price-stack {
-  display: grid;
-  gap: 4px;
-}
-
-.sub-price {
-  display: grid;
-  gap: 2px;
-}
-
-.sub-price > span {
-  color: var(--plaza-muted-soft);
-  font-size: 8px;
-  font-weight: 700;
-}
-
-.sub-price :deep(.customer-price) {
-  font-size: 12px;
-}
-
-.sub-price :deep(.reference-price) {
-  font-size: 8px;
 }
 
 .video-price-unit {

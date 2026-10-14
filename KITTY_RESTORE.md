@@ -1,34 +1,106 @@
 # Kitty Upgrade And Restore Guide
 
-## v0.2.6-kitty.2 release requirements
+## v0.2.5 candidate — 2026-09-16
 
-- Base this UI-only release on verified production commit `4ac1af3af860bd5405b1a05f6eb45408bd104f3b` and retain the complete `0.2.6-kitty.1` release and recovery set.
-- Creating an API key disables the picker platform tabs and their secondary filter; editing keeps the default tabs. Preserve the parent provider filter and its clearing of an obsolete group selection.
-- Verify multi-platform Other groups, name/description search, group selection, and the creation/editing mode boundary. Build the embedded frontend and Linux image locally with exact commit/version provenance using the established offline overlay procedure.
-- No database migration or backend business logic changes are introduced. An image rollback to `0.2.6-kitty.1` restores the previous picker without a database downgrade.
+Candidate version: `0.2.5-kittyyyds.1`, for `kittyyyds.xyz` only. The upgrade
+starts from verified production commit `45231756b9410de0a7b356f6c0930074327c129d`
+(`0.2.4-kittyyyds.11`) and merges official `v0.2.5` against official `v0.2.4`.
+This section describes the candidate requirements, not completed deployment.
 
-## v0.2.6 release requirements
+- Retain the current and all historical releases, tags, images and recovery
+  sets. The current user's full-history policy supersedes older retention text.
+- Build frontend and Linux backend outside the production servers, with
+  explicit version/commit/date metadata and embedded frontend. Assemble the
+  final image locally from the SHA-256-verified `docker save` archive of this
+  site's current immutable image, replacing `/app/sub2api` and the complete
+  `/app/resources` directory with an overlay equivalent to
+  `deploy/kitty-overlay.Dockerfile`. Bind the base-image ID/archive hash,
+  candidate Git commit, binary hash, frontend manifest, resources manifest and
+  resulting image ID/archive hash in one release manifest. Verify that manifest
+  again before server-side `docker load`; do not compile, install development
+  dependencies or assemble build layers on either production host.
+- `deploy/offline-overlay.py` writes an OCI archive for Docker's containerd
+  image store. Its required build receipt binds the binary SHA-256, source
+  commit, version/date, and matching frontend manifests recorded before and
+  after compilation. Verify the loaded Linux image and served frontend assets
+  before switching traffic.
+- A temporary process sharing the live database during traffic handoff must
+  set `KITTY_DEPLOYMENT_HANDOFF=true`. This skips only the active channel-monitor
+  and scheduled-account-test runners so they cannot duplicate paid probes.
+  API requests, manual tests and other workers keep their existing behavior.
+  Leave this variable unset on the final production process and restart it to
+  restore these two runners; it is read at startup, not dynamically.
+- Run the loaded candidate in an isolated Linux smoke environment before
+  changing the production image: apply explicit CPU/memory limits, a separate
+  port and disposable cloned data/database; keep production customer writes
+  outside that instance. Verify Linux startup, embedded pages, migrations and
+  required business checks. Earlier named-context build examples are historical
+  alternatives; this release uses the reviewed offline overlay tool and manifest.
+- Preserve identity v2 and its diagnostics, prompt-cache-key/continuation
+  contracts, per-model and per-resolution final image/video prices, recharge
+  bonuses, Kitty Apps, candy tests, registration-only Turnstile, group access
+  controls and both selected-risk switches resetting off for a new release.
+- Do not reintroduce retired Cursor, model variant locks, old Token reward
+  handlers, or add the separately discussed automatic account-login feature.
+- Keep all 302 already published SQL files unchanged. New official migrations
+  `238_opencode_go_platform.sql` and `238_purge_unlimited_user_platform_quotas.sql`
+  coexist with Kitty's `238_kitty_candy_tests.sql` by complete filename.
+  Preflight and back up the all-null platform-quota rows before the purge;
+  retain the additional historical `231_disable_long_context_pricing.sql`
+  ledger row without guessing or rewriting its missing source.
+- Preserve existing subscription settings while accepting the new public flag,
+  navigation and payment-mode behavior. Verify both recharge and subscription
+  paths together with the Kitty checkout and bonus displays.
+- Regress identity HTTP/WS/compact/tool continuation and peer-close/queueing,
+  model prices, payments, Apps, candy results, API-key provider selection/bulk
+  editing, registration confirmation, subscription gating and group boundaries.
 
-- Merge official `v0.2.6` (`49a39b6dc1abed30fd227611e8af1108bc427610`) into the verified `0.2.5-kitty.1` baseline (`cb8aea7180d87034f209d837c2f06b19976cf4ce`). Candidate version: `0.2.6-kitty.1`.
-- Preserve all Kitty Apps/media history, recharge bonus and payment integrations, registration-only Turnstile with fail-closed settings loading, account proxy pools and client profiles, model capability tests, risk controls, channel monitoring, pricing, and site-specific API routes. The eight textual merge conflicts do not require retiring any of these features.
-- Add upstream Codex turn-ticket support with its upstream default disabled. Do not enable harvest or inject automatically during deployment. When explicitly enabled later, its default fail-closed policy can exclude accounts without a valid ticket and its background probes create upstream requests; this is a separate operational choice from installing the code.
-- Keep both account `ProxyPool` and upstream `CodexTurnTickets` DTO fields. Preserve client-profile validation together with the upstream protection of system-managed ticket state. Regenerate Wire so Kitty model capability/risk providers and the upstream settings dependency remain present.
-- The upstream invalid-amount input fix already exists in Kitty. Preserve the recharge-bonus component and both sets of validation cases. Preserve registration bootstrap tests and add the upstream promo-field flicker cases without opening registration before security settings finish loading.
-- Upstream adds no migration or Ent schema changes in this release. All historical Kitty/upstream SQL filenames and contents remain unchanged.
-- Include upstream paused-account OAuth refresh, durable response affinity after client cancellation, group-usage rollup query optimization, DeepSeek tool-output media handling, Gemini mixed-model discovery, strict Chat role normalization, redemption pagination, TOTP/payment/UI fixes, and the grpc dependency update.
-- Use a locally built embedded frontend and Linux binary with explicit candidate commit/version metadata. Assemble the OCI archive locally using the verified historical runtime-layer archive and replace the complete resources directory. Production receives only the finished artifact; current production backups and resource headroom checks remain required before switching traffic.
+## Identity diagnostics and protocol repair (2026-09-13)
 
-## v0.2.5 release requirements
+The candidate based on `0.2.4-kittyyyds.7` adds an admin-only recent-request
+diagnostic view, header-only v2 identity projection for legacy compact, and
+bounded parent-thread reference resolution. It changes no database schema,
+account settings, identity seeds/epochs, prices, business concurrency or request
+pacing. Keep the `.7` image and its recovery manifest as the immediate rollback
+until the candidate passes production acceptance. Application rollback alone is
+sufficient; never restore old balances or usage from a database dump for this fix.
 
-- Upgrade the verified `0.2.4-kitty.7` source at `0d5227968338949578a3b801397f19191126629c` to official `v0.2.5` while preserving Kitty customizations. The candidate version is `0.2.5-kitty.1`.
-- Archive the verified current source in its private GitHub Release before upgrading production. Preserve every historical release, tag, source archive, image, and recovery set; the old two-release cleanup policy is retired.
-- Build and test the frontend and embedded Linux/amd64 binary locally with resource limits. Production must not compile source or assemble images. Export and verify the current production image first; use the reviewed offline overlay tool locally to produce an image equivalent to `deploy/kitty-overlay.Dockerfile`. The new layer must whiteout the old `/app/resources` directory, include the complete matching resource tree, and replace `/app/sub2api` with the verified binary. Production only loads the finished image and switches to its immutable ID after validation.
-- Bind the source commit, old image ID/archive SHA-256, frontend manifest, binary SHA-256, resources manifest, final image ID, build toolchain and timestamp in the release manifest. Run the candidate in a resource-limited isolated Linux environment with recovery copies and isolated ports before production rollout. The legacy Dockerfile prebuilt stage is not the release driver for this upgrade; do not rely on an unavailable external driver.
-- Preserve per-model/resolution image prices, the ten-result candy-test limit, recharge bonuses, Kitty Apps, provider payment handling, registration-only Turnstile, custom group picker, site-specific endpoints, and client-profile/connection settings. Keep the selected risk controls reset off on upgrade; retired Cursor and variant-lock features remain removed. Account/browser auto-login is outside this release.
-- Retain all existing SQL migration filenames and checksums. Preflight `238_purge_unlimited_user_platform_quotas.sql` against the recovery copy before production migration and preserve the old database recovery set. `238_opencode_go_platform.sql` adds upstream platform support. The extra historical `231_disable_long_context_pricing.sql` ledger row is not deleted or recreated.
-- Keep Kitty routes and UI while applying upstream subscription visibility, API-key bulk editing/provider selection, scheduling thresholds, and WebSocket keepalive/queue fixes. Verify both custom and upstream regression tests before release.
-- `deploy/offline-overlay.py` writes an OCI archive for Docker's containerd image store. Its required build receipt binds the binary SHA-256, source commit, version/date, and matching frontend manifests recorded before and after compilation. Verify the loaded Linux image and served frontend assets before switching traffic.
-- A temporary process sharing the live database during traffic handoff must set `KITTY_DEPLOYMENT_HANDOFF=true`. This skips only the active channel-monitor and scheduled-account-test runners so they cannot duplicate paid probes. API requests, manual tests and other workers keep their existing behavior. Leave this variable unset on the final production process and restart it to restore these two runners; the variable is read at startup, not dynamically.
+Actual trace events are `identity_v2_outbound_start/result`. Headers received do
+not prove response completion. Recent diagnostics and parent reference caches
+are bounded and process-local; restarting clears them. Unresolved parents retain
+the client's original reference. Native WS terminal summaries do not claim TLS,
+per-frame identity or client delivery observations they do not possess.
+
+Regression gate: `TestIdentityV2*`, `TestOpenAIClientProfile*`, compact/service-tier
+and continuation tests, administrator route tests, and the two identity Vue
+component suites. Verify source/image identity, rollback availability and
+memory headroom; compile frontend and Linux binary locally. Server-side image
+assembly must stay in the existing bounded worker and stop on low headroom.
+
+## Independent identity v2 cutover
+
+The `0.2.4-kittyyyds.6` candidate replaces the prior custom identity code only on
+`kittyyyds.xyz`. Its immediate application rollback is
+`kitty-tb/sub2api:0.2.4-kittyyyds.5`, revision
+`b489a8aa579fbe2e6db94f246fe1a24899ddaf2c`, image ID
+`sha256:079dfcbc24dfe348c853f115e256431d12766ff9d801ead32064659a25b52be6`.
+
+Prepare and checksum the existing recovery set before migration. Migration 226
+only prepares enabled v2 seeds and leaves legacy fields intact while `.5` runs.
+After `.6` passes health/authentication/payment/catalog checks, enable the
+requested account 111 with the Mac declaration and standard TLS. Verify its
+request, then archive/remove the legacy identity fields. Other accounts remain
+opt-in. A Mac declaration does not emulate a physical device or promise changes
+to upstream model quality.
+
+The server-bound release directory is
+`/opt/kitty-tb/staging/codex-identity-v2-20260912`. Its `rollback-current.py
+--site kittyyyds --check` validates image/configuration and selective identity
+recovery; adding `--apply` restores the saved application and identity settings.
+It refuses conflicting newer administrator edits. Ordinary rollback does not
+restore the PostgreSQL/Redis dump over current usage, balances or credentials.
+The checksummed recovery set remains outside Git and is retained with all older
+release recovery sets. Production acceptance never authorizes automatic pruning.
 
 ## v0.2.4 release requirements
 
@@ -177,7 +249,7 @@ Do not restore the retired repository, service, user/admin handlers, routes, Vue
 - Keep the marker-based duplicate guard and preserve existing client instructions. Prompt content remains administrator-only in HTTP DTOs.
 - After deployment, enable the feature only for the intended Grok group and invalidate API-key auth cache entries for that group through the normal group update path.
 - Migration `187` is additive. An older binary ignores the new columns, but the enhancement is inactive while that binary is running.
-- Migration `188_enable_grok_enhancement_group.sql` enables the built-in prepend prompt only for the exact active Grok group named `Grok 澧炲己鐗坄 and queues auth-cache invalidation for its API keys.
+- Migration `188_enable_grok_enhancement_group.sql` enables the built-in prepend prompt only for the exact active Grok group named `Grok 增强版` and queues auth-cache invalidation for its API keys.
 
 ## v0.1.165 integration notes
 
@@ -225,7 +297,7 @@ Do not restore the retired repository, service, user/admin handlers, routes, Vue
 - Available-channel composite-group expansion comes from upstream and must coexist with Kitty's platform-filtered supported-model pricing view.
 - Production deployment must include `/app/resources` with the embedded binary so the model-pricing fallback catalog is available at runtime.
 - Keep `security_opt: no-new-privileges:true` in the production Compose service while retaining the existing Kitty timeout environment variables and proxy configuration.
-- Kitty `0.1.169-kitty.2` originally added `free-media-studio` as a client-managed catalog entry. The current Kitty tree supersedes that design: the four-mode workspace requires the persisted Kitty Apps runtime and optional planner migration `195_application_center_optional_planner.sql`. Do not restore `ClientManaged`, a standalone runtime fallback, direct media execution, `kittyImageHistory`, or `kittyVideoTask`. Keep the customer navigation branded `Kitty搴旂敤 / Kitty Apps` and attach the existing hot badge to that route.
+- Kitty `0.1.169-kitty.2` originally added `free-media-studio` as a client-managed catalog entry. The current Kitty tree supersedes that design: the four-mode workspace requires the persisted Kitty Apps runtime and optional planner migration `195_application_center_optional_planner.sql`. Do not restore `ClientManaged`, a standalone runtime fallback, direct media execution, `kittyImageHistory`, or `kittyVideoTask`. Keep the customer navigation branded `Kitty应用 / Kitty Apps` and attach the existing hot badge to that route.
 - Kitty `0.1.169-kitty.3` updates the built-in xAI media rate card to the official resolution-specific prices. Keep Grok group media price overrides empty when multiple Imagine models share a group so the model-specific defaults remain effective; use the image/video multipliers for customer pricing instead.
 - Kitty `0.1.169-kitty.4` adds channel-level video billing tiers in USD per second. Preserve the `video` billing mode, resolution-tier editor, duration/count multiplication, and legacy `image`/`per_request` per-call behavior. Production Grok media pricing stores the upstream balance rates per model and resolution in the channel, then applies independent image/video group multipliers of `1.5`.
 - Kitty `0.1.169-kitty.5` adds an account-scoped `openai_compatible` Grok media contract for third-party relays. Preserve image `1K/2K` to `1024x1024/2048x2048` normalization, `b64_json` responses, multipart image-edit forwarding with indexed `image[n]` fields and `mask`, the five-value video aspect-ratio whitelist, bounded duration/resolution checks, original 4xx/422 response passthrough, and the official-xAI default path. Application Center uses `json_object` for Grok planners while keeping strict JSON Schema for other planner platforms.

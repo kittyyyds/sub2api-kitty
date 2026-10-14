@@ -220,6 +220,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
@@ -257,6 +258,7 @@ import { COMMON_ERROR_STATUS_CODES } from '@/utils/errorBadges'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const route = useRoute()
 
 type DistributionMetric = 'tokens' | 'actual_cost'
 type EndpointSource = 'inbound' | 'upstream' | 'path'
@@ -366,6 +368,21 @@ const filters = ref<UsageQueryParams>({
   billing_type: null,
   billing_mode: null,
 })
+
+const applyRouteQueryFilters = () => {
+  const single = (value: string | null | Array<string | null> | undefined) =>
+    Array.isArray(value) ? value.find((item): item is string => typeof item === 'string' && item.length > 0) : value
+  const keyID = Number(single(route.query.api_key_id))
+  const start = single(route.query.start_date)
+  const end = single(route.query.end_date)
+  if (start && /^\d{4}-\d{2}-\d{2}$/.test(start)) startDate.value = start
+  if (end && /^\d{4}-\d{2}-\d{2}$/.test(end)) endDate.value = end
+  filters.value = { ...filters.value,
+    api_key_id: Number.isSafeInteger(keyID) && keyID > 0 ? keyID : undefined,
+    start_date: startDate.value, end_date: endDate.value,
+  }
+  granularity.value = getGranularityForRange(startDate.value, endDate.value)
+}
 
 const pagination = reactive({
   page: 1,
@@ -899,6 +916,7 @@ const switchToErrors = () => {
 }
 
 onMounted(() => {
+  applyRouteQueryFilters()
   loadSavedColumns()
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)

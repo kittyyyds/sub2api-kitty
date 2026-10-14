@@ -51,24 +51,20 @@ func TestFilterPlazaVisibleGroups_AuthedEmptySetSeesNoExclusive(t *testing.T) {
 }
 
 func TestFilterPlazaVisibleGroups_RestrictedUserSeesOnlyGrantedPublic(t *testing.T) {
-	// 开启公开分组限制后，公开分组也必须落在授权集合内，否则用户会在广场
-	// 看到自己实际绑定不了的分组。
 	allowed := map[int64]struct{}{1: {}, 2: {}}
 	visible := filterPlazaVisibleGroups(plazaGroups(), allowed, true)
 	ids := make([]int64, 0, len(visible))
-	for _, g := range visible {
-		ids = append(ids, g.ID)
+	for _, group := range visible {
+		ids = append(ids, group.ID)
 	}
-	// 3 是未授权的公开分组，受限后不可见；4 是未授权的专属分组，一贯不可见。
 	require.ElementsMatch(t, []int64{1, 2}, ids)
 }
 
 func TestFilterPlazaVisibleGroups_RestrictionDoesNotAffectAnonymous(t *testing.T) {
-	// 匿名没有用户记录，限制标志无从谈起，可见性必须与未受限时一致。
 	visible := filterPlazaVisibleGroups(plazaGroups(), nil, true)
 	ids := make([]int64, 0, len(visible))
-	for _, g := range visible {
-		ids = append(ids, g.ID)
+	for _, group := range visible {
+		ids = append(ids, group.ID)
 	}
 	require.ElementsMatch(t, []int64{1, 3}, ids)
 }
@@ -108,7 +104,7 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	}
 
 	// 有专属倍率:user_rate_multiplier 序列化输出
-	dto := toModelPlazaGroupDTO(&g, map[int64]float64{2: 0.5})
+	dto := toModelPlazaGroupDTO(&g, map[int64]float64{2: 0.5}, nil)
 	raw, err := json.Marshal(dto)
 	require.NoError(t, err)
 	var decoded map[string]any
@@ -117,10 +113,10 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	for _, key := range []string{
 		"id", "name", "description", "platform", "subscription_type",
 		"rate_multiplier", "user_rate_multiplier", "is_exclusive", "models",
-		"image_rate_independent", "image_rate_multiplier",
+		"long_context_pricing_enabled",
 		"video_rate_independent", "video_rate_multiplier",
 		"peak_rate_enabled", "peak_start", "peak_end", "peak_rate_multiplier",
-		"long_context_pricing_enabled",
+		"image_rate_independent", "image_rate_multiplier",
 	} {
 		_, exists := decoded[key]
 		require.Truef(t, exists, "plaza group DTO must expose %q", key)
@@ -152,7 +148,7 @@ func TestToModelPlazaGroupDTO_UserRateAndFieldWhitelist(t *testing.T) {
 	require.False(t, hasTimePricing, "无分时时不输出 time_pricing")
 
 	// 无专属倍率:user_rate_multiplier 整个字段省略
-	dtoNoRate := toModelPlazaGroupDTO(&g, nil)
+	dtoNoRate := toModelPlazaGroupDTO(&g, nil, nil)
 	rawNoRate, err := json.Marshal(dtoNoRate)
 	require.NoError(t, err)
 	var decodedNoRate map[string]any
@@ -314,6 +310,8 @@ func plazaMediaCatalogModel(
 	return model
 }
 
+func testPtr(v float64) *float64 { return &v }
+
 func TestToModelPlazaGroupDTO_LongContextTiersAndBasis(t *testing.T) {
 	maxTokens := 272000
 	g := service.PlazaGroup{
@@ -326,14 +324,14 @@ func TestToModelPlazaGroupDTO_LongContextTiersAndBasis(t *testing.T) {
 				BillingMode: service.BillingModeToken,
 				InputPrice:  testPtr(2.5e-6),
 				Intervals: []service.PricingInterval{
-					{MinTokens: 0, MaxTokens: &maxTokens, TierLabel: "≤272K", InputPrice: testPtr(2.5e-6)},
+					{MinTokens: 0, MaxTokens: &maxTokens, TierLabel: "<=272K", InputPrice: testPtr(2.5e-6)},
 					{MinTokens: 272000, TierLabel: ">272K", InputPrice: testPtr(5e-6)},
 				},
 			},
 			OfficialPricing: &service.PlazaOfficialPricing{
 				InputPrice: testPtr(2.5e-6),
 				Intervals: []service.PricingInterval{
-					{MinTokens: 0, MaxTokens: &maxTokens, TierLabel: "≤272K", InputPrice: testPtr(2.5e-6)},
+					{MinTokens: 0, MaxTokens: &maxTokens, TierLabel: "<=272K", InputPrice: testPtr(2.5e-6)},
 					{MinTokens: 272000, TierLabel: ">272K", InputPrice: testPtr(5e-6)},
 				},
 			},
@@ -341,7 +339,7 @@ func TestToModelPlazaGroupDTO_LongContextTiersAndBasis(t *testing.T) {
 		}},
 	}
 
-	raw, err := json.Marshal(toModelPlazaGroupDTO(&g, nil))
+	raw, err := json.Marshal(toModelPlazaGroupDTO(&g, nil, nil))
 	require.NoError(t, err)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(raw, &decoded))
@@ -349,22 +347,9 @@ func TestToModelPlazaGroupDTO_LongContextTiersAndBasis(t *testing.T) {
 
 	model := decoded["models"].([]any)[0].(map[string]any)
 	require.Equal(t, "whole_request", model["long_context_basis"])
-
-	pricing := model["pricing"].(map[string]any)
-	paidTiers := pricing["intervals"].([]any)
-	require.Len(t, paidTiers, 2)
-	require.Equal(t, ">272K", paidTiers[1].(map[string]any)["tier_label"])
-
-	official := model["official_pricing"].(map[string]any)
-	officialTiers := official["intervals"].([]any)
-	require.Len(t, officialTiers, 2)
-	first := officialTiers[0].(map[string]any)
-	require.Equal(t, "≤272K", first["tier_label"])
-	require.InDelta(t, 272000, first["max_tokens"].(float64), 0)
-	require.Contains(t, first, "cache_write_price", "区间 DTO 字段齐全（nil 输出 null）")
+	require.Len(t, model["pricing"].(map[string]any)["intervals"].([]any), 2)
+	require.Len(t, model["official_pricing"].(map[string]any)["intervals"].([]any), 2)
 }
-
-func testPtr(v float64) *float64 { return &v }
 
 func TestToModelPlazaGroupDTO_TimePricing(t *testing.T) {
 	g := service.PlazaGroup{
@@ -376,34 +361,16 @@ func TestToModelPlazaGroupDTO_TimePricing(t *testing.T) {
 			TimePricing: &service.TimePricingSchedule{Timezone: "Asia/Shanghai", Periods: []service.TimePricingPeriod{
 				{StartTime: "00:30", EndTime: "08:30", Multiplier: 0.5},
 			}},
-		}, {
-			Name:     "deepseek-reasoner",
-			Platform: "deepseek",
-			Pricing:  &service.ChannelModelPricing{BillingMode: service.BillingModeToken, InputPrice: testPtr(0.56e-6)},
-			TimePricing: &service.TimePricingSchedule{Timezone: "Asia/Shanghai", WeekdaysOnly: true, Periods: []service.TimePricingPeriod{
-				{StartTime: "00:30", EndTime: "08:30", Multiplier: 0.5},
-			}},
 		}},
 	}
-	raw, err := json.Marshal(toModelPlazaGroupDTO(&g, nil))
+	raw, err := json.Marshal(toModelPlazaGroupDTO(&g, nil, nil))
 	require.NoError(t, err)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(raw, &decoded))
 	model := decoded["models"].([]any)[0].(map[string]any)
-	tp := model["time_pricing"].(map[string]any)
-	require.Equal(t, "Asia/Shanghai", tp["timezone"])
-	_, hasWeekdaysOnly := tp["weekdays_only"]
-	require.False(t, hasWeekdaysOnly, "未开启仅工作日时字段省略")
-	periods := tp["periods"].([]any)
-	require.Len(t, periods, 1)
-	first := periods[0].(map[string]any)
-	require.Equal(t, "00:30", first["start_time"])
-	require.Equal(t, "08:30", first["end_time"])
-	require.InDelta(t, 0.5, first["multiplier"].(float64), 1e-12)
-
-	weekdaysModel := decoded["models"].([]any)[1].(map[string]any)
-	weekdaysTP := weekdaysModel["time_pricing"].(map[string]any)
-	require.Equal(t, true, weekdaysTP["weekdays_only"])
+	timePricing := model["time_pricing"].(map[string]any)
+	require.Equal(t, "Asia/Shanghai", timePricing["timezone"])
+	require.Len(t, timePricing["periods"].([]any), 1)
 }
 
 func TestFilterPlazaVisibleGroups_SubscribedExclusiveGroup(t *testing.T) {

@@ -60,6 +60,15 @@ const orderFactory = (status: string) => ({
 })
 
 describe('PaymentStatusPanel', () => {
+  it('offers a direct payment link when a hosted checkout popup cannot open', async () => {
+    const wrapper = mount(PaymentStatusPanel, {
+      props: { orderId: 42, payUrl: 'https://pay.example.com/session/42', expiresAt: '2099-01-01T12:30:00Z', paymentType: 'wxpay', orderType: 'balance' },
+      global: { stubs: { Icon: true } },
+    })
+    await flushPromises()
+    expect(wrapper.get('[data-test="pay-in-current-window"]').attributes('href')).toBe('https://pay.example.com/session/42')
+    wrapper.unmount()
+  })
   beforeEach(() => {
     vi.useFakeTimers()
     pollOrderStatus.mockReset()

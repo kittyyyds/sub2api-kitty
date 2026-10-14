@@ -10,8 +10,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
@@ -429,6 +431,45 @@ func TestFrontendServer_ServeIndexHTML(t *testing.T) {
 	})
 }
 
+func TestFrontendServer_RefreshExternalSettingsAfterCacheExpiry(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		t.Run(strconv.FormatBool(enabled), func(t *testing.T) {
+			provider := &mockSettingsProvider{settings: map[string]bool{"plugin_management_enabled": !enabled}}
+			server, err := NewFrontendServer(provider)
+			require.NoError(t, err)
+			request := func(etag string) *httptest.ResponseRecorder {
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				c.Request = httptest.NewRequest(http.MethodGet, "/admin/plugins", nil)
+				c.Request.Header.Set("If-None-Match", etag)
+				c.Set(middleware.CSPNonceKey, "nonce123")
+				server.serveIndexHTML(c)
+				c.Writer.WriteHeaderNow()
+				return w
+			}
+			first := request("")
+			require.Equal(t, http.StatusOK, first.Code)
+			oldETag := first.Header().Get("ETag")
+			require.NotEmpty(t, oldETag)
+			// Simulate a settings change in another process, with no local callback.
+			provider.settings = map[string]bool{"plugin_management_enabled": enabled}
+			require.Equal(t, http.StatusNotModified, request(oldETag).Code)
+			require.Equal(t, 1, provider.called)
+			server.cache.mu.Lock()
+			server.cache.expiresAt = time.Now().Add(-time.Second)
+			server.cache.mu.Unlock()
+			refreshed := request(oldETag)
+			require.Equal(t, http.StatusOK, refreshed.Code, "expired ETag must not preserve stale settings")
+			require.Equal(t, 2, provider.called)
+			require.Contains(t, refreshed.Body.String(), `"plugin_management_enabled":`+strconv.FormatBool(enabled))
+			require.NotEqual(t, oldETag, refreshed.Header().Get("ETag"))
+			require.Equal(t, "no-cache", refreshed.Header().Get("Cache-Control"))
+			require.Equal(t, http.StatusNotModified, request(refreshed.Header().Get("ETag")).Code)
+			require.Equal(t, 2, provider.called)
+		})
+	}
+}
+
 func TestFrontendServer_InvalidateCache(t *testing.T) {
 	t.Run("invalidates_cache", func(t *testing.T) {
 		provider := &mockSettingsProvider{
@@ -568,6 +609,7 @@ func TestFrontendServer_Middleware(t *testing.T) {
 		apiPaths := []string{
 			"/api/v1/users",
 			"/models",
+			"/models/gpt-5.5",
 			"/v1/models",
 			"/v1beta/chat",
 			"/backend-api/codex/responses",
@@ -577,6 +619,13 @@ func TestFrontendServer_Middleware(t *testing.T) {
 			"/health",
 			"/responses",
 			"/responses/compact",
+			"/chat/completions",
+			"/messages/count_tokens",
+			"/embeddings",
+			"/contents/generations/tasks",
+			"/contents/generations/tasks/task-123",
+			"/v3/contents/generations/tasks",
+			"/v3/contents/generations/tasks/task-123",
 			"/tts",
 			"/stt",
 			"/custom-voices",
@@ -584,6 +633,7 @@ func TestFrontendServer_Middleware(t *testing.T) {
 			"/custom-voices/voice-123/audio",
 			"/realtime",
 			"/web_search",
+			"/x_search",
 		}
 
 		for _, path := range apiPaths {

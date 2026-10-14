@@ -117,6 +117,7 @@ func TestDuplicateChannelMonitorCopiesConfigurationAndResetsRuntimeState(t *test
 		Provider:         MonitorProviderOpenAI,
 		APIMode:          MonitorAPIModeResponses,
 		Endpoint:         "https://api.example.com",
+		RequestPath:      "/v1/chat/completions",
 		APIKey:           "OLD:top-secret",
 		PrimaryModel:     "gpt-5.4-mini",
 		ExtraModels:      []string{"gpt-5.4", "gpt-5.3"},
@@ -148,6 +149,7 @@ func TestDuplicateChannelMonitorCopiesConfigurationAndResetsRuntimeState(t *test
 	require.Equal(t, source.Provider, duplicate.Provider)
 	require.Equal(t, source.APIMode, duplicate.APIMode)
 	require.Equal(t, source.Endpoint, duplicate.Endpoint)
+	require.Equal(t, source.RequestPath, duplicate.RequestPath)
 	require.Equal(t, "top-secret", duplicate.APIKey)
 	require.Equal(t, "NEW:top-secret", stored.APIKey)
 	require.Equal(t, source.PrimaryModel, duplicate.PrimaryModel)
@@ -205,6 +207,7 @@ func TestDuplicateChannelMonitorRecoversCommittedCopyForSameOperation(t *testing
 		Provider:         MonitorProviderOpenAI,
 		APIMode:          MonitorAPIModeResponses,
 		Endpoint:         "https://api.example.com",
+		RequestPath:      "/v1/chat/completions",
 		APIKey:           "OLD:top-secret",
 		PrimaryModel:     "gpt-5.4-mini",
 		IntervalSeconds:  60,

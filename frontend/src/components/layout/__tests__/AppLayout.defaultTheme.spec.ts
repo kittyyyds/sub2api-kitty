@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AppLayout from '../AppLayout.vue'
 
@@ -11,9 +11,8 @@ vi.mock('@/stores', () => ({
   useAppStore: () => ({ sidebarCollapsed: false })
 }))
 
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: 'user' } })
-}))
+const auth = vi.hoisted(() => ({ isAdmin: false, user: { role: 'user' } }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 
 vi.mock('@/stores/onboarding', () => ({
   useOnboardingStore: () => ({ setReplayCallback: vi.fn() })
@@ -42,6 +41,8 @@ afterEach(() => {
   document.body.className = ''
 })
 
+beforeEach(() => { auth.isAdmin = false })
+
 describe('default SUB2API application layout', () => {
   it('uses the standard shell for an ordinary customer without mutating the body theme', () => {
     document.body.classList.add('existing-body-class')
@@ -54,7 +55,7 @@ describe('default SUB2API application layout', () => {
       expect.arrayContaining(['min-h-screen', 'bg-gray-50', 'dark:bg-dark-950'])
     )
     expect(wrapper.classes()).not.toContain('customer-console-shell')
-    expect(wrapper.find('.bg-mesh-gradient').exists()).toBe(true)
+    expect(wrapper.find('.bg-mesh-gradient').exists()).toBe(false)
     expect(wrapper.get('[data-testid="content"]').text()).toBe('content')
     expect(document.body.className).toBe('existing-body-class')
 
@@ -74,6 +75,20 @@ describe('default SUB2API application layout', () => {
     expect(layoutSource).toContain("import '@/styles/console-theme.css'")
     expect(existsSync(consoleThemePath)).toBe(true)
     expect(document.body.className).toBe('existing-body-class')
+    wrapper.unmount()
+  })
+
+  it('preserves administrator dimensions while sharing the customer theme with portaled controls', () => {
+    auth.isAdmin = true
+    const wrapper = mount(AppLayout)
+    expect(wrapper.classes()).toContain('kitty-admin-shell')
+    expect(wrapper.classes()).not.toContain('kitty-customer-shell')
+    expect(wrapper.get('.kitty-console-main').classes()).toContain('lg:ml-[230px]')
+    expect(wrapper.get('main').classes()).toContain('lg:p-5')
+    expect(wrapper.find('.bg-mesh-gradient').exists()).toBe(false)
+    expect(document.documentElement.classList.contains('kitty-console-theme')).toBe(true)
+    wrapper.unmount()
+    expect(document.documentElement.classList.contains('kitty-console-theme')).toBe(false)
   })
 
   it('keeps the retired customer scene and theme out of the application sources', () => {

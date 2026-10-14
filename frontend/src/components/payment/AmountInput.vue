@@ -24,17 +24,40 @@
               ? 'amount-input__preset--active'
               : '',
           ]"
+          :data-testid="`quick-amount-${amt}`"
           @click="selectAmount(amt)"
         >
           <span v-if="bonusByAmount.get(amt)" class="amount-input__ribbon">{{ t('payment.includesBonus') }}</span>
           <span class="amount-input__price"><small>{{ amountSymbol }}</small><strong>{{ amt }}</strong></span>
-          <span class="amount-input__credit">{{ t('payment.baseCreditPreview', { amount: (Math.round(amt * rechargeMultiplier * 100) / 100).toFixed(2) }) }}</span>
+          <span class="amount-input__credit">{{ t('payment.baseCreditPreview', { amount: (Math.round(amt * effectiveMultiplier * 100) / 100).toFixed(2) }) }}</span>
           <span v-if="bonusByAmount.get(amt)" class="amount-input__bonus">
             <Icon name="gift" size="xs" />
-            <span>{{ t('payment.tierBonus', { amount: bonusByAmount.get(amt)!.bonus_amount.toFixed(2), days: bonusByAmount.get(amt)!.validity_days }) }}</span>
+            <span>{{ t(bonusByAmount.get(amt)!.validity_days === 0 ? 'payment.permanentTierBonus' : 'payment.tierBonus', { amount: bonusByAmount.get(amt)!.bonus_amount.toFixed(2), days: bonusByAmount.get(amt)!.validity_days }) }}</span>
           </span>
-          <span v-else class="amount-input__plain"><Icon name="creditCard" size="xs" />{{ t('payment.noTierBonus') }}</span>
+          <span v-else-if="quoteFor(amt).percent === 0" class="amount-input__plain"><Icon name="creditCard" size="xs" />{{ t('payment.noTierBonus') }}</span>
           <span v-if="modelValue === amt" class="amount-input__check" aria-hidden="true"><Icon name="check" size="xs" /></span>
+          <!-- 促销价签（单行）：仅命中档位的金额显示；红底白字、内圈点线、右侧圆孔、整体旋转 -->
+          <span
+            v-if="quoteFor(amt).percent > 0"
+            class="pointer-events-none absolute -right-2 -top-3 z-10 rotate-12"
+            data-testid="quick-amount-bonus-badge"
+          >
+            <span
+              class="relative flex items-center gap-1 whitespace-nowrap rounded bg-red-600 py-0.5 pl-1.5 pr-1 text-[11px] font-extrabold leading-tight tracking-tight text-white shadow-md ring-2 ring-white before:pointer-events-none before:absolute before:inset-[2px] before:rounded-sm before:border before:border-dotted before:border-white/70 dark:bg-red-500 dark:ring-dark-800"
+            >
+              <span>{{ badgeText(amt) }}</span>
+              <span class="h-1 w-1 shrink-0 rounded-full bg-white"></span>
+            </span>
+          </span>
+                    <!-- 配置了优惠阶梯时，所有按钮都显示第二行，保持高度一致：赠金显示到账 USD，折扣显示折后实付 -->
+          <span
+            v-if="showSecondLine"
+            :class="[
+              'mt-0.5 block text-[11px] font-normal leading-tight',
+              quoteFor(amt).percent > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-400 dark:text-gray-500',
+            ]"
+            data-testid="quick-amount-credited"
+          >{{ secondLine(amt) }}</span>
         </button>
       </div>
     </div>
@@ -69,6 +92,9 @@ import { useI18n } from 'vue-i18n'
 import { currencySymbol, normalizePaymentCurrency } from './currency'
 import Icon from '@/components/icons/Icon.vue'
 import type { RechargeBonusRule } from '@/types/payment'
+import type { RechargeBonusTier } from '@/types/payment'
+import { formatRechargeBonusNumber, quoteRechargeBonus, type RechargeBonusMode } from '@/utils/rechargeBonus'
+import { formatPaymentAmount } from './currency'
 
 const props = withDefaults(defineProps<{
   amounts?: number[]
@@ -78,13 +104,23 @@ const props = withDefaults(defineProps<{
   currency?: string
   bonusRules?: RechargeBonusRule[]
   rechargeMultiplier?: number
+  /** 充值优惠阶梯（按 min_amount 升序）；为空时不显示价签与第二行 */
+  bonusTiers?: RechargeBonusTier[]
+  /** 阶梯模式：bonus 赠金 / discount 折扣 */
+  bonusMode?: RechargeBonusMode
+  /** 充值倍率（1 支付币种 = multiplier USD），用于计算到账金额 */
+  multiplier?: number
+  /** 支付币种（折扣模式第二行实付金额的币种与精度） */
 }>(), {
   amounts: () => [10, 20, 50, 100, 200, 500, 1000, 2000, 5000],
   min: 0,
   max: 0,
   currency: undefined,
   bonusRules: () => [],
-  rechargeMultiplier: 1,
+  rechargeMultiplier: undefined,
+  bonusTiers: () => [],
+  bonusMode: 'bonus',
+  multiplier: 1,
 })
 
 const emit = defineEmits<{
@@ -102,6 +138,41 @@ const bonusByAmount = computed(() => new Map(props.bonusRules.map(rule => [rule.
 const filteredAmounts = computed(() =>
   props.amounts.filter((a) => (props.min <= 0 || a >= props.min) && (props.max <= 0 || a <= props.max))
 )
+
+const effectiveMultiplier = computed(() => props.rechargeMultiplier ?? props.multiplier)
+
+const showSecondLine = computed(() => props.bonusTiers.length > 0)
+
+function currencyDigits(): number {
+  if (!props.currency) return 2
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: props.currency }).resolvedOptions().maximumFractionDigits ?? 2
+  } catch {
+    return 2
+  }
+}
+
+function quoteFor(amt: number) {
+  return quoteRechargeBonus(bonusByAmount.value.has(amt) ? [] : props.bonusTiers, amt, {
+    multiplier: effectiveMultiplier.value,
+    mode: props.bonusMode,
+    currencyDigits: currencyDigits(),
+  })
+}
+
+// 价签文案：赠金「+20%」，折扣「20% OFF」
+function badgeText(amt: number): string {
+  const percent = formatRechargeBonusNumber(quoteFor(amt).percent)
+  return props.bonusMode === 'discount' ? `${percent}% OFF` : `+${percent}%`
+}
+
+function secondLine(amt: number): string {
+  const quote = quoteFor(amt)
+  if (props.bonusMode === 'discount') {
+    return t('payment.rechargeBonus.payShort', { amount: formatPaymentAmount(quote.payBase, props.currency) })
+  }
+  return t('payment.rechargeBonus.creditedShort', { amount: '$' + quote.credited.toFixed(2) })
+}
 
 const placeholderText = computed(() => {
   if (props.min > 0 && props.max > 0) return `${props.min} - ${props.max}`

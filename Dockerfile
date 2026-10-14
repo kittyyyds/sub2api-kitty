@@ -43,8 +43,8 @@ RUN --mount=type=cache,id=sub2api-pnpm-store,target=/root/.local/share/pnpm/stor
 # Copy only that subtree to keep the build dependency minimal.
 COPY frontend/ ./
 COPY docs/legal/ /app/docs/legal/
-# Small release hosts can use the separately verified frontend-prebuilt stage.
-# The default remains a complete frontend build from source.
+# Small release hosts use separately verified frontend artifacts.
+ENV NODE_OPTIONS=--max-old-space-size=3072
 RUN pnpm run build
 
 FROM scratch AS frontend-prebuilt

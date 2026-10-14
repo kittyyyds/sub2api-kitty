@@ -95,6 +95,7 @@
     <!-- Quick Actions -->
     <div class="mb-4 flex flex-wrap gap-2">
       <button
+        v-if="hasRelatedModels"
         type="button"
         @click="fillRelated"
         class="rounded-lg border border-blue-200 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
@@ -159,9 +160,11 @@ const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: string[]
+  modelMappings?: { from: string; to: string }[]
   platform?: string
   platforms?: string[]
   accountId?: number
+  syncBlockedReason?: string
   syncCredentials?: {
     platform: string
     type: string
@@ -206,6 +209,7 @@ const upstreamSyncPlatforms = new Set([
   'gemini',
   'antigravity',
   'grok',
+  'video',
   'kimi',
   'zhipu',
   'deepseek',
@@ -237,6 +241,10 @@ const availableOptions = computed(() => {
 
   return allModels.filter(model => allowedModels.has(model.value))
 })
+
+const hasRelatedModels = computed(() => normalizedPlatforms.value.some(
+  platform => getModelsByPlatform(platform).length > 0
+))
 
 const filteredModels = computed(() => {
   const query = searchQuery.value.toLowerCase().trim()
@@ -274,6 +282,11 @@ const addCustom = () => {
     appStore.showInfo(t('admin.accounts.modelExists'))
     return
   }
+  const conflict = props.modelMappings?.find(mapping => mapping.from.trim() === model && mapping.to.trim() && mapping.to.trim() !== model)
+  if (conflict) {
+    appStore.showInfo(t('admin.accounts.modelMappingConflict', { from: model, to: conflict.to.trim() }))
+    return
+  }
   emit('update:modelValue', [...props.modelValue, model])
   customModel.value = ''
 }
@@ -296,15 +309,22 @@ const fillRelated = () => {
 
 const syncUpstreamModels = async () => {
   if (isSyncingUpstream.value) return
+  if (props.syncBlockedReason) {
+    appStore.showError(props.syncBlockedReason)
+    return
+  }
   if (!props.accountId && !props.syncCredentials) return
 
   isSyncingUpstream.value = true
   try {
     let result
-    if (props.accountId) {
-      result = await accountsAPI.syncUpstreamModels(props.accountId)
-    } else if (props.syncCredentials) {
+    // When editing an existing account, use freshly entered credentials for a
+    // preview before the user saves the account. If no new key is entered,
+    // fall back to the persisted account credentials.
+    if (props.syncCredentials) {
       result = await accountsAPI.syncUpstreamModelsPreview(props.syncCredentials as SyncUpstreamPreviewParams)
+    } else if (props.accountId) {
+      result = await accountsAPI.syncUpstreamModels(props.accountId)
     } else {
       return
     }
@@ -349,7 +369,11 @@ const syncUpstreamModels = async () => {
       appStore.showWarning(t('admin.accounts.syncUpstreamModelsMetadataPartial'))
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : t('admin.accounts.syncUpstreamModelsFailed')
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string'
+        ? error.message
+        : t('admin.accounts.syncUpstreamModelsFailed')
     appStore.showError(t('admin.accounts.syncUpstreamModelsError', { message }))
   } finally {
     isSyncingUpstream.value = false

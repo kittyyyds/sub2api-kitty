@@ -20,7 +20,7 @@ const appStore = useAppStore()
 
 const textRate = computed(() => props.group.user_rate_multiplier ?? props.group.rate_multiplier)
 const usesPersonalTextRate = computed(() => (
-  props.group.user_rate_multiplier != null
+  props.group.platform !== 'video' && props.group.user_rate_multiplier != null
   && Math.abs(props.group.user_rate_multiplier - props.group.rate_multiplier) > Number.EPSILON
 ))
 const imageRate = computed(() => (
@@ -31,7 +31,7 @@ const videoRate = computed(() => (
 ))
 
 const peakWindow = computed(() => {
-  if (!hasPeakRate(props.group)) return ''
+  if (props.group.platform === 'video' || !hasPeakRate(props.group)) return ''
   return formatPeakRateWindow(
     props.group,
     serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset)
@@ -77,7 +77,7 @@ function rateLabel(value: number): string {
         <p>{{ group.description || t('modelPlaza.detail.defaultDescription') }}</p>
       </div>
 
-      <div class="rate-list" :aria-label="t('modelPlaza.detail.effectiveRate')">
+      <div v-if="group.platform !== 'video'" class="rate-list" :aria-label="t('modelPlaza.detail.effectiveRate')">
         <span>
           {{ t(usesPersonalTextRate ? 'modelPlaza.detail.personalTextRate' : 'modelPlaza.detail.textRate') }}
           <strong>{{ rateLabel(textRate) }}</strong>
@@ -91,6 +91,7 @@ function rateLabel(value: number): string {
           <strong>{{ rateLabel(videoRate) }}</strong>
         </span>
       </div>
+      <div v-else class="rate-list">{{ t('videoModule.finalPrice') }}</div>
     </header>
 
     <p v-if="usesPersonalTextRate" class="personal-rate-note">

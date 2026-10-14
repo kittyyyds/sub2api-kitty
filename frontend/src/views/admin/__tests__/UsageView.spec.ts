@@ -205,6 +205,16 @@ describe('admin UsageView route filters', () => {
     vi.useRealTimers()
   })
 
+  it('opens an old video receipt with owner, key and settlement date range', async () => {
+    Object.assign(routeQuery, { user_id: '42', api_key_id: '166', start_date: '2026-01-03', end_date: '2026-01-06' })
+    const wrapper = mountRouteFilteredUsageView()
+    await flushPromises()
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: 42, api_key_id: 166, start_date: '2026-01-03', end_date: '2026-01-06',
+    }), expect.anything())
+    wrapper.unmount()
+  })
+
   it('shows the routed user while applying user_id to usage requests', async () => {
     routeQuery.user_id = '42'
     getById.mockResolvedValue({ id: 42, email: 'route-user@test.com' })

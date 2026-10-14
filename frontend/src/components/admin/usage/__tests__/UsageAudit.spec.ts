@@ -8,6 +8,8 @@ import UsageAuditDetailDialog from '../UsageAuditDetailDialog.vue'
 
 const messages: Record<string, string> = {
   'admin.usage.audit.status.anomaly': 'Anomaly',
+  'admin.usage.audit.localEstimateDisabled': 'Local cross-check disabled',
+  'admin.usage.audit.reasonsMap.local_estimate_disabled': 'Local cross-check disabled; upstream usage and normal billing are retained',
   'admin.usage.audit.status.missing': 'Missing',
   'admin.usage.audit.status.warning': 'Review',
   'admin.usage.audit.status.pass': 'Trusted',
@@ -179,5 +181,49 @@ describe('UsageAuditDetailDialog', () => {
     expect(wrapper.text()).toContain('input_token_deviation_high')
     expect(wrapper.text()).toContain('input_tokens')
     expect(wrapper.text()).not.toContain('prompt')
+  })
+})
+
+
+describe('disabled local token cross-check', () => {
+  const disabledRow = {
+    ...row,
+    usage_audit: {
+      ...audit,
+      version: 2,
+      status: 'unverifiable',
+      confidence: 'low',
+      evidence_source: 'normalized_only',
+      estimator: undefined,
+      local: {},
+      delta: {},
+      deviation_pct: {},
+      reasons: ['local_estimate_disabled'],
+      upstream_raw_usage: undefined,
+    },
+  } as AdminUsageLog
+
+  it('labels the table row as disabled while retaining upstream usage', () => {
+    const wrapper = mount(UsageAuditTable, {
+      props: { data: [disabledRow] },
+      global: { stubs: { Icon: IconStub } },
+    })
+    expect(wrapper.text()).toContain('Local cross-check disabled')
+    expect(wrapper.text()).toContain('Input 120')
+    expect(wrapper.text()).toContain('Cache 20')
+    expect(wrapper.text()).not.toContain('Trusted')
+    expect(wrapper.text()).not.toContain('Anomaly')
+  })
+
+  it('explains the disabled cross-check in the detail without fabricated estimates', async () => {
+    const wrapper = mount(UsageAuditDetailDialog, {
+      props: { show: true, row: disabledRow },
+      global: { stubs: { BaseDialog: BaseDialogStub, Icon: IconStub } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('upstream usage and normal billing are retained')
+    expect(wrapper.text()).not.toContain('responses_tiktoken_v1')
+    expect(wrapper.text()).not.toContain('Trusted')
+    expect(wrapper.text()).not.toContain('input_token_deviation_high')
   })
 })

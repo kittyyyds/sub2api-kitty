@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { communityGroupContact, telegramGroupContact } from '@/config/customerContact'
 
 import HeyRouteContactDialog, { type HeyRouteContactPlatform } from './HeyRouteContactDialog.vue'
 import type { HeyRouteCopy } from './heyRouteCopy'
@@ -22,12 +23,16 @@ const platforms = computed<HeyRouteContactPlatform[]>(() => [
     icon: 'chat',
     title: props.copy.communityDialogQqTitle,
     description: props.copy.communityDialogQqDescription,
-    valueLabel: props.copy.communityDialogGroupNumber,
-    value: '494038',
-    copyLabel: props.copy.communityDialogCopy,
+    valueLabel: communityGroupContact.valueKind === 'number'
+      ? props.copy.communityDialogGroupNumber
+      : props.copy.communityDialogGroupLink,
+    value: communityGroupContact.value,
+    copyLabel: communityGroupContact.valueKind === 'number'
+      ? props.copy.communityDialogCopy
+      : props.copy.communityDialogCopyLink,
     externalLabel: props.copy.communityDialogOpenQq,
-    externalUrl: 'https://qm.qq.com/q/aP8eapBPpu',
-    qrSrc: '/images/heyroute/community/qq-qr.png',
+    externalUrl: communityGroupContact.href,
+    qrSrc: communityGroupContact.qrSrc,
     qrAlt: props.copy.communityDialogQqQrAlt,
     qrBackground: '#060b10',
   },
@@ -40,8 +45,8 @@ const platforms = computed<HeyRouteContactPlatform[]>(() => [
     valueLabel: props.copy.communityDialogGroupLink,
     value: 't.me/kittyapi1',
     externalLabel: props.copy.communityDialogOpenTelegram,
-    externalUrl: 'https://t.me/kittyapi1',
-    qrSrc: '/images/heyroute/community/telegram-qr.png',
+    externalUrl: telegramGroupContact.href,
+    qrSrc: telegramGroupContact.qrSrc,
     qrAlt: props.copy.communityDialogTelegramQrAlt,
     qrBackground: '#060b10',
   },

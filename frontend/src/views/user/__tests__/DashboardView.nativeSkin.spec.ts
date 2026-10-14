@@ -47,29 +47,22 @@ describe('native customer dashboard skin contract', () => {
     expect(quickActions).toContain('dashboard-quick-actions')
   })
 
-  it('uses the compact screenshot shell without changing routing behavior', () => {
+  it('uses the spacious console shell without changing routing behavior', () => {
     expect(layout).toContain('kitty-console-main')
-    expect(layout).toContain("sidebarCollapsed ? 'lg:ml-[68px]' : 'lg:ml-[230px]'")
+    expect(layout).toContain("sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64'")
     expect(header).toContain('data-console-header')
     expect(header).toContain('data-console-header-actions')
   })
 
-  it('defines responsive dashboard tokens and a 7:5 chart split', () => {
-    expect(theme).toContain('--kc-panel: #f7f7f3')
-    expect(theme).toContain('--kc-panel-soft: rgba(247, 247, 243, 0.76)')
-    expect(theme).toContain('--kc-line: rgba(39, 46, 43, 0.11)')
-    expect(theme).toContain('--kc-hover: rgba(35, 43, 40, 0.07)')
+  it('keeps Kitty branding and responsive grids while sharing tokens with portals', () => {
+    expect(theme).toContain('--kc-bg: #f2f1ec')
+    expect(theme).toContain('--kc-accent: #c45100')
     expect(theme).toContain('--kc-panel: #202b3b')
-    expect(theme).toContain('--kc-panel-soft: rgba(32, 43, 59, 0.9)')
+    expect(theme).toContain('html.kitty-console-theme')
     expect(theme).toContain('.dashboard-charts-grid')
-    expect(theme).toContain('grid-template-columns: minmax(0, 7fr) minmax(0, 5fr)')
-    expect(theme).toContain('.dashboard-stats-row')
+    expect(theme).toContain('repeat(2, minmax(0, 1fr))')
     expect(theme).toContain('repeat(4, minmax(0, 1fr))')
-    expect(theme).toContain('max-width: 2320px')
-    expect(theme).toContain('align-items: stretch')
     expect(theme).toContain('@media (max-width: 1199px)')
-    expect(theme).toMatch(/@media \(max-width: 1199px\)[\s\S]*?\.dashboard-stats-row[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/)
-    expect(theme).toContain("data-console-performance='lite'")
   })
 
   it('turns off chart animation in the detected lite mode', () => {

@@ -21,25 +21,18 @@ const emit = defineEmits<{
 }>()
 
 const rows = computed(() => {
-  const openAI = props.summaries.find((item) => item.platform === 'openai')
-  const anthropic = props.summaries.find((item) => item.platform === 'anthropic')
-  const grok = props.summaries.find((item) => item.platform === 'grok')
-  const defaults = [
-    { summary: openAI, rateMultiplier: 0.08, groupName: 'Codex - 福利池 - 【尽量不断】', modelCount: 4 },
-    { summary: null, rateMultiplier: 0.7, groupName: 'CC-Max - 满血- 【首选】', modelCount: 16 },
-    { summary: grok, rateMultiplier: 0.15, groupName: 'Grok - 正品会员 号池', modelCount: 11 },
-    { summary: anthropic, rateMultiplier: 0.1, groupName: 'Claude-Kiro-90缓', modelCount: 16 },
-  ]
+  const summariesByModel = new Map(
+    props.summaries.map((summary) => [summary.featuredModel.toLowerCase(), summary]),
+  )
 
-  return props.copy.fallbacks.map((fallback, index) => {
-    const row = defaults[index]
-    const summary = row?.summary
+  return props.copy.fallbacks.map((fallback) => {
+    const summary = summariesByModel.get(fallback.model.toLowerCase())
     return {
       ...fallback,
       featuredModel: fallback.model,
-      rateMultiplier: summary?.rateMultiplier ?? row?.rateMultiplier ?? null,
-      groupName: summary?.groupName || row?.groupName || props.copy.unavailable,
-      modelCount: summary?.modelCount ?? row?.modelCount ?? null,
+      rateMultiplier: summary?.rateMultiplier ?? null,
+      groupName: summary?.groupName || props.copy.unavailable,
+      modelCount: summary?.modelCount ?? null,
     }
   })
 })

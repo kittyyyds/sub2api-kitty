@@ -31,6 +31,14 @@
       </section>
     </div>
 
+    <div v-else-if="compact" class="monitor-compact-board">
+      <div class="monitor-compact-tools">
+        <div class="monitor-provider-filters" :aria-label="ht('homeOverview.allProviders')"><button v-for="provider in compactProviders" :key="provider.key" type="button" :aria-pressed="selectedProvider === provider.key" @click="selectedProvider = provider.key">{{ provider.label }} <span>{{ provider.count }}</span></button></div>
+        <input v-model="search" type="search" :aria-label="ht('homeOverview.channelSearch')" :placeholder="ht('homeOverview.channelSearch')" />
+      </div>
+      <div v-if="compactItems.length" class="monitor-compact-grid"><MonitorCard v-for="item in compactItems" :key="item.id" :item="item" :availability-value="resolveAvailability(item)" :rate-multiplier="resolveRateMultiplier(item)" @click="emit('cardClick', item)" /></div>
+      <p v-else class="home-empty">{{ ht('homeOverview.channelEmpty') }}</p>
+    </div>
     <div v-else class="space-y-6">
       <section
         v-for="section in providerSections"
@@ -83,7 +91,7 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { UserMonitorView, UserMonitorDetail, Provider } from '@/api/channelMonitor'
 import {
   PROVIDER_ANTHROPIC,
@@ -103,6 +111,7 @@ interface MonitorSection {
 }
 
 const props = defineProps<{
+  compact?: boolean
   items: UserMonitorView[]
   window: '7d' | '15d' | '30d'
   loading: boolean
@@ -115,7 +124,11 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { t: ht } = useI18n()
 const { providerLabel } = useChannelMonitorFormat()
+const selectedProvider = ref('all'), search = ref('')
+const compactProviders = computed(() => [{ key: 'all', label: ht('homeOverview.allProviders'), count: props.items.length }, ...Array.from(new Set(props.items.map(i => i.provider))).map(provider => ({ key: provider, label: providerLabel(provider), count: props.items.filter(i => i.provider === provider).length }))])
+const compactItems = computed(() => props.items.filter(item => (selectedProvider.value === 'all' || selectedProvider.value === item.provider) && `${item.name} ${item.group_name} ${item.primary_model}`.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())))
 
 const providerSections = computed<MonitorSection[]>(() => {
   const openAIItems = props.items.filter(item => item.provider === PROVIDER_OPENAI)

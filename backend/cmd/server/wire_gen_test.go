@@ -52,6 +52,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	opsSystemLogSinkSvc := service.NewOpsSystemLogSink(nil)
 
 	cleanup := provideCleanup(
+		nil, // default/full runtime configuration
+		nil, // request capture manager
 		nil, // entClient
 		nil, // redis
 		&service.OpsMetricsCollector{},
@@ -63,6 +65,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // opsService
 		nil, // opsIngressRejectAggregator
 		nil, // apiKeyService
+		nil, // concurrencyService
 		nil, // authCacheInvalidationWorker
 		schedulerSnapshotSvc,
 		tokenRefreshSvc,
@@ -88,11 +91,13 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // grokOAuth
 		nil, // openAIGateway
 		nil, // scheduledTestRunner
+		nil, // accountOps
+		nil, // accountTokenGuard
+		nil, // accountTokenGuardV2
 		nil, // backupSvc
 		nil, // paymentOrderExpiry
 		nil, // rechargeBonusExpiry
 		nil, // channelMonitorRunner
-		nil, // candyTestService
 		nil, // channelMonitorV2Aggregator
 		nil, // quotaFlusher
 		nil, // upstreamBillingProbe
@@ -101,7 +106,6 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // auditLog
 		nil, // openAIAutoReset
 		nil, // promptAudit
-		nil, // contentModeration
 		nil, // pluginManager
 	)
 

@@ -35,6 +35,16 @@ describe('GroupSelector simple-mode binding policy', () => {
     expect(wrapper.text()).toContain('Composite')
   })
 
+  it('isolates video account bindings from composite and other platforms', () => {
+    const wrapper = mount(GroupSelector, {
+      props: { modelValue: [], platform: 'video', groups: [...groups, { id: 3, name: 'Video group', platform: 'video' }] },
+      global: { stubs: { GroupBadge: { props: ['name'], template: '<span>{{ name }}</span>' }, Icon: true } },
+    })
+    expect(wrapper.text()).toContain('Video group')
+    expect(wrapper.text()).not.toContain('Composite')
+    expect(wrapper.text()).not.toContain('Basic')
+  })
+
   it('cleans hidden historical composite IDs while preserving visible selections', () => {
     authState.isSimpleMode = true
     const wrapper = mountSelector([1, 2])

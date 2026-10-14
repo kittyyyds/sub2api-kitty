@@ -63,6 +63,61 @@ func TestRechargeBonusGrantForOrderIsIdempotent(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestRechargeBonusSnapshotAcceptsPermanentButRejectsNegativeDuration(t *testing.T) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	repo := newRechargeBonusRepository(db)
+	rule := &service.RechargeBonusRule{ID: 3, RechargeAmount: 50, BonusAmount: 1.99, ValidityDays: 0}
+	mock.ExpectExec(`INSERT INTO recharge_bonus_order_snapshots`).
+		WithArgs(int64(88), int64(3), 50.0, 1.99, 0).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	require.NoError(t, repo.SnapshotOrder(ctx, db, 88, rule))
+	rule.ValidityDays = -1
+	require.NoError(t, repo.SnapshotOrder(ctx, db, 89, rule))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRechargeBonusPermanentGrantAndDuplicateReadNullExpiry(t *testing.T) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	repo := newRechargeBonusRepository(db)
+	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 2; i++ {
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT rule_id, bonus_amount::double precision, validity_days`).
+			WithArgs(int64(88)).
+			WillReturnRows(sqlmock.NewRows([]string{"rule_id", "bonus_amount", "validity_days"}).AddRow(3, 1.99, 0))
+		insert := mock.ExpectQuery(`INSERT INTO recharge_bonus_grants`).
+			WithArgs(int64(42), int64(88), int64(3), 1.99, nil)
+		if i == 0 {
+			insert.WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(901))
+			mock.ExpectQuery(`UPDATE users\s+SET balance = balance \+ \$1`).
+				WithArgs(1.99, int64(42)).
+				WillReturnRows(sqlmock.NewRows([]string{"balance"}).AddRow(101.99))
+			mock.ExpectExec(`INSERT INTO recharge_bonus_ledger`).
+				WithArgs(int64(901), int64(42), "payment:88", 1.99).
+				WillReturnResult(sqlmock.NewResult(1, 1))
+			mock.ExpectCommit()
+		} else {
+			insert.WillReturnError(sql.ErrNoRows)
+			mock.ExpectQuery(`SELECT id, granted_amount::double precision, remaining_amount::double precision, expires_at`).
+				WithArgs(int64(88)).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "granted_amount", "remaining_amount", "expires_at"}).AddRow(901, 1.99, 1.99, nil))
+			mock.ExpectRollback()
+		}
+		result, err := repo.GrantForOrder(ctx, 88, 42, now)
+		require.NoError(t, err)
+		require.Equal(t, i == 0, result.Applied)
+		require.Nil(t, result.ExpiresAt)
+		require.Equal(t, 1.99, result.BonusAmount)
+	}
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestRechargeBonusConsumeUsesEarliestExpiryFirst(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()

@@ -52,64 +52,10 @@ type Options struct {
 	MaxIdleConns        int // 最大空闲连接总数（默认 100）
 	MaxIdleConnsPerHost int // 每主机最大空闲连接（默认 10）
 	MaxConnsPerHost     int // 每主机最大连接数（默认 0 无限制）
-	// ConfigureTransport is an internal opt-in hook. Its stable key must
-	// describe every setting and tenant boundary affected by the hook.
-	TransportConfigKey string
-	ConfigureTransport func(*http.Transport) error
 }
 
 // sharedClients 存储按配置参数缓存的 http.Client 实例
 var sharedClients sync.Map
-
-// Custom profiles contain an account identity and may be edited repeatedly.
-// Bound only these entries; preserve the original default pool behavior.
-var customClients = newCustomClientCache(256)
-
-type customClientCacheEntry struct {
-	client *http.Client
-	used   uint64
-}
-type customClientCache struct {
-	mu       sync.Mutex
-	entries  map[string]customClientCacheEntry
-	capacity int
-	sequence uint64
-}
-
-func newCustomClientCache(capacity int) *customClientCache {
-	return &customClientCache{entries: make(map[string]customClientCacheEntry), capacity: capacity}
-}
-
-func (c *customClientCache) get(key string, opts Options) (*http.Client, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.sequence++
-	if entry, ok := c.entries[key]; ok {
-		entry.used = c.sequence
-		c.entries[key] = entry
-		return entry.client, nil
-	}
-	client, err := buildClient(opts)
-	if err != nil {
-		return nil, err
-	}
-	if len(c.entries) >= c.capacity {
-		var oldestKey string
-		var oldest customClientCacheEntry
-		for candidate, entry := range c.entries {
-			if oldest.client == nil || entry.used < oldest.used {
-				oldestKey = candidate
-				oldest = entry
-			}
-		}
-		if oldest.client != nil {
-			delete(c.entries, oldestKey)
-			oldest.client.CloseIdleConnections()
-		}
-	}
-	c.entries[key] = customClientCacheEntry{client: client, used: c.sequence}
-	return client, nil
-}
 
 // 允许测试替换校验函数，生产默认指向真实实现。
 var validateResolvedIP = urlvalidator.ValidateResolvedIP
@@ -118,13 +64,7 @@ var validateResolvedIP = urlvalidator.ValidateResolvedIP
 // 性能优化：相同配置复用同一客户端，避免重复创建 Transport
 // 安全说明：代理配置失败时直接返回错误，不会回退到直连，避免 IP 关联风险
 func GetClient(opts Options) (*http.Client, error) {
-	if opts.ConfigureTransport != nil && opts.TransportConfigKey == "" {
-		return nil, fmt.Errorf("custom transport configuration requires a cache key")
-	}
 	key := buildClientKey(opts)
-	if opts.ConfigureTransport != nil {
-		return customClients.get(key, opts)
-	}
 	if cached, ok := sharedClients.Load(key); ok {
 		if client, ok := cached.(*http.Client); ok {
 			return client, nil
@@ -143,6 +83,23 @@ func GetClient(opts Options) (*http.Client, error) {
 	return client, nil
 }
 
+// EvictProxyClients 移除为指定代理 URL 缓存的全部客户端
+// 仅用于随进程消失的临时代理（如 Mihomo 单节点检测监听）：每次检测的端口与凭据都不同，
+// 不移除会让缓存随检测次数无限增长。空 URL 直接忽略，不影响直连客户端。
+func EvictProxyClients(proxyURL string) {
+	proxyURL = strings.TrimSpace(proxyURL)
+	if proxyURL == "" {
+		return
+	}
+	prefix := proxyURL + "|"
+	sharedClients.Range(func(key, _ any) bool {
+		if k, ok := key.(string); ok && strings.HasPrefix(k, prefix) {
+			sharedClients.Delete(key)
+		}
+		return true
+	})
+}
+
 func buildClient(opts Options) (*http.Client, error) {
 	transport, err := buildTransport(opts)
 	if err != nil {
@@ -154,23 +111,11 @@ func buildClient(opts Options) (*http.Client, error) {
 		rt = newValidatedTransport(transport)
 	}
 	rt = servertiming.WrapRoundTripper(rt)
-	if opts.ConfigureTransport != nil {
-		// Instrumentation wrappers must not hide the transport's idle-close
-		// method from the bounded cache. Active responses are not interrupted.
-		rt = &managedCustomTransport{RoundTripper: rt, transport: transport}
-	}
 	return &http.Client{
 		Transport: rt,
 		Timeout:   opts.Timeout,
 	}, nil
 }
-
-type managedCustomTransport struct {
-	http.RoundTripper
-	transport *http.Transport
-}
-
-func (t *managedCustomTransport) CloseIdleConnections() { t.transport.CloseIdleConnections() }
 
 func buildTransport(opts Options) (*http.Transport, error) {
 	// 使用自定义值或默认值
@@ -202,22 +147,25 @@ func buildTransport(opts Options) (*http.Transport, error) {
 
 	_, parsed, err := proxyurl.Parse(opts.ProxyURL)
 	if err != nil {
-		return nil, err
-	}
-	if err := proxyutil.ConfigureTransportProxy(transport, parsed); err != nil {
-		return nil, err
-	}
-	if opts.ConfigureTransport != nil {
-		if err := opts.ConfigureTransport(transport); err != nil {
+		var parseErr error
+		_, parsed, parseErr = proxyurl.ParseFlexible(opts.ProxyURL, "http")
+		if parseErr != nil {
 			return nil, err
 		}
+	}
+	if parsed == nil {
+		return transport, nil
+	}
+
+	if err := proxyutil.ConfigureTransportProxy(transport, parsed); err != nil {
+		return nil, err
 	}
 
 	return transport, nil
 }
 
 func buildClientKey(opts Options) string {
-	base := fmt.Sprintf("%s|%s|%s|%t|%t|%t|%d|%d|%d",
+	return fmt.Sprintf("%s|%s|%s|%t|%t|%t|%d|%d|%d",
 		strings.TrimSpace(opts.ProxyURL),
 		opts.Timeout.String(),
 		opts.ResponseHeaderTimeout.String(),
@@ -228,10 +176,6 @@ func buildClientKey(opts Options) string {
 		opts.MaxIdleConnsPerHost,
 		opts.MaxConnsPerHost,
 	)
-	if opts.TransportConfigKey != "" {
-		base += "|custom:" + opts.TransportConfigKey
-	}
-	return base
 }
 
 type validatedTransport struct {

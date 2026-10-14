@@ -7,10 +7,7 @@
       </svg>
     </CapacityBadge>
 
-    <div v-for="proxyId in proxyPool" :key="proxyId" class="flex items-center gap-1 pl-2 text-[10px] text-gray-500 dark:text-gray-400">
-      <span class="truncate">P{{ proxyId }}</span>
-      <CapacityBadge :color-class="proxyConcurrencyClass(proxyId)" :current="proxyConcurrency(proxyId)" :max="account.concurrency" />
-    </div>
+    <AccountConcurrencyProgress v-if="concurrencyUpgradeEnabled" :account="account" />
 
     <!-- 5h窗口费用限制 -->
     <CapacityBadge v-if="showWindowCost" :color-class="windowCostClass" :tooltip="windowCostTooltip" :current="'$' + formatCost(currentWindowCost)" :max="'$' + formatCost(account.window_cost_limit)">
@@ -27,7 +24,7 @@
     </CapacityBadge>
 
     <!-- RPM 限制 -->
-    <CapacityBadge v-if="showRpmLimit" :color-class="rpmClass" :tooltip="rpmTooltip" :current="currentRPM" :max="account.base_rpm!" :suffix="rpmStrategyTag">
+    <CapacityBadge v-if="showRpmLimit" :color-class="rpmClass" :tooltip="rpmTooltip" :current="currentRPM" :max="account.base_rpm!" :suffix="isOpenAIOAuth ? '' : rpmStrategyTag">
       <svg class="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
       </svg>
@@ -44,11 +41,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/types'
+import AccountConcurrencyProgress from './AccountConcurrencyProgress.vue'
 import CapacityBadge from '@/components/account/CapacityBadge.vue'
 import QuotaBadge from '@/components/account/QuotaBadge.vue'
 
 const props = defineProps<{
   account: Account
+  concurrencyUpgradeEnabled?: boolean
 }>()
 
 const { t } = useI18n()
@@ -63,21 +62,6 @@ const concurrencyClass = computed(() => {
   if (current > 0) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
   return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
 })
-
-const proxyPool = computed(() => {
-  const configured = props.account.proxy_pool?.filter((id) => Number.isFinite(id) && id > 0) ?? []
-  if (configured.length > 0) return configured
-  return props.account.proxy_id ? [props.account.proxy_id] : []
-})
-
-const proxyConcurrency = (proxyId: number) => props.account.proxy_concurrencies?.[String(proxyId)] ?? 0
-const proxyConcurrencyClass = (proxyId: number) => {
-  const current = proxyConcurrency(proxyId)
-  const max = props.account.concurrency
-  if (current >= max) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-  if (current > 0) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-  return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-}
 
 // ====== 窗口费用 ======
 const isAnthropicOAuthOrSetupToken = computed(() =>
@@ -142,8 +126,12 @@ const sessionLimitTooltip = computed(() => {
 })
 
 // ====== RPM ======
+const isOpenAIOAuth = computed(() =>
+  props.account.platform === 'openai' && props.account.type === 'oauth'
+)
+
 const showRpmLimit = computed(() =>
-  isAnthropicOAuthOrSetupToken.value &&
+  (isAnthropicOAuthOrSetupToken.value || isOpenAIOAuth.value) &&
   props.account.base_rpm != null &&
   props.account.base_rpm > 0
 )
@@ -162,6 +150,11 @@ const rpmClass = computed(() => {
   const current = currentRPM.value
   const base = props.account.base_rpm ?? 0
   const buffer = rpmBuffer.value
+  if (isOpenAIOAuth.value) {
+    if (current >= base) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+    if (current >= base * 0.8) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+  }
   if (rpmStrategy.value === 'tiered') {
     if (current >= base + buffer) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
     if (current >= base) return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
@@ -177,6 +170,11 @@ const rpmTooltip = computed(() => {
   const current = currentRPM.value
   const base = props.account.base_rpm ?? 0
   const buffer = rpmBuffer.value
+  if (isOpenAIOAuth.value) {
+    if (current >= base) return t('admin.accounts.capacity.rpm.openaiPaused')
+    if (current >= base * 0.8) return t('admin.accounts.capacity.rpm.openaiWarning')
+    return t('admin.accounts.capacity.rpm.openaiNormal')
+  }
   if (rpmStrategy.value === 'tiered') {
     if (current >= base + buffer) return t('admin.accounts.capacity.rpm.tieredBlocked', { buffer })
     if (current >= base) return t('admin.accounts.capacity.rpm.tieredStickyOnly', { buffer })

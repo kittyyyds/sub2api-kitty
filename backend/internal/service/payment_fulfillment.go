@@ -171,6 +171,11 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 			"tradeNo":          tradeNo,
 		})
 	}
+	ctx, err = s.verifyEasyPayOrder(ctx, o, tradeNo, paid)
+	if err != nil {
+		s.writeAuditLog(ctx, o.ID, "PAYMENT_VERIFICATION_PENDING", pk, map[string]any{"reason": err.Error()})
+		return err
+	}
 	return s.toPaid(ctx, o, tradeNo, paid, pk)
 }
 
@@ -224,17 +229,26 @@ func (s *PaymentService) toPaid(ctx context.Context, o *dbent.PaymentOrder, trad
 	previousStatus := o.Status
 	now := time.Now()
 	grace := now.Add(-paymentGraceMinutes * time.Minute)
-	c, err := s.entClient.PaymentOrder.Update().Where(
-		paymentorder.IDEQ(o.ID),
-		paymentorder.Or(
-			paymentorder.StatusEQ(OrderStatusPending),
-			paymentorder.StatusEQ(OrderStatusCancelled),
-			paymentorder.And(
-				paymentorder.StatusEQ(OrderStatusExpired),
-				paymentorder.UpdatedAtGTE(grace),
+	update := func(client *dbent.Client) (int, error) {
+		return client.PaymentOrder.Update().Where(
+			paymentorder.IDEQ(o.ID),
+			paymentorder.Or(
+				paymentorder.StatusEQ(OrderStatusPending),
+				paymentorder.StatusEQ(OrderStatusCancelled),
+				paymentorder.And(
+					paymentorder.StatusEQ(OrderStatusExpired),
+					paymentorder.UpdatedAtGTE(grace),
+				),
 			),
-		),
-	).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
+		).SetStatus(OrderStatusPaid).SetPayAmount(paid).SetPaymentTradeNo(tradeNo).SetPaidAt(now).ClearFailedAt().ClearFailedReason().Save(ctx)
+	}
+	var c int
+	var err error
+	if strings.EqualFold(pk, payment.TypeEasyPay) {
+		c, err = s.easyPayPaidTransition(ctx, o, tradeNo, paid, update)
+	} else {
+		c, err = update(s.entClient)
+	}
 	if err != nil {
 		return fmt.Errorf("update to PAID: %w", err)
 	}
@@ -310,6 +324,10 @@ func (s *PaymentService) ExecuteBalanceFulfillment(ctx context.Context, oid int6
 	}
 	if o.Status != OrderStatusPaid && o.Status != OrderStatusFailed && o.Status != OrderStatusRecharging {
 		return infraerrors.BadRequest("INVALID_STATUS", "order cannot fulfill in status "+o.Status)
+	}
+	ctx, err = s.verifyEasyPayOrder(ctx, o, o.PaymentTradeNo, o.PayAmount)
+	if err != nil {
+		return err
 	}
 	lease, err := s.acquirePaymentFulfillmentLease(ctx, o)
 	if err != nil {
@@ -628,6 +646,10 @@ func (s *PaymentService) ExecuteSubscriptionFulfillment(ctx context.Context, oid
 	if o.SubscriptionGroupID == nil || o.SubscriptionDays == nil {
 		return infraerrors.BadRequest("INVALID_STATUS", "missing subscription info")
 	}
+	ctx, err = s.verifyEasyPayOrder(ctx, o, o.PaymentTradeNo, o.PayAmount)
+	if err != nil {
+		return err
+	}
 	lease, err := s.acquirePaymentFulfillmentLease(ctx, o)
 	if err != nil {
 		return err
@@ -846,7 +868,10 @@ func affiliateRebateBaseAmount(o *dbent.PaymentOrder) float64 {
 		return 0
 	}
 	switch o.OrderType {
-	case payment.OrderTypeBalance, payment.OrderTypeSubscription:
+	case payment.OrderTypeBalance:
+		// 返利只按实充部分计算，赠送额度不参与
+		return paymentOrderAmountWithoutBonus(o)
+	case payment.OrderTypeSubscription:
 		return o.Amount
 	default:
 		return 0

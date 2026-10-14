@@ -4,16 +4,17 @@ import "time"
 
 // APIKeyAuthSnapshot API Key 认证缓存快照（仅包含认证所需字段）
 type APIKeyAuthSnapshot struct {
-	Version     int                      `json:"version"`
-	APIKeyID    int64                    `json:"api_key_id"`
-	UserID      int64                    `json:"user_id"`
-	GroupID     *int64                   `json:"group_id,omitempty"`
-	Name        string                   `json:"name"`
-	Status      string                   `json:"status"`
-	IPWhitelist []string                 `json:"ip_whitelist,omitempty"`
-	IPBlacklist []string                 `json:"ip_blacklist,omitempty"`
-	User        APIKeyAuthUserSnapshot   `json:"user"`
-	Group       *APIKeyAuthGroupSnapshot `json:"group,omitempty"`
+	ConcurrencyLimit int                      `json:"concurrency_limit"`
+	Version          int                      `json:"version"`
+	APIKeyID         int64                    `json:"api_key_id"`
+	UserID           int64                    `json:"user_id"`
+	GroupID          *int64                   `json:"group_id,omitempty"`
+	Name             string                   `json:"name"`
+	Status           string                   `json:"status"`
+	IPWhitelist      []string                 `json:"ip_whitelist,omitempty"`
+	IPBlacklist      []string                 `json:"ip_blacklist,omitempty"`
+	User             APIKeyAuthUserSnapshot   `json:"user"`
+	Group            *APIKeyAuthGroupSnapshot `json:"group,omitempty"`
 
 	// Quota fields for API Key independent quota feature
 	Quota     float64 `json:"quota"`      // Quota limit in USD (0 = unlimited)
@@ -53,10 +54,16 @@ type APIKeyAuthUserSnapshot struct {
 	// UserGroupRPMOverride 该 API Key 对应的 (user, group) 专属 RPM 覆盖值。
 	// nil = 无 override（回退到 group/user 级）；0 = 不限流；>0 = 专属上限。
 	UserGroupRPMOverride *int `json:"user_group_rpm_override,omitempty"`
+
+	// UserGroupDeniedModels 该 API Key 对应的 (user, group) 禁用模型；准入与模型列表据此拒绝 / 过滤。
+	UserGroupDeniedModels []string `json:"user_group_denied_models,omitempty"`
 }
 
 // APIKeyAuthGroupSnapshot 分组快照
 type APIKeyAuthGroupSnapshot struct {
+	SecurityPolicyEnabled           bool                          `json:"security_policy_enabled"`
+	SecurityPolicyMode              string                        `json:"security_policy_mode"`
+	SecurityPolicyEmailEnabled      bool                          `json:"security_policy_email_enabled"`
 	ID                              int64                         `json:"id"`
 	Name                            string                        `json:"name"`
 	Platform                        string                        `json:"platform"`
@@ -91,6 +98,7 @@ type APIKeyAuthGroupSnapshot struct {
 	ClaudeCodeOnly                  bool                          `json:"claude_code_only"`
 	FallbackGroupID                 *int64                        `json:"fallback_group_id,omitempty"`
 	FallbackGroupIDOnInvalidRequest *int64                        `json:"fallback_group_id_on_invalid_request,omitempty"`
+	StreamOnly                      bool                          `json:"stream_only"`
 
 	// Model routing is used by gateway account selection, so it must be part of auth cache snapshot.
 	// Only anthropic groups use these fields; others may leave them empty.
@@ -122,9 +130,6 @@ type APIKeyAuthGroupSnapshot struct {
 	MaxReasoningEffortOverLimit string `json:"max_reasoning_effort_over_limit,omitempty"`
 	// ReasoningEffortMappings rewrites explicit effort values before the ceiling.
 	ReasoningEffortMappings []ReasoningEffortMapping `json:"reasoning_effort_mappings"`
-	GrokPromptEnabled       bool                     `json:"grok_prompt_enabled"`
-	GrokPromptMode          string                   `json:"grok_prompt_mode,omitempty"`
-	GrokPromptContent       string                   `json:"grok_prompt_content,omitempty"`
 
 	// 高峰时段倍率：PeakRateEnabled 为 true 且请求时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier（详见 Group.PeakMultiplierAt）。

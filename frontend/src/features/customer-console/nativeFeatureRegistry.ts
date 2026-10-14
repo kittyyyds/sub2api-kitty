@@ -2,15 +2,6 @@ import { defineAsyncComponent, type Component } from 'vue'
 
 export const NATIVE_CUSTOM_FEATURES = [
   {
-    id: 'reset-radar',
-    path: '/custom/reset-radar',
-    labelKey: 'nav.resetRadar',
-    fallbackLabel: 'GPT智力测评',
-    descriptionKey: 'native.featureDescription.radar',
-    headerDescription: '实时 GPT 模型智力、成本与速度排行',
-    icon: 'brain'
-  },
-  {
     id: 'billing-rules',
     path: '/custom/billing-rules',
     labelKey: 'nav.billingRules',
@@ -35,12 +26,10 @@ export type NativeCustomFeatureId = (typeof NATIVE_CUSTOM_FEATURES)[number]['id'
 const NATIVE_CUSTOM_FEATURE_IDS = new Set<string>(
   NATIVE_CUSTOM_FEATURES.map(({ id }) => id)
 )
-const MIGRATED_CUSTOM_FEATURE_IDS = new Set(['image-generator'])
+// Keep retired IDs reserved so saved legacy custom menus cannot restore them.
+const LEGACY_CUSTOM_FEATURE_IDS = new Set(['image-generator', 'reset-radar'])
 
 const nativeFeatureComponents: Record<NativeCustomFeatureId, Component> = {
-  'reset-radar': defineAsyncComponent(
-    () => import('@/views/user/native/ResetRadarPanel.vue')
-  ),
   'billing-rules': defineAsyncComponent(
     () => import('@/views/user/native/BillingRulesPanel.vue')
   ),
@@ -55,7 +44,7 @@ export function isNativeCustomFeatureId(value: unknown): value is NativeCustomFe
 
 export function isReservedCustomerFeatureId(value: unknown): boolean {
   return isNativeCustomFeatureId(value)
-    || (typeof value === 'string' && MIGRATED_CUSTOM_FEATURE_IDS.has(value))
+    || (typeof value === 'string' && LEGACY_CUSTOM_FEATURE_IDS.has(value))
 }
 
 export function getNativeFeatureComponent(value: unknown): Component | null {

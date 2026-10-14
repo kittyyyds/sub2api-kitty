@@ -1,12 +1,101 @@
 # Kitty Custom Patches
 
-## v0.2.6-kitty.2 API key group selection
+## 2.8.18-kitty.4 Prism manual Cookie experiment — 2026-09-28
 
-- Creating an API key uses the existing provider selector as its only platform filter. The group picker hides its redundant platform tabs and searches every group supplied for that provider, including all Gemini, Grok, Antigravity, composite, and OpenCode Go groups under Other.
-- Editing an API key keeps the existing platform tabs. Group icons, descriptions, prices, selection resets, and dropdown sizing remain unchanged.
-- This frontend-only change preserves the official v0.2.6 integration and all Kitty customizations. It adds no database migration or gateway/account behavior change.
+来源：codex。Incrementally integrates the confirmed local Prism adapter into
+production `2.8.18-kitty.3` while preserving its non-observer fixes and every
+existing migration file. Prism is disabled globally and per account by default.
+Administrators may manually bind a Prism Cookie to an existing OpenAI OAuth
+parent account and explicitly select its model scope. The existing SUB customer
+API key, grouping, account scheduling and billing paths remain in use.
+
+This is an experimental text-only adapter with buffered SSE after completion.
+It does not provide Prism Bearer authentication, automatic login/binding, browser
+helpers, or changes to workspace/model eligibility. Local tests and builds do
+not establish real Prism workspace authentication, model access, inference, or
+billing correctness. See `docs/PRISM_RELEASE_20260928.md` for the release boundary.
+
+## 0.2.8-kittyyyds.3 timezone and model diagnostics — 2026-09-24
+
+Selectively adapted from MACOS-DO/sub4api v1.1.4, commit
+`c2fbf1ba6eb38ad282ca3d464dbd9d6bede70cd4` (LGPL-3.0-or-later).
+The unpublished `.2` candidate below is superseded, and its artifacts remain.
+
+- Preserve client `current_date` and `current_time`; replace only existing timezone
+  fields. Complete environment blocks without kind metadata are supported using
+  a conservative environment-field check; explicit `user.text` remains untouched.
+  Field-boundary parsing accepts unrelated non-XML text and self-closing dates,
+  but ambiguous timezone fields and multiple roots remain unchanged.
+- Retain per-account default-OFF, 490 IANA zones plus UTC, independent search
+  switch, HTTP/WS hooks, language headers and merge-preserved account extras.
+- Add an administrator-only, explicit billed model diagnostic using the
+  administrator's own usable API key through the normal gateway. A private
+  in-process context pins the target without bypassing group, quota, rate limit,
+  model, IP or billing policies, and never falls back to another account.
+- ModelTrace fingerprint implementation and bundled bank originate from
+  `https://github.com/xqy2006/ModelTrace`; its MIT notice is retained beside
+  `modeltrace_unified_bank.json` in `modeltrace_LICENSE`. Classification score
+  below 0.90, mapped models, incomplete output and missing target observation are
+  inconclusive. Fingerprint similarity does not prove upstream identity or IQ.
+- Editable, validated anonymous seven-record JSONL template; fresh random
+  challenge per run, no real conversation history, no tools, bounded response,
+  two concurrent probes per process and one per administrator. No periodic
+  model requests, automatic account pausing or ticket/Cookie functionality.
+- No SQL migration or changes to existing pricing, payment, Canvas or tier-pool
+  controls. The original image keepalive test now synchronizes with the actual
+  heartbeat rather than a 20 ms sleep; production image code is unchanged.
+
+Usage and the three-version comparison are in
+`docs/kitty-timezone-model-diagnostic-20260924.md`. Deployment is proven by a
+separate production receipt, not by this source note.
+
+## 0.2.8-kittyyyds.2 request timezone candidate — 2026-09-24
+
+来源：codex。Only the OpenAI per-account request timezone feature is selectively
+adapted from MACOS-DO/sub4api v1.1.3, commit
+`f70efeb52bf92294bab5dd40d236d2c5becfd5c8` (LGPL-3.0-or-later).
+
+- Existing and new accounts default OFF. An explicit boolean switch enables the
+  selected IANA timezone. Search-tool timezone sync is separately opt-in. No SQL
+  migration, automatic account enablement or global/server timezone change.
+- Only marked `environment_context` blocks with existing date/timezone elements
+  are rewritten. Ordinary messages, model/effort, cache and continuation IDs,
+  image/tool payloads and language headers retain their existing semantics.
+- HTTP and WebSocket first/subsequent request paths normalize before OAuth
+  metadata cleanup. Timezone-only account saves merge existing extension fields;
+  unrelated edits retain timezone policy. Create, update, key merge and bulk
+  updates validate the policy before writing.
+- Tier routing, quotas, identity settings, billing, Canvas, video and payments
+  retain their existing implementation. Retired ticket/risk/health/profit modules
+  are not reintroduced. No claim is made about upstream model quality or account
+  risk classification. This is a candidate record, not evidence of deployment.
+
+## v0.2.5 merge candidate — 2026-09-16
+
+`0.2.5-kittyyyds.1` merges official `v0.2.5` onto the verified secondary-site
+`0.2.4-kittyyyds.11` source. Identity management v2, final per-model/resolution
+media pricing, candy tests, recharge bonuses, Kitty Apps, selected-risk release
+gates, registration security, custom payment UI and site-specific customer
+features are retained. Official WebSocket liveness/queueing, scheduling override,
+OpenCode Go, subscription visibility, API-key bulk editing/provider selection
+and registration confirmation changes are merged with those custom paths.
+The full-history backup policy replaces automatic two-release pruning. This is
+a candidate-source record; deployment and validation results are recorded by
+the release process separately. 来源：codex。
 
 This image tracks upstream Sub2API `v0.1.173` on branch `kitty/v0.1.173`. The Kitty release version is `0.1.173-kitty.2` and carries the production-specific changes below.
+
+## Pending GPT identity management v2 — 2026-09-13
+
+This section describes the candidate source change and required release procedure; it is not a deployment record. 来源: codex。
+
+- GPT OAuth identity configuration uses the flat `extra.fingerprint_v2` object with explicit `schema_version: 2`, a server-managed `fingerprint_v2_seed`, and `identity_epoch` (default 1). New profiles stay disabled until explicitly enabled. Ordinary settings edits preserve the installation seed and epoch; language, client declaration, HTTP, and diagnostics changes do not automatically rotate the device identity.
+- Account, API Key, session, thread, window, and per-turn identifiers share an attempt snapshot across applicable headers and metadata. Missing client identifiers receive a request-local nonce. Default session-derived cache keys are synchronized while custom cache keys, tool IDs, model/reasoning parameters, continuation response IDs, and billing logic retain their own contracts.
+- The admin entry is “身份管理 v2”, with dedicated `/admin/accounts/:id/identity-v2` and `/identity-v2/egress` routes. Egress observations use `fingerprint_v2_egress`. Retired convergence controls and browser TLS templates are removed from the GPT profile UI. Single-account edits, reset-to-default, and bulk saves preserve each account's identity epoch.
+- `tls_profile=standard` uses standard Go TLS with a TLS 1.2 minimum; `tls13` requires TLS 1.3. Certificate verification remains enabled. HTTP/2 is a negotiation preference with compatible HTTP/1.1 fallback, while WebSocket Upgrade uses HTTP/1.1. These controls are not browser emulation or proof of a real Mac/Linux/Windows device. A configured proxy failure must not silently become a direct request.
+- RPM, normal request intervals, and account business concurrency are unchanged. Diagnostics default off, report observed transport results without tokens or conversation bodies, and cannot establish upstream model quality or risk classification.
+- Migration is staged: `226_cutover_openai_identity_v2.sql` prepares missing seeds for already-enabled schema-2 profiles without deleting legacy fields or enabling accounts. Archive identity settings, switch and health-check the candidate application, then remove retired identity fields. On failure, roll back the application image and selectively restore affected identity settings; never restore an old full database over current balances, recharge records, billing, or usage.
+- See `docs/kitty-client-profiles.md` for operator instructions and `docs/FINGERPRINT_V2_DESIGN.md` for the actual schema, lifecycle, coverage limits, and verification requirements.
 
 ## v0.1.173 upstream integration
 

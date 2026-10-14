@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -147,6 +148,10 @@ func NewUsageRecordWorkerPoolWithOptions(opts UsageRecordWorkerPoolOptions) *Usa
 	if p.autoScaleEnabled {
 		p.startAutoScaler()
 	}
+	managedinstance.RegisterAccounting(func() bool {
+		stats := p.Stats()
+		return stats.WaitingTasks == 0 && stats.SubmittedTasks == stats.CompletedTasks
+	})
 	return p
 }
 

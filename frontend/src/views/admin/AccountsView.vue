@@ -16,6 +16,7 @@
             @refresh="handleManualRefresh"
             @create="showCreate = true"
           >
+            <template #beforeCreate><button class="btn btn-secondary" @click="showTwoFA = true">2FA添加 / 批量</button></template>
             <template #after>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
@@ -191,10 +192,6 @@
           @select-all-results="handleSelectAllResults"
           @toggle-schedulable="handleBulkToggleSchedulable"
         />
-        <div v-if="selIds.length" class="mb-3 flex items-center gap-3">
-          <button class="btn btn-secondary text-sm" @click="openBulkClientProfile"><Icon name="cog" size="sm" />批量设置 GPT 指纹</button>
-          <span class="text-xs text-gray-500 dark:text-gray-400">仅对选中的 GPT 授权账号生效</span>
-        </div>
         <div ref="accountTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DataTable
           ref="dataTableRef"
@@ -246,7 +243,6 @@
                 </template>
               </HelpTooltip>
               <span v-else class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
-              <button v-if="isClientProfileAccount(row)" class="mt-1 self-start rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-xs text-gray-600 hover:border-primary-300 hover:text-primary-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300" title="查看与修改已保存的客户端身份方案" @click="handleClientProfile(row)">身份：{{ clientProfileLabel(row.extra) }}</button>
               <span
                 v-if="accountDisplayEmail(row)"
                 class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]"
@@ -254,6 +250,7 @@
               >
                 {{ accountDisplayEmail(row) }}
               </span>
+              <ExcelBPS403Badge :account="row" :groups="accountGroupsForRow(row)" />
             </div>
           </template>
           <template #cell-notes="{ value }">
@@ -289,11 +286,11 @@
             </div>
           </template>
           <template #cell-capacity="{ row }">
-            <AccountCapacityCell :account="row" />
+            <AccountCapacityCell :account="row" :concurrency-upgrade-enabled="concurrencyUpgradeEnabled" />
           </template>
           <template #cell-status="{ row }">
             <div class="flex items-center gap-1.5">
-              <AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" />
+              <div><AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" /><IQHistoryStrip :summary="iqSummaries[row.id]" :error="iqSummaryError" /></div>
             </div>
           </template>
           <template #cell-schedulable="{ row }">
@@ -361,7 +358,7 @@
             <span class="inline-flex items-center gap-1 text-sm font-mono text-gray-700 dark:text-gray-300">
               <span>{{ formatMultiplier(row.rate_multiplier ?? 1) }}x</span>
               <span
-                v-if="row.extra?.upstream_billing_rate_sync_enabled === true"
+                v-if="!usesModelPriceProbe(row) && row.extra?.upstream_billing_rate_sync_enabled === true"
                 class="inline-flex cursor-help text-emerald-600 dark:text-emerald-400"
                 :aria-label="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
                 :title="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
@@ -375,7 +372,7 @@
             <div class="flex items-center gap-1">
               <span>{{ column.label }}</span>
               <span @click.stop>
-                <HelpTooltip :content="t('admin.accounts.upstreamBilling.trustWarning')" width-class="w-80" />
+                <HelpTooltip :content="t(params.platform === 'video' ? 'admin.accounts.upstreamBilling.video.publicDefault' : 'admin.accounts.upstreamBilling.trustWarning')" width-class="w-80" />
               </span>
             </div>
           </template>
@@ -389,12 +386,11 @@
             />
           </template>
           <template #cell-priority="{ row }">
-            <span
-              class="text-sm text-gray-700 dark:text-gray-300"
-              :title="accountPriorityDisplay(row).title"
-            >
-              {{ accountPriorityDisplay(row).text }}
-            </span>
+            <AccountPriorityCell
+              :account="row"
+              @updated="handleAccountUpdated"
+              @error="(message: string) => appStore.showError(message)"
+            />
           </template>
           <template #header-scheduler_score="{ column }">
             <div class="flex items-center">
@@ -450,9 +446,6 @@
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
-              <button v-if="isClientProfileAccount(row)" @click="handleClientProfile(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400">
-                <Icon name="cog" size="sm" /><span class="whitespace-nowrap text-xs">指纹配置</span>
-              </button>
               <button @click="handleDelete(row)" class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                 <span class="text-xs">{{ t('common.delete') }}</span>
@@ -468,14 +461,15 @@
       </template>
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
+    <TwoFABatchImportModal v-if="showTwoFA" :proxies="proxies" :groups="groups" @close="showTwoFA = false" @created="reload" />
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
-    <ClientProfileModal :show="showClientProfile" :account="clientProfileAcc" :account-ids="clientProfileIds" :proxies="proxies" @close="showClientProfile = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
+    <IQTestModal :show="showIQTest" :account="iqTestingAcc" :accounts="accounts" @close="closeIQTestModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :anchor-rect="menu.anchorRect" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @iq-test="handleIQTest" @duplicate="handleDuplicateAccount" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" @set-privacy="handleSetPrivacy" @create-spark-shadow="handleCreateSparkShadow" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal
@@ -505,6 +499,8 @@
 </template>
 
 <script setup lang="ts">
+import { usesModelPriceProbe } from "@/utils/modelPriceProbe"
+import { isValidAccountCostMultiplier } from '@/utils/accountCost'
 import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
@@ -523,8 +519,7 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
-import ClientProfileModal from '@/components/account/ClientProfileModal.vue'
-import { clientProfileLabel, isClientProfileAccount } from '@/components/account/clientProfile'
+import TwoFABatchImportModal from '@/components/account/TwoFABatchImportModal.vue'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
@@ -533,14 +528,19 @@ import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
+import IQTestModal from '@/components/admin/account/IQTestModal.vue'
 import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
 import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
+import IQHistoryStrip from '@/components/admin/account/IQHistoryStrip.vue'
+import { useIQSummaries } from '@/composables/useIQSummaries'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
+import ExcelBPS403Badge from '@/components/account/ExcelBPS403Badge.vue'
 import UpstreamBillingRateCell from '@/components/account/UpstreamBillingRateCell.vue'
+import AccountPriorityCell from '@/components/account/AccountPriorityCell.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
@@ -558,6 +558,20 @@ import type { Account, AccountListItem, AccountPlatform, AccountSchedulerGroupSc
 const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const concurrencyUpgradeEnabled = ref(false)
+let concurrencyUpgradeRequest = 0
+
+const loadConcurrencyUpgradeState = async () => {
+  const request = ++concurrencyUpgradeRequest
+  try {
+    const capabilities = await adminAPI.accounts.getManagementCapabilities()
+    if (request === concurrencyUpgradeRequest) {
+      concurrencyUpgradeEnabled.value = capabilities.concurrency_upgrade_enabled === true
+    }
+  } catch {
+    if (request === concurrencyUpgradeRequest) concurrencyUpgradeEnabled.value = false
+  }
+}
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
@@ -620,10 +634,8 @@ const selTypes = computed<AccountType[]>(() => {
   return [...types]
 })
 const showCreate = ref(false)
+const showTwoFA = ref(false)
 const showEdit = ref(false)
-const showClientProfile = ref(false)
-const clientProfileAcc = ref<Account | null>(null)
-const clientProfileIds = ref<number[]>([])
 const showSync = ref(false)
 const showImportData = ref(false)
 const showExportDataDialog = ref(false)
@@ -636,6 +648,7 @@ const showCreateShadowDialog = ref(false)
 const showReAuth = ref(false)
 const showTest = ref(false)
 const showStats = ref(false)
+const showIQTest = ref(false)
 const showErrorPassthrough = ref(false)
 const showTLSFingerprintProfiles = ref(false)
 const edAcc = ref<Account | null>(null)
@@ -645,6 +658,7 @@ const creatingShadowAcc = ref<Account | null>(null)
 const reAuthAcc = ref<Account | null>(null)
 const testingAcc = ref<Account | null>(null)
 const statsAcc = ref<Account | null>(null)
+const iqTestingAcc = ref<Account | null>(null)
 const showSchedulePanel = ref(false)
 const scheduleAcc = ref<Account | null>(null)
 const scheduleModelOptions = ref<SelectOption[]>([])
@@ -1099,6 +1113,12 @@ const syncAccountListDerivedParams = () => {
   // Keep every load path, including auto-refresh and sorting, aligned with the current column visibility.
   const requestParams = params as any
   requestParams.include_scheduler_score = shouldIncludeSchedulerScore() ? '1' : '0'
+  if (requestParams.platform === 'video' && sortState.sort_by === 'upstream_billing_rate') {
+    sortState.sort_by = 'name'
+    sortState.sort_order = 'asc'
+    requestParams.sort_by = 'name'
+    requestParams.sort_order = 'asc'
+  }
 }
 
 const {
@@ -1126,55 +1146,6 @@ const {
     sort_order: sortState.sort_order
   }
 })
-
-type AccountPriorityDisplay = { text: string; title: string }
-
-const accountPriorityDisplay = (account: AccountListItem): AccountPriorityDisplay => {
-  const globalPriority = account.priority
-  const globalDisplay = {
-    text: String(globalPriority),
-    title: t('admin.accounts.accountPriorityLabel', { priority: globalPriority })
-  }
-
-  if (!accountGroupPriorityEnabled.value) {
-    return globalDisplay
-  }
-
-  const memberships = accountGroupMembershipsForRow(account).filter((membership) =>
-    Number.isFinite(membership.group_id) && Number.isFinite(membership.priority)
-  )
-  if (memberships.length === 0) return globalDisplay
-
-  const selectedGroup = String(params.group || '').trim()
-  if (selectedGroup && selectedGroup !== 'ungrouped') {
-    const selectedGroupID = Number(selectedGroup)
-    if (Number.isFinite(selectedGroupID)) {
-      const membership = memberships.find((item) => item.group_id === selectedGroupID)
-      if (membership) {
-        return {
-          text: `P${membership.priority}`,
-          title: t('admin.accounts.groupPriorityLabel', { priority: membership.priority })
-        }
-      }
-    }
-    return globalDisplay
-  }
-
-  const priorities = memberships.map((membership) => membership.priority)
-  if (priorities.length === 1) {
-    return {
-      text: `P${priorities[0]}`,
-      title: t('admin.accounts.groupPriorityLabel', { priority: priorities[0] })
-    }
-  }
-
-  return {
-    text: priorities.map((priority) => `P${priority}`).join(' / '),
-    title: priorities
-      .map((priority) => t('admin.accounts.groupPriorityLabel', { priority }))
-      .join(', ')
-  }
-}
 
 const {
   selectedSet,
@@ -1231,6 +1202,7 @@ useSwipeSelect(accountTableRef, {
 const resetAutoRefreshCache = () => {
   autoRefreshETag.value = null
   upstreamBillingRateETag.value = null
+  upstreamBillingRateAbortController?.abort()
 }
 
 type AccountLoadOptions = {
@@ -1244,7 +1216,7 @@ const load = async (options: AccountLoadOptions = {}) => {
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
   requestParams.lite = '1'
-  await baseLoad()
+  await Promise.all([baseLoad(), loadConcurrencyUpgradeState()])
   if (options.refreshTodayStats !== false) await refreshTodayStatsBatch()
 }
 
@@ -1253,7 +1225,7 @@ const reload = async () => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
-  await baseReload()
+  await Promise.all([baseReload(), loadConcurrencyUpgradeState()])
   await refreshTodayStatsBatch()
 }
 
@@ -1281,37 +1253,50 @@ const upstreamBillingRateContextKey = () => JSON.stringify({
 })
 
 const applyUpstreamBillingRateSnapshots = async (
-  result: NonNullable<Awaited<ReturnType<typeof adminAPI.accounts.getUpstreamBillingRatesWithEtag>>['data']>
+  result: NonNullable<Awaited<ReturnType<typeof adminAPI.accounts.getUpstreamBillingRatesWithEtag>>['data']>,
+  requestContextKey: string,
+  signal: AbortSignal
 ) => {
   const nextIDs = result.items.map(item => item.account_id)
   const currentIDs = accounts.value.map(account => account.id)
+  const currentByID = new Map(accounts.value.map(account => [account.id, account]))
 
-  // The compact response cannot fill a row that crossed a page boundary.
-  // Only that case needs the expensive, full account-list request.
-  if (result.total !== pagination.total || !sameAccountIDOrder(nextIDs, currentIDs)) {
-    try {
-      await load({ refreshTodayStats: false })
-    } catch (error) {
-      console.error('Failed to reconcile upstream billing sort:', error)
-    }
+  // Fetch missing rows without replacing the table with its loading skeleton.
+  if (result.total !== pagination.total || nextIDs.length !== currentIDs.length || nextIDs.some(id => !currentByID.has(id))) {
+    const page = await adminAPI.accounts.list(
+      pagination.page,
+      pagination.page_size,
+      { ...toRaw(params), lite: '1' },
+      { signal }
+    )
+    if (signal.aborted || loading.value || requestContextKey !== upstreamBillingRateContextKey()) return
+    pagination.total = page.total
+    pagination.pages = page.pages
+    mergeAccountsIncrementally(page.items)
+    hasPendingListSync.value = false
+    upstreamBillingNow.value = Date.now()
     return
   }
 
   const itemsByID = new Map(result.items.map(item => [item.account_id, item]))
-  let changed = false
-  const nextAccounts = accounts.value.map(account => {
+  let changed = !sameAccountIDOrder(nextIDs, currentIDs)
+  const nextAccounts = nextIDs.map(id => {
+    const account = currentByID.get(id)!
     const item = itemsByID.get(account.id)
     if (!item) return account
     const nextSnapshot = item.snapshot ?? null
     const previousSnapshot = account.extra?.upstream_billing_probe ?? null
-    if (JSON.stringify(previousSnapshot) === JSON.stringify(nextSnapshot)) return account
+    const costChanged = isValidAccountCostMultiplier(item.cost_multiplier)
+      && account.extra?.cost_multiplier !== item.cost_multiplier
+    if (!costChanged && JSON.stringify(previousSnapshot) === JSON.stringify(nextSnapshot)) return account
 
     const nextExtra = { ...(account.extra ?? {}) }
+    if (costChanged) nextExtra.cost_multiplier = item.cost_multiplier
     if (nextSnapshot) nextExtra.upstream_billing_probe = nextSnapshot
     else delete nextExtra.upstream_billing_probe
     const nextAccount = {
       ...account,
-      ...(typeof nextSnapshot?.synced_rate_multiplier === 'number'
+      ...(!usesModelPriceProbe(account) && nextSnapshot?.kind !== 'video_model_prices' && nextSnapshot?.kind !== 'image_model_prices' && typeof nextSnapshot?.synced_rate_multiplier === 'number'
         ? { rate_multiplier: nextSnapshot.synced_rate_multiplier }
         : {}),
       extra: nextExtra
@@ -1350,10 +1335,13 @@ const refreshUpstreamBillingRates = async (force = false) => {
       buildUpstreamBillingRateFilters(),
       { etag: force ? null : upstreamBillingRateETag.value, signal: controller.signal }
     )
-    if (loading.value || requestContextKey !== upstreamBillingRateContextKey()) return
+    if (controller.signal.aborted || loading.value || requestContextKey !== upstreamBillingRateContextKey()) return
     if (result.etag) upstreamBillingRateETag.value = result.etag
-    if (!result.notModified && result.data) await applyUpstreamBillingRateSnapshots(result.data)
+    if (!result.notModified && result.data) {
+      await applyUpstreamBillingRateSnapshots(result.data, requestContextKey, controller.signal)
+    }
   } catch (error) {
+    upstreamBillingRateETag.value = null
     const refreshError = error as { name?: string; code?: string }
     if (refreshError.name !== 'AbortError' && refreshError.name !== 'CanceledError' && refreshError.code !== 'ERR_CANCELED') {
       console.error('Failed to refresh upstream billing rates:', error)
@@ -1362,11 +1350,6 @@ const refreshUpstreamBillingRates = async (force = false) => {
     if (upstreamBillingRateAbortController === controller) upstreamBillingRateAbortController = null
     upstreamBillingRateRefreshing.value = false
   }
-}
-
-const refreshUpstreamBillingSortedList = async (force = false) => {
-  if (!force && sortState.sort_by !== 'upstream_billing_rate') return
-  await refreshUpstreamBillingRates(force)
 }
 
 useIntervalFn(() => { void refreshUpstreamBillingRates() }, 5 * 60_000, { immediate: false })
@@ -1397,6 +1380,7 @@ const handlePageSizeChange = (size: number) => {
 }
 
 const handleSort = (key: string, order: AccountSortOrder) => {
+  if (params.platform === 'video' && key === 'upstream_billing_rate') return
   sortState.sort_by = key
   sortState.sort_order = order
   const requestParams = params as any
@@ -1440,9 +1424,8 @@ watch(accounts, (rows) => {
 
 const isAnyModalOpen = computed(() => {
   return (
-    showCreate.value ||
+    showCreate.value || showTwoFA.value ||
     showEdit.value ||
-    showClientProfile.value ||
     showSync.value ||
     showImportData.value ||
     showExportDataDialog.value ||
@@ -1471,8 +1454,12 @@ const shouldReplaceAutoRefreshRow = (current: Account, next: Account) => {
   return (
     current.updated_at !== next.updated_at ||
     current.current_concurrency !== next.current_concurrency ||
+    JSON.stringify(current.extra?.auto_config_concurrency) !== JSON.stringify(next.extra?.auto_config_concurrency) ||
     current.current_window_cost !== next.current_window_cost ||
     current.active_sessions !== next.active_sessions ||
+    current.current_rpm !== next.current_rpm ||
+    current.rpm_paused !== next.rpm_paused ||
+    current.rpm_reset_at !== next.rpm_reset_at ||
     current.schedulable !== next.schedulable ||
     current.status !== next.status ||
     current.rate_limit_reset_at !== next.rate_limit_reset_at ||
@@ -1525,6 +1512,7 @@ const refreshAccountsIncrementally = async () => {
   if (autoRefreshFetching.value) return
   syncAccountListDerivedParams()
   autoRefreshFetching.value = true
+  const upgradeStateRefresh = loadConcurrencyUpgradeState()
   try {
     const result = await adminAPI.accounts.listWithEtag(
       pagination.page,
@@ -1558,6 +1546,7 @@ const refreshAccountsIncrementally = async () => {
   } catch (error) {
     console.error('Auto refresh failed:', error)
   } finally {
+    await upgradeStateRefresh
     autoRefreshFetching.value = false
   }
 }
@@ -1899,7 +1888,7 @@ const allColumns = computed(() => {
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
     { key: 'scheduler_score', label: t('admin.accounts.columns.schedulerScore'), sortable: false },
     { key: 'rate_multiplier', label: t('admin.accounts.columns.billingRateMultiplier'), sortable: true },
-    { key: 'upstream_billing_rate', label: t('admin.accounts.columns.upstreamBillingRate'), sortable: true },
+    { key: 'upstream_billing_rate', label: t('admin.accounts.columns.upstreamBillingRate'), sortable: params.platform !== 'video' },
     { key: 'last_used_at', label: t('admin.accounts.columns.lastUsed'), sortable: true },
     { key: 'created_at', label: t('admin.accounts.columns.createdAt'), sortable: true },
     { key: 'expires_at', label: t('admin.accounts.columns.expiresAt'), sortable: true },
@@ -1941,18 +1930,6 @@ const handleEdit = async (a: AccountListItem) => {
   if (!account) return
   edAcc.value = account
   showEdit.value = true
-}
-const handleClientProfile = async (a: AccountListItem) => {
-  const account = await loadAccountDetails(a)
-  if (!account) return
-  clientProfileAcc.value = account
-  clientProfileIds.value = []
-  showClientProfile.value = true
-}
-const openBulkClientProfile = () => {
-  clientProfileAcc.value = null
-  clientProfileIds.value = [...selIds.value]
-  showClientProfile.value = true
 }
 const openMenu = (a: Account, e: MouseEvent) => {
   menu.acc = a
@@ -2335,14 +2312,16 @@ const patchUpstreamBillingSnapshot = (accountID: number, snapshot: UpstreamBilli
   upstreamBillingNow.value = Date.now()
   patchAccountInList({
     ...account,
-    ...(typeof snapshot.synced_rate_multiplier === 'number'
+    ...(!usesModelPriceProbe(account) && snapshot.kind !== 'video_model_prices' && snapshot.kind !== 'image_model_prices' && typeof snapshot.synced_rate_multiplier === 'number'
       ? { rate_multiplier: snapshot.synced_rate_multiplier }
       : {}),
     extra: { ...account.extra, upstream_billing_probe: snapshot }
   })
 }
 const refreshAccountsAfterUpstreamBillingProbe = async () => {
-  await refreshUpstreamBillingSortedList(true)
+  enterAutoRefreshSilentWindow()
+  // Cost may change even when the active sort does not depend on upstream rates.
+  await refreshUpstreamBillingRates(true)
 }
 const handleProbeUpstreamBilling = async (account: Account) => {
   if (probingUpstreamBilling.has(account.id)) return
@@ -2355,7 +2334,7 @@ const handleProbeUpstreamBilling = async (account: Account) => {
     }
   } catch (error) {
     console.error('Failed to probe upstream billing:', error)
-    appStore.showError(extractApiErrorMessage(error, t('admin.accounts.upstreamBilling.probeFailed')))
+    appStore.showError(extractApiErrorMessage(error, t(account.platform === 'video' ? 'admin.accounts.upstreamBilling.video.probeFailed' : 'admin.accounts.upstreamBilling.probeFailed')))
   } finally {
     probingUpstreamBilling.delete(account.id)
   }
@@ -2421,6 +2400,7 @@ const handleExportData = async () => {
 const accountExportStepUp = useStepUp()
 const closeTestModal = () => { showTest.value = false; testingAcc.value = null }
 const closeStatsModal = () => { showStats.value = false; statsAcc.value = null }
+const closeIQTestModal = () => { showIQTest.value = false; iqTestingAcc.value = null }
 const closeReAuthModal = () => { showReAuth.value = false; reAuthAcc.value = null }
 const handleTest = async (a: AccountListItem) => {
   const account = await loadAccountDetails(a)
@@ -2433,6 +2413,12 @@ const handleViewStats = async (a: AccountListItem) => {
   if (!account) return
   statsAcc.value = account
   showStats.value = true
+}
+const handleIQTest = async (a: AccountListItem) => {
+  const account = await loadAccountDetails(a)
+  if (!account) return
+  iqTestingAcc.value = account
+  showIQTest.value = true
 }
 const handleSchedule = async (a: Account) => {
   scheduleAcc.value = a
@@ -2677,6 +2663,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  concurrencyUpgradeRequest++
   upstreamBillingRateAbortController?.abort()
   if (usageBatchFlushTimer !== null) {
     clearTimeout(usageBatchFlushTimer)
@@ -2696,6 +2683,8 @@ onUnmounted(() => {
   desktopViewportListener = null
   desktopViewportMediaQuery = null
 })
+
+const { summaries: iqSummaries, error: iqSummaryError } = useIQSummaries(computed(() => accounts.value.map(a => a.id)))
 </script>
 
 <style scoped>

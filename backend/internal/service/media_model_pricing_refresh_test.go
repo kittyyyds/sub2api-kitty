@@ -193,7 +193,6 @@ func TestGatewayRefreshesMissingImageModelPriceFromPartialSnapshot(t *testing.T)
 		1,
 		1,
 		time.Time{},
-		nil,
 	)
 
 	require.True(t, cost.FinalPriceApplied)

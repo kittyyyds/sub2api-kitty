@@ -24,31 +24,39 @@ type CustomEndpoint struct {
 	Name        string `json:"name"`
 	Endpoint    string `json:"endpoint"`
 	Description string `json:"description"`
+	Recommended *bool  `json:"recommended,omitempty"`
 }
 
 // SystemSettings represents the admin settings API response payload.
 type SystemSettings struct {
-	RegistrationEnabled                 bool                     `json:"registration_enabled"`
-	EmailVerifyEnabled                  bool                     `json:"email_verify_enabled"`
-	RegistrationEmailSuffixWhitelist    []string                 `json:"registration_email_suffix_whitelist"`
-	RegistrationEmailDomainQuotaEnabled bool                     `json:"registration_email_domain_quota_enabled"`
-	PromoCodeEnabled                    bool                     `json:"promo_code_enabled"`
-	PasswordResetEnabled                bool                     `json:"password_reset_enabled"`
-	FrontendURL                         string                   `json:"frontend_url"`
-	InvitationCodeEnabled               bool                     `json:"invitation_code_enabled"`
-	TotpEnabled                         bool                     `json:"totp_enabled"`                   // TOTP 双因素认证
-	TotpEncryptionKeyConfigured         bool                     `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
-	PasskeyEnabled                      bool                     `json:"passkey_enabled"`
-	PasskeyConfigured                   bool                     `json:"passkey_configured"`
-	PasskeyRPID                         string                   `json:"passkey_rp_id"`
-	PasskeyRPOrigins                    []string                 `json:"passkey_rp_origins"`
-	SessionBindingEnabled               bool                     `json:"session_binding_enabled"`  // 会话 IP/UA 绑定
-	StepUpEnabled                       bool                     `json:"step_up_enabled"`          // 敏感操作 step-up 2FA
-	AuditLogRetentionDays               int                      `json:"audit_log_retention_days"` // 审计日志保留天数
-	LoginAgreementEnabled               bool                     `json:"login_agreement_enabled"`
-	LoginAgreementMode                  string                   `json:"login_agreement_mode"`
-	LoginAgreementUpdatedAt             string                   `json:"login_agreement_updated_at"`
-	LoginAgreementDocuments             []LoginAgreementDocument `json:"login_agreement_documents"`
+	OpenAICodexTicketHarvestScope       service.CodexTicketHarvestScope `json:"openai_codex_ticket_harvest_scope"`
+	OpenAICodexTicketStrictResponse     bool                            `json:"openai_codex_ticket_strict_response,omitempty"`
+	OpenAICodexTicketFailClosed         bool                            `json:"openai_codex_ticket_fail_closed"`
+	OpenAICodexTicketStrategy           string                          `json:"openai_codex_ticket_strategy"`
+	RegistrationEnabled                 bool                            `json:"registration_enabled"`
+	PrismBrowserEnabled                 bool                            `json:"prism_browser_enabled"`
+	PrismBrowserBaseURL                 string                          `json:"prism_browser_base_url"`
+	PrismBrowserAPIKeyConfigured        bool                            `json:"prism_browser_api_key_configured"`
+	EmailVerifyEnabled                  bool                            `json:"email_verify_enabled"`
+	RegistrationEmailSuffixWhitelist    []string                        `json:"registration_email_suffix_whitelist"`
+	RegistrationEmailDomainQuotaEnabled bool                            `json:"registration_email_domain_quota_enabled"`
+	PromoCodeEnabled                    bool                            `json:"promo_code_enabled"`
+	PasswordResetEnabled                bool                            `json:"password_reset_enabled"`
+	FrontendURL                         string                          `json:"frontend_url"`
+	InvitationCodeEnabled               bool                            `json:"invitation_code_enabled"`
+	TotpEnabled                         bool                            `json:"totp_enabled"`                   // TOTP 双因素认证
+	TotpEncryptionKeyConfigured         bool                            `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
+	PasskeyEnabled                      bool                            `json:"passkey_enabled"`
+	PasskeyConfigured                   bool                            `json:"passkey_configured"`
+	PasskeyRPID                         string                          `json:"passkey_rp_id"`
+	PasskeyRPOrigins                    []string                        `json:"passkey_rp_origins"`
+	SessionBindingEnabled               bool                            `json:"session_binding_enabled"`  // 会话 IP/UA 绑定
+	StepUpEnabled                       bool                            `json:"step_up_enabled"`          // 敏感操作 step-up 2FA
+	AuditLogRetentionDays               int                             `json:"audit_log_retention_days"` // 审计日志保留天数
+	LoginAgreementEnabled               bool                            `json:"login_agreement_enabled"`
+	LoginAgreementMode                  string                          `json:"login_agreement_mode"`
+	LoginAgreementUpdatedAt             string                          `json:"login_agreement_updated_at"`
+	LoginAgreementDocuments             []LoginAgreementDocument        `json:"login_agreement_documents"`
 
 	SMTPHost               string `json:"smtp_host"`
 	SMTPPort               int    `json:"smtp_port"`
@@ -153,6 +161,7 @@ type SystemSettings struct {
 	SiteLogo                    string           `json:"site_logo"`
 	SiteSubtitle                string           `json:"site_subtitle"`
 	APIBaseURL                  string           `json:"api_base_url"`
+	APIBaseURLDescription       string           `json:"api_base_url_description"`
 	ContactInfo                 string           `json:"contact_info"`
 	DocURL                      string           `json:"doc_url"`
 	HomeContent                 string           `json:"home_content"`
@@ -203,24 +212,29 @@ type SystemSettings struct {
 	BackendModeEnabled bool `json:"backend_mode_enabled"`
 
 	// Gateway forwarding behavior
-	OpenAITTFTMode                         string `json:"openai_ttft_mode"`
-	EnableFingerprintUnification           bool   `json:"enable_fingerprint_unification"`
-	EnableMetadataPassthrough              bool   `json:"enable_metadata_passthrough"`
-	EnableCCHSigning                       bool   `json:"enable_cch_signing"`
-	EnableClaudeOAuthSystemPromptInjection bool   `json:"enable_claude_oauth_system_prompt_injection"`
-	ClaudeOAuthSystemPrompt                string `json:"claude_oauth_system_prompt"`
-	ClaudeOAuthSystemPromptBlocks          string `json:"claude_oauth_system_prompt_blocks"`
-	EnableAnthropicCacheTTL1hInjection     bool   `json:"enable_anthropic_cache_ttl_1h_injection"`
-	RewriteMessageCacheControl             bool   `json:"rewrite_message_cache_control"`
-	EnableClientDatelineNormalization      bool   `json:"enable_client_dateline_normalization"`
-	AntigravityUserAgentVersion            string `json:"antigravity_user_agent_version"`
-	OpenAICodexUserAgent                   string `json:"openai_codex_user_agent"`
-	OpenAICodexClientVersion               string `json:"openai_codex_client_version"`
-	OpenAICodexClientVersionSynced         string `json:"openai_codex_client_version_synced"`
-	OpenAICodexVersionAutoSyncEnabled      bool   `json:"openai_codex_version_auto_sync_enabled"`
-	ClaudeCodeClientVersion                string `json:"claude_code_client_version"`
-	ClaudeCodeClientVersionSynced          string `json:"claude_code_client_version_synced"`
-	ClaudeCodeVersionAutoSyncEnabled       bool   `json:"claude_code_version_auto_sync_enabled"`
+	OpenAITTFTMode                          string   `json:"openai_ttft_mode"`
+	EnableFingerprintUnification            bool     `json:"enable_fingerprint_unification"`
+	EnableMetadataPassthrough               bool     `json:"enable_metadata_passthrough"`
+	EnableCCHSigning                        bool     `json:"enable_cch_signing"`
+	EnableClaudeOAuthSystemPromptInjection  bool     `json:"enable_claude_oauth_system_prompt_injection"`
+	ClaudeOAuthSystemPrompt                 string   `json:"claude_oauth_system_prompt"`
+	ClaudeOAuthSystemPromptBlocks           string   `json:"claude_oauth_system_prompt_blocks"`
+	EnableAnthropicCacheTTL1hInjection      bool     `json:"enable_anthropic_cache_ttl_1h_injection"`
+	RewriteMessageCacheControl              bool     `json:"rewrite_message_cache_control"`
+	EnableClientDatelineNormalization       bool     `json:"enable_client_dateline_normalization"`
+	AntigravityUserAgentVersion             string   `json:"antigravity_user_agent_version"`
+	OpenAICodexUserAgent                    string   `json:"openai_codex_user_agent"`
+	OpenAICodexClientVersion                string   `json:"openai_codex_client_version"`
+	OpenAICodexClientVersionSynced          string   `json:"openai_codex_client_version_synced"`
+	OpenAICodexVersionAutoSyncEnabled       bool     `json:"openai_codex_version_auto_sync_enabled"`
+	OpenAICodexTicketEnabled                bool     `json:"openai_codex_ticket_enabled"`
+	OpenAICodexTicketHarvestProxyURL        string   `json:"openai_codex_ticket_harvest_proxy_url"`
+	OpenAICodexTicketStaticProxyURL         string   `json:"openai_codex_ticket_static_proxy_url,omitempty"`
+	OpenAICodexTicketHarvestProxyConfigured bool     `json:"openai_codex_ticket_harvest_proxy_configured"`
+	OpenAICodexTicketModels                 []string `json:"openai_codex_ticket_models"`
+	ClaudeCodeClientVersion                 string   `json:"claude_code_client_version"`
+	ClaudeCodeClientVersionSynced           string   `json:"claude_code_client_version_synced"`
+	ClaudeCodeVersionAutoSyncEnabled        bool     `json:"claude_code_version_auto_sync_enabled"`
 
 	// codex_cli_only 加固
 	MinCodexVersion                      string `json:"min_codex_version"`
@@ -280,11 +294,15 @@ type SystemSettings struct {
 	PaymentBalanceRechargeMultiplier float64  `json:"payment_balance_recharge_multiplier"`
 	PaymentSubscriptionUSDToCNYRate  float64  `json:"payment_subscription_usd_to_cny_rate"`
 	PaymentRechargeFeeRate           float64  `json:"payment_recharge_fee_rate"`
-	PaymentLoadBalanceStrat          string   `json:"payment_load_balance_strategy"`
-	PaymentProductNamePrefix         string   `json:"payment_product_name_prefix"`
-	PaymentProductNameSuffix         string   `json:"payment_product_name_suffix"`
-	PaymentHelpImageURL              string   `json:"payment_help_image_url"`
-	PaymentHelpText                  string   `json:"payment_help_text"`
+	// 充值赠送阶梯与活动文案
+	PaymentRechargeBonusTiers  []RechargeBonusTier `json:"payment_recharge_bonus_tiers"`
+	PaymentRechargeBonusMode   string              `json:"payment_recharge_bonus_mode"`
+	PaymentRechargeBonusNotice string              `json:"payment_recharge_bonus_notice"`
+	PaymentLoadBalanceStrat    string              `json:"payment_load_balance_strategy"`
+	PaymentProductNamePrefix   string              `json:"payment_product_name_prefix"`
+	PaymentProductNameSuffix   string              `json:"payment_product_name_suffix"`
+	PaymentHelpImageURL        string              `json:"payment_help_image_url"`
+	PaymentHelpText            string              `json:"payment_help_text"`
 
 	// Cancel rate limit
 	PaymentCancelRateLimitEnabled bool   `json:"payment_cancel_rate_limit_enabled"`
@@ -322,6 +340,10 @@ type SystemSettings struct {
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
+	// Pelican showcase (user-facing gallery of scheduled Pelican HTML results)
+	PelicanShowcaseEnabled bool                          `json:"pelican_showcase_enabled"`
+	PelicanShowcase        service.PelicanShowcaseConfig `json:"pelican_showcase_config"`
+
 	// Subscription feature switch: gates the whole user-facing subscription surface
 	// (sidebar entries, purchase-page subscription tab, header badge, /subscriptions route).
 	SubscriptionEnabled bool `json:"subscription_enabled"`
@@ -336,8 +358,10 @@ type SystemSettings struct {
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
 	// cyber 会话屏蔽开关 + TTL
-	CyberSessionBlockEnabled    bool `json:"cyber_session_block_enabled"`
-	CyberSessionBlockTTLSeconds int  `json:"cyber_session_block_ttl_seconds"`
+	CyberSessionBlockEnabled          bool   `json:"cyber_session_block_enabled"`
+	CyberSessionBlockTTLSeconds       int    `json:"cyber_session_block_ttl_seconds"`
+	CyberSessionIdentityStrictEnabled bool   `json:"cyber_session_identity_strict_enabled"`
+	CyberPolicyUserAllowlist          string `json:"cyber_policy_user_allowlist"`
 
 	// Affiliate (邀请返利) feature switch
 	AffiliateEnabled bool `json:"affiliate_enabled"`
@@ -352,7 +376,26 @@ type SystemSettings struct {
 	AccountSchedulingThresholds map[string]int `json:"account_scheduling_thresholds,omitempty"`
 
 	// 允许终端用户在用量页查看自己的失败请求
-	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`
+	AllowUserViewErrorRequests    bool   `json:"allow_user_view_error_requests"`
+	UsageShowLongContextBadge     bool   `json:"usage_show_long_context_badge"`
+	RequestCaptureEnabled         bool   `json:"request_capture_enabled"`
+	RequestCaptureQuotaMiB        int64  `json:"request_capture_quota_mib"`
+	RequestCaptureRetentionDays   int    `json:"request_capture_retention_days"`
+	ExcelBPSImageMode             string `json:"excel_bps_image_mode"`
+	ExcelBPSImageRelayEnabled     bool   `json:"excel_bps_image_relay_enabled"`
+	ExcelBPSImageBaseURL          string `json:"excel_bps_image_base_url"`
+	ExcelBPSImageBodyLimitMiB     int    `json:"excel_bps_image_body_limit_mib"`
+	ExcelBPSImageBudgetMiB        int    `json:"excel_bps_image_budget_mib"`
+	ExcelBPSImageMaxRequests      int    `json:"excel_bps_image_max_requests"`
+	ExcelBPSImageMaxImageMiB      int    `json:"excel_bps_image_max_image_mib"`
+	ExcelBPSImageMaxImages        int    `json:"excel_bps_image_max_images"`
+	ExcelBPSImageLimitPolicy      string `json:"excel_bps_image_limit_policy"`
+	ExcelBPSImageWarningRemaining int    `json:"excel_bps_image_warning_remaining"`
+	ExcelBPSImageCompactReserve   int    `json:"excel_bps_image_compact_reserve"`
+	ExcelBPSImageMaxTotalMiB      int    `json:"excel_bps_image_max_total_mib"`
+	ExcelBPSImageStorageMiB       int    `json:"excel_bps_image_storage_mib"`
+	ExcelBPSImageStorageEntries   int    `json:"excel_bps_image_storage_entries"`
+	ExcelBPSImageTTLMinutes       int    `json:"excel_bps_image_ttl_minutes"`
 }
 
 type DefaultSubscriptionSetting struct {
@@ -389,6 +432,7 @@ type PublicSettings struct {
 	SiteLogo                            string                   `json:"site_logo"`
 	SiteSubtitle                        string                   `json:"site_subtitle"`
 	APIBaseURL                          string                   `json:"api_base_url"`
+	APIBaseURLDescription               string                   `json:"api_base_url_description"`
 	ContactInfo                         string                   `json:"contact_info"`
 	DocURL                              string                   `json:"doc_url"`
 	HomeContent                         string                   `json:"home_content"`
@@ -434,6 +478,7 @@ type PublicSettings struct {
 	ChannelMonitorHideUserRanking        bool   `json:"channel_monitor_hide_user_ranking"`
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+	PelicanShowcaseEnabled   bool `json:"pelican_showcase_enabled"`
 
 	SubscriptionEnabled bool `json:"subscription_enabled"`
 
@@ -446,6 +491,8 @@ type PublicSettings struct {
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
 	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`
+
+	UsageShowLongContextBadge bool `json:"usage_show_long_context_badge"`
 }
 
 type LoginAgreementDocument struct {

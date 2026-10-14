@@ -23,13 +23,16 @@ type Group struct {
 	RateMultiplier float64
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
 	// token 计费倍率额外乘以 PeakRateMultiplier。详见 PeakMultiplierAt。
-	PeakRateEnabled    bool
-	PeakStart          string
-	PeakEnd            string
-	PeakRateMultiplier float64
-	IsExclusive        bool
-	Status             string
-	Hydrated           bool // indicates the group was loaded from a trusted repository source
+	PeakRateEnabled            bool
+	PeakStart                  string
+	PeakEnd                    string
+	PeakRateMultiplier         float64
+	IsExclusive                bool
+	SecurityPolicyEnabled      bool
+	SecurityPolicyMode         string
+	SecurityPolicyEmailEnabled bool
+	Status                     string
+	Hydrated                   bool // indicates the group was loaded from a trusted repository source
 	// DuplicateOperationID is internal persistence metadata used only to recover
 	// an already committed one-click copy. It must never be mapped to API DTOs.
 	DuplicateOperationID string
@@ -84,6 +87,9 @@ type Group struct {
 	// 无效请求兜底分组（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
 
+	// StreamOnly 仅允许流式请求：非流式的对话生成请求在网关入口拒绝（见 middleware.GroupStreamOnly）。
+	StreamOnly bool
+
 	// 模型路由配置
 	// key: 模型匹配模式（支持 * 通配符，如 "claude-opus-*"）
 	// value: 优先账号 ID 列表
@@ -126,11 +132,6 @@ type Group struct {
 	MaxReasoningEffortOverLimit string
 	// ReasoningEffortMappings rewrites explicit request values before applying the ceiling.
 	ReasoningEffortMappings []ReasoningEffortMapping
-
-	// Empty GrokPromptContent selects the built-in client-neutral prompt.
-	GrokPromptEnabled bool
-	GrokPromptMode    string
-	GrokPromptContent string
 
 	// 分组利润控制（五个 token 计费平台可启用）。
 	// 调度准入条件：账号倍率 U 满足 U <= D*(1-margin-buffer)，

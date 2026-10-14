@@ -1,0 +1,162 @@
+{
+  "success": true,
+  "group_ratio": {
+    "default": 1
+  },
+  "data": [
+    {
+      "model_name": "官方直连sd2.0(fast全参不排队480P)",
+      "billing_mode": "video_multi",
+      "model_price": 0.32,
+      "video_pricing": {
+        "output_per_second": 0.32,
+        "resolution_per_second": {
+          "480p": 0.32
+        },
+        "ref_video_per_second": 0.32
+      }
+    },
+    {
+      "model_name": "官方直连sd2.0(满血全参不排队720P)",
+      "billing_mode": "video_multi",
+      "model_price": 0.68,
+      "video_pricing": {
+        "output_per_second": 0.68,
+        "resolution_per_second": {
+          "720p": 0.68
+        },
+        "ref_video_per_second": 0.68
+      }
+    },
+    {
+      "model_name": "官转sd2.5(30图10音不卡脸720P)",
+      "billing_mode": "per_second",
+      "model_price": 0.85
+    },
+    {
+      "model_name": "官方直连sd2.0(满血全参不排队1080P)",
+      "billing_mode": "video_multi",
+      "model_price": 1.65,
+      "video_pricing": {
+        "output_per_second": 1.65,
+        "resolution_per_second": {
+          "1080p": 1.65
+        },
+        "ref_video_per_second": 1.65
+      }
+    },
+    {
+      "model_name": "官方直连sd2.0(满血全参不排队480P)",
+      "billing_mode": "video_multi",
+      "model_price": 0.46,
+      "video_pricing": {
+        "output_per_second": 0.46,
+        "resolution_per_second": {
+          "480p": 0.46
+        },
+        "ref_video_per_second": 0.46
+      }
+    },
+    {
+      "model_name": "官方直连sd2.0(mini全参不排队480P)",
+      "billing_mode": "video_multi",
+      "model_price": 0.093,
+      "video_pricing": {
+        "output_per_second": 0.093,
+        "resolution_per_second": {
+          "480p": 0.093
+        },
+        "ref_video_per_second": 0.093
+      }
+    },
+    {
+      "model_name": "官转sd2.5(30图10音不卡脸1080P)",
+      "billing_mode": "per_second",
+      "model_price": 0.95
+    },
+    {
+      "model_name": "官方直连sd2.0(满血全参不排队4K)",
+      "billing_mode": "per_second",
+      "model_price": 5.45
+    },
+    {
+      "model_name": "特价稳定wan3.0(10-5-5不卡脸480P)",
+      "billing_mode": "per_second",
+      "model_price": 0.35
+    },
+    {
+      "model_name": "官方直连sd2.0(fast全参不排队720P)",
+      "billing_mode": "video_multi",
+      "model_price": 0.55,
+      "video_pricing": {
+        "output_per_second": 0.55,
+        "resolution_per_second": {
+          "720p": 0.55
+        },
+        "ref_video_per_second": 0.55
+      }
+    },
+    {
+      "model_name": "官方直连sd2.5(满血全参不排队480P)",
+      "billing_mode": "video_multi",
+      "model_price": 0.82,
+      "video_pricing": {
+        "output_per_second": 0.82,
+        "ref_video_per_second": 0.82
+      }
+    },
+    {
+      "model_name": "官方直连sd2.5(满血全参不排队1080P)",
+      "billing_mode": "video_multi",
+      "model_price": 2.4,
+      "video_pricing": {
+        "output_per_second": 2.4,
+        "resolution_per_second": {
+          "1080p": 2.4
+        },
+        "ref_video_per_second": 2.4
+      }
+    },
+    {
+      "model_name": "官方直连sd2.5(满血全参不排队720P)",
+      "billing_mode": "video_multi",
+      "model_price": 1.1,
+      "video_pricing": {
+        "output_per_second": 1.1,
+        "ref_video_per_second": 1.1
+      }
+    },
+    {
+      "model_name": "官方直连wan3.0(10-5-5不卡脸1080P)",
+      "billing_mode": "per_second",
+      "model_price": 0.8
+    },
+    {
+      "model_name": "官转sd2.0(903不卡脸不排队720P)",
+      "billing_mode": "per_second",
+      "model_price": 0.6
+    },
+    {
+      "model_name": "官方直连sd2.0(mini全参不排队720P)",
+      "billing_mode": "video_multi",
+      "model_price": 0.22,
+      "video_pricing": {
+        "output_per_second": 0.22,
+        "resolution_per_second": {
+          "720p": 0.22
+        },
+        "ref_video_per_second": 0.22
+      }
+    },
+    {
+      "model_name": "官方直连wan3.0(10-5-5不卡脸720P)",
+      "billing_mode": "per_second",
+      "model_price": 0.45
+    },
+    {
+      "model_name": "官转sd2.0(mini903不卡脸不排队720P)",
+      "billing_mode": "per_second",
+      "model_price": 0.43
+    }
+  ]
+}

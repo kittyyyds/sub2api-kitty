@@ -236,6 +236,7 @@ func TestAPIContracts(t *testing.T) {
 					"last_used_at": null,
 					"last_used_ip": null,
 					"current_concurrency": 0,
+					"concurrency_limit":   0,
 					"quota": 0,
 					"quota_used": 0,
 					"rate_limit_5h": 0,
@@ -287,6 +288,7 @@ func TestAPIContracts(t *testing.T) {
 							"last_used_at": null,
 							"last_used_ip": null,
 							"current_concurrency": 0,
+							"concurrency_limit":   0,
 							"quota": 0,
 							"quota_used": 0,
 							"rate_limit_5h": 0,
@@ -387,6 +389,9 @@ func TestAPIContracts(t *testing.T) {
 						"claude_code_only": false,
 						"allow_messages_dispatch": false,
 						"allow_live": false,
+						"security_policy_enabled": false,
+						"security_policy_mode": "",
+						"security_policy_email_enabled": false,
 						"fallback_group_id": null,
 						"fallback_group_id_on_invalid_request": null,
 						"require_oauth_only": false,
@@ -614,6 +619,9 @@ func TestAPIContracts(t *testing.T) {
 							"duration_ms": 100,
 							"first_token_ms": 50,
 							"image_count": 0,
+                            "video_count": 0,
+                            "video_duration_seconds": null,
+                            "video_resolution": null,
 							"image_size": null,
 							"image_input_size": null,
 							"image_output_size": null,
@@ -821,6 +829,7 @@ func TestAPIContracts(t *testing.T) {
 						"site_logo": "",
 						"site_subtitle": "Subtitle",
 						"api_base_url": "https://api.example.com",
+						"api_base_url_description": "",
 						"api_key_acl_trust_forwarded_ip": false,
 					"forwarded_client_ip_headers": [],
 					"contact_info": "support",
@@ -863,7 +872,7 @@ func TestAPIContracts(t *testing.T) {
 					"force_email_on_third_party_signup": false,
 					"default_concurrency": 5,
 					"default_balance": 1.25,
-					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"minimax":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"opencode_go":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
+					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"minimax":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"opencode_go":{"daily":null,"weekly":null,"monthly":null},"typesafe":{"daily":null,"weekly":null,"monthly":null},"video":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
 					"auth_source_default_email_platform_quotas": null,
 					"auth_source_default_github_platform_quotas": null,
 					"auth_source_default_google_platform_quotas": null,
@@ -879,6 +888,26 @@ func TestAPIContracts(t *testing.T) {
 					"default_user_rpm_limit": 0,
 					"default_subscriptions": [],
 					"enable_model_fallback": false,
+					"excel_bps_image_mode": "native",
+					"excel_bps_image_base_url": "",
+ "excel_bps_image_max_image_mib": 20,
+ "excel_bps_image_max_images": 20,
+ "excel_bps_image_max_total_mib": 32,
+ "excel_bps_image_storage_mib": 1024,
+ "excel_bps_image_storage_entries": 512,
+ "excel_bps_image_ttl_minutes": 30,
+
+					"excel_bps_image_body_limit_mib": 64,
+					"excel_bps_image_budget_mib": 1024,
+					"excel_bps_image_max_requests": 128,
+					"excel_bps_image_max_images": 20,
+ "request_capture_enabled": false,
+ "request_capture_quota_mib": 1024,
+ "request_capture_retention_days": 7,
+					"excel_bps_image_relay_enabled": true,
+                    "excel_bps_image_limit_policy": "off",
+                    "excel_bps_image_warning_remaining": 8,
+                    "excel_bps_image_compact_reserve": 3,
 					"fallback_model_anthropic": "claude-3-5-sonnet-20241022",
 					"fallback_model_antigravity": "gemini-2.5-pro",
 					"fallback_model_gemini": "gemini-2.5-pro",
@@ -897,6 +926,13 @@ func TestAPIContracts(t *testing.T) {
 						"table_page_size_options": [10, 20, 50, 100],
 					"min_claude_code_version": "",
 					"max_claude_code_version": "",
+					"openai_codex_ticket_enabled": false,
+					"openai_codex_ticket_fail_closed": false,
+					"openai_codex_ticket_strategy": "standby",
+                    "openai_codex_ticket_harvest_scope": {"mode":"all","group_ids":[],"account_policy":"schedulable_only"},
+					"openai_codex_ticket_harvest_proxy_url": "",
+					"openai_codex_ticket_harvest_proxy_configured": false,
+					"openai_codex_ticket_models": ["gpt-6-astra", "gpt-5.6-sol"],
 					"min_codex_version": "",
 					"max_codex_version": "",
 					"codex_cli_only_blacklist": "",
@@ -971,6 +1007,9 @@ func TestAPIContracts(t *testing.T) {
 					"payment_balance_recharge_multiplier": 0,
 					"payment_subscription_usd_to_cny_rate": 0,
 					"payment_recharge_fee_rate": 0,
+					"payment_recharge_bonus_tiers": [],
+					"payment_recharge_bonus_mode": "bonus",
+					"payment_recharge_bonus_notice": "",
 					"payment_load_balance_strategy": "",
 					"payment_product_name_prefix": "",
 					"payment_product_name_suffix": "",
@@ -999,14 +1038,21 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_hide_user_ranking": false,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
+					"pelican_showcase_enabled": false,
+					"pelican_showcase_config": {"max_items": 20, "auto_cleanup": true, "retention_days": 7},
 					"subscription_enabled": true,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
 					"plugin_management_enabled": false,
+					"prism_browser_enabled": false,
+					"prism_browser_base_url": "http://127.0.0.1:8319/v1",
+					"prism_browser_api_key_configured": false,
 					"risk_control_enabled": false,
+					"cyber_policy_user_allowlist": "",
 					"cyber_session_block_enabled": false,
 					"cyber_session_block_ttl_seconds": 3600,
+					"cyber_session_identity_strict_enabled": false,
 					"affiliate_enabled": false,
 					"wechat_connect_enabled": false,
 					"wechat_connect_app_id": "",
@@ -1024,7 +1070,8 @@ func TestAPIContracts(t *testing.T) {
 					"wechat_connect_redirect_url": "",
 					"wechat_connect_frontend_redirect_url": "/auth/wechat/callback",
 					"wechat_connect_scopes": "snsapi_login",
-					"allow_user_view_error_requests": false
+					"allow_user_view_error_requests": false,
+					"usage_show_long_context_badge": true
 				}
 			}`,
 		},
@@ -1173,6 +1220,7 @@ func TestAPIContracts(t *testing.T) {
 					"site_logo": "",
 					"site_subtitle": "Subscription to API Conversion Platform",
 					"api_base_url": "",
+					"api_base_url_description": "",
 					"api_key_acl_trust_forwarded_ip": false,
 					"forwarded_client_ip_headers": [],
 					"contact_info": "",
@@ -1186,7 +1234,7 @@ func TestAPIContracts(t *testing.T) {
 					"purchase_subscription_url": "",
 					"table_default_page_size": 20,
 					"table_page_size_options": [10, 20, 50],
-					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"minimax":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"opencode_go":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
+					"default_platform_quotas": {"anthropic":{"daily":null,"weekly":null,"monthly":null},"antigravity":{"daily":null,"weekly":null,"monthly":null},"deepseek":{"daily":null,"weekly":null,"monthly":null},"gemini":{"daily":null,"weekly":null,"monthly":null},"grok":{"daily":null,"weekly":null,"monthly":null},"kimi":{"daily":null,"weekly":null,"monthly":null},"minimax":{"daily":null,"weekly":null,"monthly":null},"openai":{"daily":null,"weekly":null,"monthly":null},"opencode_go":{"daily":null,"weekly":null,"monthly":null},"typesafe":{"daily":null,"weekly":null,"monthly":null},"video":{"daily":null,"weekly":null,"monthly":null},"zhipu":{"daily":null,"weekly":null,"monthly":null}},
 					"auth_source_default_email_platform_quotas": null,
 					"auth_source_default_github_platform_quotas": null,
 					"auth_source_default_google_platform_quotas": null,
@@ -1206,6 +1254,26 @@ func TestAPIContracts(t *testing.T) {
 					"default_user_rpm_limit": 0,
 					"default_subscriptions": [],
 					"enable_model_fallback": false,
+					"excel_bps_image_mode": "native",
+					"excel_bps_image_base_url": "",
+ "excel_bps_image_max_image_mib": 20,
+ "excel_bps_image_max_images": 20,
+ "excel_bps_image_max_total_mib": 32,
+ "excel_bps_image_storage_mib": 1024,
+ "excel_bps_image_storage_entries": 512,
+ "excel_bps_image_ttl_minutes": 30,
+
+					"excel_bps_image_body_limit_mib": 64,
+					"excel_bps_image_budget_mib": 1024,
+					"excel_bps_image_max_requests": 128,
+					"excel_bps_image_max_images": 20,
+ "request_capture_enabled": false,
+ "request_capture_quota_mib": 1024,
+ "request_capture_retention_days": 7,
+					"excel_bps_image_relay_enabled": true,
+                    "excel_bps_image_limit_policy": "off",
+                    "excel_bps_image_warning_remaining": 8,
+                    "excel_bps_image_compact_reserve": 3,
 					"fallback_model_anthropic": "claude-3-5-sonnet-20241022",
 					"fallback_model_openai": "gpt-4o",
 					"fallback_model_gemini": "gemini-2.5-pro",
@@ -1230,6 +1298,13 @@ func TestAPIContracts(t *testing.T) {
 					"rewrite_message_cache_control": false,
 					"enable_client_dateline_normalization": true,
 					"antigravity_user_agent_version": "",
+					"openai_codex_ticket_enabled": false,
+					"openai_codex_ticket_fail_closed": false,
+					"openai_codex_ticket_strategy": "standby",
+                    "openai_codex_ticket_harvest_scope": {"mode":"all","group_ids":[],"account_policy":"schedulable_only"},
+					"openai_codex_ticket_harvest_proxy_url": "",
+					"openai_codex_ticket_harvest_proxy_configured": false,
+					"openai_codex_ticket_models": ["gpt-6-astra", "gpt-5.6-sol"],
 					"min_codex_version": "",
 					"max_codex_version": "",
 					"codex_cli_only_blacklist": "",
@@ -1291,6 +1366,9 @@ func TestAPIContracts(t *testing.T) {
 					"payment_balance_recharge_multiplier": 0,
 					"payment_subscription_usd_to_cny_rate": 0,
 					"payment_recharge_fee_rate": 0,
+					"payment_recharge_bonus_tiers": [],
+					"payment_recharge_bonus_mode": "bonus",
+					"payment_recharge_bonus_notice": "",
 					"payment_load_balance_strategy": "",
 					"payment_product_name_prefix": "",
 					"payment_product_name_suffix": "",
@@ -1318,14 +1396,21 @@ func TestAPIContracts(t *testing.T) {
 					"channel_monitor_hide_user_ranking": false,
 					"channel_monitor_default_interval_seconds": 60,
 					"available_channels_enabled": false,
+					"pelican_showcase_enabled": false,
+					"pelican_showcase_config": {"max_items": 20, "auto_cleanup": true, "retention_days": 7},
 					"subscription_enabled": true,
 					"model_plaza_enabled": false,
 					"model_plaza_require_auth": false,
 					"model_plaza_description": "",
 					"plugin_management_enabled": false,
+					"prism_browser_enabled": false,
+					"prism_browser_base_url": "http://127.0.0.1:8319/v1",
+					"prism_browser_api_key_configured": false,
 					"risk_control_enabled": false,
+					"cyber_policy_user_allowlist": "",
 					"cyber_session_block_enabled": false,
 					"cyber_session_block_ttl_seconds": 3600,
+					"cyber_session_identity_strict_enabled": false,
 					"affiliate_enabled": false,
 					"wechat_connect_enabled": true,
 					"wechat_connect_app_id": "wx-open-config",
@@ -1379,7 +1464,8 @@ func TestAPIContracts(t *testing.T) {
 					"auth_source_default_dingtalk_grant_on_signup": false,
 					"auth_source_default_dingtalk_grant_on_first_bind": false,
 					"force_email_on_third_party_signup": false,
-					"allow_user_view_error_requests": false
+					"allow_user_view_error_requests": false,
+					"usage_show_long_context_badge": true
 				}
 			}`,
 		},
@@ -1737,8 +1823,8 @@ func (stubApiKeyCache) IncrementCreateAttemptCount(ctx context.Context, userID i
 	return nil
 }
 
-func (stubApiKeyCache) DeleteCreateAttemptCount(ctx context.Context, userID int64) error {
-	return nil
+func (stubApiKeyCache) IncrementCreateCount(ctx context.Context, userID int64, window time.Duration) (int64, error) {
+	return 0, nil
 }
 
 func (stubApiKeyCache) IncrementDailyUsage(ctx context.Context, apiKey string) error {
@@ -1963,6 +2049,10 @@ func (s *stubAccountRepo) AutoPauseExpiredAccounts(ctx context.Context, now time
 }
 
 func (s *stubAccountRepo) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
+	return errors.New("not implemented")
+}
+
+func (s *stubAccountRepo) SetGroupAllowedModels(ctx context.Context, accountID int64, allowed map[int64][]string) error {
 	return errors.New("not implemented")
 }
 
@@ -2654,7 +2744,7 @@ func (r *stubUsageLogRepo) GetAPIKeyUsageTrend(ctx context.Context, startTime, e
 	return nil, errors.New("not implemented")
 }
 
-func (r *stubUsageLogRepo) GetUserUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int) ([]usagestats.UserUsageTrendPoint, error) {
+func (r *stubUsageLogRepo) GetUserUsageTrend(ctx context.Context, startTime, endTime time.Time, granularity string, limit int, metric string) ([]usagestats.UserUsageTrendPoint, error) {
 	return nil, errors.New("not implemented")
 }
 

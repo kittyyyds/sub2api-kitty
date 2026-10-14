@@ -88,3 +88,7 @@ deploy/redis_data/
 .claude/
 issues/
 CLAUDE.md
+
+# Local-only console preview and synthetic payment server.
+/preview/
+/frontend/preview/

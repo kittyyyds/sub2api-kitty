@@ -417,6 +417,52 @@ func TestFetchUpstreamSupportedModelsParsesOpenAIResponse(t *testing.T) {
 	require.Equal(t, "Bearer openai-key", upstream.lastReq.Header.Get("Authorization"))
 }
 
+func TestSyncUpstreamModelCatalogVideoReturnsLiveIDsWithoutCodexRegistry(t *testing.T) {
+	for _, accountID := range []int64{0, 205} {
+		upstream := &httpUpstreamRecorder{resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(`{"data":[
+				{"id":"官转稳定sd2.0(933原生过真人480P)","description":"供应商原始描述"},
+				{"id":"特价/官方h3-2k"},{"id":"特价/官方h3-2k"}
+			]}`)),
+		}}
+		repo := &upstreamModelMetadataRepoStub{}
+		svc := &AccountTestService{accountRepo: repo, httpUpstream: upstream, cfg: upstreamModelSyncTestConfig()}
+		account := &Account{ID: accountID, Platform: PlatformVideo, Type: AccountTypeAPIKey,
+			Credentials: map[string]any{"api_key": "video-key", "base_url": "https://video.example/v1",
+				"model_mapping": map[string]any{"removed-local-model": "removed-local-model"}}}
+		catalog, err := svc.SyncUpstreamModelCatalog(context.Background(), account)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []string{"官转稳定sd2.0(933原生过真人480P)", "特价/官方h3-2k"}, catalog.Models)
+		require.Equal(t, "供应商原始描述", catalog.Metadata["官转稳定sd2.0(933原生过真人480P)"].Description)
+		require.Empty(t, catalog.Warnings)
+		require.Len(t, upstream.requests, 1, "preview and saved-account sync must only query the supplier")
+		require.Equal(t, http.MethodGet, upstream.lastReq.Method)
+		require.Equal(t, "https://video.example/v1/models", upstream.lastReq.URL.String())
+		require.Equal(t, "Bearer video-key", upstream.lastReq.Header.Get("Authorization"))
+		require.Nil(t, repo.updates, "video sync must not rewrite Codex capability snapshots")
+	}
+}
+
+func TestSyncUpstreamModelCatalogVideoDoesNotFallbackOnUnsupportedList(t *testing.T) {
+	for _, status := range []int{http.StatusNotFound, http.StatusMethodNotAllowed} {
+		upstream := &httpUpstreamRecorder{resp: &http.Response{
+			StatusCode: status, Body: io.NopCloser(strings.NewReader(`{"error":"unsupported"}`)),
+		}}
+		svc := &AccountTestService{httpUpstream: upstream, cfg: upstreamModelSyncTestConfig()}
+		catalog, err := svc.SyncUpstreamModelCatalog(context.Background(), &Account{
+			ID: 205, Platform: PlatformVideo, Type: AccountTypeAPIKey,
+			Credentials: map[string]any{"api_key": "video-key", "base_url": "https://video.example/v1",
+				"model_mapping": map[string]any{"特价/官方h3-2k": "特价/官方h3-2k"}},
+		})
+		require.Error(t, err)
+		require.Nil(t, catalog, "a configured whitelist is not evidence of live upstream availability")
+		require.Equal(t, status, upstreamModelSyncStatusCode(err))
+		require.Len(t, upstream.requests, 1)
+	}
+}
+
 // Scenario: ID-only 模型列表从 Models.dev 补齐能力。
 func TestSyncUpstreamModelCatalogEnrichesOpenCodeIDOnlyListAndPersistsSnapshot(t *testing.T) {
 	upstream := &httpUpstreamRecorder{responses: []*http.Response{

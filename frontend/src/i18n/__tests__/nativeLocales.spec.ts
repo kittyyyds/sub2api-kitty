@@ -23,7 +23,6 @@ describe('native customer-console locales', () => {
     const panels = [
       '../../features/app-center/components/media/FreeMediaStudioPanel.vue',
       '../../components/customer-console/billing/BillingEstimator.vue',
-      '../../views/user/native/ResetRadarPanel.vue',
       '../../views/user/native/BillingRulesPanel.vue',
       '../../views/user/native/DocumentationPanel.vue',
     ]

@@ -103,6 +103,11 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 		return nil, nil
 	}
 
+	rule, ruleErr := s.globalContextRule(ctx, in.Model)
+	if ruleErr != nil {
+		return nil, ruleErr
+	}
+	ctx = context.WithValue(ctx, globalContextSnapshotKey{}, globalContextSnapshot{model: in.Model, rule: rule})
 	req := TokenCostRequest{
 		Ctx:            ctx,
 		Model:          in.Model,
@@ -118,6 +123,9 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 	}
 
 	plan := s.contextPricingBreakpoints(resolver, resolved, in.Model)
+	if rule != nil {
+		plan = contextBreakpointPlan{bounds: []int{rule.ThresholdTokens}, thresholdBound: rule.ThresholdTokens, threshold: rule.ThresholdTokens}
+	}
 	segments := buildContextSegments(plan.bounds)
 
 	tiers := make([]ContextPricingTier, 0, len(segments))

@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type openAIWSLeaseLossAfterReadConn struct {
@@ -148,7 +149,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 
 	serverErrCh := make(chan error, 1)
 	turnTerminalCh := make(chan string, 2)
+	promptModels := make(chan string, 2)
 	hooks := &OpenAIWSIngressHooks{
+		TransformPayload: func(raw []byte, model string) ([]byte, error) {
+			promptModels <- model
+			return sjson.SetBytes(raw, "instructions", "PROMPT")
+		},
 		AfterTurn: func(_ int, result *OpenAIForwardResult, turnErr error) {
 			if turnErr == nil && result != nil {
 				turnTerminalCh <- result.UpstreamTerminalEvent
@@ -241,6 +247,9 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	require.Equal(t, int64(1), metrics.AcquireTotal, "同一 ingress 会话多 turn 应只获取一次上游 lease")
 	require.Equal(t, 1, captureDialer.DialCount(), "同一 ingress 会话应保持同一上游连接")
 	require.Len(t, captureConn.writes, 2, "应向同一上游连接发送两轮 response.create")
+	require.Len(t, promptModels, 1, "only the follow-up is transformed here; the handler owns the first frame")
+	require.Equal(t, "gpt-5.1", <-promptModels)
+	require.Equal(t, "PROMPT", captureConn.writes[1]["instructions"])
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_LeaseLossSendsRetryClose(t *testing.T) {
@@ -671,6 +680,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_CodexImageBridge
 	}
 	account := &Account{
 		ID:          31,
+		GroupIDs:    []int64{groupID},
 		Name:        "openai-codex-image-ws",
 		Platform:    PlatformOpenAI,
 		Type:        AccountTypeOAuth,

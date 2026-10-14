@@ -245,18 +245,14 @@ export async function toggleStatus(id: number, status: 'active' | 'inactive'): P
  * @param id - Group ID
  * @returns Group usage statistics
  */
-export async function getStats(id: number): Promise<{
-  total_api_keys: number
-  active_api_keys: number
-  total_requests: number
-  total_cost: number
-}> {
-  const { data } = await apiClient.get<{
-    total_api_keys: number
-    active_api_keys: number
-    total_requests: number
-    total_cost: number
-  }>(`/admin/groups/${id}/stats`)
+export interface GroupDetailStats {
+  group_id: number; group_name: string; total_api_keys: number; active_api_keys: number; total_accounts: number
+  total_requests: number; total_tokens: number; total_cost: number; total_actual_cost: number; total_account_cost: number
+  balance_cost: number; subscription_cost: number; zero_charge_requests: number; average_duration_ms: number
+  from: string | null; to: string | null; generated_at: string
+}
+export async function getStats(id: number, params?: { from?: string; to?: string }, signal?: AbortSignal): Promise<GroupDetailStats> {
+  const { data } = await apiClient.get<GroupDetailStats>(`/admin/groups/${id}/stats`, { params, signal })
   return data
 }
 
@@ -338,6 +334,7 @@ export interface GroupRateMultiplierEntry {
   user_status: string
   rate_multiplier?: number | null
   rpm_override?: number | null
+  denied_models?: string[] | null
 }
 
 /**
@@ -445,6 +442,56 @@ export async function clearGroupRPMOverrides(id: number): Promise<{ message: str
   return data
 }
 
+export interface GroupUserDeniedModelsEntry {
+  user_id: number
+  user_name: string
+  user_email: string
+  user_notes: string
+  user_status: string
+  denied_models: string[]
+}
+
+/**
+ * Get the models each user may not use in a group (subset of rate-multipliers endpoint).
+ */
+export async function getGroupUserDeniedModels(id: number): Promise<GroupUserDeniedModelsEntry[]> {
+  const { data } = await apiClient.get<GroupRateMultiplierEntry[]>(
+    `/admin/groups/${id}/rate-multipliers`
+  )
+  return data
+    .filter(e => (e.denied_models?.length ?? 0) > 0)
+    .map(e => ({
+      user_id: e.user_id,
+      user_name: e.user_name,
+      user_email: e.user_email,
+      user_notes: e.user_notes,
+      user_status: e.user_status,
+      denied_models: [...(e.denied_models ?? [])]
+    }))
+}
+
+/**
+ * Replace the per-user denied models of a group; users not listed become unrestricted.
+ */
+export async function batchSetGroupUserDeniedModels(
+  id: number,
+  entries: Array<{ user_id: number; denied_models: string[] }>
+): Promise<{ message: string }> {
+  const { data } = await apiClient.put<{ message: string }>(
+    `/admin/groups/${id}/user-denied-models`,
+    { entries }
+  )
+  return data
+}
+
+/**
+ * Clear the denied models of every user in a group.
+ */
+export async function clearGroupUserDeniedModels(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>(`/admin/groups/${id}/user-denied-models`)
+  return data
+}
+
 /**
  * Get usage summary (today + yesterday + cumulative cost) for all groups
  * @returns Array of group usage summaries
@@ -470,7 +517,13 @@ export async function getCapacitySummary(): Promise<
   return data
 }
 
+export async function getAvailableModels(id: number): Promise<string[]> {
+  const { data } = await apiClient.get<{models:string[]}>(`/admin/groups/${id}/available-models`)
+  return data.models || []
+}
+
 export const groupsAPI = {
+  getAvailableModels,
   list,
   getAll,
   getByPlatform,
@@ -496,6 +549,9 @@ export const groupsAPI = {
   getGroupRPMOverrides,
   clearGroupRPMOverrides,
   batchSetGroupRPMOverrides,
+  getGroupUserDeniedModels,
+  batchSetGroupUserDeniedModels,
+  clearGroupUserDeniedModels,
   updateSortOrder,
   getUsageSummary,
   getCapacitySummary

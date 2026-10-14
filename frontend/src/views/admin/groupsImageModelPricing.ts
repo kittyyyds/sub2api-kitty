@@ -109,8 +109,19 @@ export function serializeImageModelPrices(form: ImageModelPricesForm): ImageMode
 
 export function imageModelPriceRows(
   form: ImageModelPricesForm,
-  platform = 'grok'
+  platform = 'grok',
+  pricing: ReadonlyArray<{ models: string[]; image?: { provider: string } }> = []
 ) {
+  const managed = new Set(pricing.filter(p => p.image?.provider === 'suanli')
+    .flatMap(p => p.models.map(normalizeModel)))
+  if (platform === 'openai' && managed.size > 0) {
+    // Account-driven models have one editor on the image follow-price page.
+    // Preserve their stored cells on save, but do not offer a duplicate editor.
+    // In mixed groups, keep configured prices belonging to other providers.
+    return Object.keys(form).filter(model => !managed.has(normalizeModel(model))
+      && Object.values(form[model] ?? {}).some(value => normalizePrice(value) !== null))
+      .sort().map(key => ({ key, label: key }))
+  }
   const platformModels = imagePriceModelsByPlatform[platform] ?? []
   const known = new Set<string>(allImagePriceModels.map(({ key }) => key))
   const extra = Object.keys(form)

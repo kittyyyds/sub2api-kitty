@@ -70,6 +70,16 @@ function mediaModel(overrides: Partial<NonNullable<UserSupportedModel['pricing']
 }
 
 describe('SupportedModelChip media pricing', () => {
+  it.each(['video', 'per_request'] as const)('keeps video-platform %s prices final despite group and personal multipliers', async (billingMode) => {
+    const model = { ...mediaModel({ billing_mode: billingMode, per_request_price: 0.25 }), platform: 'video' }
+    const wrapper = mountChip(model, [pricingGroup({ platform: 'video', rate_multiplier: 3, video_rate_multiplier: 5 })])
+    await wrapper.setProps({ userGroupRates: { 24: 7 } })
+    expect(wrapper.get('[data-pricing-row]').text()).toMatch(/\|0\.25\|.*\|1$/)
+    expect(wrapper.text()).toContain('videoModule.finalPrice')
+    expect(wrapper.text()).not.toContain('×7')
+    expect(wrapper.text()).not.toContain('×5')
+  })
+
   it('shows video billing as a per-second price, including resolution tiers', () => {
     const wrapper = mountChip(mediaModel({
       billing_mode: 'video',

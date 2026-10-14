@@ -135,6 +135,20 @@ func (_u *ChannelMonitorUpdate) SetNillableEndpoint(v *string) *ChannelMonitorUp
 	return _u
 }
 
+// SetRequestPath sets the "request_path" field.
+func (_u *ChannelMonitorUpdate) SetRequestPath(v string) *ChannelMonitorUpdate {
+	_u.mutation.SetRequestPath(v)
+	return _u
+}
+
+// SetNillableRequestPath sets the "request_path" field if the given value is not nil.
+func (_u *ChannelMonitorUpdate) SetNillableRequestPath(v *string) *ChannelMonitorUpdate {
+	if v != nil {
+		_u.SetRequestPath(*v)
+	}
+	return _u
+}
+
 // SetAPIKeyEncrypted sets the "api_key_encrypted" field.
 func (_u *ChannelMonitorUpdate) SetAPIKeyEncrypted(v string) *ChannelMonitorUpdate {
 	_u.mutation.SetAPIKeyEncrypted(v)
@@ -509,6 +523,11 @@ func (_u *ChannelMonitorUpdate) check() error {
 			return &ValidationError{Name: "endpoint", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.endpoint": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RequestPath(); ok {
+		if err := channelmonitor.RequestPathValidator(v); err != nil {
+			return &ValidationError{Name: "request_path", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.request_path": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.APIKeyEncrypted(); ok {
 		if err := channelmonitor.APIKeyEncryptedValidator(v); err != nil {
 			return &ValidationError{Name: "api_key_encrypted", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.api_key_encrypted": %w`, err)}
@@ -580,6 +599,9 @@ func (_u *ChannelMonitorUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.Endpoint(); ok {
 		_spec.SetField(channelmonitor.FieldEndpoint, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RequestPath(); ok {
+		_spec.SetField(channelmonitor.FieldRequestPath, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.APIKeyEncrypted(); ok {
 		_spec.SetField(channelmonitor.FieldAPIKeyEncrypted, field.TypeString, value)
@@ -878,6 +900,20 @@ func (_u *ChannelMonitorUpdateOne) SetEndpoint(v string) *ChannelMonitorUpdateOn
 func (_u *ChannelMonitorUpdateOne) SetNillableEndpoint(v *string) *ChannelMonitorUpdateOne {
 	if v != nil {
 		_u.SetEndpoint(*v)
+	}
+	return _u
+}
+
+// SetRequestPath sets the "request_path" field.
+func (_u *ChannelMonitorUpdateOne) SetRequestPath(v string) *ChannelMonitorUpdateOne {
+	_u.mutation.SetRequestPath(v)
+	return _u
+}
+
+// SetNillableRequestPath sets the "request_path" field if the given value is not nil.
+func (_u *ChannelMonitorUpdateOne) SetNillableRequestPath(v *string) *ChannelMonitorUpdateOne {
+	if v != nil {
+		_u.SetRequestPath(*v)
 	}
 	return _u
 }
@@ -1269,6 +1305,11 @@ func (_u *ChannelMonitorUpdateOne) check() error {
 			return &ValidationError{Name: "endpoint", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.endpoint": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RequestPath(); ok {
+		if err := channelmonitor.RequestPathValidator(v); err != nil {
+			return &ValidationError{Name: "request_path", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.request_path": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.APIKeyEncrypted(); ok {
 		if err := channelmonitor.APIKeyEncryptedValidator(v); err != nil {
 			return &ValidationError{Name: "api_key_encrypted", err: fmt.Errorf(`ent: validator failed for field "ChannelMonitor.api_key_encrypted": %w`, err)}
@@ -1357,6 +1398,9 @@ func (_u *ChannelMonitorUpdateOne) sqlSave(ctx context.Context) (_node *ChannelM
 	}
 	if value, ok := _u.mutation.Endpoint(); ok {
 		_spec.SetField(channelmonitor.FieldEndpoint, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RequestPath(); ok {
+		_spec.SetField(channelmonitor.FieldRequestPath, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.APIKeyEncrypted(); ok {
 		_spec.SetField(channelmonitor.FieldAPIKeyEncrypted, field.TypeString, value)

@@ -75,16 +75,20 @@ export function humanizeModelName(value: string): string {
 
 export function catalogKind(model: PlazaModel): CatalogKind {
   const mode = model.pricing?.billing_mode
+  // Missing video pricing is not token pricing and must not inherit an official price.
+  if (model.platform === 'video') return mode === 'per_request' ? 'per_request' : 'video'
   if (mode === 'image' || mode === 'video' || mode === 'per_request') return mode
   return 'token'
 }
 
 export function groupTextRate(group: ModelPlazaGroup): number {
+  if (group.platform === 'video') return 1
   const value = group.user_rate_multiplier ?? group.rate_multiplier
   return Number.isFinite(value) && value >= 0 ? value : 1
 }
 
 export function groupModelRate(group: ModelPlazaGroup, kind: CatalogKind): number {
+  if (group.platform === 'video') return 1
   if (kind === 'image' && group.image_rate_independent) {
     return finitePrice(group.image_rate_multiplier) ?? 1
   }
@@ -134,6 +138,23 @@ function tokenMetrics(model: PlazaModel, group: ModelPlazaGroup): CatalogMetric[
 }
 
 function unitMetrics(model: PlazaModel, group: ModelPlazaGroup, kind: CatalogKind): CatalogMetric[] {
+  if (model.platform === 'video') {
+    const pricing = model.pricing
+    const validMode = pricing?.billing_mode === 'video' || pricing?.billing_mode === 'per_request'
+    const resolutions = pricing?.resolution_prices
+    // A configured resolution map is authoritative. Missing tiers do not inherit
+    // the base price, and unsupported/unselected models are never added here.
+    const rows = validMode && resolutions && Object.keys(resolutions).length > 0
+      ? [...new Set([...(model.capabilities?.resolutions ?? []), ...Object.keys(resolutions)])]
+        .map(tier => ({ tier, value: finitePrice(resolutions[tier]) }))
+      : validMode && pricing.intervals?.length
+        ? pricing.intervals.map(interval => ({ tier: interval.tier_label?.trim() || '', value: finitePrice(interval.per_request_price) }))
+        : [{ tier: model.capabilities?.generic ? '以上游参数为准' : (model.capabilities?.resolutions ?? []).join(' / '), value: validMode ? finitePrice(pricing.per_request_price) : null }]
+    return rows.map((row, index) => ({
+      key: `${kind}:${row.tier || index}`, label: 'unit', tier: row.tier,
+      current: row.value, official: null, saving: null,
+    }))
+  }
   const intervals = (model.pricing?.intervals ?? [])
     .filter((interval) => finitePrice(interval.per_request_price) != null)
   const finalTiers = new Set(
@@ -148,7 +169,7 @@ function unitMetrics(model: PlazaModel, group: ModelPlazaGroup, kind: CatalogKin
     : [{ tier: '', value: finitePrice(model.pricing?.per_request_price) }]
 
   return rows.map((row, index) => {
-    const isFinalPrice = finalTiers.has(row.tier.toLowerCase())
+    const isFinalPrice = model.platform === 'video' || finalTiers.has(row.tier.toLowerCase())
     const current = row.value == null
       ? null
       : row.value * (isFinalPrice ? 1 : groupModelRate(group, kind))
@@ -165,7 +186,7 @@ function unitMetrics(model: PlazaModel, group: ModelPlazaGroup, kind: CatalogKin
 
 function cardFor(group: ModelPlazaGroup, model: PlazaModel): CatalogCard {
   const kind = catalogKind(model)
-  const modelId = normalizeModelId(model.name)
+  const modelId = model.platform === 'video' ? model.name : normalizeModelId(model.name)
   return {
     key: `${model.platform}:${modelId}:${group.id}`,
     modelId,
@@ -177,7 +198,7 @@ function cardFor(group: ModelPlazaGroup, model: PlazaModel): CatalogCard {
     multiplier: groupModelRate(group, kind),
     metrics: kind === 'token' ? tokenMetrics(model, group) : unitMetrics(model, group, kind),
     hasLongContextPricing: (model.pricing?.intervals?.length ?? 0) > 1 && kind === 'token',
-    hasTimePricing: (model.time_pricing?.periods?.length ?? 0) > 0,
+    hasTimePricing: group.platform !== 'video' && model.platform !== 'video' && (model.time_pricing?.periods?.length ?? 0) > 0,
   }
 }
 
@@ -201,7 +222,8 @@ function candidateIsCheaper(next: CatalogCard, current: CatalogCard): boolean {
 }
 
 function modelKey(model: PlazaModel): string {
-  return `${model.platform}:${normalizeModelId(model.name).toLowerCase()}:${catalogKind(model)}`
+  const id = model.platform === 'video' ? model.name : normalizeModelId(model.name).toLowerCase()
+  return `${model.platform}:${id}:${catalogKind(model)}`
 }
 
 export function visibleCatalogGroups(groups: ModelPlazaGroup[]): ModelPlazaGroup[] {

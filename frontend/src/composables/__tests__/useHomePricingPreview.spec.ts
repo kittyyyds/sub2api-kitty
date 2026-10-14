@@ -38,19 +38,87 @@ function group(overrides: Partial<ModelPlazaGroup>): ModelPlazaGroup {
 }
 
 describe('buildHomePricingSummaries', () => {
+  it('does not use an image-only group for the text model price', () => {
+    const summaries = buildHomePricingSummaries([
+      group({
+        id: 6,
+        name: '【生图专属】image 1K',
+        rate_multiplier: 0.01,
+        models: [
+          { name: 'gpt-image-2', platform: 'openai', pricing: { billing_mode: 'image' } as never, official_pricing: null },
+        ],
+      }),
+      group({
+        id: 3,
+        name: 'Codex - 福利特惠【尽量不断】',
+        rate_multiplier: 0.1,
+        models: [
+          { name: 'gpt-5.6-sol', platform: 'openai', pricing: null, official_pricing: null },
+        ],
+      }),
+    ])
+
+    expect(summaries).toHaveLength(1)
+    expect(summaries[0]).toMatchObject({
+      platform: 'openai',
+      groupName: 'Codex - 福利特惠【尽量不断】',
+      rateMultiplier: 0.1,
+      featuredModel: 'gpt-5.6-sol',
+    })
+  })
+
   it('selects the lowest effective rate for each public platform', () => {
     const summaries = buildHomePricingSummaries([
-      group({ id: 1, name: 'OpenAI stable', rate_multiplier: 0.2 }),
-      group({ id: 2, name: 'OpenAI welfare', rate_multiplier: 0.08 }),
-      group({ id: 3, platform: 'anthropic', name: 'Claude', rate_multiplier: 0.65 }),
-      group({ id: 4, platform: 'anthropic', name: 'Kiro', rate_multiplier: 0.1 }),
-      group({ id: 5, platform: 'grok', name: 'Grok', rate_multiplier: 0.15 }),
+      group({ id: 1, name: 'OpenAI stable', rate_multiplier: 0.2, models: [{ name: 'gpt-5.6-sol', platform: 'openai', pricing: null, official_pricing: null }] }),
+      group({ id: 2, name: 'OpenAI welfare', rate_multiplier: 0.08, models: [{ name: 'gpt-5.6-sol', platform: 'openai', pricing: null, official_pricing: null }] }),
+      group({ id: 3, platform: 'anthropic', name: 'Claude', rate_multiplier: 0.65, models: [{ name: 'claude-sonnet-5', platform: 'anthropic', pricing: null, official_pricing: null }] }),
+      group({ id: 4, platform: 'anthropic', name: 'Kiro', rate_multiplier: 0.1, models: [{ name: 'claude-sonnet-5', platform: 'anthropic', pricing: null, official_pricing: null }] }),
+      group({ id: 5, platform: 'grok', name: 'Grok', rate_multiplier: 0.15, models: [{ name: 'grok-4.5', platform: 'grok', pricing: null, official_pricing: null }] }),
     ])
 
     expect(summaries.map((summary) => [summary.platform, summary.groupName, summary.rateMultiplier])).toEqual([
       ['openai', 'OpenAI welfare', 0.08],
       ['anthropic', 'Kiro', 0.1],
       ['grok', 'Grok', 0.15],
+    ])
+  })
+
+  it('maps each homepage model to a group that actually contains it', () => {
+    const summaries = buildHomePricingSummaries([
+      group({
+        id: 3,
+        name: 'Codex - 福利特惠【尽量不断】',
+        rate_multiplier: 0.1,
+        models: [{ name: 'gpt-5.6-sol', platform: 'openai', pricing: null, official_pricing: null }],
+      }),
+      group({
+        id: 10,
+        platform: 'anthropic',
+        name: 'Claude - Kiro -【99缓】',
+        rate_multiplier: 0.4,
+        models: [
+          { name: 'claude-fable-5', platform: 'anthropic', pricing: null, official_pricing: null },
+          { name: 'claude-sonnet-5', platform: 'anthropic', pricing: null, official_pricing: null },
+        ],
+      }),
+      group({
+        id: 11,
+        platform: 'grok',
+        name: 'Grok - 正品会员池【稳定】',
+        rate_multiplier: 0.2,
+        models: [{ name: 'grok-4.5', platform: 'grok', pricing: null, official_pricing: null }],
+      }),
+    ])
+
+    expect(summaries.map((summary) => [
+      summary.featuredModel,
+      summary.groupName,
+      summary.rateMultiplier,
+    ])).toEqual([
+      ['gpt-5.6-sol', 'Codex - 福利特惠【尽量不断】', 0.1],
+      ['claude-fable-5', 'Claude - Kiro -【99缓】', 0.4],
+      ['claude-sonnet-5', 'Claude - Kiro -【99缓】', 0.4],
+      ['grok-4.5', 'Grok - 正品会员池【稳定】', 0.2],
     ])
   })
 
@@ -116,7 +184,11 @@ describe('buildHomePricingSummaries', () => {
     const enabled = shallowRef(false)
     getModelPlazaMock.mockResolvedValue({
       description: '',
-      groups: [group({ name: 'Runtime group', rate_multiplier: 0.08 })],
+      groups: [group({
+        name: 'Runtime group',
+        rate_multiplier: 0.08,
+        models: [{ name: 'gpt-5.6-sol', platform: 'openai', pricing: null, official_pricing: null }],
+      })],
     })
 
     let preview: ReturnType<typeof useHomePricingPreview> | undefined

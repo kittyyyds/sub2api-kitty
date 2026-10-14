@@ -61,6 +61,10 @@ func (ChannelMonitor) Fields() []ent.Field {
 		field.String("endpoint").
 			MaxLen(500).
 			Comment("Provider base origin, e.g. https://api.openai.com; empty for quota-only monitors"),
+		field.String("request_path").
+			Default("").
+			MaxLen(500).
+			Comment("Optional probe path override; empty uses provider default"),
 		field.String("api_key_encrypted").
 			NotEmpty().
 			Sensitive().

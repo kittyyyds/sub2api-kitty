@@ -67,6 +67,7 @@ func (s *AccountTestService) testCNProviderAdaptiveAnthropicConnection(c *gin.Co
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create adaptive Anthropic test payload")
 	}
+
 	payloadBytes, _ := json.Marshal(payload)
 
 	s.sendEvent(c, TestEvent{Type: "status", Text: "正在通过原生 /v1/messages 测试自适应 Anthropic 端点"})
@@ -111,6 +112,7 @@ func (s *AccountTestService) testCNProviderAdaptiveAnthropicConnection(c *gin.Co
 
 func (s *AccountTestService) processCNProviderAdaptiveAnthropicStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
+	usage := startPelicanTestStream(c, "anthropic")
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
@@ -125,6 +127,7 @@ func (s *AccountTestService) processCNProviderAdaptiveAnthropicStream(c *gin.Con
 			continue
 		}
 		jsonStr := sseDataPrefix.ReplaceAllString(line, "")
+		usage.read(jsonStr)
 		if jsonStr == "[DONE]" {
 			return nil
 		}
@@ -166,6 +169,7 @@ func (s *AccountTestService) testCNProviderAdaptiveResponsesConnection(c *gin.Co
 	// DeepSeek / Kimi native Responses endpoints are stateless and do not need
 	// the OpenAI probe's synthetic instructions.
 	delete(payload, "instructions")
+
 	payloadBytes, _ := json.Marshal(payload)
 	payloadBytes = normalizeDeepSeekResponsesRequestBody(account, payloadBytes)
 
@@ -252,6 +256,7 @@ func (s *AccountTestService) testCNProviderAnthropicConnection(c *gin.Context, a
 	if err != nil {
 		return s.sendErrorAndEnd(c, "Failed to create Anthropic test payload")
 	}
+
 	payloadBytes, _ := json.Marshal(payload)
 
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})

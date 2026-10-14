@@ -3,12 +3,14 @@ package sysutil
 
 import (
 	"log"
-	"os"
 	"runtime"
 	"time"
 )
 
-// RestartService triggers a service restart by gracefully exiting.
+// RestartService asks the normal SIGTERM shutdown path to exit the process.
+// That path runs HTTP shutdown and deferred accounting/service cleanup. It
+// retains the application's existing shutdown deadlines; administrators must
+// drain active requests before restarting, particularly long-lived WebSockets.
 //
 // This relies on systemd's Restart=always configuration to automatically
 // restart the service after it exits. This is the industry-standard approach:
@@ -22,17 +24,19 @@ import (
 //   - Service configured with Restart=always in systemd unit file
 func RestartService() error {
 	if runtime.GOOS != "linux" {
-		log.Println("Service restart via exit only works on Linux with systemd")
+		log.Println("Service restart is supported only on Linux with a restart supervisor")
 		return nil
 	}
 
-	log.Println("Initiating service restart by graceful exit...")
-	log.Println("systemd will automatically restart the service (Restart=always)")
+	log.Println("Initiating service restart through the normal SIGTERM shutdown path...")
+	log.Println("The supervisor must restart normal exits (systemd Restart=always or Docker unless-stopped)")
 
 	// Give a moment for logs to flush and response to be sent
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		os.Exit(0)
+		if err := signalGracefulRestart(); err != nil {
+			log.Printf("Could not signal service restart: %v", err)
+		}
 	}()
 
 	return nil

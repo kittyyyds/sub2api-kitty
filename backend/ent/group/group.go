@@ -38,6 +38,12 @@ const (
 	FieldPeakRateMultiplier = "peak_rate_multiplier"
 	// FieldIsExclusive holds the string denoting the is_exclusive field in the database.
 	FieldIsExclusive = "is_exclusive"
+	// FieldSecurityPolicyEnabled holds the string denoting the security_policy_enabled field in the database.
+	FieldSecurityPolicyEnabled = "security_policy_enabled"
+	// FieldSecurityPolicyMode holds the string denoting the security_policy_mode field in the database.
+	FieldSecurityPolicyMode = "security_policy_mode"
+	// FieldSecurityPolicyEmailEnabled holds the string denoting the security_policy_email_enabled field in the database.
+	FieldSecurityPolicyEmailEnabled = "security_policy_email_enabled"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldDuplicateOperationID holds the string denoting the duplicate_operation_id field in the database.
@@ -106,6 +112,8 @@ const (
 	FieldFallbackGroupID = "fallback_group_id"
 	// FieldFallbackGroupIDOnInvalidRequest holds the string denoting the fallback_group_id_on_invalid_request field in the database.
 	FieldFallbackGroupIDOnInvalidRequest = "fallback_group_id_on_invalid_request"
+	// FieldStreamOnly holds the string denoting the stream_only field in the database.
+	FieldStreamOnly = "stream_only"
 	// FieldModelRouting holds the string denoting the model_routing field in the database.
 	FieldModelRouting = "model_routing"
 	// FieldModelRoutingEnabled holds the string denoting the model_routing_enabled field in the database.
@@ -242,6 +250,9 @@ var Columns = []string{
 	FieldPeakEnd,
 	FieldPeakRateMultiplier,
 	FieldIsExclusive,
+	FieldSecurityPolicyEnabled,
+	FieldSecurityPolicyMode,
+	FieldSecurityPolicyEmailEnabled,
 	FieldStatus,
 	FieldDuplicateOperationID,
 	FieldPlatform,
@@ -276,6 +287,7 @@ var Columns = []string{
 	FieldClaudeCodeOnly,
 	FieldFallbackGroupID,
 	FieldFallbackGroupIDOnInvalidRequest,
+	FieldStreamOnly,
 	FieldModelRouting,
 	FieldModelRoutingEnabled,
 	FieldMcpXMLInject,
@@ -354,6 +366,14 @@ var (
 	DefaultPeakRateMultiplier float64
 	// DefaultIsExclusive holds the default value on creation for the "is_exclusive" field.
 	DefaultIsExclusive bool
+	// DefaultSecurityPolicyEnabled holds the default value on creation for the "security_policy_enabled" field.
+	DefaultSecurityPolicyEnabled bool
+	// DefaultSecurityPolicyMode holds the default value on creation for the "security_policy_mode" field.
+	DefaultSecurityPolicyMode string
+	// SecurityPolicyModeValidator is a validator for the "security_policy_mode" field. It is called by the builders before save.
+	SecurityPolicyModeValidator func(string) error
+	// DefaultSecurityPolicyEmailEnabled holds the default value on creation for the "security_policy_email_enabled" field.
+	DefaultSecurityPolicyEmailEnabled bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -398,6 +418,8 @@ var (
 	DefaultLongContextPricingEnabled bool
 	// DefaultClaudeCodeOnly holds the default value on creation for the "claude_code_only" field.
 	DefaultClaudeCodeOnly bool
+	// DefaultStreamOnly holds the default value on creation for the "stream_only" field.
+	DefaultStreamOnly bool
 	// DefaultModelRoutingEnabled holds the default value on creation for the "model_routing_enabled" field.
 	DefaultModelRoutingEnabled bool
 	// DefaultMcpXMLInject holds the default value on creation for the "mcp_xml_inject" field.
@@ -517,6 +539,21 @@ func ByPeakRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByIsExclusive orders the results by the is_exclusive field.
 func ByIsExclusive(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsExclusive, opts...).ToFunc()
+}
+
+// BySecurityPolicyEnabled orders the results by the security_policy_enabled field.
+func BySecurityPolicyEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSecurityPolicyEnabled, opts...).ToFunc()
+}
+
+// BySecurityPolicyMode orders the results by the security_policy_mode field.
+func BySecurityPolicyMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSecurityPolicyMode, opts...).ToFunc()
+}
+
+// BySecurityPolicyEmailEnabled orders the results by the security_policy_email_enabled field.
+func BySecurityPolicyEmailEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSecurityPolicyEmailEnabled, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.
@@ -672,6 +709,11 @@ func ByFallbackGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByFallbackGroupIDOnInvalidRequest orders the results by the fallback_group_id_on_invalid_request field.
 func ByFallbackGroupIDOnInvalidRequest(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFallbackGroupIDOnInvalidRequest, opts...).ToFunc()
+}
+
+// ByStreamOnly orders the results by the stream_only field.
+func ByStreamOnly(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStreamOnly, opts...).ToFunc()
 }
 
 // ByModelRoutingEnabled orders the results by the model_routing_enabled field.

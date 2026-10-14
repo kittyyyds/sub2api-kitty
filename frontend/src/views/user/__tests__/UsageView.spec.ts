@@ -18,6 +18,7 @@ const {
   showWarning,
   showSuccess,
   showInfo,
+  routeQuery,
 } = vi.hoisted(() => ({
   query: vi.fn(),
   getStats: vi.fn(),
@@ -30,7 +31,10 @@ const {
   showWarning: vi.fn(),
   showSuccess: vi.fn(),
   showInfo: vi.fn(),
+  routeQuery: {} as Record<string, string>,
 }))
+
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: routeQuery }) }))
 
 const messages: Record<string, string> = {
   'admin.dashboard.timeRange': 'Time range',
@@ -172,6 +176,7 @@ function mountUsageView() {
 
 describe('user UsageView', () => {
   beforeEach(() => {
+    Object.keys(routeQuery).forEach((key) => delete routeQuery[key])
     query.mockReset()
     getStats.mockReset()
     getDashboardModels.mockReset()
@@ -231,6 +236,25 @@ describe('user UsageView', () => {
     expect(list).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledWith(1, 100)
     expect(getAvailable).toHaveBeenCalled()
+  })
+
+  it('opens an old video task receipt with its original key and lifecycle dates', async () => {
+    Object.assign(routeQuery, { api_key_id: '166', start_date: '2026-01-03', end_date: '2026-01-06' })
+    const wrapper = mountUsageView()
+    await flushPromises()
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({
+      api_key_id: 166, start_date: '2026-01-03', end_date: '2026-01-06', page: 1,
+    }), expect.anything())
+    expect(getStats).toHaveBeenCalledWith(expect.objectContaining({ api_key_id: 166, start_date: '2026-01-03', end_date: '2026-01-06' }))
+    wrapper.unmount()
+  })
+
+  it('ignores a malformed key ID in a usage link', async () => {
+    routeQuery.api_key_id = '-1.5'
+    const wrapper = mountUsageView()
+    await flushPromises()
+    expect(query.mock.calls[0][0].api_key_id).toBeUndefined()
+    wrapper.unmount()
   })
 
   it('includes API keys after the first page in both record filters and queries by the selected key', async () => {

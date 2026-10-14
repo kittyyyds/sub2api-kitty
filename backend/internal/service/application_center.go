@@ -631,7 +631,7 @@ func (s *ApplicationCenterService) validateRunMediaAPIKey(
 	}
 	platform := strings.ToLower(strings.TrimSpace(key.Group.Platform))
 	if applicationModeRequiresGrokMedia(app, resolveApplicationMode(app.Slug, input)) {
-		if platform != PlatformGrok {
+		if platform != PlatformGrok && platform != PlatformVideo {
 			return nil, ErrApplicationAPIKeyUnavailable
 		}
 	} else if platform != PlatformGrok && platform != PlatformOpenAI {

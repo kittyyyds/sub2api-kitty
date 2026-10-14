@@ -141,13 +141,18 @@
 
         <template #cell-billing_mode="{ row }">
           <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getBillingModeBadgeClass(getDisplayBillingMode(row))">
-            {{ getBillingModeLabel(getDisplayBillingMode(row), t) }}
+              {{ isVideoUsage(row) && !row.billing_mode ? t('usage.videoBillingUnknown') : getBillingModeLabel(getDisplayBillingMode(row), t) }}
           </span>
         </template>
 
         <template #cell-tokens="{ row }">
+          <div v-if="isVideoUsage(row)" data-testid="video-usage-units" class="flex flex-wrap items-center gap-1.5 text-sm">
+            <span class="font-medium text-gray-900 dark:text-white">{{ row.video_count > 0 ? `${row.video_count}${t('usage.videoUnit')}` : t('usage.videoGeneration') }}</span>
+            <span class="text-gray-500">{{ row.video_duration_seconds > 0 ? `${row.video_duration_seconds}${t('usage.videoSeconds')}` : t('usage.videoDurationUnknown') }}</span>
+            <span class="text-gray-500">{{ row.video_resolution || t('usage.videoResolutionUnknown') }}</span>
+          </div>
           <!-- 图片生成请求（仅按次计费时显示图片格式） -->
-          <div v-if="isImageUsage(row)" class="flex items-center gap-1.5">
+          <div v-else-if="isImageUsage(row)" class="flex items-center gap-1.5">
             <svg class="h-4 w-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
@@ -232,7 +237,7 @@
             <div class="flex items-center gap-1.5">
               <span class="font-medium text-green-600 dark:text-green-400">${{ row.actual_cost?.toFixed(6) || '0.000000' }}</span>
               <span
-                v-if="row.long_context_billing_applied"
+                v-if="showLongContextBadge && row.long_context_billing_applied"
                 data-testid="long-context-billing-marker"
                 class="inline-flex items-center rounded px-1 py-px text-[10px] font-semibold leading-tight bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:ring-amber-500/30"
               >x2</span>
@@ -253,14 +258,13 @@
           </div>
         </template>
 
-        <!-- 合并首字/总耗时的健康度列：左侧色条上端随首字档、下端随总耗时档，中段(40%-60%)短渐变过渡，便于纵向扫视整体健康状况 -->
+        <!-- 合并首字/总耗时/TPS 的健康度列：左侧色条上中下三段分别随首字、总耗时、TPS 档，段间短渐变过渡，便于纵向扫视整体健康状况 -->
         <template #cell-latency="{ row }">
-          <div class="flex items-stretch gap-2">
+          <component :is="enableTimingDetails ? 'button' : 'div'" :type="enableTimingDetails ? 'button' : undefined" class="flex items-stretch gap-2 text-left" :class="enableTimingDetails ? 'hover:opacity-80 focus-visible:outline focus-visible:outline-primary-500' : ''" :aria-label="enableTimingDetails ? t('requestTiming.title') : undefined" @click="enableTimingDetails && (timingRecord = row)">
             <span
+              data-testid="latency-bar"
               class="w-1 shrink-0 rounded-full"
-              :class="row.first_token_ms != null
-                ? ['bg-gradient-to-b from-40% to-60%', LATENCY_BAR_FROM_CLASSES[firstTokenSeverity(row.first_token_ms)], LATENCY_BAR_TO_CLASSES[durationSeverity(row.duration_ms ?? 0)]]
-                : LATENCY_BAR_CLASSES[durationSeverity(row.duration_ms ?? 0)]"
+              :class="latencyBarClasses(row)"
               aria-hidden="true"
             ></span>
             <div class="grid grid-cols-[max-content_max-content] items-baseline gap-x-2 gap-y-0.5 text-xs">
@@ -269,8 +273,17 @@
               <span v-else class="text-gray-400 dark:text-gray-500">-</span>
               <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyDuration') }}</span>
               <span class="font-medium tabular-nums" :class="LATENCY_TEXT_CLASSES[durationSeverity(row.duration_ms ?? 0)]">{{ formatDuration(row.duration_ms) }}</span>
+              <span class="text-gray-400 dark:text-gray-500">{{ t('usage.latencyTps') }}</span>
+              <span
+                v-if="formatUsageOutputTps(row)"
+                data-testid="latency-tps"
+                class="font-medium tabular-nums"
+                :class="LATENCY_TEXT_CLASSES[tpsSeverity(usageOutputTps(row) ?? 0)]"
+                :title="t('usage.latencyTpsHint')"
+              >{{ formatUsageOutputTps(row) }}</span>
+              <span v-else data-testid="latency-tps" class="text-gray-400 dark:text-gray-500">-</span>
             </div>
-          </div>
+          </component>
         </template>
 
         <template #cell-created_at="{ value }">
@@ -446,8 +459,28 @@
               <span class="text-gray-400">{{ t('usage.imageOutputCost') }}</span>
               <span class="font-medium text-pink-300">${{ tooltipData.image_output_cost.toFixed(8) }}</span>
             </div>
-            <!-- Token billing: show unit prices per 1M tokens -->
-            <template v-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
+            <!-- Use the receipt's own units; historical gaps stay explicit. -->
+            <template v-if="tooltipData && isVideoUsage(tooltipData)">
+              <div data-testid="video-cost-details" class="space-y-1.5">
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoCount') }}</span>
+                  <span>{{ tooltipData.video_count && tooltipData.video_count > 0 ? tooltipData.video_count : t('usage.videoNotRecorded') }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoDuration') }}</span>
+                  <span>{{ tooltipData.video_duration_seconds && tooltipData.video_duration_seconds > 0 ? `${tooltipData.video_duration_seconds}${t('usage.videoSeconds')}` : t('usage.videoNotRecorded') }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoResolution') }}</span>
+                  <span>{{ tooltipData.video_resolution || t('usage.videoNotRecorded') }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                  <span class="text-gray-400">{{ t('usage.videoEffectiveUnitPrice') }}</span>
+                  <span data-testid="video-unit-price" class="text-sky-300">{{ videoUnitPrice(tooltipData) == null ? t('usage.videoNotRecorded') : `$${videoUnitPrice(tooltipData)!.toFixed(8)} ${t(tooltipData.billing_mode === 'video' ? 'usage.videoPerSecond' : 'usage.videoPerItem')}` }}</span>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
               <div v-if="tooltipData && textInputTokens(tooltipData) > 0" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
                 <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, textInputTokens(tooltipData)) }} {{ t('usage.perMillionTokens') }}</span>
@@ -519,7 +552,7 @@
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span>
+            <span class="font-semibold text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier ?? 1) }}x</span>
           </div>
           <div class="flex items-center justify-between gap-6">
             <span class="text-gray-400">{{ t('usage.original') }}</span>
@@ -551,15 +584,18 @@
       </div>
     </div>
   </Teleport>
+  <UsageTimingDialog :record="timingRecord" @close="timingRecord = null" />
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import UsageTimingDialog from './UsageTimingDialog.vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { formatDateTime, formatReasoningEffort, reasoningEffortValuesEqual } from '@/utils/format'
 import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
+import { isVideoUsage, videoUnitPrice } from '@/utils/videoUsage'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import {
@@ -568,13 +604,15 @@ import {
   getPromptTokenCount,
 } from '@/utils/usageCacheHitRate'
 import {
-  LATENCY_BAR_CLASSES,
   LATENCY_BAR_FROM_CLASSES,
   LATENCY_BAR_TO_CLASSES,
+  LATENCY_BAR_VIA_CLASSES,
   LATENCY_TEXT_CLASSES,
   durationSeverity,
   firstTokenSeverity,
+  tpsSeverity,
 } from '@/utils/latencyHealth'
+import { formatUsageOutputTps, usageOutputTps } from '@/utils/usageTps'
 import {
   BILLING_MODE_TOKEN,
   getBillingModeLabel,
@@ -621,6 +659,7 @@ interface Props {
   defaultSortKey?: string
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
+  enableTimingDetails?: boolean
   showUpstreamEndpoint?: boolean
   /** 管理员用量明细专用；客户前台保持关闭 */
   showCacheHitRate?: boolean
@@ -628,12 +667,15 @@ interface Props {
   flat?: boolean
 }
 
+const timingRecord = ref<AdminUsageLog | null>(null)
+
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   serverSideSort: false,
   defaultSortKey: '',
   defaultSortOrder: 'asc',
   showAccountBilling: true,
+  enableTimingDetails: false,
   showUpstreamEndpoint: true,
   showCacheHitRate: false,
   flat: false
@@ -650,6 +692,9 @@ const showAccountBilling = props.showAccountBilling
 const showUpstreamEndpoint = props.showUpstreamEndpoint
 const showCacheHitRate = props.showCacheHitRate
 const ipGeoBatchLoading = ref(false)
+
+// 长上下文计费 x2 徽标展示开关（公开设置，默认开启；未加载/缺失时按开启处理）
+const showLongContextBadge = computed(() => appStore.cachedPublicSettings?.usage_show_long_context_badge !== false)
 
 const showIpGeoToolbar = computed(() => props.columns.some((col) => col.key === 'ip_address'))
 
@@ -791,6 +836,18 @@ const formatDuration = (ms: number | null | undefined): string => {
   const totalSec = Math.round(ms / 1000)
   if (totalSec < 3600) return `${Math.floor(totalSec / 60)}m ${totalSec % 60}s`
   return `${Math.floor(totalSec / 3600)}h ${Math.floor((totalSec % 3600) / 60)}m`
+}
+
+// 延迟色条三段依次对应首字/总耗时/TPS 三行（30%/50%/70% 分别落在三行内）；无首字或无 TPS 的段沿用总耗时档
+const latencyBarClasses = (row: AdminUsageLog): string[] => {
+  const duration = durationSeverity(row.duration_ms ?? 0)
+  const tps = usageOutputTps(row)
+  return [
+    'bg-gradient-to-b from-30% via-50% to-70%',
+    LATENCY_BAR_FROM_CLASSES[row.first_token_ms != null ? firstTokenSeverity(row.first_token_ms) : duration],
+    LATENCY_BAR_VIA_CLASSES[duration],
+    LATENCY_BAR_TO_CLASSES[tps != null ? tpsSeverity(tps) : duration],
+  ]
 }
 
 // Cost tooltip functions

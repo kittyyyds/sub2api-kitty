@@ -1,5 +1,6 @@
 <template>
   <AppLayout>
+    <ContextPricingDialog :show="showContextPricing" @close="showContextPricing = false" />
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -39,6 +40,7 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
+            <button class="btn btn-secondary" @click="showContextPricing = true">上下文定价</button>
             <button @click="openCreateDialog" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.channels.createChannel', 'Create Channel') }}
@@ -442,17 +444,17 @@
                 {{ t('admin.channels.form.noPricingRules', 'No pricing rules yet. Click "Add" to create one.') }}
               </div>
               <div v-else class="space-y-2">
-                <PricingEntryCard
-                  v-for="(entry, idx) in section.model_pricing"
-                  :key="idx"
-                  :entry="entry"
-                  :platform="section.platform"
-                  allow-video-billing
-                  enable-time-pricing
-                  enable-tier-multipliers
-                  @update="updatePricingEntry(sIdx, idx, $event)"
-                  @remove="removePricingEntry(sIdx, idx)"
-                />
+                  <PricingEntryCard
+                    v-for="(entry, idx) in section.model_pricing"
+                    :key="idx"
+                    :entry="entry"
+                    :platform="section.platform"
+                    allow-video-billing
+                    enable-time-pricing
+                    enable-tier-multipliers
+                    @update="updatePricingEntry(sIdx, idx, $event)"
+                    @remove="removePricingEntry(sIdx, idx)"
+                  />
               </div>
             </div>
 
@@ -628,6 +630,8 @@
 </template>
 
 <script setup lang="ts">
+import ContextPricingDialog from '@/components/admin/ContextPricingDialog.vue'
+const showContextPricing = ref(false)
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -764,9 +768,9 @@ const form = reactive({
 let abortController: AbortController | null = null
 
 // ── Platform config ──
-const platformOrder: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go']
+const platformOrder: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'video', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'typesafe']
 // Composite pricing/mapping may target every concrete schedulable provider.
-const compositePlatforms: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go']
+const compositePlatforms: GroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'video', 'kimi', 'zhipu', 'deepseek', 'minimax', 'opencode_go', 'typesafe']
 
 // ── Helpers ──
 function formatDate(value: string): string {

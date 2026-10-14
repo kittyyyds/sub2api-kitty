@@ -61,6 +61,7 @@ describe('EndpointPopover', () => {
     const wrapper = mount(EndpointPopover, {
       props: {
         apiBaseUrl: 'https://default.example.com/v1',
+        defaultEndpointDescription: '国内直连',
         customEndpoints: [
           {
             name: '备用线路',
@@ -71,8 +72,10 @@ describe('EndpointPopover', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('API 端点')
+    expect(wrapper.get('section').attributes('aria-label')).toBe('API 端点')
     expect(wrapper.text()).toContain('https://default.example.com')
+    expect(wrapper.text()).toContain('国内直连')
+    expect(wrapper.text()).toContain('推荐')
     expect(wrapper.text()).not.toContain('https://default.example.com/v1')
     expect(wrapper.text()).toContain('备用线路')
     expect(wrapper.text()).toContain('https://backup.example.com/v1')
@@ -113,6 +116,7 @@ describe('EndpointPopover', () => {
       props: {
         apiBaseUrl: configuredEndpoint,
         customEndpoints: [],
+        autoTest: false,
       },
     })
 
@@ -123,18 +127,28 @@ describe('EndpointPopover', () => {
     expect(wrapper.find('button[aria-label="已复制到剪贴板"]').exists()).toBe(true)
   })
 
-  it('复用表格的表头和表体材质，不再渲染蓝色嵌套卡片', () => {
+  it('端点独立成紧凑短条，保留默认和可配置的推荐线路', () => {
     const wrapper = mount(EndpointPopover, {
       props: {
-        apiBaseUrl: 'https://default.example.com/v1',
-        customEndpoints: [],
+        apiBaseUrl: 'https://api.kittyyyds.xyz',
+        defaultEndpointDescription: '回国线路',
+        autoTest: false,
+        customEndpoints: [{ name: '国际路线', endpoint: 'https://kittyyyds.xyz', description: '', recommended: true }],
       },
     })
-
-    expect(wrapper.get('.endpoint-panel').classes()).toContain('card')
-    expect(wrapper.get('.endpoint-list').classes()).toContain('dark:bg-dark-900')
-    expect(wrapper.get('.endpoint-row').classes()).not.toContain('dark:bg-dark-900/45')
-    expect(wrapper.get('.endpoint-panel').classes()).not.toContain('dark:bg-dark-800/90')
+    const rows = wrapper.findAll('.endpoint-row')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('回国线路')
+    expect(rows[0].text()).toContain('默认')
+    expect(rows[0].text()).not.toContain('推荐')
+    expect(rows[1].text()).toContain('国际路线')
+    expect(rows[1].text()).toContain('推荐')
+    expect(rows[1].text()).not.toContain('默认')
+    for (const row of rows) {
+      expect(row.find('button[aria-label="复制端点"]').exists()).toBe(true)
+      expect(row.find('button[aria-label$="延迟"]').exists()).toBe(true)
+      expect(row.find('[role="status"]').text()).toBe('未测速')
+    }
   })
 
   it('单条测速请求同域 /health 并显示延迟和推荐', async () => {
@@ -143,6 +157,7 @@ describe('EndpointPopover', () => {
       props: {
         apiBaseUrl: 'https://default.example.com/v1',
         customEndpoints: [],
+        autoTest: false,
       },
     })
 
@@ -154,7 +169,7 @@ describe('EndpointPopover', () => {
     const probeUrl = new URL(String(input))
     expect(probeUrl.origin).toBe('https://default.example.com')
     expect(probeUrl.pathname).toBe('/health')
-    expect(init).toMatchObject({ method: 'GET', cache: 'no-store', credentials: 'omit' })
+    expect(init).toMatchObject({ method: 'GET', mode: 'cors', redirect: 'error', cache: 'no-store', credentials: 'omit' })
     expect(wrapper.text()).toMatch(/\d+ ms/)
     expect(wrapper.text()).toContain('推荐')
   })
@@ -167,6 +182,7 @@ describe('EndpointPopover', () => {
     const wrapper = mount(EndpointPopover, {
       props: {
         apiBaseUrl: 'https://default.example.com/v1',
+        autoTest: false,
         customEndpoints: [
           {
             name: '备用线路',
@@ -177,13 +193,40 @@ describe('EndpointPopover', () => {
       },
     })
 
-    const allButton = wrapper.findAll('button').find(button => button.text().includes('全部测速'))
-    expect(allButton).toBeDefined()
-    await allButton!.trigger('click')
+    await wrapper.get('button[aria-label="全部测速"]').trigger('click')
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('HTTP 503')
     expect(wrapper.text()).toContain('推荐')
+  })
+
+  it('站点配置就绪后自动测速一次，并按本地延迟显示颜色等级', async () => {
+    const fetchMock = vi.mocked(globalThis.fetch)
+    const wrapper = mount(EndpointPopover, {
+      props: {
+        apiBaseUrl: '',
+        customEndpoints: [],
+      },
+    })
+
+    await flushPromises()
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    await wrapper.setProps({
+      apiBaseUrl: 'https://api.kittyyyds.xyz',
+      customEndpoints: [
+        {
+          name: '海外线路',
+          endpoint: 'https://kittyyyds.xyz',
+          description: '需要梯子',
+        },
+      ],
+    })
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(wrapper.findAll('[data-latency-level="fast"]')).toHaveLength(2)
+    expect(wrapper.find('button[title="需要梯子"]').exists()).toBe(true)
   })
 })

@@ -70,6 +70,7 @@ const isSubscription = computed(() => props.subscriptionType === 'subscription')
 // 是否有专属倍率（且与默认倍率不同）
 const hasCustomRate = computed(() => {
   return (
+    props.platform !== 'video' &&
     props.userRateMultiplier !== null &&
     props.userRateMultiplier !== undefined &&
     props.rateMultiplier !== undefined &&
@@ -80,7 +81,7 @@ const hasCustomRate = computed(() => {
 const appStore = useAppStore()
 
 const hasPeakRate = computed(() => {
-  return Boolean(props.showRate && props.peakRateEnabled && props.peakStart && props.peakEnd)
+  return Boolean(props.platform !== 'video' && props.showRate && props.peakRateEnabled && props.peakStart && props.peakEnd)
 })
 
 const peakRateText = computed(() => {
@@ -122,7 +123,7 @@ const labelText = computed(() => {
     // 否则显示"订阅"
     return t('groups.subscription')
   }
-  return rateLabel
+  return props.platform === 'video' ? t('videoModule.finalPrice') : rateLabel
 })
 
 // Label style based on type and days remaining

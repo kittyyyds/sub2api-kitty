@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { shallowRef } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 
 import Icon from '@/components/icons/Icon.vue'
+import { useAppStore } from '@/stores/app'
+import { sanitizeUrl } from '@/utils/url'
+import DocumentationPanel from './DocumentationPanel.vue'
 
-const FEISHU_GUIDE_URL = 'https://vcn7nwjngah3.feishu.cn/wiki/BJMJwAJoHiy7X1kblVkcJ2Zhnld'
+const appStore = useAppStore()
+const guideUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const isLoading = shallowRef(true)
+watch(guideUrl, () => { isLoading.value = true })
 
 function handleFrameLoad() {
   isLoading.value = false
@@ -12,7 +17,8 @@ function handleFrameLoad() {
 </script>
 
 <template>
-  <section class="feishu-guide" aria-labelledby="feishu-guide-title">
+  <DocumentationPanel v-if="!guideUrl" />
+  <section v-else class="feishu-guide" aria-labelledby="feishu-guide-title">
     <header class="feishu-guide__toolbar">
       <div class="feishu-guide__heading">
         <span class="feishu-guide__icon" aria-hidden="true">
@@ -25,7 +31,7 @@ function handleFrameLoad() {
       </div>
 
       <a
-        :href="FEISHU_GUIDE_URL"
+        :href="guideUrl"
         class="btn btn-secondary btn-sm feishu-guide__open"
         target="_blank"
         rel="noopener noreferrer"
@@ -43,7 +49,7 @@ function handleFrameLoad() {
       </div>
 
       <iframe
-        :src="FEISHU_GUIDE_URL"
+        :src="guideUrl"
         class="feishu-guide__frame"
         title="Kitty API 新手必看文档"
         referrerpolicy="strict-origin-when-cross-origin"

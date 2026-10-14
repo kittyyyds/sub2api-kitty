@@ -64,13 +64,20 @@ type User struct {
 	// 避免每请求查 DB。字段不持久化到数据库。
 	UserGroupRPMOverride *int
 
+	// UserGroupDeniedModels 来自 auth cache snapshot 的 (user, group) 禁用模型，
+	// 即该 API Key 所属用户在 Key 分组内不能使用的模型。字段不持久化到 users 表。
+	UserGroupDeniedModels []string
+
 	APIKeys       []APIKey
 	Subscriptions []UserSubscription
 }
 
 func (u *User) IsAdmin() bool {
-	return u.Role == RoleAdmin
+	return u != nil && IsAdminRole(u.Role)
 }
+
+func IsAdminRole(role string) bool { return role == RoleAdmin || role == RoleSuperAdmin }
+func (u *User) IsSuperAdmin() bool { return u != nil && u.Role == RoleSuperAdmin }
 
 func (u *User) IsActive() bool {
 	return u.Status == StatusActive

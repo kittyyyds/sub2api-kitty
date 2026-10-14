@@ -39,6 +39,8 @@ func newSimpleModeGroupRouter(svc *stubAdminService) *gin.Engine {
 	r.DELETE("/groups/:id/rate-multipliers", h.ClearGroupRateMultipliers)
 	r.PUT("/groups/:id/rpm-overrides", h.BatchSetGroupRPMOverrides)
 	r.DELETE("/groups/:id/rpm-overrides", h.ClearGroupRPMOverrides)
+	r.PUT("/groups/:id/user-denied-models", h.BatchSetGroupUserDeniedModels)
+	r.DELETE("/groups/:id/user-denied-models", h.ClearGroupUserDeniedModels)
 	r.DELETE("/groups/:id", h.Delete)
 	return r
 }
@@ -286,7 +288,6 @@ func TestGroupHandlerSimpleModeBlocksAdvancedOperations(t *testing.T) {
 		{http.MethodDelete, "/groups/1/rate-multipliers", ""},
 		{http.MethodPut, "/groups/1/rpm-overrides", `{"entries":[]}`},
 		{http.MethodDelete, "/groups/1/rpm-overrides", ""},
-		{http.MethodGet, "/groups/1/stats", ""},
 		{http.MethodGet, "/groups/1/api-keys", ""},
 		{http.MethodGet, "/groups/live-capability", ""},
 		{http.MethodGet, "/groups/usage-summary", ""},

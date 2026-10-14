@@ -626,7 +626,7 @@ func buildApplicationMediaRequest(
 	}
 	mode := resolveApplicationMode(app.Slug, input)
 	if applicationModeRequiresGrokMedia(app, mode) {
-		if !strings.EqualFold(strings.TrimSpace(mediaPlatform), PlatformGrok) {
+		if !strings.EqualFold(strings.TrimSpace(mediaPlatform), PlatformGrok) && !strings.EqualFold(strings.TrimSpace(mediaPlatform), PlatformVideo) {
 			return nil, "", ErrApplicationAPIKeyUnavailable
 		}
 		return buildApplicationVideoRequest(input, mode, prompt)

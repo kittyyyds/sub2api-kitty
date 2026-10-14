@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -21,19 +22,16 @@ type PlazaOfficialPricing struct {
 
 // PlazaModel 模型广场中单个模型条目：按实收口径合成的展示定价 + 官方参考价。
 type PlazaModel struct {
-	Name            string
-	Platform        string
-	Pricing         *ChannelModelPricing
-	OfficialPricing *PlazaOfficialPricing
+	Name                 string
+	Platform             string
+	Pricing              *ChannelModelPricing
+	OfficialPricing      *PlazaOfficialPricing
+	FinalImagePriceTiers []string
+	FinalVideoPriceTiers []string
 	// LongContextBasis 多档时的计价基准（整单 / 仅超出部分），单档为空。
 	LongContextBasis ContextPricingBasis
 	// TimePricing 计费会生效的分时倍率时段；无分时为 nil。
 	TimePricing *TimePricingSchedule
-	// FinalImagePriceTiers and FinalVideoPriceTiers identify tiers whose group
-	// media price is already a customer-facing final price. The frontend must
-	// not apply a group multiplier to them again.
-	FinalImagePriceTiers []string
-	FinalVideoPriceTiers []string
 }
 
 // PlazaGroup 模型广场中以分组为顶层的条目。
@@ -57,8 +55,7 @@ type PlazaGroup struct {
 	// = 档位价 × ImageRateMultiplier，不乘分组/用户专属倍率（与计费口径一致）。
 	ImageRateIndependent bool
 	ImageRateMultiplier  float64
-	// VideoRateIndependent follows the same effective-rate rule as image
-	// pricing, but applies to the per-second video price table.
+	// 视频独立倍率与图片独立倍率分别配置，开启时覆盖非最终价档位的分组/用户专属倍率。
 	VideoRateIndependent bool
 	VideoRateMultiplier  float64
 	// LongContextPricingEnabled 分组是否按上下文长度应用阶梯价；关闭时模型展示的是最低档。
@@ -122,21 +119,12 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		return strings.ToLower(channels[i].Name) < strings.ToLower(channels[j].Name)
 	})
 
-	type modelKey struct {
-		platform string
-		name     string
-	}
-
 	byGroup := make(map[int64]*PlazaGroup, len(groups))
 	groupEnt := make(map[int64]*Group, len(groups))
-	// modelIdx[groupID][platform+modelName] = index into byGroup[groupID].Models.
-	// It is initialized from group configuration so a configured media price is
-	// visible even before a channel explicitly advertises the model.
-	modelIdx := make(map[int64]map[modelKey]int, len(groups))
 	order := make([]int64, 0, len(groups))
 	for i := range groups {
 		g := &groups[i]
-		pg := &PlazaGroup{
+		byGroup[g.ID] = &PlazaGroup{
 			ID:                        g.ID,
 			Name:                      g.Name,
 			Description:               g.Description,
@@ -154,19 +142,31 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			VideoRateMultiplier:       g.VideoRateMultiplier,
 			LongContextPricingEnabled: g.LongContextPricingEnabled,
 		}
-		byGroup[g.ID] = pg
 		groupEnt[g.ID] = g
 		order = append(order, g.ID)
+	}
 
-		configuredModels := plazaConfiguredModelNames(g)
-		idx := make(map[modelKey]int, len(configuredModels))
+	type modelKey struct {
+		platform string
+		name     string
+	}
+	// modelIdx[groupID][platform+modelName] = index into byGroup[groupID].Models
+	modelIdx := make(map[int64]map[modelKey]int, len(groups))
+	for i := range groups {
+		g := &groups[i]
+		pg := byGroup[g.ID]
+		idx := make(map[modelKey]int)
 		modelIdx[g.ID] = idx
-		for _, configuredModel := range configuredModels {
+		for _, configuredModel := range plazaConfiguredModelNames(g) {
 			name := strings.TrimSpace(configuredModel)
 			if name == "" {
 				continue
 			}
 			platform := g.Platform
+			indexName, displayName := plazaModelIndexName(name), plazaModelDisplayName(name)
+			if platform == PlatformVideo {
+				indexName, displayName = name, name
+			}
 			if platform == PlatformComposite {
 				detected, ok := DetectModelPlatform(name)
 				if !ok || !isConcreteRequestPlatform(detected) {
@@ -176,16 +176,16 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			}
 			key := modelKey{
 				platform: strings.ToLower(strings.TrimSpace(platform)),
-				name:     plazaModelIndexName(name),
+				name:     indexName,
 			}
 			if _, exists := idx[key]; exists {
 				continue
 			}
 			idx[key] = len(pg.Models)
 			pg.Models = append(pg.Models, PlazaModel{
-				Name:                 plazaModelDisplayName(name),
+				Name:                 displayName,
 				Platform:             platform,
-				Pricing:              plazaMediaDisplayPricing(matchGroupModelPricing(g, name), g, name),
+				Pricing:              matchGroupModelPricing(g, name),
 				FinalImagePriceTiers: plazaFinalImagePriceTiers(g, name),
 				FinalVideoPriceTiers: plazaFinalVideoPriceTiers(g, name),
 			})
@@ -206,6 +206,9 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 				continue
 			}
 			g := groupEnt[gid]
+			if g.Platform == PlatformVideo {
+				continue // This group advertises only its exact authoritative price cards.
+			}
 			idx := modelIdx[gid]
 			for j := range supported {
 				m := supported[j]
@@ -221,21 +224,16 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 				if pricing == nil {
 					pricing = m.Pricing
 				}
-				pricing = plazaMediaDisplayPricing(pricing, g, m.Name)
-				finalImagePriceTiers := plazaFinalImagePriceTiers(g, m.Name)
-				finalVideoPriceTiers := plazaFinalVideoPriceTiers(g, m.Name)
 				key := modelKey{
 					platform: strings.ToLower(strings.TrimSpace(m.Platform)),
 					name:     plazaModelIndexName(m.Name),
 				}
 				if at, seen := idx[key]; seen {
-					// A group price always overrides. Otherwise retain the first
-					// priced entry after the configured-model placeholder.
 					if groupPricing != nil || (pg.Models[at].Pricing == nil && pricing != nil) {
 						pg.Models[at].Pricing = pricing
 					}
-					pg.Models[at].FinalImagePriceTiers = finalImagePriceTiers
-					pg.Models[at].FinalVideoPriceTiers = finalVideoPriceTiers
+					pg.Models[at].FinalImagePriceTiers = plazaFinalImagePriceTiers(g, m.Name)
+					pg.Models[at].FinalVideoPriceTiers = plazaFinalVideoPriceTiers(g, m.Name)
 					continue
 				}
 				idx[key] = len(pg.Models)
@@ -243,8 +241,8 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 					Name:                 plazaModelDisplayName(m.Name),
 					Platform:             m.Platform,
 					Pricing:              pricing,
-					FinalImagePriceTiers: finalImagePriceTiers,
-					FinalVideoPriceTiers: finalVideoPriceTiers,
+					FinalImagePriceTiers: plazaFinalImagePriceTiers(g, m.Name),
+					FinalVideoPriceTiers: plazaFinalVideoPriceTiers(g, m.Name),
 				})
 			}
 		}
@@ -266,7 +264,9 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		g := groupEnt[gid]
 		for j := range pg.Models {
 			s.fillDisplayPricing(ctx, &pg.Models[j], g)
-			pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+			if g.Platform != PlatformVideo && ImageGroupModelConfig(g, pg.Models[j].Name) == nil {
+				pg.Models[j].OfficialPricing = s.lookupOfficialPricing(ctx, pg.Models[j].Name, officialMemo)
+			}
 		}
 		out = append(out, *pg)
 	}
@@ -280,24 +280,15 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	return out, nil
 }
 
-// ListPlazaGroups exposes the model-plaza catalog for services that should not
-// depend on handler-facing method names.
-func (s *ModelPlazaService) ListPlazaGroups(ctx context.Context) ([]PlazaGroup, error) {
-	return s.ListGroups(ctx)
-}
-
 // fillDisplayPricing 把模型的展示定价换成实收口径：
 // token 模型取计费阶梯表（单价与档位均由真实计费函数得出），
 // 图片/按次模型（或阶梯表不可用时）沿用渠道定价与分组图片档位价。
 func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaModel, g *Group) {
-	// Media prices are request prices, not token prices. Resolve them before the
-	// token ladder so a per-model final media price cannot be overwritten by an
-	// otherwise valid LiteLLM token schedule.
 	if groupPricing := matchGroupModelPricing(g, m.Name); groupPricing != nil {
 		m.Pricing = groupPricing
 	}
 	mediaPricing := plazaMediaDisplayPricing(m.Pricing, g, m.Name)
-	if mediaPricing != nil && (mediaPricing.BillingMode == BillingModeImage || mediaPricing.BillingMode == BillingModeVideo) {
+	if mediaPricing != nil && mediaPricing.BillingMode != BillingModeToken {
 		m.Pricing = mediaPricing
 		return
 	}
@@ -359,14 +350,25 @@ func plazaIntervalsFromTiers(tiers []ContextPricingTier) []PricingInterval {
 	return intervals
 }
 
-// plazaConfiguredModelNames combines configured models with model-specific
-// media price keys. A final media price is meaningful by itself and should be
-// present in the public catalog even while a channel's model list is catching up.
+// plazaConfiguredModelNames combines configured models with per-model media
+// prices so a deliberately priced media model remains visible before a channel
+// has advertised it in its supported-model list.
 func plazaConfiguredModelNames(g *Group) []string {
 	if g == nil {
 		return nil
 	}
-	names := append([]string(nil), g.ModelAllowlist.Models...)
+	if g.Platform == PlatformVideo {
+		return VideoGroupModelIDs(g)
+	}
+	names := []string{}
+	// Keep supplier display IDs intact; billing lookup may canonicalize, but
+	// customers must copy the exact model name accepted by the upstream.
+	for _, p := range g.ModelPricing {
+		if p.Image != nil && p.Image.Provider == "suanli" {
+			names = append(names, p.Models...)
+		}
+	}
+	names = append(names, g.ModelAllowlist.Models...)
 
 	imageNames := make([]string, 0, len(g.ImageModelPrices))
 	for model, tiers := range g.ImageModelPrices {
@@ -410,8 +412,6 @@ func plazaModelIndexName(model string) string {
 	return normalized
 }
 
-// plazaModelDisplayName keeps supported Grok video aliases callable while the
-// catalog exposes one stable row per billing family.
 func plazaModelDisplayName(model string) string {
 	name := strings.TrimSpace(model)
 	if family := CanonicalGrokImagineVideoPriceFamily(name); family != "" {
@@ -421,13 +421,30 @@ func plazaModelDisplayName(model string) string {
 }
 
 func plazaMediaDisplayPricing(p *ChannelModelPricing, g *Group, model string) *ChannelModelPricing {
+	if g != nil && g.Platform == PlatformVideo {
+		price, err := ResolveVideoGroupPrice(g, model)
+		if err != nil {
+			return nil
+		}
+		// Exact video model cells already contain the final customer unit price.
+		// Clients must not apply the group's token or legacy media multipliers.
+		display := &ChannelModelPricing{Platform: PlatformVideo, Models: []string{price.Model}, BillingMode: price.BillingMode, PerRequestPrice: &price.UnitPrice}
+		if price.Video != nil {
+			// Carry only the effective selling prices and public input contract.
+			// Supplier costs and pricing controls never enter the plaza projection.
+			display.Video = &VideoModelConfig{
+				Spec:               price.Video.Spec,
+				ReferencePerSecond: price.Video.ReferencePerSecond,
+				ResolutionPrices:   maps.Clone(price.Video.ResolutionPrices),
+			}
+		}
+		return display
+	}
 	return plazaVideoDisplayPricing(plazaImageDisplayPricing(p, g, model), g, model)
 }
 
-// plazaImageDisplayPricing builds effective image tiers. Per-model prices are
-// already final USD/image values and therefore must not be multiplied again by
-// the group or user rate. Flat group and channel prices retain their usual
-// billing semantics.
+// plazaImageDisplayPricing preserves the site's final per-model USD prices;
+// those tiers bypass rate multipliers in both billing and the catalog.
 func plazaImageDisplayPricing(p *ChannelModelPricing, g *Group, model string) *ChannelModelPricing {
 	if g == nil {
 		return p
@@ -440,6 +457,17 @@ func plazaImageDisplayPricing(p *ChannelModelPricing, g *Group, model string) *C
 	hasModelPrice := modelPrices[ImageBillingSize1K] != nil ||
 		modelPrices[ImageBillingSize2K] != nil || modelPrices[ImageBillingSize4K] != nil
 	hasFlatPrice := g.ImagePrice1K != nil || g.ImagePrice2K != nil || g.ImagePrice4K != nil
+	if !hasModelPrice && ImageGroupModelConfig(g, model) != nil {
+		// Supplier image billing requires exact model cells. Never advertise a
+		// stale channel fallback while a cleared override awaits synchronization.
+		clone := ChannelModelPricing{BillingMode: BillingModeImage}
+		if p != nil {
+			clone = *p
+		}
+		clone.PerRequestPrice = nil
+		clone.Intervals = nil
+		return &clone
+	}
 	if !hasModelPrice && (p == nil || p.BillingMode != BillingModeImage || !hasFlatPrice) {
 		return p
 	}
@@ -514,9 +542,6 @@ func plazaFinalImagePriceTiers(g *Group, model string) []string {
 	return tiers
 }
 
-// plazaVideoDisplayPricing follows the image precedence for USD/second video
-// tiers. A final per-model price wins, then group flat and channel prices, then
-// the trusted Grok defaults needed for a partially configured family.
 func plazaVideoDisplayPricing(p *ChannelModelPricing, g *Group, model string) *ChannelModelPricing {
 	if g == nil {
 		return p

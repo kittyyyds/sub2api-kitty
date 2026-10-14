@@ -54,6 +54,7 @@ type AdminUser struct {
 }
 
 type APIKey struct {
+	KeyDisplay  string     `json:"key_display,omitempty"`
 	ID          int64      `json:"id"`
 	UserID      int64      `json:"user_id"`
 	Key         string     `json:"key"`
@@ -73,31 +74,35 @@ type APIKey struct {
 	CurrentConcurrency int `json:"current_concurrency"`
 
 	// Rate limit fields
-	RateLimit5h   float64    `json:"rate_limit_5h"`
-	RateLimit1d   float64    `json:"rate_limit_1d"`
-	RateLimit7d   float64    `json:"rate_limit_7d"`
-	Usage5h       float64    `json:"usage_5h"`
-	Usage1d       float64    `json:"usage_1d"`
-	Usage7d       float64    `json:"usage_7d"`
-	Window5hStart *time.Time `json:"window_5h_start"`
-	Window1dStart *time.Time `json:"window_1d_start"`
-	Window7dStart *time.Time `json:"window_7d_start"`
-	Reset5hAt     *time.Time `json:"reset_5h_at,omitempty"`
-	Reset1dAt     *time.Time `json:"reset_1d_at,omitempty"`
-	Reset7dAt     *time.Time `json:"reset_7d_at,omitempty"`
+	ConcurrencyLimit int        `json:"concurrency_limit"`
+	RateLimit5h      float64    `json:"rate_limit_5h"`
+	RateLimit1d      float64    `json:"rate_limit_1d"`
+	RateLimit7d      float64    `json:"rate_limit_7d"`
+	Usage5h          float64    `json:"usage_5h"`
+	Usage1d          float64    `json:"usage_1d"`
+	Usage7d          float64    `json:"usage_7d"`
+	Window5hStart    *time.Time `json:"window_5h_start"`
+	Window1dStart    *time.Time `json:"window_1d_start"`
+	Window7dStart    *time.Time `json:"window_7d_start"`
+	Reset5hAt        *time.Time `json:"reset_5h_at,omitempty"`
+	Reset1dAt        *time.Time `json:"reset_1d_at,omitempty"`
+	Reset7dAt        *time.Time `json:"reset_7d_at,omitempty"`
 
 	User  *User  `json:"user,omitempty"`
 	Group *Group `json:"group,omitempty"`
 }
 
 type Group struct {
-	ID             int64   `json:"id"`
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Platform       string  `json:"platform"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
-	Status         string  `json:"status"`
+	SecurityPolicyEnabled      bool    `json:"security_policy_enabled"`
+	SecurityPolicyMode         string  `json:"security_policy_mode"`
+	SecurityPolicyEmailEnabled bool    `json:"security_policy_email_enabled"`
+	ID                         int64   `json:"id"`
+	Name                       string  `json:"name"`
+	Description                string  `json:"description"`
+	Platform                   string  `json:"platform"`
+	RateMultiplier             float64 `json:"rate_multiplier"`
+	IsExclusive                bool    `json:"is_exclusive"`
+	Status                     string  `json:"status"`
 
 	SubscriptionType          string   `json:"subscription_type"`
 	DailyLimitUSD             *float64 `json:"daily_limit_usd"`
@@ -171,10 +176,9 @@ type AdminGroup struct {
 	ForceOpenAIFast bool `json:"force_openai_fast"`
 	// FreeOpenAIFast 是管理端计费策略，用户侧分组 DTO 无需暴露。
 	FreeOpenAIFast bool `json:"free_openai_fast"`
+	// StreamOnly 是管理端请求策略（只接受流式的对话生成请求），用户侧分组 DTO 无需暴露。
+	StreamOnly bool `json:"stream_only"`
 
-	GrokPromptEnabled bool   `json:"grok_prompt_enabled"`
-	GrokPromptMode    string `json:"grok_prompt_mode"`
-	GrokPromptContent string `json:"grok_prompt_content"`
 
 	// 分组利润控制（五个 token 平台分组可启用；margin/buffer 为小数存储）。
 	// 仅管理员可见：这三个字段与同响应中的 rate_multiplier 相乘即可反推出
@@ -217,26 +221,27 @@ type Account struct {
 	Type     string  `json:"type"`
 	// Credentials 经 RedactCredentials 处理后只含非敏感子键；敏感 token / api_key / 私钥
 	// 的存在性通过 CredentialsStatus（has_<key>）暴露，原始值不返回前端。
-	Credentials             map[string]any                 `json:"credentials"`
-	CredentialsStatus       map[string]bool                `json:"credentials_status,omitempty"`
-	Extra                   map[string]any                 `json:"extra"`
-	OllamaCloudUsage        *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
-	OpenCodeGoUsage         *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
-	ProxyID                 *int64                         `json:"proxy_id"`
-	ProxyFallbackOriginID   *int64                         `json:"proxy_fallback_origin_id"`
-	ProxyFallbackOriginName *string                        `json:"proxy_fallback_origin_name,omitempty"`
-	Concurrency             int                            `json:"concurrency"`
-	LoadFactor              *int                           `json:"load_factor,omitempty"`
-	Priority                int                            `json:"priority"`
-	RateMultiplier          float64                        `json:"rate_multiplier"`
-	Status                  string                         `json:"status"`
-	ErrorMessage            string                         `json:"error_message"`
-	LastUsedAt              *time.Time                     `json:"last_used_at"`
-	ExpiresAt               *int64                         `json:"expires_at"`
-	AutoPauseOnExpired      bool                           `json:"auto_pause_on_expired"`
-	CreatedAt               time.Time                      `json:"created_at"`
-	UpdatedAt               time.Time                      `json:"updated_at"`
-	ProxyPool               []int64                        `json:"proxy_pool,omitempty"`
+	Credentials             map[string]any                    `json:"credentials"`
+	CredentialsStatus       map[string]bool                   `json:"credentials_status,omitempty"`
+	Extra                   map[string]any                    `json:"extra"`
+	OllamaCloudUsage        *service.OllamaCloudUsageState    `json:"ollama_cloud_usage,omitempty"`
+	CodexTurnTickets        []service.OpenAICodexTicketStatus `json:"codex_turn_tickets,omitempty"`
+	ProxyID                 *int64                            `json:"proxy_id"`
+	ProxyFallbackOriginID   *int64                            `json:"proxy_fallback_origin_id"`
+	ProxyFallbackOriginName *string                           `json:"proxy_fallback_origin_name,omitempty"`
+	Concurrency             int                               `json:"concurrency"`
+	LoadFactor              *int                              `json:"load_factor,omitempty"`
+	Priority                int                               `json:"priority"`
+	RateMultiplier          float64                           `json:"rate_multiplier"`
+	GroupRateMultiplier     float64                           `json:"group_rate_multiplier"`
+	Status                  string                            `json:"status"`
+	ErrorMessage            string                            `json:"error_message"`
+	LastUsedAt              *time.Time                        `json:"last_used_at"`
+	ExpiresAt               *int64                            `json:"expires_at"`
+	AutoPauseOnExpired      bool                              `json:"auto_pause_on_expired"`
+	CreatedAt               time.Time                         `json:"created_at"`
+	UpdatedAt               time.Time                         `json:"updated_at"`
+	OpenCodeGoUsage         *service.OpenCodeGoUsageState     `json:"opencode_go_usage,omitempty"`
 
 	Schedulable bool `json:"schedulable"`
 
@@ -261,7 +266,7 @@ type Account struct {
 	MaxSessions           *int `json:"max_sessions,omitempty"`
 	SessionIdleTimeoutMin *int `json:"session_idle_timeout_minutes,omitempty"`
 
-	// RPM 限制（仅 Anthropic OAuth/SetupToken 账号有效）
+	// RPM 限制（Anthropic OAuth/SetupToken 与 OpenAI OAuth 账号有效）
 	// 从 extra 字段提取，方便前端显示和编辑
 	BaseRPM          *int    `json:"base_rpm,omitempty"`
 	RPMStrategy      *string `json:"rpm_strategy,omitempty"`
@@ -343,20 +348,21 @@ type AccountListItem struct {
 	Platform string  `json:"platform"`
 	Type     string  `json:"type"`
 
-	Credentials       map[string]any                 `json:"credentials,omitempty"`
-	CredentialsStatus map[string]bool                `json:"credentials_status,omitempty"`
-	Extra             map[string]any                 `json:"extra,omitempty"`
-	OllamaCloudUsage  *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
-	OpenCodeGoUsage   *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
+	Credentials       map[string]any                    `json:"credentials,omitempty"`
+	CredentialsStatus map[string]bool                   `json:"credentials_status,omitempty"`
+	Extra             map[string]any                    `json:"extra,omitempty"`
+	OllamaCloudUsage  *service.OllamaCloudUsageState    `json:"ollama_cloud_usage,omitempty"`
+	CodexTurnTickets  []service.OpenAICodexTicketStatus `json:"codex_turn_tickets,omitempty"`
+	OpenCodeGoUsage   *service.OpenCodeGoUsageState     `json:"opencode_go_usage,omitempty"`
 
 	ProxyID                 *int64     `json:"proxy_id"`
-	ProxyPool               []int64    `json:"proxy_pool,omitempty"`
 	ProxyFallbackOriginID   *int64     `json:"proxy_fallback_origin_id"`
 	ProxyFallbackOriginName *string    `json:"proxy_fallback_origin_name,omitempty"`
 	Concurrency             int        `json:"concurrency"`
 	LoadFactor              *int       `json:"load_factor,omitempty"`
 	Priority                int        `json:"priority"`
 	RateMultiplier          float64    `json:"rate_multiplier"`
+	GroupRateMultiplier     float64    `json:"group_rate_multiplier"`
 	Status                  string     `json:"status"`
 	ErrorMessage            string     `json:"error_message"`
 	LastUsedAt              *time.Time `json:"last_used_at"`
@@ -430,10 +436,12 @@ type AccountListItem struct {
 }
 
 type AccountGroup struct {
-	AccountID int64     `json:"account_id"`
-	GroupID   int64     `json:"group_id"`
-	Priority  int       `json:"priority"`
-	CreatedAt time.Time `json:"created_at"`
+	AccountID int64 `json:"account_id"`
+	GroupID   int64 `json:"group_id"`
+	Priority  int   `json:"priority"`
+	// AllowedModels 为空表示账号在该分组内不限制模型
+	AllowedModels []string  `json:"allowed_models,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 
 	Account *Account `json:"account,omitempty"`
 	Group   *Group   `json:"group,omitempty"`
@@ -654,6 +662,11 @@ type UsageLog struct {
 	ImageSizeBreakdown map[string]int `json:"image_size_breakdown"`
 	MediaType          *string        `json:"media_type"`
 
+	// 视频计量字段，用户与管理员账单共用。
+	VideoCount           int     `json:"video_count"`
+	VideoResolution      *string `json:"video_resolution"`
+	VideoDurationSeconds *int    `json:"video_duration_seconds"`
+
 	// User-Agent
 	UserAgent *string `json:"user_agent"`
 	// IPAddress is visible to the owner of the usage record.
@@ -827,4 +840,21 @@ type PromoCodeUsage struct {
 	UsedAt      time.Time `json:"used_at"`
 
 	User *User `json:"user,omitempty"`
+}
+
+// SecurityPolicyKeyword 是安全策略自定义词的管理端 DTO。
+type SecurityPolicyKeyword struct {
+	ID        int64     `json:"id"`
+	GroupID   *int64    `json:"group_id"`
+	Keyword   string    `json:"keyword"`
+	Category  string    `json:"category"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// SecurityPolicyKeywordSeed 是内置 seed 词的管理端 DTO（只读）。
+type SecurityPolicyKeywordSeed struct {
+	Keyword  string `json:"keyword"`
+	Category string `json:"category"`
 }

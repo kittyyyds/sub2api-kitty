@@ -22,7 +22,12 @@
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.amount') }}</span>
-                <span class="font-medium text-gray-900 dark:text-white">{{ creditedAmountSymbol }}{{ paidOrder.amount.toFixed(2) }}</span>
+                <span class="font-medium text-gray-900 dark:text-white">
+                  {{ creditedAmountSymbol }}{{ paidOrder.amount.toFixed(2) }}
+                  <span v-if="(paidOrder.bonus_amount ?? 0) > 0" class="ml-1 text-xs font-normal text-amber-600 dark:text-amber-400">
+                    ({{ t('payment.orders.bonusIncluded', { amount: creditedAmountSymbol + (paidOrder.bonus_amount ?? 0).toFixed(2) }) }})
+                  </span>
+                </span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.payAmount') }}</span>
@@ -204,6 +209,9 @@
           <button v-if="payUrl" class="btn btn-secondary text-sm" @click="reopenPopup">
             {{ t('payment.qr.openPayWindow') }}
           </button>
+          <a v-if="payUrl" :href="payUrl" class="text-sm text-primary-600 underline dark:text-primary-400" data-test="pay-in-current-window">
+            {{ t('payment.qr.openInCurrentWindow') }}
+          </a>
         </div>
       </div>
       <div class="card p-4 text-center">

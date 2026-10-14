@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"io"
 	"maps"
 	"math/rand/v2"
@@ -442,11 +443,16 @@ func ProvideOllamaCloudUsageService(
 	svc := NewOllamaCloudUsageService(accountRepo, httpUpstream, settingService, encryptor, keyConfigured)
 	svc.lockCache = lockCache
 	svc.db = db
-	svc.Start()
+	managedinstance.Register("OllamaCloudUsageService", func() { svc.start(cfg.RunsBackgroundJobs()) }, svc.Stop)
 	return svc
 }
 
 func (s *OllamaCloudUsageService) Start() {
+	s.start(true)
+}
+
+// Per-request probe work stays local; periodic account scans belong to full nodes.
+func (s *OllamaCloudUsageService) start(background bool) {
 	if s == nil {
 		return
 	}
@@ -456,9 +462,14 @@ func (s *OllamaCloudUsageService) Start() {
 		return
 	}
 	s.started = true
-	s.wg.Add(2)
+	s.wg.Add(1)
+	if background {
+		s.wg.Add(1)
+	}
 	s.mu.Unlock()
-	go s.runLoop()
+	if background {
+		go s.runLoop()
+	}
 	go s.probeLoop()
 }
 
@@ -717,6 +728,12 @@ func (s *OllamaCloudUsageService) Refresh(ctx context.Context, accountID int64) 
 }
 
 func (s *OllamaCloudUsageService) RunDue(ctx context.Context) error {
+	ctx, managedDone, managedAllowed := managedinstance.Begin(ctx)
+	if !managedAllowed {
+		return nil
+	}
+	defer managedDone()
+
 	if s == nil || s.accountRepo == nil {
 		return nil
 	}

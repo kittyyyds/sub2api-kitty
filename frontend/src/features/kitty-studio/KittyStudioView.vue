@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
 import { useAppStore } from '@/stores/app'
+import type { ApiKey } from '@/types'
+import SuanliSpecialVideoRunner from '@/features/app-center/components/runners/SuanliSpecialVideoRunner.vue'
+import UnifiedVideoRunner from '@/features/app-center/components/runners/UnifiedVideoRunner.vue'
+import { isExclusiveSuanliModelCatalog } from '@/features/app-center/suanliVideo'
 
 import StudioCanvas from './components/StudioCanvas.vue'
 import StudioControls from './components/StudioControls.vue'
@@ -13,6 +17,23 @@ const appStore = useAppStore()
 const studio = useKittyStudio()
 const { isDarkMode } = useDocumentDarkMode()
 const logo = computed(() => appStore.brandLogoUrl || '/logo.svg')
+const specialVideoBusy = ref(false)
+const specialVideoMode = computed(() => studio.selectedPlatform.value === 'video'
+  || (studio.selectedKey.value?.group?.is_exclusive === true && studio.selectedPlatform.value === 'grok'
+  && isExclusiveSuanliModelCatalog(studio.gatewayModelIds.value)))
+
+function keyLabel(key: ApiKey): string {
+  const masked = key.key.length > 12 ? `${key.key.slice(0, 6)}...${key.key.slice(-4)}` : key.key
+  return `${key.name || `Key ${key.id}`} · ${key.group?.name || '未分组'} · ${masked}`
+}
+
+function selectSpecialKey(event: Event): void {
+  if (!specialVideoBusy.value) void studio.setKey((event.target as HTMLSelectElement).value)
+}
+
+function refreshSpecialKeys(): void {
+  if (!specialVideoBusy.value) void studio.loadKeys()
+}
 
 onMounted(() => {
   if (!appStore.publicSettingsLoaded) void appStore.fetchPublicSettings()
@@ -23,7 +44,38 @@ onMounted(() => {
 <template>
   <AppLayout>
     <section class="kitty-studio-shell" :class="{ 'is-dark': isDarkMode }" aria-label="Kitty 生图工作室">
+      <div v-if="specialVideoMode" class="special-video-workspace" data-testid="studio-suanli-workspace">
+        <div class="special-video-identity">
+          <label>
+            <span>调用身份</span>
+            <select
+              :value="studio.form.keyId"
+              :disabled="specialVideoBusy || studio.loadingKeys.value || studio.loadingModels.value"
+              data-testid="studio-suanli-key"
+              @change="selectSpecialKey"
+            >
+              <option v-for="key in studio.availableKeys.value" :key="key.id" :value="String(key.id)">{{ keyLabel(key) }}</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            :disabled="specialVideoBusy || studio.loadingKeys.value || studio.loadingModels.value"
+            data-testid="studio-suanli-refresh"
+            @click="refreshSpecialKeys"
+          >刷新 Key 与模型</button>
+          <RouterLink to="/keys">管理 Key</RouterLink>
+        </div>
+        <component
+          :is="studio.selectedPlatform.value === 'video' ? UnifiedVideoRunner : SuanliSpecialVideoRunner"
+          :api-key="studio.selectedKey.value?.key || ''"
+          :model-ids="studio.gatewayModelIds.value"
+          :disabled="studio.loadingKeys.value || studio.loadingModels.value"
+          @busy="specialVideoBusy = $event"
+        />
+      </div>
+
       <StudioControls
+        v-else
         :form="studio.form"
         :keys="studio.availableKeys.value"
         :models="studio.modelOptions.value"
@@ -46,6 +98,7 @@ onMounted(() => {
       />
 
       <StudioCanvas
+        v-if="!specialVideoMode"
         :logo="logo"
         :gallery="studio.gallery.value"
         :progress="studio.progress.value"
@@ -105,6 +158,51 @@ onMounted(() => {
   box-shadow: 0 20px 60px rgb(0 0 0 / 30%);
 }
 
+.special-video-workspace {
+  --customer-ink: var(--studio-ink);
+  --customer-muted: var(--studio-muted);
+  --customer-line: var(--studio-line);
+  --customer-surface: var(--studio-surface);
+  --customer-cyan: var(--studio-accent);
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 1080px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 24px;
+}
+
+.special-video-identity {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--studio-line);
+  font-size: 12px;
+}
+
+.special-video-identity label {
+  display: grid;
+  flex: 1 1 220px;
+  min-width: 0;
+  gap: 6px;
+}
+
+.special-video-identity select,
+.special-video-identity button {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--studio-line);
+  border-radius: 5px;
+  color: var(--studio-ink);
+  background: var(--studio-surface);
+}
+
+.special-video-identity :disabled { opacity: .5; cursor: not-allowed; }
+.special-video-identity a { padding-block: 9px; color: var(--studio-accent); }
+
 @media (max-width: 1040px) {
   .kitty-studio-shell {
     grid-template-columns: 1fr;
@@ -113,6 +211,7 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
+  .special-video-workspace { padding: 16px; }
   .kitty-studio-shell {
     border-radius: 6px;
   }

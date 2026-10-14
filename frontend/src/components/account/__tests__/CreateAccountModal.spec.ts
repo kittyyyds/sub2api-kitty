@@ -1,6 +1,13 @@
+
+vi.mock('@/api/admin/credentialEncryption', () => ({
+  getCredentialEncryption: vi.fn().mockResolvedValue({ configured: true, source: 'server_config' }),
+  initializeCredentialEncryption: vi.fn(),
+}))
 import { defineComponent } from 'vue'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+enableAutoUnmount(afterEach)
 
 const {
   createAccountMock,
@@ -9,6 +16,7 @@ const {
   showWarningMock,
   importCodexSessionMock,
   createOpenAICodexPATMock,
+  createCredentialOperationsMock,
   authIsSimpleMode,
 } = vi.hoisted(() => ({
   createAccountMock: vi.fn(),
@@ -17,6 +25,7 @@ const {
   showWarningMock: vi.fn(),
   importCodexSessionMock: vi.fn(),
   createOpenAICodexPATMock: vi.fn(),
+  createCredentialOperationsMock: vi.fn(),
   authIsSimpleMode: { value: true },
 }))
 
@@ -40,6 +49,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
       create: createAccountMock,
+      getOpenAIRequestTimezones: vi.fn().mockResolvedValue({ default: 'Asia/Singapore', timezones: ['Asia/Singapore', 'America/New_York'] }),
       probeUpstreamBilling: probeUpstreamBillingMock,
       syncUpstreamModels: syncUpstreamModelsMock,
       checkMixedChannelRisk: vi.fn().mockResolvedValue({ has_risk: false }),
@@ -60,6 +70,10 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('@/api/admin/accountTokenGuardV2', () => ({
+  createTokenGuardV2Account: createCredentialOperationsMock,
+}))
+
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   return {
@@ -69,6 +83,7 @@ vi.mock('vue-i18n', async () => {
 })
 
 import CreateAccountModal from '../CreateAccountModal.vue'
+import OpenAITwoFAImport from '../OpenAITwoFAImport.vue'
 
 const BaseDialogStub = defineComponent({
   name: 'BaseDialog',
@@ -158,6 +173,7 @@ async function selectButtonByText(wrapper: ReturnType<typeof mountModal>, text: 
   const button = wrapper.findAll('button').find((candidate) => candidate.text().includes(text))
   expect(button).toBeDefined()
   await button?.trigger('click')
+  await flushPromises()
 }
 
 async function submitApiKeyAccount(
@@ -195,6 +211,18 @@ async function openCodexImportStep(toggleClicks = 0) {
 }
 
 describe('CreateAccountModal OpenAI long-context billing', () => {
+  it('creates an account with a separate cost multiplier and the original billing rate', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="account-cost-multiplier"]').element.value).toBe('0.1')
+    await wrapper.get('[data-testid="account-cost-multiplier"]').setValue(0.35)
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Cost example')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent'); await flushPromises()
+    expect(createAccountMock).toHaveBeenCalledWith(expect.objectContaining({ rate_multiplier: 1, extra: expect.objectContaining({ cost_multiplier: 0.35 }) }))
+  })
+
   beforeEach(() => {
     authIsSimpleMode.value = true
     createAccountMock.mockReset().mockResolvedValue({ id: 42, platform: 'openai', type: 'apikey' })
@@ -208,30 +236,98 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
       failed: 0,
       errors: [],
       warnings: [],
+      items: [{ action: 'created', account_id: 42 }],
     })
+    createCredentialOperationsMock.mockReset().mockResolvedValue({ account_id: 42 })
     createOpenAICodexPATMock.mockReset().mockResolvedValue({})
   })
 
   afterEach(() => vi.useRealTimers())
 
-  it('imports an explicitly selected Mac profile without changing connection or fingerprint convergence defaults', async () => {
+
+
+  it('creates video API-key accounts with explicit provider and base URL without OAuth', async () => {
     const wrapper = mountModal()
-    await selectButtonByText(wrapper, 'OpenAI')
-    await wrapper.get('[data-testid="create-client-profile"]').setValue('macos')
-    await wrapper.get('form#create-account-form input[type="text"]').setValue('Mac account')
-    await wrapper.get('form#create-account-form').trigger('submit.prevent')
-    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
     await flushPromises()
-    const extra = importCodexSessionMock.mock.calls[0]?.[0]?.extra
-    expect(extra?.openai_client_profile).toMatchObject({ enabled: true, preset: 'macos', ws_mode: 'inherit', http_version: 'inherit' })
-    expect(extra?.codex_fingerprint_mode).toBeUndefined()
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video provider')
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue('https://video.example.test')
+    await wrapper.get('input[type="password"]').setValue('video-fixture-key')
+    await wrapper.get('[data-testid="grok-media-provider"]').setValue('suanli_special')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).toHaveBeenCalledWith(expect.objectContaining({
+      platform: 'video', type: 'apikey',
+      credentials: expect.objectContaining({ base_url: 'https://video.example.test', api_key: 'video-fixture-key', grok_media_provider: 'suanli_special' }),
+    }))
+    expect(wrapper.findComponent(OAuthAuthorizationFlowStub).exists()).toBe(false)
+    wrapper.unmount()
   })
 
-  it('does not add a client profile to default OAuth imports', async () => {
-    const wrapper = await openCodexImportStep()
-    await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
+  it('does not create a video account with an implicit Anthropic base URL', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video provider')
+    await wrapper.get('input[type="password"]').setValue('video-fixture-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
     await flushPromises()
-    expect(importCodexSessionMock.mock.calls[0]?.[0]?.extra?.openai_client_profile).toBeUndefined()
+    expect(createAccountMock).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('offers 2FA initial login with optional name and imports through Session deduplication', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
+    await wrapper.get('[data-testid="request-timezone-search"]').setValue(true)
+    const tier = wrapper.getComponent({ name: 'AccountTierRoutingFields' })
+    tier.vm.$emit('update:enabled', true)
+    tier.vm.$emit('update:pool', 'premium')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('[data-testid="openai-two-fa"]').trigger('click')
+    expect(wrapper.get('[data-tour="account-form-name"]').attributes('required')).toBeUndefined()
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    const importer = wrapper.getComponent(OpenAITwoFAImport)
+    await importer.props('prepare')?.()
+    expect(wrapper.findComponent(OAuthAuthorizationFlowStub).exists()).toBe(false)
+    const credential = { access_token: 'test-access', refresh_token: 'test-refresh', account_id: 'test-workspace' }
+    const login = { email: 'user@example.com', password: 'test-password', mfa_secret: 'test-secret' }
+    await expect(importer.props('importCredential')(credential, login.email, login)).resolves.toBe('created')
+    expect(importCodexSessionMock).toHaveBeenCalledWith(expect.objectContaining({
+      content: JSON.stringify(credential), name: 'user@example.com', update_existing: false, skip_existing: true,
+      concurrency: 10, group_ids: [], proxy_id: null,
+      extra: expect.objectContaining({
+        tiered_routing_enabled: true, pool: 'premium', openai_request_timezone_enabled: true,
+        openai_request_timezone: 'Asia/Singapore', openai_request_timezone_sync_search: true,
+      }),
+    }))
+    expect(wrapper.emitted('created')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(createCredentialOperationsMock).toHaveBeenCalledWith({
+      account_id: 42, login_email: login.email, password: login.password, totp_secret: login.mfa_secret,
+      credential_mode: 'password_totp', proxy_source: 'account', enabled: true, auto_relogin_enabled: true,
+    })
+  })
+
+  it('retries operations enrollment for an already imported identity without reporting premature success', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('[data-testid="openai-two-fa"]').trigger('click')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    const importer = wrapper.getComponent(OpenAITwoFAImport)
+    await importer.props('prepare')?.()
+    const credential = { access_token: 'test-access', refresh_token: 'test-refresh' }
+    const login = { email: 'user@example.com', password: 'test-password', mfa_secret: 'test-secret' }
+    createCredentialOperationsMock.mockRejectedValueOnce(new Error('encryption unavailable'))
+    await expect(importer.props('importCredential')(credential, login.email, login)).rejects.toThrow()
+    expect(wrapper.emitted('created')).toBeUndefined()
+    importCodexSessionMock.mockResolvedValue({ created: 0, updated: 0, skipped: 1, failed: 0, items: [{ action: 'skipped', account_id: 42 }] })
+    await expect(importer.props('importCredential')(credential, login.email, login)).resolves.toBe('created')
+    expect(importCodexSessionMock).toHaveBeenCalledTimes(1)
+    expect(createCredentialOperationsMock).toHaveBeenCalledTimes(2)
+    expect(createCredentialOperationsMock.mock.calls[1]?.[0]).toMatchObject({
+      account_id: 42, password: login.password, totp_secret: login.mfa_secret, enabled: true, auto_relogin_enabled: true,
+    })
   })
 
   it('sets month and year expiry presets without submitting the account form', async () => {
@@ -302,6 +398,18 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
 
     expect(wrapper.find('[data-testid="openai-long-context-billing-toggle"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="create-openai-ws-mode"]').exists()).toBe(true)
+  })
+
+  it('persists Copilot SDK mode for an API key account', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('copilot sidecar')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('sidecar-key')
+    await wrapper.get('[data-testid="copilot-sdk-toggle"]').setValue(true)
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_copilot_sdk).toBe(true)
   })
 
   it('sends false explicitly for normal OpenAI account creation by default', async () => {
@@ -431,6 +539,46 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(wrapper.find('[data-testid="create-openai-flatten-namespaces-toggle"]').exists()).toBe(
       false
     )
+  })
+
+  it.each(['success', 'failed', 'unsupported', 'transport'])('saves video accounts with a price probe (%s), without rate sync', async (outcome) => {
+    if (outcome === 'transport') probeUpstreamBillingMock.mockRejectedValue(new Error('probe offline'))
+    else probeUpstreamBillingMock.mockResolvedValue({ snapshot: { kind: 'video_model_prices', status: outcome === 'success' ? 'ok' : outcome } })
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
+    await flushPromises()
+    const toggle = wrapper.get('[data-testid="upstream-billing-auto-probe"]')
+    expect(toggle.attributes('aria-label')).toBe('admin.accounts.upstreamBilling.video.autoProbe')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(wrapper.text()).not.toContain('admin.accounts.upstreamBilling.syncRate')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video supplier')
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue('https://video.example.com')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-video-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const payload = createAccountMock.mock.calls[0]?.[0]
+    expect(payload).toMatchObject({ platform: 'video', type: 'apikey', upstream_billing_probe_enabled: true })
+    expect(payload).not.toHaveProperty('upstream_billing_rate_sync_enabled')
+    expect(payload.extra).not.toHaveProperty('upstream_billing_rate_sync_enabled')
+    expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
+    expect(createAccountMock.mock.invocationCallOrder[0]).toBeLessThan(probeUpstreamBillingMock.mock.invocationCallOrder[0])
+    expect(wrapper.emitted('created')).toHaveLength(1)
+    if (outcome === 'success') expect(showWarningMock).not.toHaveBeenCalled()
+    else expect(showWarningMock).toHaveBeenCalledWith('admin.accounts.upstreamBilling.video.savedProbeFailed')
+  })
+
+  it('can disable video price probing before creating the account', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="account-platform-video"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="upstream-billing-auto-probe"]').trigger('click')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Video supplier')
+    await wrapper.get('input[placeholder="https://video.example.com"]').setValue('https://video.example.com')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-video-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.upstream_billing_probe_enabled).toBe(false)
+    expect(probeUpstreamBillingMock).not.toHaveBeenCalled()
   })
 
   it('enables upstream billing probes by default for new OpenAI API key accounts', async () => {
@@ -680,6 +828,28 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(payload?.upstream_billing_probe_enabled).toBe(true)
     // 创建成功后前端立即发起一次首探（与其他 apikey 平台一致）。
     expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
+  })
+
+  it.each([
+    ['import-codex-session', importCodexSessionMock],
+    ['import-codex-pat', createOpenAICodexPATMock]
+  ] as const)('preserves timezone and the selected account pool on %s', async (event, request) => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
+    await wrapper.get('[data-testid="request-timezone-search"]').setValue(true)
+    const fields = wrapper.findComponent({ name: 'AccountTierRoutingFields' })
+    fields.vm.$emit('update:enabled', true)
+    fields.vm.$emit('update:pool', 'premium')
+    await wrapper.vm.$nextTick()
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Tiered import')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await wrapper.get(`[data-testid="${event}"]`).trigger('click')
+    await flushPromises()
+    expect(request.mock.calls[0]?.[0]?.extra).toMatchObject({
+      tiered_routing_enabled: true, pool: 'premium', openai_request_timezone_enabled: true,
+      openai_request_timezone: 'Asia/Singapore', openai_request_timezone_sync_search: true
+    })
   })
 
   it('leaves Codex session import billing ownership to the backend', async () => {

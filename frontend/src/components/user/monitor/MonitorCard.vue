@@ -5,8 +5,8 @@
     :aria-label="item.name"
     @click="emit('click')"
   >
-    <div class="flex min-w-0 items-start justify-between gap-3">
-      <div class="flex min-w-0 items-start gap-2.5">
+    <div class="monitor-card-header flex min-w-0 items-start justify-between gap-3">
+      <div class="monitor-card-title-group flex min-w-0 items-start gap-2.5">
         <span
           class="grid h-7 w-7 shrink-0 place-items-center rounded-md"
           :class="[providerBackgroundClass, providerTintClass]"
@@ -14,26 +14,26 @@
           <ProviderIcon :provider="item.provider" :size="16" />
         </span>
         <div class="min-w-0">
-          <div class="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+          <div class="monitor-card-name truncate text-sm font-semibold text-gray-900 dark:text-gray-100" :title="item.name">
             {{ item.name }}
           </div>
           <div class="mt-0.5 min-w-0">
-            <span class="truncate font-mono text-[10px] text-gray-400">
+            <span class="monitor-card-model truncate font-mono text-[10px] text-gray-400">
               {{ formatMonitorModel(item.primary_model) }}
             </span>
           </div>
         </div>
       </div>
-      <div class="flex shrink-0 items-center gap-1.5">
+      <div class="monitor-card-badges flex shrink-0 items-center gap-1.5">
         <span
           v-if="rateMultiplier != null"
-          class="inline-flex items-center rounded-md px-2 py-1 font-mono text-[10px] font-medium"
+          class="monitor-card-rate inline-flex items-center rounded-md px-2 py-1 font-mono text-[10px] font-medium"
           :class="[providerBackgroundClass, providerTintClass]"
         >
           {{ t('monitorCommon.rateLabel') }}: {{ formatMultiplier(rateMultiplier) }}x
         </span>
         <span
-          class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium"
+          class="monitor-card-status inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium"
           :class="statusChipClass"
         >
           <span class="h-1.5 w-1.5 rounded-full" :class="statusDotClass"></span>
@@ -42,8 +42,8 @@
       </div>
     </div>
 
-    <div class="mt-3 flex min-w-0 items-baseline justify-between gap-3">
-      <div class="flex min-w-0 items-baseline gap-5 text-[11px]">
+    <div class="monitor-card-metrics mt-3 flex min-w-0 items-baseline justify-between gap-3">
+      <div class="monitor-card-latencies flex min-w-0 items-baseline gap-5 text-[11px]">
         <span class="whitespace-nowrap text-gray-400">
           {{ t('monitorCommon.dialogLatency') }}
           <span class="ml-1 font-mono text-xs text-gray-900 dark:text-gray-100">
@@ -58,7 +58,7 @@
         </span>
       </div>
       <span
-        class="origin-right shrink-0 scale-[1.5] font-mono text-sm font-semibold tabular-nums"
+        class="monitor-card-availability origin-right shrink-0 scale-[1.5] font-mono text-sm font-semibold tabular-nums"
         :style="availabilityStyle"
       >
         {{ availabilityText }}

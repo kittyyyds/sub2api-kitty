@@ -5,9 +5,10 @@
   >
     <div class="app-header-shell px-2 sm:px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex shrink-0 items-center gap-2 sm:gap-4">
+      <div class="flex min-w-0 items-center gap-2 sm:gap-4">
         <button
           @click="toggleMobileSidebar"
+          data-mobile-menu-toggle
           class="btn-ghost btn-icon lg:hidden"
           :aria-label="t('common.toggleMenu')"
         >
@@ -15,19 +16,13 @@
         </button>
 
         <div class="hidden min-w-0 xl:block">
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+          <h1 class="truncate text-lg font-semibold text-gray-900 dark:text-white">
             {{ pageTitle }}
           </h1>
-          <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
+          <p v-if="pageDescription" class="truncate text-xs text-gray-500 dark:text-dark-400" :title="pageDescription">
             {{ pageDescription }}
           </p>
         </div>
-      </div>
-
-      <div v-if="isCustomer" class="app-header-customer-toolbar" data-customer-header-toolbar>
-        <CustomerHeaderShortcuts />
-        <CustomerContactActions />
-        <AnnouncementBell />
       </div>
 
       <!-- Right: Docs + Language + Subscriptions + Balance + User Dropdown -->
@@ -36,21 +31,8 @@
           <AnnouncementBell />
         </div>
 
-        <!-- Customer guide replaces the duplicate external docs shortcut. -->
-        <router-link
-          v-if="isCustomer"
-          to="/custom/docs"
-          class="app-header-getting-started"
-          data-customer-header-guide
-          :aria-label="t('nav.gettingStartedHeader')"
-          :title="t('nav.gettingStartedHeader')"
-        >
-          <span aria-hidden="true">📘</span>
-          <span>{{ t('nav.gettingStartedHeader') }}</span>
-        </router-link>
-
         <a
-          v-else-if="docUrl"
+          v-if="!isCustomer && docUrl"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
@@ -59,6 +41,26 @@
           <Icon name="book" size="sm" />
           <span class="hidden 2xl:inline">{{ t('nav.docs') }}</span>
         </a>
+
+        <!-- Customers already have a pricing shortcut in their toolbar. -->
+        <router-link
+          v-if="user && !isCustomer && modelPlazaEnabled"
+          :to="{ path: '/model-plaza', query: { embedded: '1' } }"
+          :title="t('nav.modelPlaza')"
+          :aria-label="t('nav.modelPlaza')"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+        >
+          <Icon name="grid" size="sm" />
+          <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
+        </router-link>
+
+        <div v-if="isCustomer" class="console-header-tools">
+          <AnnouncementBell />
+          <router-link to="/custom/billing-rules" class="btn-secondary console-intelligence-button">
+            <Icon name="dollar" size="sm" />
+            <span>{{ t('nav.billingRules') }}</span>
+          </router-link>
+        </div>
 
         <!-- Language Switcher -->
         <LocaleSwitcher />
@@ -120,7 +122,7 @@
             class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
             :aria-label="t('common.userMenu')"
           >
-            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
+            <div class="console-user-avatar flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
               <img
                 v-if="avatarUrl"
                 :src="avatarUrl"
@@ -129,7 +131,7 @@
               >
               <span v-else>{{ userInitials }}</span>
             </div>
-            <div class="hidden text-left md:block">
+            <div class="hidden text-left" :class="isCustomer ? 'xl:block' : 'md:block'">
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ displayName }}
               </div>
@@ -270,8 +272,6 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
-import CustomerContactActions from '@/components/layout/CustomerContactActions.vue'
-import CustomerHeaderShortcuts from '@/components/layout/CustomerHeaderShortcuts.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { getNativeFeature } from '@/features/customer-console/nativeFeatureRegistry'
@@ -289,6 +289,7 @@ const onboardingStore = useOnboardingStore()
 
 const user = computed(() => authStore.user)
 const isCustomer = computed(() => user.value?.role === 'user')
+const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
@@ -304,7 +305,7 @@ const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHe
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
-  return !authStore.isSimpleMode && user.value?.role === 'admin'
+  return !authStore.isSimpleMode && authStore.isAdmin
 })
 
 const userInitials = computed(() => {

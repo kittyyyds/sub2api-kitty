@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"log/slog"
 	"math/rand/v2"
 	"sync"
@@ -257,6 +258,17 @@ func (r *ChannelMonitorRunner) runScheduled(ctx context.Context, task *scheduled
 // fire 提交一次检测到 worker 池。功能开关关闭时跳过本次（不取消任务，
 // 重新启用时立即恢复）；池满或重复在飞时也跳过。
 func (r *ChannelMonitorRunner) fire(ctx context.Context, task *scheduledMonitor) {
+	ctx, managedDone, managedAllowed := managedinstance.Begin(ctx)
+	if !managedAllowed {
+		return
+	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			managedDone()
+		}
+	}()
+
 	if r.settingService != nil {
 		rt := r.settingService.GetChannelMonitorRuntime(ctx)
 		if !rt.ActiveProbesAllowed() {
@@ -269,12 +281,15 @@ func (r *ChannelMonitorRunner) fire(ctx context.Context, task *scheduledMonitor)
 		return
 	}
 	if _, ok := r.pool.TrySubmit(func() {
-		r.runOne(task.id, task.name)
+		defer managedDone()
+		r.runOneContext(ctx, task.id, task.name)
 	}); !ok {
 		// 池满：丢弃本次检测，但必须释放已占用的 inFlight 槽，否则该 monitor 会被永久卡住。
 		r.releaseInFlight(task.id)
 		slog.Warn("channel_monitor: worker pool full, skip submission",
 			"monitor_id", task.id, "name", task.name)
+	} else {
+		transferred = true
 	}
 }
 
@@ -300,7 +315,10 @@ func (r *ChannelMonitorRunner) releaseInFlight(id int64) {
 // runOne 执行单个监控的检测。普通错误只记日志；API key 解密失败会撤销任务。
 // 任务结束时（含 panic recover）必须释放 in-flight 槽。
 func (r *ChannelMonitorRunner) runOne(id int64, name string) {
-	ctx, cancel := context.WithTimeout(context.Background(), monitorRequestTimeout+monitorPingTimeout+monitorRunOneBuffer)
+	r.runOneContext(context.Background(), id, name)
+}
+func (r *ChannelMonitorRunner) runOneContext(parent context.Context, id int64, name string) {
+	ctx, cancel := context.WithTimeout(parent, monitorRequestTimeout+monitorPingTimeout+monitorRunOneBuffer)
 	defer cancel()
 
 	defer r.releaseInFlight(id)

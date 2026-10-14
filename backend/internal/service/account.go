@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -35,15 +36,19 @@ type Account struct {
 	Priority                int
 	// RateMultiplier 账号计费倍率（>=0，允许 0 表示该账号计费为 0）。
 	// 使用指针用于兼容旧版本调度缓存（Redis）中缺字段的情况：nil 表示按 1.0 处理。
-	RateMultiplier     *float64
-	LoadFactor         *int // 调度负载因子；nil 表示使用 Concurrency
-	Status             string
-	ErrorMessage       string
-	LastUsedAt         *time.Time
-	ExpiresAt          *time.Time
-	AutoPauseOnExpired bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	RateMultiplier *float64
+	// GroupRateMultiplier is an account-level multiplier applied to the resolved
+	// user/group billing multiplier. It defaults to 1.0 and is independent from
+	// RateMultiplier, which only affects account-side cost statistics.
+	GroupRateMultiplier *float64
+	LoadFactor          *int // 调度负载因子；nil 表示使用 Concurrency
+	Status              string
+	ErrorMessage        string
+	LastUsedAt          *time.Time
+	ExpiresAt           *time.Time
+	AutoPauseOnExpired  bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 
 	Schedulable bool
 
@@ -82,80 +87,6 @@ type Account struct {
 	headerOverrideCacheRawPtr         uintptr
 	headerOverrideCacheRawLen         int
 	headerOverrideCacheRawSig         uint64
-}
-
-// GetProxyPool returns the proxy IDs configured for this account. Newer
-// accounts store the pool in extra.proxy_pool; legacy accounts may use
-// extra_proxy_ids or the single proxy_id column.
-func (a *Account) GetProxyPool() []int64 {
-	if a == nil {
-		return nil
-	}
-	var raw any
-	if a.Extra != nil {
-		raw = a.Extra["proxy_pool"]
-		if raw == nil {
-			raw = a.Extra["extra_proxy_ids"]
-		}
-	}
-	ids := normalizeProxyPoolIDs(raw)
-	if len(ids) == 0 && a.ProxyID != nil && *a.ProxyID > 0 {
-		ids = []int64{*a.ProxyID}
-	}
-	return ids
-}
-
-func normalizeProxyPoolIDs(raw any) []int64 {
-	var values []any
-	switch v := raw.(type) {
-	case []any:
-		values = v
-	case []int64:
-		values = make([]any, len(v))
-		for i := range v {
-			values[i] = v[i]
-		}
-	case []int:
-		values = make([]any, len(v))
-		for i := range v {
-			values[i] = v[i]
-		}
-	case []float64:
-		values = make([]any, len(v))
-		for i := range v {
-			values[i] = v[i]
-		}
-	}
-	seen := make(map[int64]struct{}, len(values))
-	ids := make([]int64, 0, len(values))
-	for _, value := range values {
-		var id int64
-		switch n := value.(type) {
-		case int64:
-			id = n
-		case int:
-			id = int64(n)
-		case float64:
-			id = int64(n)
-		case json.Number:
-			parsed, err := n.Int64()
-			if err == nil {
-				id = parsed
-			}
-		case string:
-			parsed, err := strconv.ParseInt(strings.TrimSpace(n), 10, 64)
-			if err == nil {
-				id = parsed
-			}
-		}
-		if id > 0 {
-			if _, ok := seen[id]; !ok {
-				seen[id] = struct{}{}
-				ids = append(ids, id)
-			}
-		}
-	}
-	return ids
 }
 
 // ApplyAccountGroupPriority replaces the effective priority on an account that
@@ -204,6 +135,19 @@ const (
 	// credentials["openai_capabilities"] 配置集。仅用于生图意图的 /v1/responses
 	// 调度，避免把请求调度到会在 forward 阶段被降级为 Chat Completions 的账号（#4417）。
 	OpenAIEndpointCapabilityResponses OpenAIEndpointCapability = "responses"
+	// OpenAIEndpointCapabilityResponsesCompact 表示该账号能够承接 Codex 的
+	// native remote compaction v2 请求，比 OpenAIEndpointCapabilityResponses 宽。
+	//
+	// 压缩请求有两种承接方式：
+	//   - 上游原生 /responses 认识 compaction_trigger（OpenAI 官方、OAuth 等）；
+	//   - 其余账号走 chat 桥：网关把 compaction 回合改写成普通 CC 请求，回程再
+	//     合成 compaction item（buildDeepSeekCompactChatBody /
+	//     buildDeepSeekCompactResponse），因此只要求 chat_completions 可用。
+	//
+	// 早先统一按 OpenAIEndpointCapabilityResponses 过滤，纯 chat 账号（如把 GPT
+	// 模型名映射到聚合站的 platform=openai 账号）会被判 capability_mismatch，
+	// 压缩请求直接 503 no available account（实测确认）。
+	OpenAIEndpointCapabilityResponsesCompact OpenAIEndpointCapability = "responses_compact"
 )
 
 const openAIEndpointCapabilitiesCredentialKey = "openai_capabilities"
@@ -292,6 +236,15 @@ func (a *Account) EffectiveBillingRateMultiplierAt(now time.Time) (float64, stri
 		return rate, "probe"
 	}
 	return fallback, "manual"
+}
+
+// UserGroupRateMultiplier returns the account-level multiplier used with the
+// resolved user/group rate. Nil and invalid values preserve the 1.0 default.
+func (a *Account) UserGroupRateMultiplier() float64 {
+	if a == nil || a.GroupRateMultiplier == nil || *a.GroupRateMultiplier < 0 {
+		return 1.0
+	}
+	return *a.GroupRateMultiplier
 }
 
 func (a *Account) EffectiveLoadFactor() int {
@@ -397,6 +350,10 @@ func (a *Account) IsGrok() bool {
 	return a.Platform == PlatformGrok
 }
 
+func (a *Account) IsTypeSafe() bool {
+	return a != nil && a.Platform == PlatformTypeSafe
+}
+
 func (a *Account) IsGrokOAuth() bool {
 	return a.IsGrok() && a.Type == AccountTypeOAuth
 }
@@ -414,6 +371,18 @@ func (a *Account) IsGrokOpenAICompatibleMedia() bool {
 	}
 	return value == GrokMediaCompatibilityOpenAI || value == "openai-compatible"
 }
+const grokSkipForbiddenPauseExtraKey = "grok_skip_forbidden_pause"
+
+// SkipGrokForbiddenPause reports the deployed per-account opt-out for pausing
+// a Grok account after an unknown inference 403. A missing or non-boolean value
+// preserves the legacy pause. Explicit entitlement and suspension markers are
+// protected by the caller even when this returns true.
+func (a *Account) SkipGrokForbiddenPause() bool {
+	if a == nil || !a.IsGrok() {
+		return false
+	}
+	return a.getExtraBool(grokSkipForbiddenPauseExtraKey)
+}
 
 // IsKimi / IsZhipu / IsDeepseek 标识国产 OpenAI 兼容供应商账号。
 func (a *Account) IsKimi() bool {
@@ -428,11 +397,7 @@ func (a *Account) IsDeepseek() bool {
 	return a.Platform == PlatformDeepseek
 }
 
-func (a *Account) IsMiniMax() bool {
-	return a.Platform == PlatformMiniMax
-}
-
-// IsCNProvider 报告是否为国产 OpenAI 兼容供应商（kimi/zhipu/deepseek/minimax）。
+// IsCNProvider 报告是否为国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）。
 func (a *Account) IsCNProvider() bool {
 	return a != nil && IsCNProvider(a.Platform)
 }
@@ -441,7 +406,7 @@ func (a *Account) IsCNProvider() bool {
 // openai/grok 原生走 OpenAI 网关；国产供应商同为 OpenAI Chat Completions
 // 兼容上游，也经 OpenAI 网关转发。OpenCode 同样经 OpenAI 网关按模型分流。
 func (a *Account) IsOpenAICompatible() bool {
-	return a != nil && (a.Platform == PlatformOpenAI || a.Platform == PlatformGrok || a.IsCNProvider() || a.IsOpenCodeGo())
+	return a != nil && (a.Platform == PlatformOpenAI || a.Platform == PlatformGrok || a.IsVideo() || a.IsCNProvider() || a.IsOpenCodeGo())
 }
 
 func (a *Account) GeminiOAuthType() string {
@@ -944,6 +909,39 @@ func mappingHasWildcardForModel(mapping map[string]string, model string) bool {
 	return false
 }
 
+// resolveGrokMediaFallbackModel returns the built-in Grok Imagine mapping for
+// known media aliases when an account has a custom chat-only model mapping.
+//
+// model_mapping is an explicit allowlist when it is non-empty, which is the
+// right behavior for ordinary models. Media eligibility is the separate
+// operator-controlled switch for Grok image/edit/video generation, so an
+// eligible Grok account may inherit only the built-in, known media aliases
+// without widening its chat allowlist or accepting arbitrary model names.
+//
+// billing_unobserved remains a candidate here because the scheduler must be
+// able to select the account and let the request path perform its authoritative
+// media eligibility probe before forwarding.
+func (a *Account) resolveGrokMediaFallbackModel(requestedModel string) (string, bool) {
+	if a == nil || !a.IsGrok() {
+		return "", false
+	}
+
+	defaultMapping := xai.DefaultModelMapping()
+	mappedModel, matched := resolveRequestedModelInMapping(defaultMapping, requestedModel)
+	if !matched || !xai.IsGrokImagineModel(requestedModel) {
+		return "", false
+	}
+
+	eligible, reason := a.GrokMediaGenerationEligibility()
+	if !eligible && reason != "billing_unobserved" {
+		return "", false
+	}
+	if strings.TrimSpace(mappedModel) == "" {
+		return "", false
+	}
+	return mappedModel, true
+}
+
 func normalizeRequestedModelForLookup(platform, requestedModel string) string {
 	trimmed := strings.TrimSpace(requestedModel)
 	if trimmed == "" {
@@ -1009,6 +1007,22 @@ func resolveRequestedModelInMapping(mapping map[string]string, requestedModel st
 // （isDeepseekServableModel）——未知模型名透传上游只会得到 404/400，并误触发
 // per-(账号,模型) 30 分钟冷却；带 [1m] 上下文后缀的写法先归一化再比对。
 func (a *Account) IsModelSupported(requestedModel string) bool {
+	if blocked, _ := a.Extra["astra_model_disabled"].(bool); blocked {
+		if empty, _ := a.Extra["astra_model_empty_mapping"].(bool); empty {
+			return false
+		}
+		if strings.EqualFold(strings.TrimSpace(requestedModel), "gpt-6-astra") || strings.EqualFold(a.GetMappedModel(requestedModel), "gpt-6-astra") {
+			return false
+		}
+		if keys, ok := a.Extra["astra_model_blocked_keys"].([]any); ok {
+			for _, key := range keys {
+				if k, ok := key.(string); ok && (strings.EqualFold(k, requestedModel) || (strings.HasSuffix(k, "*") && strings.HasPrefix(requestedModel, strings.TrimSuffix(k, "*")))) {
+					return false
+				}
+			}
+		}
+	}
+
 	// 透传模式仅替换认证、模型语义完全交由上游决定，因此放行所有模型。
 	// 该短路必须在 model_mapping 判定之前：账号从"白名单模式"切换到透传后，
 	// credentials 里常残留旧的非空 model_mapping，若不在此放行，透传账号会被
@@ -1030,7 +1044,14 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 		return true
 	}
 	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
-	return normalized != requestedModel && mappingSupportsRequestedModel(mapping, normalized)
+	if normalized != requestedModel && mappingSupportsRequestedModel(mapping, normalized) {
+		return true
+	}
+	if a.IsOpenAIModelMappingAliases() {
+		return isOpenAIOAuthServableModel(requestedModel)
+	}
+	_, fallback := a.resolveGrokMediaFallbackModel(requestedModel)
+	return fallback
 }
 
 // GetMappedModel 获取映射后的模型名（支持通配符，最长优先匹配）
@@ -1055,6 +1076,9 @@ func (a *Account) ResolveMappedModel(requestedModel string) (mappedModel string,
 		if mappedModel, matched := resolveRequestedModelInMapping(mapping, normalized); matched {
 			return mappedModel, true
 		}
+	}
+	if mappedModel, matched := a.resolveGrokMediaFallbackModel(requestedModel); matched {
+		return mappedModel, true
 	}
 	return requestedModel, false
 }
@@ -1136,6 +1160,10 @@ func (a *Account) GetBaseURL() string {
 	}
 	baseURL := a.GetCredential("base_url")
 	if baseURL == "" {
+		// TypeSafe keys must never fall back to the Anthropic host.
+		if a.Platform == PlatformTypeSafe {
+			return typesafe.DefaultBaseURL
+		}
 		return "https://api.anthropic.com"
 	}
 	if a.Platform == PlatformAntigravity {
@@ -1155,6 +1183,28 @@ func (a *Account) GetGeminiBaseURL(defaultBaseURL string) string {
 		return strings.TrimRight(baseURL, "/") + "/antigravity"
 	}
 	return baseURL
+}
+
+func (a *Account) GetTypeSafeBaseURL() string {
+	if a == nil || !a.IsTypeSafe() || a.Type != AccountTypeAPIKey {
+		return ""
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(a.GetCredential("base_url")), "/")
+	// The System One path already carries /v1; accept a base URL pasted with it.
+	if len(baseURL) >= 3 && strings.EqualFold(baseURL[len(baseURL)-3:], "/v1") {
+		baseURL = strings.TrimRight(baseURL[:len(baseURL)-3], "/")
+	}
+	if baseURL == "" {
+		return typesafe.DefaultBaseURL
+	}
+	return baseURL
+}
+
+func (a *Account) GetTypeSafeAPIKey() string {
+	if a == nil || !a.IsTypeSafe() || a.Type != AccountTypeAPIKey {
+		return ""
+	}
+	return strings.TrimSpace(a.GetCredential("api_key"))
 }
 
 func (a *Account) GetExtraString(key string) string {
@@ -1567,7 +1617,7 @@ func (a *Account) IsCodingPlan() bool {
 
 // GetAPIProtocol 返回国产供应商账号的上游 API 协议。存储于
 // credentials["api_protocol"]；缺失或与平台不匹配时回退 chat_completions
-// （与既有行为完全一致）。responses 协议仅 deepseek / kimi / minimax 支持（官方原生
+// （与既有行为完全一致）。responses 协议仅 deepseek / kimi 支持（官方原生
 // Responses 端点，适配 Codex）；zhipu 无此端点。
 func (a *Account) GetAPIProtocol() string {
 	if a == nil || !a.IsMultiProtocolAPIKey() {
@@ -1593,7 +1643,7 @@ func (a *Account) GetAPIProtocol() string {
 
 // SupportsNativeCNResponses 报告该国产供应商是否提供原生 Responses 端点。
 // DeepSeek 官方为 /responses（无 /v1）；Kimi 按量付费与 Coding Plan 均为
-// /v1/responses（moonshot.cn / kimi.com/coding）；MiniMax 为 /v1/responses。
+// /v1/responses（moonshot.cn / kimi.com/coding）。
 func (a *Account) SupportsNativeCNResponses() bool {
 	if a == nil {
 		return false
@@ -1768,9 +1818,9 @@ func (a *Account) GetCNAPIKey() string {
 	return a.GetCredential("api_key")
 }
 
-// GetCodingPlanProvider 根据 base_url 识别 Coding Plan 供应商（kimi / zhipu / minimax），
+// GetCodingPlanProvider 根据 base_url 识别 Coding Plan 供应商（kimi / zhipu），
 // 用于路由到对应的额度查询端点。非 coding 模式或无法识别时返回空串。
-// 只认官方域名：自定义中转不得把第三方 Key 发往厂商官方额度端点。
+// 判定规则与 cc-switch coding_plan.rs::detect_provider 保持一致。
 func (a *Account) GetCodingPlanProvider() string {
 	if a == nil {
 		return ""
@@ -1782,15 +1832,14 @@ func (a *Account) GetCodingPlanProvider() string {
 		return ""
 	}
 	baseURL := strings.ToLower(a.GetOpenAIBaseURL())
+	if parsed, err := url.Parse(baseURL); a.Platform == PlatformMiniMax && err == nil && (parsed.Hostname() == "api.minimaxi.com" || parsed.Hostname() == "api.minimax.io") {
+		return PlatformMiniMax
+	}
 	switch {
 	case strings.Contains(baseURL, "api.kimi.com/coding"):
 		return PlatformKimi
 	case strings.Contains(baseURL, "bigmodel.cn"), strings.Contains(baseURL, "api.z.ai"):
 		return PlatformZhipu
-	case strings.Contains(baseURL, "minimax.io"),
-		strings.Contains(baseURL, "minimaxi.com"),
-		strings.Contains(baseURL, "minimax.com"):
-		return PlatformMiniMax
 	default:
 		return ""
 	}
@@ -1818,7 +1867,7 @@ func (a *Account) GetOpenAIRefreshToken() string {
 // traffic (OAuth authorization and token refresh) always uses the official
 // auth endpoints regardless of this value.
 func (a *Account) GetGrokBaseURL() string {
-	if a == nil || !a.IsGrok() {
+	if !a.IsGrokMediaAccount() {
 		return ""
 	}
 	if a.IsGrokOAuth() {
@@ -1831,7 +1880,7 @@ func (a *Account) GetGrokBaseURL() string {
 // supplied default. Official OAuth endpoints are normalized here; custom
 // endpoints are retained for the request builder's operator URL policy.
 func (a *Account) GetGrokBaseURLOr(defaultBaseURL string) string {
-	if a == nil || !a.IsGrok() {
+	if !a.IsGrokMediaAccount() {
 		return ""
 	}
 	defaultBaseURL = strings.TrimRight(strings.TrimSpace(defaultBaseURL), "/")
@@ -1868,7 +1917,7 @@ func (a *Account) GetGrokBaseURLOr(defaultBaseURL string) string {
 // selected endpoint (official/regional API hosts or custom relays) serves
 // media as-is.
 func (a *Account) GetGrokMediaBaseURL() string {
-	if !a.IsGrok() {
+	if !a.IsGrokMediaAccount() {
 		return ""
 	}
 	baseURL := a.GetGrokBaseURL()
@@ -1928,11 +1977,6 @@ func (a *Account) GetOpenAIUserAgent() string {
 	if !a.IsOpenAI() {
 		return ""
 	}
-	if profile := a.GetOpenAIClientProfile(); profile != nil {
-		if ua := OpenAIClientProfilePresetUA(profile.Preset, profile.ClientVersion); ua != "" {
-			return ua
-		}
-	}
 	return a.GetCredential("user_agent")
 }
 
@@ -1989,6 +2033,9 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 	if a == nil {
 		return false
 	}
+	if a.IsVideo() {
+		return a.Type == AccountTypeAPIKey && (capability == "" || capability == OpenAIEndpointCapabilityGrokMediaGeneration)
+	}
 	if capability == OpenAIEndpointCapabilitySeedance {
 		configured, _ := a.openAIEndpointCapabilitySet()
 		return configured["seedance"] && a.Platform == PlatformOpenAI && a.Type == AccountTypeAPIKey &&
@@ -2033,6 +2080,16 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 		// 支持 Responses 的上游同样需具备 chat 能力：复用下方 chat_completions
 		// 配置集校验。
 		capability = OpenAIEndpointCapabilityChatCompletions
+	case OpenAIEndpointCapabilityResponsesCompact:
+		// 与 OpenAIEndpointCapabilityResponses 的唯一区别：DeepSeek 语义上游的压缩
+		// 回合由 chat 桥承接（改写为普通 CC 请求 + 回程合成 compaction item，见
+		// shouldForwardDeepSeekResponsesCompactViaChatCompletions），因此不要求
+		// openai_responses_supported；其余账号保持原 Responses 判定。
+		if a.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(a.Extra) &&
+			!isDeepSeekSemanticsAccount(a) {
+			return false
+		}
+		capability = OpenAIEndpointCapabilityChatCompletions
 	case OpenAIEndpointCapabilityAlphaSearch:
 		// alpha/search 的转发按账号类型分流：OAuth/PAT 走
 		// chatgpt.com/backend-api/codex/alpha/search，API key 走
@@ -2060,11 +2117,13 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 }
 
 // GrokMediaGenerationEligibility reports whether a Grok account may receive
-// new image/video generation requests. Explicit evidence of a forbidden or
-// free account blocks media, while an incomplete successful billing response
-// remains eligible for backwards compatibility. An explicit operator
-// override takes precedence over probe data.
+// new image/video generation requests. OAuth media fails closed unless billing
+// observations provide positive paid-entitlement evidence. An explicit
+// operator override takes precedence over probe data.
 func (a *Account) GrokMediaGenerationEligibility() (bool, string) {
+	if a.IsVideo() {
+		return a.Type == AccountTypeAPIKey, "video_api_key"
+	}
 	if a == nil || !a.IsGrok() {
 		return false, "not_grok"
 	}
@@ -2094,12 +2153,7 @@ func (a *Account) GrokMediaGenerationEligibility() (bool, string) {
 		return false, "billing_free_tier"
 	}
 	if !grokBillingHasAuthoritativeQuota(billing) {
-		// Billing endpoints can return 200 with an account-specific schema that
-		// omits plan/quota fields (for example, some SuperGrok accounts). An
-		// incomplete observation is not proof of ineligibility; keep the account
-		// routable and expose the reason for diagnostics. Operators can still
-		// quarantine a known-bad account with grok_media_eligible=false.
-		return true, "billing_inconclusive"
+		return false, "billing_inconclusive"
 	}
 	return true, "eligible"
 }
@@ -2263,6 +2317,9 @@ func (a *Account) IsOveragesEnabled() bool {
 // 兼容字段：accounts.extra.openai_oauth_passthrough（历史 OAuth 开关）。
 // 字段缺失或类型不正确时，按 false（关闭）处理。
 func (a *Account) IsOpenAIPassthroughEnabled() bool {
+	if a.IsCopilotSDKEnabled() {
+		return true
+	}
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
 		return false
 	}
@@ -2273,6 +2330,150 @@ func (a *Account) IsOpenAIPassthroughEnabled() bool {
 		return enabled
 	}
 	return false
+}
+
+// IsExcelBPSEnabled routes an existing ChatGPT OAuth account to the Excel gateway.
+// Credentials and refresh remain on the original account; no sidecar is involved.
+func (a *Account) IsExcelBPSEnabled() bool {
+	if a == nil || a.Platform != PlatformOpenAI || a.Type != AccountTypeOAuth || a.IsShadow() || a.IsOpenAIAgentIdentity() || a.IsOpenAIPersonalAccessToken() {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(a.GetCredential("plan_type")), "free") {
+		return false
+	}
+	enabled, _ := a.Extra["openai_excel_bps"].(bool)
+	return enabled
+}
+
+const ExcelBPSIgnoreEncryptedContentKey = "openai_excel_bps_ignore_encrypted_content"
+
+// IsExcelBPSIgnoreEncryptedContentEnabled opts into replacing ciphertext that
+// BPS cannot forward, such as sub-agent messages in an old Codex conversation,
+// with an omission notice instead of rejecting the whole request.
+func (a *Account) IsExcelBPSIgnoreEncryptedContentEnabled() bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	enabled, _ := a.Extra[ExcelBPSIgnoreEncryptedContentKey].(bool)
+	return enabled
+}
+
+func (a *Account) IsExcelBPSMihomoEnabled() bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	enabled, _ := a.Extra["openai_excel_bps_mihomo"].(bool)
+	return enabled
+}
+
+// ExcelBPSProxySourceKey selects the pool behind the BPS session proxy toggle:
+// the managed Mihomo kernel (default) or the admin proxy list (IP 管理).
+const ExcelBPSProxySourceKey = "openai_excel_bps_proxy_source"
+
+const (
+	ExcelBPSProxySourceMihomo = "mihomo"
+	ExcelBPSProxySourceIPPool = "ip_pool"
+)
+
+// ExcelBPSProxySource is meaningful only while the session proxy is enabled;
+// unknown stored values fall back to the Mihomo pool rather than direct.
+func (a *Account) ExcelBPSProxySource() string {
+	if !a.IsExcelBPSMihomoEnabled() {
+		return ""
+	}
+	source, _ := a.Extra[ExcelBPSProxySourceKey].(string)
+	if source == ExcelBPSProxySourceIPPool {
+		return ExcelBPSProxySourceIPPool
+	}
+	return ExcelBPSProxySourceMihomo
+}
+
+// IsExcelBPSCacheCreationAsInputEnabled controls local billing and downstream usage.
+// The setting has no effect unless this account uses the Excel/BPS protocol.
+func (a *Account) IsExcelBPSCacheCreationAsInputEnabled() bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	enabled, _ := a.Extra["openai_excel_bps_cache_creation_as_input"].(bool)
+	return enabled
+}
+
+// IsExcelBPSAutoDisableOn403Enabled opts into disabling BPS after a generic 403.
+func (a *Account) IsExcelBPSAutoDisableOn403Enabled() bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	enabled, _ := a.Extra["openai_excel_bps_auto_disable_on_403"].(bool)
+	return enabled
+}
+
+// isExcelBPSAllModelsEnabled preserves legacy account-wide routing. An explicit
+// list, including an empty or malformed list, never enables BPS for all models.
+func (a *Account) isExcelBPSAllModelsEnabled() bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	_, scoped := a.Extra["openai_excel_bps_models"]
+	return !scoped
+}
+
+// IsExcelBPSEnabledForModel selects the protocol after account model mapping.
+// The list selects a protocol; it does not restrict access to other models.
+func (a *Account) IsExcelBPSEnabledForModel(requestedModel string) bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	return a.isExcelBPSUpstreamModelEnabled(a.GetMappedModel(requestedModel))
+}
+
+// IsExcelBPSImagesEnabledForModel routes image generation through BPS only
+// when the image model is listed explicitly. Legacy account-wide routing keeps
+// images on Codex so an upgrade does not silently change the image channel.
+func (a *Account) IsExcelBPSImagesEnabledForModel(requestedModel string) bool {
+	if !a.IsExcelBPSEnabled() || a.isExcelBPSAllModelsEnabled() {
+		return false
+	}
+	model := a.GetMappedModel(requestedModel)
+	return usesCodexDirectImages(model) && excelBPSImagesSupportedModel(model) && a.isExcelBPSUpstreamModelEnabled(model)
+}
+
+func (a *Account) isExcelBPSUpstreamModelEnabled(model string) bool {
+	if !a.IsExcelBPSEnabled() {
+		return false
+	}
+	raw, scoped := a.Extra["openai_excel_bps_models"]
+	if !scoped {
+		return true
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	switch models := raw.(type) {
+	case []string:
+		for _, selected := range models {
+			if strings.TrimSpace(selected) == model {
+				return true
+			}
+		}
+	case []any:
+		for _, selected := range models {
+			if name, ok := selected.(string); ok && strings.TrimSpace(name) == model {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// IsCopilotSDKEnabled selects the stateful Responses sidecar contract. The
+// endpoint and bearer key belong to the sidecar, not GitHub or ChatGPT OAuth.
+func (a *Account) IsCopilotSDKEnabled() bool {
+	if a == nil || a.Platform != PlatformOpenAI || a.Type != AccountTypeAPIKey {
+		return false
+	}
+	enabled, _ := a.Extra["openai_copilot_sdk"].(bool)
+	return enabled
 }
 
 // IsOpenAIResponsesWebSocketV2Enabled 返回 OpenAI 账号是否开启 Responses WebSocket v2。
@@ -2289,11 +2490,11 @@ func (a *Account) IsOpenAIPassthroughEnabled() bool {
 // 1. 按账号类型读取分类型字段
 // 2. 分类型字段缺失时，回退兼容字段
 func (a *Account) IsOpenAIResponsesWebSocketV2Enabled() bool {
-	if a == nil || !a.IsOpenAI() || a.Extra == nil {
+	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
 		return false
 	}
-	if mode := a.GetOpenAIWSMode(); mode != "inherit" {
-		return mode != "off"
+	if a == nil || !a.IsOpenAI() || a.Extra == nil {
+		return false
 	}
 	if a.IsOpenAIOAuthLike() {
 		if enabled, ok := a.Extra["openai_oauth_responses_websockets_v2_enabled"].(bool); ok {
@@ -2360,12 +2561,12 @@ func normalizeOpenAIWSIngressDefaultMode(mode string) string {
 // 3. 兼容 enabled 旧字段（bool）
 // 4. defaultMode（非法时回退 ctx_pool）
 func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) string {
+	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
+		return OpenAIWSIngressModeOff
+	}
 	resolvedDefault := normalizeOpenAIWSIngressDefaultMode(defaultMode)
 	if a == nil || !a.IsOpenAI() {
 		return OpenAIWSIngressModeOff
-	}
-	if mode := a.GetOpenAIWSMode(); mode != "inherit" {
-		return mode
 	}
 	if a.Extra == nil {
 		return resolvedDefault
@@ -2433,11 +2634,11 @@ func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) stri
 // IsOpenAIWSForceHTTPEnabled 返回账号级"强制 HTTP"开关。
 // 字段：accounts.extra.openai_ws_force_http。
 func (a *Account) IsOpenAIWSForceHTTPEnabled() bool {
+	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
+		return true
+	}
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
 		return false
-	}
-	if mode := a.GetOpenAIWSMode(); mode != "inherit" {
-		return mode == "off"
 	}
 	enabled, ok := a.Extra["openai_ws_force_http"].(bool)
 	return ok && enabled
@@ -2561,8 +2762,8 @@ func (a *Account) IsAnthropicOAuthOrSetupToken() bool {
 }
 
 // IsTLSFingerprintEnabled 检查是否启用 TLS 指纹伪装
-// 仅适用于 Anthropic OAuth/SetupToken 类型账号
-// 启用后将模拟 Claude Code (Node.js) 客户端的 TLS 握手特征
+// 仅适用于 Anthropic OAuth/SetupToken 类型账号。
+// 与官方一致，使用 Claude Code (Node.js) 客户端的 TLS 握手特征。
 func (a *Account) IsTLSFingerprintEnabled() bool {
 	// 仅支持 Anthropic OAuth/SetupToken 账号
 	if !a.IsAnthropicOAuthOrSetupToken() {
@@ -3258,8 +3459,11 @@ func (a *Account) GetBaseRPM() int {
 }
 
 // GetRPMStrategy 获取 RPM 策略
-// "tiered" = 三区模型（默认）, "sticky_exempt" = 粘性豁免
+// "strict" = OpenAI OAuth 硬上限；Anthropic 使用 "tiered" 或 "sticky_exempt"。
 func (a *Account) GetRPMStrategy() string {
+	if a.IsOpenAIOAuth() {
+		return "strict"
+	}
 	if a.Extra == nil {
 		return "tiered"
 	}
@@ -3329,6 +3533,9 @@ func (a *Account) CheckRPMSchedulability(currentRPM int) WindowCostSchedulabilit
 	}
 
 	strategy := a.GetRPMStrategy()
+	if strategy == "strict" {
+		return WindowCostNotSchedulable
+	}
 	if strategy == "sticky_exempt" {
 		return WindowCostStickyOnly // 粘性豁免无红区
 	}
@@ -3444,6 +3651,18 @@ func parseExtraInt(value any) int {
 
 // IsShadow 报告账号是否为影子账号（parent_account_id 非空；当前唯一预设是 spark 维度）。
 func (a *Account) IsShadow() bool { return a != nil && a.ParentAccountID != nil }
+
+// RPMAccountID returns the counter owner for per-minute limits. Credential
+// shadows intentionally share their parent account's upstream quota.
+func (a *Account) RPMAccountID() int64 {
+	if a == nil {
+		return 0
+	}
+	if a.IsOpenAIOAuth() && a.ParentAccountID != nil && *a.ParentAccountID > 0 {
+		return *a.ParentAccountID
+	}
+	return a.ID
+}
 
 // IsCredentialShadow 语义别名，供「凭据消费者跳过影子」处使用（管理/后台 OAuth 路径）。
 func (a *Account) IsCredentialShadow() bool { return a.IsShadow() }

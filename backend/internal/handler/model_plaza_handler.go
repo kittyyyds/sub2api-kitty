@@ -37,68 +37,62 @@ func NewModelPlazaHandler(
 	}
 }
 
-// modelPlazaOfficialPricing 官方参考价（USD per token，与计费目录同源）。
+// modelPlazaOfficialPricing LiteLLM 官方参考价（USD per token）。
 type modelPlazaOfficialPricing struct {
-	InputPrice        *float64 `json:"input_price"`
-	OutputPrice       *float64 `json:"output_price"`
-	CacheWritePrice   *float64 `json:"cache_write_price"`
-	CacheWrite1hPrice *float64 `json:"cache_write_1h_price,omitempty"`
-	CacheReadPrice    *float64 `json:"cache_read_price"`
-	// Intervals 官方长上下文阶梯，仅多档模型给出。
-	Intervals []userPricingIntervalDTO `json:"intervals,omitempty"`
+	InputPrice        *float64                 `json:"input_price"`
+	OutputPrice       *float64                 `json:"output_price"`
+	CacheWritePrice   *float64                 `json:"cache_write_price"`
+	CacheWrite1hPrice *float64                 `json:"cache_write_1h_price,omitempty"`
+	CacheReadPrice    *float64                 `json:"cache_read_price"`
+	Intervals         []userPricingIntervalDTO `json:"intervals,omitempty"`
 }
 
-// modelPlazaTimePricingPeriod 分时倍率时段（配置时区当天 [start, end)）。
 type modelPlazaTimePricingPeriod struct {
 	StartTime  string  `json:"start_time"`
 	EndTime    string  `json:"end_time"`
 	Multiplier float64 `json:"multiplier"`
 }
 
-// modelPlazaTimePricing 计费会生效的分时倍率（仅倍率 ≠ 1 的时段）。
-// WeekdaysOnly 为 true 时时段仅周一至周五生效，周末整天按标准价计费。
 type modelPlazaTimePricing struct {
 	Timezone     string                        `json:"timezone"`
 	WeekdaysOnly bool                          `json:"weekdays_only,omitempty"`
 	Periods      []modelPlazaTimePricingPeriod `json:"periods"`
 }
 
-// modelPlazaModel 广场模型条目：实收口径展示定价（白名单形态）+ 官方参考价。
+// modelPlazaModel 广场模型条目：渠道定价（白名单形态）+ 官方参考价。
 type modelPlazaModel struct {
-	Name                 string                     `json:"name"`
-	Platform             string                     `json:"platform"`
-	Pricing              *userSupportedModelPricing `json:"pricing"`
-	OfficialPricing      *modelPlazaOfficialPricing `json:"official_pricing"`
-	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
-	LongContextBasis     string                     `json:"long_context_basis,omitempty"`
-	// TimePricing 分时倍率时段，落在时段内的请求整单乘倍率；无分时省略。
-	TimePricing          *modelPlazaTimePricing     `json:"time_pricing,omitempty"`
-	FinalImagePriceTiers []string                   `json:"final_image_price_tiers,omitempty"`
-	FinalVideoPriceTiers []string                   `json:"final_video_price_tiers,omitempty"`
+	Name                 string                       `json:"name"`
+	Platform             string                       `json:"platform"`
+	Pricing              *modelPlazaPricing           `json:"pricing"`
+	Description          string                       `json:"description,omitempty"`
+	Capabilities         *modelPlazaVideoCapabilities `json:"capabilities,omitempty"`
+	OfficialPricing      *modelPlazaOfficialPricing   `json:"official_pricing"`
+	FinalImagePriceTiers []string                     `json:"final_image_price_tiers,omitempty"`
+	FinalVideoPriceTiers []string                     `json:"final_video_price_tiers,omitempty"`
+	LongContextBasis     string                       `json:"long_context_basis,omitempty"`
+	TimePricing          *modelPlazaTimePricing       `json:"time_pricing,omitempty"`
 }
 
 // modelPlazaGroup 广场分组条目（白名单字段）。
 type modelPlazaGroup struct {
-	ID                 int64    `json:"id"`
-	Name               string   `json:"name"`
-	Description        string   `json:"description"`
-	Platform           string   `json:"platform"`
-	SubscriptionType   string   `json:"subscription_type"`
-	RateMultiplier     float64  `json:"rate_multiplier"`
-	UserRateMultiplier *float64 `json:"user_rate_multiplier,omitempty"`
-	PeakRateEnabled    bool     `json:"peak_rate_enabled"`
-	PeakStart          string   `json:"peak_start"`
-	PeakEnd            string   `json:"peak_end"`
-	PeakRateMultiplier float64  `json:"peak_rate_multiplier"`
-	IsExclusive        bool     `json:"is_exclusive"`
-	// 生图独立倍率：为 true 时图片计费模型的实付倍率取 ImageRateMultiplier，
-	// 不取分组/用户专属倍率。
-	ImageRateIndependent bool    `json:"image_rate_independent"`
-	ImageRateMultiplier  float64 `json:"image_rate_multiplier"`
-	VideoRateIndependent bool    `json:"video_rate_independent"`
-	VideoRateMultiplier  float64 `json:"video_rate_multiplier"`
-	// 分组是否启用长上下文阶梯计费；关闭时模型实付列只展示最低档/基础价。
+	ID               int64   `json:"id"`
+	Name             string  `json:"name"`
+	Description      string  `json:"description"`
+	Platform         string  `json:"platform"`
+	SubscriptionType string  `json:"subscription_type"`
+	RateMultiplier   float64 `json:"rate_multiplier"`
+	// 独立媒体倍率只作用于非最终价档位，最终价标记随模型条目传递。
+	ImageRateIndependent      bool              `json:"image_rate_independent"`
+	ImageRateMultiplier       float64           `json:"image_rate_multiplier"`
+	VideoRateIndependent      bool              `json:"video_rate_independent"`
+	VideoRateMultiplier       float64           `json:"video_rate_multiplier"`
 	LongContextPricingEnabled bool              `json:"long_context_pricing_enabled"`
+	UserRateMultiplier        *float64          `json:"user_rate_multiplier,omitempty"`
+	PeakRateEnabled           bool              `json:"peak_rate_enabled"`
+	PeakStart                 string            `json:"peak_start"`
+	PeakEnd                   string            `json:"peak_end"`
+	PeakRateMultiplier        float64           `json:"peak_rate_multiplier"`
+	IsExclusive               bool              `json:"is_exclusive"`
 	Models                    []modelPlazaModel `json:"models"`
 }
 
@@ -137,6 +131,7 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 	var allowedGroups map[int64]struct{}
 	var restrictPublicGroups bool
 	var userRates map[int64]float64
+	var deniedModels map[int64][]string
 	if authed {
 		allowedGroups, restrictPublicGroups, err = h.apiKeyService.GetUserGroupVisibility(c.Request.Context(), subject.UserID)
 		if err != nil {
@@ -150,13 +145,19 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 			slog.Warn("model_plaza_user_rates_failed", "error", err, "user_id", subject.UserID)
 			userRates = nil
 		}
+		deniedModels, err = h.apiKeyService.GetUserGroupDeniedModels(c.Request.Context(), subject.UserID)
+		if err != nil {
+			// 广场只做展示，真正的准入在网关；拿不到时照常展示，不影响请求时的拒绝。
+			slog.Warn("model_plaza_user_denied_models_failed", "error", err, "user_id", subject.UserID)
+			deniedModels = nil
+		}
 	}
 
 	visible := filterPlazaVisibleGroups(groups, allowedGroups, restrictPublicGroups)
 
 	out := make([]modelPlazaGroup, 0, len(visible))
 	for i := range visible {
-		dto := toModelPlazaGroupDTO(&visible[i], userRates)
+		dto := toModelPlazaGroupDTO(&visible[i], userRates, deniedModels[visible[i].ID])
 		if len(dto.Models) == 0 {
 			continue
 		}
@@ -192,22 +193,42 @@ func filterPlazaVisibleGroups(
 	return visible
 }
 
-// toModelPlazaGroupDTO 将 service 层广场分组映射为白名单 DTO,并合并用户专属倍率。
-func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) modelPlazaGroup {
+// toModelPlazaGroupDTO 将 service 层广场分组映射为白名单 DTO,合并用户专属倍率并隐藏该用户被禁用的模型。
+func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64, deniedModels []string) modelPlazaGroup {
 	visibleModels := selectModelPlazaModels(g)
 	models := make([]modelPlazaModel, 0, len(visibleModels))
 	for i := range visibleModels {
 		m := &visibleModels[i]
-		models = append(models, modelPlazaModel{
+		if service.UserGroupDeniesModel(deniedModels, m.Name) {
+			continue
+		}
+		model := modelPlazaModel{
 			Name:                 m.Name,
 			Platform:             m.Platform,
-			Pricing:              toUserPricing(m.Pricing),
+			Pricing:              toModelPlazaPricing(m.Pricing),
 			OfficialPricing:      toModelPlazaOfficialPricing(m.OfficialPricing),
-			LongContextBasis:     string(m.LongContextBasis),
-			TimePricing:          toModelPlazaTimePricing(m.TimePricing),
 			FinalImagePriceTiers: m.FinalImagePriceTiers,
 			FinalVideoPriceTiers: m.FinalVideoPriceTiers,
-		})
+			LongContextBasis:     string(m.LongContextBasis),
+			TimePricing:          toModelPlazaTimePricing(m.TimePricing),
+		}
+		if m.Platform == service.PlatformVideo && m.Pricing != nil && m.Pricing.Video != nil {
+			v := m.Pricing.Video
+			model.Description = modelPlazaVideoDescription(v.Spec)
+			model.Capabilities = &modelPlazaVideoCapabilities{
+				CanvasModelCapability: v.Capability(),
+				MaxCombinedSeconds:    v.Spec.MaxCombinedSeconds,
+				AllowAudioOnly:        v.Spec.AllowAudioOnly,
+				RequiresVisualOrAudio: v.Spec.RequiresVisualOrAudio,
+			}
+		}
+		if m.Pricing != nil && m.Pricing.Image != nil && m.Pricing.Image.Provider == "suanli" {
+			model.Description = "图片生成与参考图编辑；每次生成一张；尺寸和质量以上游渠道支持为准"
+			if description := m.Pricing.Image.Description; description != "" {
+				model.Description += "；上游说明：" + description
+			}
+		}
+		models = append(models, model)
 	}
 	dto := modelPlazaGroup{
 		ID:                        g.ID,
@@ -216,16 +237,16 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		Platform:                  g.Platform,
 		SubscriptionType:          g.SubscriptionType,
 		RateMultiplier:            g.RateMultiplier,
-		PeakRateEnabled:           g.PeakRateEnabled,
-		PeakStart:                 g.PeakStart,
-		PeakEnd:                   g.PeakEnd,
-		PeakRateMultiplier:        g.PeakRateMultiplier,
-		IsExclusive:               g.IsExclusive,
 		ImageRateIndependent:      g.ImageRateIndependent,
 		ImageRateMultiplier:       g.ImageRateMultiplier,
 		VideoRateIndependent:      g.VideoRateIndependent,
 		VideoRateMultiplier:       g.VideoRateMultiplier,
 		LongContextPricingEnabled: g.LongContextPricingEnabled,
+		PeakRateEnabled:           g.PeakRateEnabled,
+		PeakStart:                 g.PeakStart,
+		PeakEnd:                   g.PeakEnd,
+		PeakRateMultiplier:        g.PeakRateMultiplier,
+		IsExclusive:               g.IsExclusive,
 		Models:                    models,
 	}
 	if rate, ok := userRates[g.ID]; ok {
@@ -263,7 +284,7 @@ func selectModelPlazaModels(g *service.PlazaGroup) []service.PlazaModel {
 		}
 		switch platform {
 		case service.PlatformOpenAI:
-			if isModelPlazaTextModel(&model) {
+			if isModelPlazaTextModel(&model) || (model.Pricing != nil && model.Pricing.Image != nil && model.Pricing.Image.Provider == "suanli") {
 				models = append(models, model)
 			}
 		case service.PlatformGrok:
@@ -299,6 +320,11 @@ func selectModelPlazaModels(g *service.PlazaGroup) []service.PlazaModel {
 func openAIImageCatalogTiers(g *service.PlazaGroup) ([]string, bool) {
 	if g == nil || !strings.EqualFold(strings.TrimSpace(g.Platform), service.PlatformOpenAI) {
 		return nil, false
+	}
+	for _, m := range g.Models {
+		if m.Pricing != nil && m.Pricing.Image != nil && m.Pricing.Image.Provider == "suanli" {
+			return nil, false
+		}
 	}
 	name := strings.ToLower(strings.TrimSpace(g.Name))
 	if !strings.Contains(name, "image") || !strings.Contains(name, "生图") {
@@ -380,7 +406,6 @@ func containsFold(values []string, target string) bool {
 	return false
 }
 
-// toModelPlazaTimePricing 转换分时倍率；nil 透传（JSON 省略）。
 func toModelPlazaTimePricing(p *service.TimePricingSchedule) *modelPlazaTimePricing {
 	if p == nil || len(p.Periods) == 0 {
 		return nil
@@ -393,7 +418,11 @@ func toModelPlazaTimePricing(p *service.TimePricingSchedule) *modelPlazaTimePric
 			Multiplier: period.Multiplier,
 		})
 	}
-	return &modelPlazaTimePricing{Timezone: p.Timezone, WeekdaysOnly: p.WeekdaysOnly, Periods: periods}
+	return &modelPlazaTimePricing{
+		Timezone:     p.Timezone,
+		WeekdaysOnly: p.WeekdaysOnly,
+		Periods:      periods,
+	}
 }
 
 // toModelPlazaOfficialPricing 转换官方参考价；nil 透传（前端显示 "-"）。

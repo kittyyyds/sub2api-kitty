@@ -130,7 +130,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 	// 2. 尝试粘性会话命中
 	// Try sticky session hit
 	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, cacheKey, requestedModel, excludedIDs, platform, useMixedScheduling); account != nil {
-		return account, nil
+		return s.hydrateSelectedAccount(ctx, account)
 	}
 
 	// 3. 查询可调度账户（强制平台模式：优先按分组查找，找不到再查全部）
@@ -149,7 +149,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 
 	// 4. 按优先级 + LRU 选择最佳账号
 	// Select best account by priority + LRU
-	selected := s.selectBestGeminiAccount(ctx, accounts, requestedModel, excludedIDs, platform, useMixedScheduling)
+	selected := s.selectBestGeminiAccount(ctx, groupID, accounts, requestedModel, excludedIDs, platform, useMixedScheduling)
 
 	if selected == nil {
 		if requestedModel != "" {
@@ -238,7 +238,7 @@ func (s *GeminiMessagesCompatService) tryStickySessionHit(
 
 	// 验证账号是否可用于当前请求
 	// Verify account is usable for current request
-	if !s.isAccountUsableForRequest(ctx, account, requestedModel, platform, useMixedScheduling) {
+	if !s.isAccountUsableForRequest(ctx, account, groupID, requestedModel, platform, useMixedScheduling) {
 		return nil
 	}
 
@@ -259,15 +259,17 @@ func (s *GeminiMessagesCompatService) tryStickySessionHit(
 func (s *GeminiMessagesCompatService) isAccountUsableForRequest(
 	ctx context.Context,
 	account *Account,
+	groupID *int64,
 	requestedModel, platform string,
 	useMixedScheduling bool,
 ) bool {
-	return s.isAccountUsableForRequestWithPrecheck(ctx, account, requestedModel, platform, useMixedScheduling, nil)
+	return s.isAccountUsableForRequestWithPrecheck(ctx, account, groupID, requestedModel, platform, useMixedScheduling, nil)
 }
 
 func (s *GeminiMessagesCompatService) isAccountUsableForRequestWithPrecheck(
 	ctx context.Context,
 	account *Account,
+	groupID *int64,
 	requestedModel, platform string,
 	useMixedScheduling bool,
 	precheckResult map[int64]bool,
@@ -281,6 +283,12 @@ func (s *GeminiMessagesCompatService) isAccountUsableForRequestWithPrecheck(
 	// 检查模型支持
 	// Check model support
 	if requestedModel != "" && !s.isModelSupportedByAccount(account, requestedModel) {
+		return false
+	}
+
+	// 检查账号在当前分组内的模型限制
+	// Check the per-group model allowlist of the account binding
+	if requestedModel != "" && !account.IsModelAllowedInGroup(groupID, requestedModel) {
 		return false
 	}
 
@@ -339,6 +347,7 @@ func (s *GeminiMessagesCompatService) passesRateLimitPreCheckWithCache(ctx conte
 // Returns nil if no available account.
 func (s *GeminiMessagesCompatService) selectBestGeminiAccount(
 	ctx context.Context,
+	groupID *int64,
 	accounts []Account,
 	requestedModel string,
 	excludedIDs map[int64]struct{},
@@ -357,7 +366,7 @@ func (s *GeminiMessagesCompatService) selectBestGeminiAccount(
 		}
 
 		// 检查账号是否可用于当前请求
-		if !s.isAccountUsableForRequestWithPrecheck(ctx, acc, requestedModel, platform, useMixedScheduling, precheckResult) {
+		if !s.isAccountUsableForRequestWithPrecheck(ctx, acc, groupID, requestedModel, platform, useMixedScheduling, precheckResult) {
 			continue
 		}
 
@@ -447,19 +456,22 @@ func (s *GeminiMessagesCompatService) getSchedulableAccount(ctx context.Context,
 }
 
 func (s *GeminiMessagesCompatService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
-	if account == nil || s.schedulerSnapshot == nil {
-		return account, nil
+	if account == nil {
+		return nil, nil
 	}
-	// Snapshot hydration refreshes runtime fields but stores the global account
-	// priority. Preserve the effective priority computed for this request.
 	effectivePriority := account.Priority
-	hydrated, err := s.schedulerSnapshot.GetAccount(ctx, account.ID)
-	if err != nil {
-		return nil, err
+	hydrated := account
+	if s.schedulerSnapshot != nil {
+		var err error
+		hydrated, err = s.schedulerSnapshot.GetAccount(ctx, account.ID)
+		if err != nil {
+			return nil, err
+		}
+		if hydrated == nil {
+			return nil, fmt.Errorf("selected gemini account %d not found during hydration", account.ID)
+		}
 	}
-	if hydrated == nil {
-		return nil, fmt.Errorf("selected gemini account %d not found during hydration", account.ID)
-	}
+
 	hydrated.Priority = effectivePriority
 	return hydrated, nil
 }
@@ -470,7 +482,7 @@ func (s *GeminiMessagesCompatService) listSchedulableAccountsOnce(ctx context.Co
 		// account-wide priority, even when group-priority scheduling is enabled.
 		enabled := groupID != nil && s.settingService != nil && s.settingService.IsAccountGroupPriorityEnabled(ctx)
 		ApplyAccountGroupPriorities(accounts, groupID, enabled)
-		return accounts
+		return FilterTierPoolAccounts(accounts, TierPoolFromContext(ctx))
 	}
 
 	if s.schedulerSnapshot != nil {
@@ -840,6 +852,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 		requestIDHeader = idHeader
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		s.rateLimitService.observeQualityResponse(upstreamReq.Context(), account, resp, err)
 		if err != nil {
 			return nil, s.handleUpstreamTransportError(ctx, c, account, err)
 		}
@@ -1375,6 +1388,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		requestIDHeader = idHeader
 
 		resp, err = s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+		s.rateLimitService.observeQualityResponse(upstreamReq.Context(), account, resp, err)
 		if err != nil {
 			transportErr := s.handleUpstreamTransportError(ctx, c, account, err)
 			// countTokens 不因上游链路故障而失败：本地估算兜底，不换号。
@@ -2929,6 +2943,7 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 	}
 
 	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	s.rateLimitService.observeQualityResponse(req.Context(), account, resp, err)
 	if err != nil {
 		return nil, err
 	}

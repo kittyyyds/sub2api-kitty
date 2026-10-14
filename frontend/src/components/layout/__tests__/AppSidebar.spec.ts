@@ -76,8 +76,8 @@ describe('AppSidebar header styles', () => {
   })
 })
 
-describe('AppSidebar regular-user flat navigation contract', () => {
-  it('uses the Kitty Studio brand and keeps chat as a first-class entry', () => {
+describe('AppSidebar regular-user grouped navigation contract', () => {
+  it('preserves the Kitty Studio brand and existing route translations', () => {
     expect(zhCommon.nav.appCenter).toBe('Kitty生图')
     expect(enCommon.nav.appCenter).toBe('Kitty Studio')
     expect(zhCommon.appCenter.title).toBe('Kitty生图')
@@ -89,15 +89,16 @@ describe('AppSidebar regular-user flat navigation contract', () => {
   })
 
   it('renders direct links and keeps the API-key onboarding selector on its link', () => {
-    expect(componentSource).toContain('v-for="item in userNavItems"')
+    expect(componentSource).toContain('v-for="section in customerNavSections"')
+    expect(componentSource).toContain('v-for="item in section.items"')
     expect(componentSource).toContain(':to="item.path"')
     expect(componentSource).toContain(":data-tour=\"item.path === '/keys' ? 'sidebar-my-keys' : undefined\"")
     expect(componentSource).toContain('@click="handleMenuItemClick(item.path)"')
     expect(componentSource).not.toContain('data-user-nav-group')
   })
 
-  it('renders bright promotion badges inside their flat navigation links', () => {
-    expect(componentSource).toContain(':data-sidebar-promo="item.badge.tone"')
+  it('keeps legacy feature definitions without promotion badges in the customer menu', () => {
+    expect(componentSource).not.toContain(':data-sidebar-promo="item.badge.tone"')
     expect(componentSource).toContain("label: t('nav.hotRecommendation')")
     expect(componentSource).toContain("label: t('nav.limitedOffer')")
     expect(componentSource).toContain("tone: 'deal'")
@@ -106,18 +107,16 @@ describe('AppSidebar regular-user flat navigation contract', () => {
     expect(componentSource).toContain("path: '/apps'")
     expect(componentSource).toContain("path: '/chat'")
     expect(componentSource).not.toContain("buildNativeFeatureNavItem('image-generator')")
-    expect(componentSource).not.toContain("buildNativeFeatureNavItem('reset-radar')")
-    expect(componentSource).not.toContain("path: '/model-plaza?embedded=1'")
   })
 
-  it('keeps mobile close behavior without customer-only group state', () => {
+  it('keeps mobile close behavior and separate admin group state', () => {
     expect(componentSource).toContain('appStore.setMobileOpen(false)')
     expect(componentSource).toContain('const groupExpandOverrides = ref<Map<string, boolean>>(new Map())')
     expect(componentSource).not.toContain('groupUserNavItems')
     expect(componentSource).not.toContain('collapsedPath')
   })
 
-  it('filters the flat customer routes without changing the admin personal menu source', () => {
+  it('filters customer routes without changing the admin personal menu source', () => {
     expect(componentSource).toContain('const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))')
     expect(componentSource).toContain('const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))')
   })
@@ -138,5 +137,24 @@ describe('AppSidebar subscription feature flag', () => {
     expect(componentSource).toMatch(/case 'recharge_only':\s*return t\('nav\.recharge'\)/)
     expect(componentSource).toMatch(/case 'subscription_only':\s*return t\('nav\.subscribe'\)/)
     expect(componentSource).toMatch(/path: '\/purchase',\s*label: purchaseNavLabel\.value/)
+  })
+})
+
+describe('AppSidebar smart operations group', () => {
+  const smartOpsBlock = componentSource.match(/path: '\/admin\/smart-ops'[\s\S]*?\n {4}\] \},/)?.[0] ?? ''
+  const pathsIn = (source: string) => [...source.matchAll(/path: '([^']+)'/g)].map(match => match[1])
+
+  it('nests request capture and the ticket harvest flow under 智能运维', () => {
+    expect(smartOpsBlock).not.toBe('')
+    expect(smartOpsBlock).toMatch(/path: '\/admin\/request-captures'[^\n]*featureFlag: \(\) => adminSettingsStore\.requestCaptureEnabled/)
+    expect(smartOpsBlock).toContain("path: '/admin/harvest-flow'")
+    // Each entry is declared once, so neither is still a top-level item.
+    expect(componentSource.match(/path: '\/admin\/request-captures'/g)).toHaveLength(1)
+    expect(componentSource.match(/path: '\/admin\/harvest-flow'/g)).toHaveLength(1)
+  })
+
+  it('keeps the group in the same order as the 智能运维 tab bar', () => {
+    const navSource = readFileSync(resolve(dirname(componentPath), '../admin/operations/SmartOpsNav.vue'), 'utf8')
+    expect(pathsIn(smartOpsBlock).slice(1)).toEqual(pathsIn(navSource))
   })
 })

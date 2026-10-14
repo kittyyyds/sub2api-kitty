@@ -110,6 +110,21 @@ func IsExclusive(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldIsExclusive, v))
 }
 
+// SecurityPolicyEnabled applies equality check predicate on the "security_policy_enabled" field. It's identical to SecurityPolicyEnabledEQ.
+func SecurityPolicyEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEnabled, v))
+}
+
+// SecurityPolicyMode applies equality check predicate on the "security_policy_mode" field. It's identical to SecurityPolicyModeEQ.
+func SecurityPolicyMode(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyEmailEnabled applies equality check predicate on the "security_policy_email_enabled" field. It's identical to SecurityPolicyEmailEnabledEQ.
+func SecurityPolicyEmailEnabled(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEmailEnabled, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldStatus, v))
@@ -263,6 +278,11 @@ func FallbackGroupID(v int64) predicate.Group {
 // FallbackGroupIDOnInvalidRequest applies equality check predicate on the "fallback_group_id_on_invalid_request" field. It's identical to FallbackGroupIDOnInvalidRequestEQ.
 func FallbackGroupIDOnInvalidRequest(v int64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnInvalidRequest, v))
+}
+
+// StreamOnly applies equality check predicate on the "stream_only" field. It's identical to StreamOnlyEQ.
+func StreamOnly(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldStreamOnly, v))
 }
 
 // ModelRoutingEnabled applies equality check predicate on the "model_routing_enabled" field. It's identical to ModelRoutingEnabledEQ.
@@ -858,6 +878,91 @@ func IsExclusiveEQ(v bool) predicate.Group {
 // IsExclusiveNEQ applies the NEQ predicate on the "is_exclusive" field.
 func IsExclusiveNEQ(v bool) predicate.Group {
 	return predicate.Group(sql.FieldNEQ(FieldIsExclusive, v))
+}
+
+// SecurityPolicyEnabledEQ applies the EQ predicate on the "security_policy_enabled" field.
+func SecurityPolicyEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEnabled, v))
+}
+
+// SecurityPolicyEnabledNEQ applies the NEQ predicate on the "security_policy_enabled" field.
+func SecurityPolicyEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSecurityPolicyEnabled, v))
+}
+
+// SecurityPolicyModeEQ applies the EQ predicate on the "security_policy_mode" field.
+func SecurityPolicyModeEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeNEQ applies the NEQ predicate on the "security_policy_mode" field.
+func SecurityPolicyModeNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeIn applies the In predicate on the "security_policy_mode" field.
+func SecurityPolicyModeIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldSecurityPolicyMode, vs...))
+}
+
+// SecurityPolicyModeNotIn applies the NotIn predicate on the "security_policy_mode" field.
+func SecurityPolicyModeNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldSecurityPolicyMode, vs...))
+}
+
+// SecurityPolicyModeGT applies the GT predicate on the "security_policy_mode" field.
+func SecurityPolicyModeGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeGTE applies the GTE predicate on the "security_policy_mode" field.
+func SecurityPolicyModeGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeLT applies the LT predicate on the "security_policy_mode" field.
+func SecurityPolicyModeLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeLTE applies the LTE predicate on the "security_policy_mode" field.
+func SecurityPolicyModeLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeContains applies the Contains predicate on the "security_policy_mode" field.
+func SecurityPolicyModeContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeHasPrefix applies the HasPrefix predicate on the "security_policy_mode" field.
+func SecurityPolicyModeHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeHasSuffix applies the HasSuffix predicate on the "security_policy_mode" field.
+func SecurityPolicyModeHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeEqualFold applies the EqualFold predicate on the "security_policy_mode" field.
+func SecurityPolicyModeEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyModeContainsFold applies the ContainsFold predicate on the "security_policy_mode" field.
+func SecurityPolicyModeContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldSecurityPolicyMode, v))
+}
+
+// SecurityPolicyEmailEnabledEQ applies the EQ predicate on the "security_policy_email_enabled" field.
+func SecurityPolicyEmailEnabledEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldSecurityPolicyEmailEnabled, v))
+}
+
+// SecurityPolicyEmailEnabledNEQ applies the NEQ predicate on the "security_policy_email_enabled" field.
+func SecurityPolicyEmailEnabledNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldSecurityPolicyEmailEnabled, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.
@@ -2218,6 +2323,16 @@ func FallbackGroupIDOnInvalidRequestIsNil() predicate.Group {
 // FallbackGroupIDOnInvalidRequestNotNil applies the NotNil predicate on the "fallback_group_id_on_invalid_request" field.
 func FallbackGroupIDOnInvalidRequestNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnInvalidRequest))
+}
+
+// StreamOnlyEQ applies the EQ predicate on the "stream_only" field.
+func StreamOnlyEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldStreamOnly, v))
+}
+
+// StreamOnlyNEQ applies the NEQ predicate on the "stream_only" field.
+func StreamOnlyNEQ(v bool) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldStreamOnly, v))
 }
 
 // ModelRoutingIsNil applies the IsNil predicate on the "model_routing" field.

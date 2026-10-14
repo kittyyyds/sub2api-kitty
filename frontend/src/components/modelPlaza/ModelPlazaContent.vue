@@ -1,843 +1,218 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-
 import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
 import ModelIcon from '@/components/common/ModelIcon.vue'
-import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
 import { useAuthStore } from '@/stores/auth'
-import type { GroupPlatform } from '@/types'
 import { platformLabel } from '@/utils/platformColors'
 import { formatScaled } from '@/utils/pricing'
+import { groupTextRate, visibleCatalogGroups } from './modelCatalog'
+import { priceTableRows, productFor, type PriceTableRow } from './catalogTable'
+import PlazaVideoModelDetails from './PlazaVideoModelDetails.vue'
 
-import {
-  buildCatalogSections,
-  groupTextRate,
-  visibleCatalogGroups,
-  type CatalogKind,
-  type CatalogMetric,
-} from './modelCatalog'
-
-const props = defineProps<{
-  response: ModelPlazaResponse | null
-  loading: boolean
-  error?: boolean
-  embedded?: boolean
-}>()
-
-const emit = defineEmits<{
-  retry: []
-}>()
-
+const props = defineProps<{ response: ModelPlazaResponse | null; loading: boolean; error?: boolean; embedded?: boolean }>()
+const emit = defineEmits<{ retry: [] }>()
 const { t } = useI18n()
 const authStore = useAuthStore()
 const { isDarkMode } = useDocumentDarkMode()
 const { copyToClipboard } = useClipboard()
-
-const selectedGroupId = shallowRef<number | null>(null)
-const isAuthenticated = computed(() => authStore.isAuthenticated)
+const selectedProduct = ref('')
+const selectedGroupId = ref<number | null>(null)
+const priceMode = ref<'group' | 'official'>('group')
 const groups = computed(() => visibleCatalogGroups(props.response?.groups ?? []))
-const sections = computed(() => buildCatalogSections(props.response?.groups ?? [], selectedGroupId.value))
-const modelCount = computed(() => sections.value.reduce((total, section) => total + section.cards.length, 0))
+const productOrder = ['anthropic', 'openai', 'grok', 'gemini', 'antigravity', 'deepseek', 'image', 'video']
+const products = computed(() => [...new Set(groups.value.flatMap(group => group.platform === 'video' ? ['video'] : group.models.map(productFor)))].sort((a, b) => {
+  const rank = (p: string) => productOrder.includes(p) ? productOrder.indexOf(p) : 99
+  return rank(a) - rank(b)
+}))
+const productGroups = computed(() => groups.value.filter(group =>
+  (group.platform === 'video' && selectedProduct.value === 'video')
+  || group.models.some(model => productFor(model) === selectedProduct.value)))
+const selectedGroup = computed(() => productGroups.value.find(group => group.id === selectedGroupId.value))
+const rows = computed(() => selectedGroup.value ? priceTableRows(selectedGroup.value, selectedProduct.value) : [])
+const isVideoGroup = computed(() => selectedGroup.value?.platform === 'video')
+const tokenTable = computed(() => rows.value.some(row => row.kind === 'token'))
+const columns = computed(() => [
+  { key: 'input', label: t('modelPlaza.reference.input') },
+  { key: 'output', label: t('modelPlaza.reference.output') },
+  { key: 'cache_write', label: t('modelPlaza.reference.cacheWrite') },
+  { key: 'cache_read', label: t('modelPlaza.reference.cacheRead') },
 
-const descriptionHtml = computed(() => {
-  const markdown = props.response?.description?.trim()
-  if (!markdown) return ''
-  return DOMPurify.sanitize(marked.parse(markdown) as string)
-})
-
-watch(groups, (nextGroups) => {
-  if (
-    selectedGroupId.value != null
-    && !nextGroups.some((group) => group.id === selectedGroupId.value)
-  ) {
-    selectedGroupId.value = null
-  }
-})
-
-function selectGroup(groupId: number | null): void {
-  selectedGroupId.value = groupId
+])
+const descriptionHtml = computed(() => props.response?.description?.trim()
+  ? DOMPurify.sanitize(marked.parse(props.response.description) as string) : '')
+watch(products, next => { if (!next.includes(selectedProduct.value)) selectedProduct.value = next[0] ?? '' }, { immediate: true })
+watch(productGroups, next => { if (!next.some(group => group.id === selectedGroupId.value)) selectedGroupId.value = next[0]?.id ?? null }, { immediate: true })
+function productLabel(product: string) {
+  return ({ anthropic: 'Claude', openai: 'ChatGPT', grok: 'Grok', gemini: 'Gemini', deepseek: 'DeepSeek', image: t('modelPlaza.catalog.kinds.image'), video: t('modelPlaza.catalog.kinds.video') } as Record<string, string>)[product] ?? platformLabel(product)
 }
-
-function groupRate(group: ModelPlazaGroup): string {
-  return rateLabel(groupTextRate(group))
+function productIcon(product: string) {
+  return ({ anthropic: 'claude', openai: 'gpt', image: 'gpt-image', video: 'sora' } as Record<string, string>)[product] ?? product
 }
-
-function groupUsesPersonalRate(group: ModelPlazaGroup): boolean {
-  return group.user_rate_multiplier != null
-    && Math.abs(group.user_rate_multiplier - group.rate_multiplier) > Number.EPSILON
+function groupRate(group: ModelPlazaGroup) {
+  if (selectedProduct.value === 'video' && group.platform === 'video') return t('videoModule.finalPrice')
+  const rate = selectedProduct.value === 'image' && group.image_rate_independent ? group.image_rate_multiplier
+    : selectedProduct.value === 'video' && group.video_rate_independent ? group.video_rate_multiplier : groupTextRate(group)
+  return `×${Number(rate.toFixed(4))}`
 }
-
-function rateLabel(value: number): string {
-  return `×${new Intl.NumberFormat(undefined, {
-    maximumFractionDigits: value >= 1 ? 2 : 4
-  }).format(value)}`
+function metric(row: PriceTableRow, key: string) { return row.metrics.find(item => item.key === key) }
+function price(row: PriceTableRow, key: string, official = priceMode.value === 'official') {
+  const item = metric(row, key)
+  return formatScaled((official ? item?.official : item?.current) ?? null, row.kind === 'token' ? 1_000_000 : 1, 2)
 }
-
-function sectionTitle(platform: string, kind: CatalogKind): string {
-  return t('modelPlaza.catalog.sectionTitle', {
-    platform: platformLabel(platform),
-    kind: kindLabel(kind)
-  })
+function saving(row: PriceTableRow) { return row.metrics.find(item => item.key === 'input')?.saving ?? null }
+function unit(row: PriceTableRow) {
+  if (row.model.platform === 'video' && row.kind === 'per_request') return t('modelPlaza.video.perVideoUnit')
+  return row.kind === 'token' ? '1M tokens' : t(`modelPlaza.catalog.units.${row.kind === 'image' ? 'image' : row.kind === 'video' ? 'second' : 'request'}`)
 }
-
-function kindLabel(kind: CatalogKind): string {
-  return t(`modelPlaza.catalog.kinds.${kind}`)
+function referencePrice(row: PriceTableRow): string | null {
+  const maxVideos = row.model.capabilities?.reference_videos?.max
+  if (typeof maxVideos !== 'number' || !Number.isFinite(maxVideos) || maxVideos <= 0) return null
+  const value = row.model.pricing?.reference_per_second
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? formatScaled(value, 1, 2) : null
 }
-
-function metricTitle(metric: CatalogMetric, kind: CatalogKind): string {
-  if (metric.label === 'unit') {
-    const unit = kind === 'image'
-      ? t('modelPlaza.catalog.units.image')
-      : kind === 'video'
-        ? t('modelPlaza.catalog.units.second')
-        : t('modelPlaza.catalog.units.request')
-    return metric.tier ? `${metric.tier} / ${unit}` : unit
-  }
-  return `${t(`modelPlaza.catalog.metrics.${metric.label}`)} / 1M`
-}
-
-function displayPrice(value: number | null, kind: CatalogKind): string {
-  return formatScaled(value, kind === 'token' ? 1_000_000 : 1, 2)
-}
-
-function savingLabel(value: number): string {
-  return `-${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)}%`
-}
-
-function copyModelId(modelId: string): void {
-  void copyToClipboard(modelId, t('modelPlaza.catalog.copySuccess'))
-}
+function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPlaza.catalog.copySuccess')) }
 </script>
 
 <template>
   <main class="model-catalog" :class="{ 'is-dark': isDarkMode }">
-    <section
-      v-if="groups.length > 0"
-      class="pricing-group-panel"
-      :aria-label="t('modelPlaza.catalog.groupSelector')"
-    >
-      <button
-        type="button"
-        class="pricing-group-chip"
-        :class="{ active: selectedGroupId === null }"
-        :aria-pressed="selectedGroupId === null"
-        @click="selectGroup(null)"
-      >
-        <Icon name="sparkles" size="sm" />
-        <span>{{ t('modelPlaza.catalog.bestPrice') }}</span>
+    <nav v-if="products.length" class="product-tabs" :aria-label="t('modelPlaza.reference.products')">
+      <button v-for="product in products" :key="product" type="button" :aria-pressed="selectedProduct === product" :class="{ active: selectedProduct === product }" @click="selectedProduct = product">
+        <ModelIcon :model="productIcon(product)" size="22px" /><span>{{ productLabel(product) }}</span>
       </button>
-
-      <button
-        v-for="group in groups"
-        :key="group.id"
-        type="button"
-        class="pricing-group-chip"
-        :class="{ active: selectedGroupId === group.id }"
-        :aria-pressed="selectedGroupId === group.id"
-        :title="group.name"
-        @click="selectGroup(group.id)"
-      >
-        <PlatformIcon :platform="group.platform as GroupPlatform" size="sm" />
-        <span class="pricing-group-name">{{ group.name }}</span>
-        <small :title="groupUsesPersonalRate(group) ? t('modelPlaza.catalog.personalRate') : undefined">
-          {{ groupRate(group) }}
-        </small>
-      </button>
-    </section>
-
-    <div
-      v-if="descriptionHtml"
-      class="catalog-notice"
-      v-html="descriptionHtml"
-    ></div>
-
-    <p v-if="!isAuthenticated" class="catalog-hint">
-      <Icon name="infoCircle" size="xs" />
-      {{ t('modelPlaza.anonymousHint') }}
-    </p>
-
-    <div v-if="loading" class="state-panel" :aria-label="t('modelPlaza.loading')">
-      <div class="state-spinner"></div>
-      <p>{{ t('modelPlaza.loading') }}</p>
-    </div>
-
-    <div v-else-if="error" class="state-panel error">
-      <Icon name="exclamationTriangle" size="lg" />
-      <p>{{ t('modelPlaza.loadFailed') }}</p>
-      <button type="button" class="retry-button" @click="emit('retry')">
-        <Icon name="refresh" size="sm" />
-        {{ t('common.refresh') }}
-      </button>
-    </div>
-
-    <div v-else-if="modelCount === 0" class="state-panel">
-      <Icon name="inbox" size="xl" />
-      <p>{{ t('modelPlaza.empty') }}</p>
-    </div>
-
-    <div v-else class="platform-section-list">
-      <section
-        v-for="section in sections"
-        :key="section.key"
-        class="platform-model-section"
-      >
-        <header class="platform-section-header">
-          <div>
-            <h2>{{ sectionTitle(section.platform, section.kind) }}</h2>
-            <p>{{ t('modelPlaza.catalog.modelCount', { count: section.cards.length }) }}</p>
-          </div>
-        </header>
-
-        <div class="platform-grid">
-          <article
-            v-for="card in section.cards"
-            :key="card.key"
-            class="platform-card"
-          >
-            <header class="platform-card-header">
-              <div class="platform-title-group">
-                <div class="platform-model-icon" aria-hidden="true">
-                  <ModelIcon :model="card.modelId" size="34px" />
-                </div>
-                <div class="model-title-copy">
-                  <h3 :title="card.modelName">{{ card.modelName }}</h3>
-                  <div class="platform-meta-row">
-                    <span class="platform-provider-pill">
-                      <PlatformIcon :platform="card.platform as GroupPlatform" size="sm" />
-                      {{ platformLabel(card.platform) }}
-                    </span>
-                    <span class="platform-kind-pill">{{ kindLabel(card.kind) }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="platform-header-actions">
-                <span class="best-group-pill">
-                  {{ t(
-                    selectedGroupId === null
-                      ? 'modelPlaza.catalog.bestGroup'
-                      : 'modelPlaza.catalog.currentGroup',
-                    { group: card.groupName }
-                  ) }}
-                </span>
-                <button
-                  type="button"
-                  class="copy-id-button"
-                  :title="t('modelPlaza.catalog.copyModelId')"
-                  @click="copyModelId(card.modelId)"
-                >
-                  <Icon name="copy" size="sm" />
-                  <span>{{ t('modelPlaza.catalog.copyId') }}</span>
-                </button>
-              </div>
-            </header>
-
-            <div class="platform-model-id-row">
-              <span>{{ t('modelPlaza.catalog.modelId') }}</span>
-              <code :title="card.modelId">{{ card.modelId }}</code>
-            </div>
-
-            <div
-              class="platform-price-grid"
-              :class="`price-grid-${Math.min(card.metrics.length, 4)}`"
-            >
-              <div
-                v-for="metric in card.metrics"
-                :key="metric.key"
-                class="price-metric"
-              >
-                <p class="price-metric-title">{{ metricTitle(metric, card.kind) }}</p>
-                <div class="price-metric-body">
-                  <div class="price-line">
-                    <span>{{ t('modelPlaza.catalog.currentPrice') }}</span>
-                    <strong>{{ displayPrice(metric.current, card.kind) }}</strong>
-                  </div>
-                  <div v-if="metric.official != null" class="price-line official">
-                    <span>{{ t('modelPlaza.catalog.officialPrice') }}</span>
-                    <span>{{ displayPrice(metric.official, card.kind) }}</span>
-                  </div>
-                </div>
-                <div v-if="metric.saving != null" class="price-saving-row">
-                  <span>{{ t('modelPlaza.catalog.saving') }}</span>
-                  <strong>{{ savingLabel(metric.saving) }}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div class="platform-footer-row">
-              <span>{{ t('modelPlaza.catalog.effectiveMultiplier') }}</span>
-              <strong>{{ rateLabel(card.multiplier) }}</strong>
-            </div>
-
-            <div
-              v-if="card.hasLongContextPricing || card.hasTimePricing"
-              class="platform-note-list"
-            >
-              <span v-if="card.hasLongContextPricing" class="platform-note-chip">
-                {{ t('modelPlaza.catalog.longContextNote') }}
-              </span>
-              <span v-if="card.hasTimePricing" class="platform-note-chip">
-                {{ t('modelPlaza.catalog.timePricingNote') }}
-              </span>
-            </div>
-          </article>
+    </nav>
+    <div class="pricing-rule-bar"><Icon name="calculator" size="sm" /><strong>{{ t('nav.billingRules') }}</strong><span>{{ t('modelPlaza.reference.rule') }}</span></div>
+    <section class="pricing-list-panel" :aria-label="t('modelPlaza.reference.title')">
+      <header class="pricing-list-heading">
+        <h2><Icon name="shield" size="md" />{{ t('modelPlaza.reference.title') }}</h2>
+        <p>{{ t('modelPlaza.reference.subtitle') }}</p>
+        <div class="price-mode-switch" role="group" :aria-label="t('modelPlaza.reference.mode')">
+          <button type="button" :aria-pressed="priceMode === 'group'" @click="priceMode = 'group'">{{ t('modelPlaza.reference.groupPrice') }}</button>
+          <button type="button" :aria-pressed="priceMode === 'official'" @click="priceMode = 'official'">{{ t('modelPlaza.catalog.officialPrice') }}</button>
         </div>
-      </section>
-    </div>
+      </header>
+      <div class="pricing-list-body">
+        <div v-if="productGroups.length" class="pricing-group-scroll" :aria-label="t('modelPlaza.catalog.groupSelector')">
+          <button v-for="group in productGroups" :key="group.id" type="button" class="pricing-group-card" :class="{ active: selectedGroupId === group.id }" :aria-pressed="selectedGroupId === group.id" @click="selectedGroupId = group.id">
+            <span class="pricing-group-title"><strong :title="group.name">{{ group.name }}</strong><Icon v-if="selectedGroupId === group.id" name="checkCircle" size="sm" /></span>
+            <span class="pricing-group-meta"><small :title="group.platform !== 'video' && group.user_rate_multiplier != null ? t('modelPlaza.catalog.personalRate') : undefined">{{ groupRate(group) }}</small><span>{{ t(group.platform === 'video' ? 'modelPlaza.video.groupSellingPrice' : group.user_rate_multiplier != null ? 'modelPlaza.catalog.personalRate' : 'modelPlaza.catalog.effectiveMultiplier') }}</span></span>
+          </button>
+        </div>
+        <div v-if="selectedGroup" class="group-description"><strong>{{ t('modelPlaza.reference.groupIntro') }}</strong><span>{{ selectedGroup.description || t('modelPlaza.detail.defaultDescription') }}</span></div>
+        <div v-if="loading" class="state-panel" role="status"><div class="state-spinner"></div>{{ t('modelPlaza.loading') }}</div>
+        <div v-else-if="error" class="state-panel"><p>{{ t('modelPlaza.loadFailed') }}</p><button type="button" class="retry-button" @click="emit('retry')">{{ t('common.refresh') }}</button></div>
+        <div v-else-if="rows.length === 0" class="state-panel" role="status">{{ t(isVideoGroup ? 'modelPlaza.video.noConfiguredPrices' : 'modelPlaza.empty') }}</div>
+        <template v-else>
+          <div class="pricing-table-scroll" tabindex="0" :aria-label="t('modelPlaza.reference.title')">
+            <table class="reference-pricing-table">
+              <thead><tr><th scope="col">{{ t('modelPlaza.catalog.modelId') }}</th><template v-if="tokenTable"><th v-for="column in columns" :key="column.key" scope="col">{{ column.label }}</th><th scope="col">{{ t('modelPlaza.table.savingsColumn') }}</th></template><template v-else><th scope="col">{{ t('modelPlaza.table.tier') }}</th><th scope="col">{{ t('modelPlaza.catalog.currentPrice') }}</th></template></tr></thead>
+              <tbody>
+                <tr v-for="row in rows" :key="row.key" :data-billing-kind="row.kind">
+                  <th scope="row" class="model-id-cell"><div><code>{{ row.modelId }}</code><button type="button" class="copy-id-button" :aria-label="`${t('modelPlaza.catalog.copyModelId')}: ${row.modelId}`" @click="copyModelId(row.modelId)"><Icon name="copy" size="xs" /></button></div>
+                    <small class="model-platform">{{ platformLabel(row.model.platform || selectedGroup?.platform || '') }}</small>
+                    <PlazaVideoModelDetails v-if="row.model.platform === 'video'" :description="row.model.description" :capabilities="row.model.capabilities" />
+                    <small v-if="tokenTable && row.tier">{{ row.tier }}</small><small v-if="row.period" class="period-label">{{ row.period }}</small>
+                    <small v-if="row.model.long_context_basis === 'marginal'">{{ t('modelPlaza.reference.marginal') }}</small>
+                    <small v-if="row.model.pricing?.reasoning_effort_multipliers && Object.keys(row.model.pricing.reasoning_effort_multipliers).length" class="effort-note"><template v-for="(rate, effort) in row.model.pricing.reasoning_effort_multipliers" :key="effort">{{ effort }} ×{{ rate }} · </template></small>
+                  </th>
+                  <template v-if="row.kind === 'token'"><td v-for="column in columns" :key="column.key">
+                    <div class="price-primary"><strong>{{ price(row, column.key) }}</strong><small v-if="price(row, column.key) !== '-'"> / {{ unit(row) }}</small></div>
+                    <div v-if="priceMode === 'group' && metric(row, column.key)?.official != null" class="price-reference" :class="{ discounted: (metric(row, column.key)?.saving ?? 0) > 0 }">{{ t('modelPlaza.catalog.officialPrice') }} {{ price(row, column.key, true) }}</div>
+                    <div v-if="column.key === 'cache_write' && metric(row, 'cache_write_1h')?.current != null && (metric(row, 'cache_write_1h')?.current !== metric(row, 'cache_write')?.current || metric(row, 'cache_write_1h')?.official !== metric(row, 'cache_write')?.official)" class="price-cache-hour">1h: {{ price(row, 'cache_write_1h') }}<span v-if="priceMode === 'group' && metric(row, 'cache_write_1h')?.official != null" class="price-reference">{{ t('modelPlaza.catalog.officialPrice') }} {{ price(row, 'cache_write_1h', true) }}</span></div>
+                  </td><td><span v-if="priceMode === 'group' && saving(row) != null" class="saving-badge">{{ t('modelPlaza.table.savings', { percent: saving(row) }) }}</span><span v-else class="empty-price">—</span></td></template>
+                  <template v-else>
+                    <td v-if="!tokenTable">{{ row.tier || '—' }}</td>
+                    <td :colspan="tokenTable ? columns.length + 1 : 1">
+                      <div v-if="tokenTable" class="unit-billing-kind">{{ t(`modelPlaza.catalog.kinds.${row.kind}`) }}</div>
+                      <div v-if="row.model.platform === 'video' && priceMode === 'group' && row.metrics[0]?.current == null" class="empty-price" data-testid="video-price-unconfigured">{{ t('modelPlaza.video.priceUnconfigured') }}</div>
+                      <div v-else class="price-primary"><strong>{{ price(row, row.metrics[0]!.key) }}</strong><small v-if="priceMode === 'group'"> / {{ unit(row) }}</small></div>
+                      <div v-if="row.model.platform === 'video' && priceMode === 'group' && referencePrice(row) != null" class="video-reference-price">
+                        {{ row.model.pricing?.reference_per_second === 0
+                          ? t('modelPlaza.video.referenceIncluded')
+                          : t('modelPlaza.video.referencePrice', { price: referencePrice(row) }) }}
+                      </div>
+                      <small v-if="priceMode === 'official'" class="empty-price">{{ t('modelPlaza.reference.noOfficial') }}</small>
+                    </td>
+                  </template>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="catalog-footnote">{{ t(isVideoGroup ? 'modelPlaza.video.priceNote' : 'modelPlaza.reference.note') }}</p>
+          <p v-if="selectedGroup?.peak_rate_enabled && selectedGroup.platform !== 'video'" class="catalog-footnote">{{ t('modelPlaza.detail.peakNote', { window: `${selectedGroup.peak_start}–${selectedGroup.peak_end}`, multiplier: selectedGroup.peak_rate_multiplier }) }}</p>
+        </template>
+        <div v-if="descriptionHtml" class="catalog-notice" v-html="descriptionHtml"></div>
+        <p v-if="!authStore.isAuthenticated" class="catalog-footnote">{{ t('modelPlaza.anonymousHint') }}</p>
+      </div>
+    </section>
   </main>
 </template>
 
 <style scoped>
-.model-catalog {
-  --catalog-surface: #ffffff;
-  --catalog-surface-muted: #f7f9fb;
-  --catalog-surface-soft: #eef3f5;
-  --catalog-line: #dfe6eb;
-  --catalog-line-strong: #cdd8df;
-  --catalog-text: #526171;
-  --catalog-text-strong: #172330;
-  --catalog-muted: #748191;
-  --catalog-accent: #0f766e;
-  --catalog-accent-strong: #0b625c;
-  --catalog-accent-soft: #eaf8f5;
-  --catalog-active-text: #ffffff;
-  --catalog-saving: #c25716;
-  --catalog-saving-bg: #fff4ea;
-  --catalog-saving-line: #f1c9aa;
-  --catalog-danger: #dc2626;
-  width: 100%;
-  max-width: 1280px;
-  margin-inline: auto;
-  color: var(--catalog-text);
-}
-
-.model-catalog.is-dark {
-  --catalog-surface: #111b29;
-  --catalog-surface-muted: #0d1724;
-  --catalog-surface-soft: #182636;
-  --catalog-line: #29394a;
-  --catalog-line-strong: #3a4b5e;
-  --catalog-text: #c6d0db;
-  --catalog-text-strong: #f5f7fa;
-  --catalog-muted: #96a3b3;
-  --catalog-accent: #4dd8c5;
-  --catalog-accent-strong: #61e7d4;
-  --catalog-accent-soft: rgb(45 212 191 / 11%);
-  --catalog-active-text: #071514;
-  --catalog-saving: #fdba74;
-  --catalog-saving-bg: rgb(194 65 12 / 16%);
-  --catalog-saving-line: rgb(251 146 60 / 28%);
-  --catalog-danger: #fca5a5;
-}
-
-.pricing-group-panel {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--catalog-line);
-  border-radius: 8px;
-  padding: 12px;
-  background: var(--catalog-surface);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
-}
-
-.pricing-group-chip {
-  display: inline-flex;
-  height: 36px;
-  max-width: 100%;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--catalog-line);
-  border-radius: 6px;
-  padding: 0 12px;
-  color: var(--catalog-text);
-  background: var(--catalog-surface-muted);
-  font-size: 13px;
-  font-weight: 600;
-  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
-}
-
-.pricing-group-chip:hover {
-  border-color: color-mix(in srgb, var(--catalog-accent) 62%, var(--catalog-line));
-  color: var(--catalog-accent-strong);
-  background: var(--catalog-accent-soft);
-}
-
-.pricing-group-chip.active {
-  border-color: var(--catalog-accent);
-  color: var(--catalog-active-text);
-  background: var(--catalog-accent);
-}
-
-.pricing-group-chip small {
-  flex: 0 0 auto;
-  color: inherit;
-  opacity: .8;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-}
-
-.pricing-group-name {
-  max-width: 176px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.catalog-notice,
-.catalog-hint {
-  margin: 12px 0 0;
-  border: 1px solid var(--catalog-line);
-  border-radius: 6px;
-  padding: 10px 12px;
-  color: var(--catalog-muted);
-  background: var(--catalog-surface-muted);
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.catalog-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.catalog-notice :deep(p) {
-  margin: 0;
-}
-
-.catalog-notice :deep(a) {
-  color: var(--catalog-accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.state-panel {
-  display: flex;
-  min-height: 288px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 16px;
-  border: 1px dashed var(--catalog-line-strong);
-  border-radius: 8px;
-  padding: 32px;
-  color: var(--catalog-muted);
-  background: var(--catalog-surface);
-  text-align: center;
-  font-size: 13px;
-}
-
-.state-panel p {
-  margin: 0;
-}
-
-.state-panel.error {
-  color: var(--catalog-danger);
-}
-
-.state-spinner {
-  width: 32px;
-  height: 32px;
-  animation: spin 1s linear infinite;
-  border: 3px solid color-mix(in srgb, var(--catalog-accent) 24%, transparent);
-  border-top-color: var(--catalog-accent);
-  border-radius: 50%;
-}
-
-.retry-button,
-.copy-id-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--catalog-line);
-  border-radius: 6px;
-  color: var(--catalog-text);
-  background: var(--catalog-surface);
-  font-weight: 600;
-}
-
-.retry-button {
-  min-height: 34px;
-  padding: 0 12px;
-  font-size: 12px;
-}
-
-.platform-section-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-top: 18px;
-}
-
-.platform-model-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.platform-section-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.platform-section-header h2 {
-  margin: 0;
-  color: var(--catalog-text-strong);
-  font-size: 19px;
-  font-weight: 700;
-}
-
-.platform-section-header p {
-  margin: 3px 0 0;
-  color: var(--catalog-muted);
-  font-size: 12px;
-}
-
-.platform-grid {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.platform-card {
-  min-width: 0;
-  border: 1px solid var(--catalog-line);
-  border-radius: 8px;
-  padding: 14px;
-  background: var(--catalog-surface);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
-}
-
-.platform-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.platform-title-group {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.platform-model-icon {
-  display: flex;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--catalog-line);
-  border-radius: 8px;
-  background: var(--catalog-surface);
-}
-
-.model-title-copy {
-  min-width: 0;
-}
-
-.platform-card h3 {
-  margin: 0;
-  overflow: hidden;
-  color: var(--catalog-text-strong);
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.platform-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 5px;
-}
-
-.platform-provider-pill,
-.platform-kind-pill,
-.best-group-pill,
-.platform-note-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.platform-provider-pill,
-.best-group-pill,
-.platform-note-chip {
-  color: var(--catalog-text);
-  background: var(--catalog-surface-soft);
-}
-
-.platform-kind-pill {
-  color: #0369a1;
-  background: #eff8ff;
-}
-
-.is-dark .platform-kind-pill {
-  color: #7dd3fc;
-  background: rgb(14 165 233 / 14%);
-}
-
-.platform-header-actions {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.best-group-pill {
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.copy-id-button {
-  height: 32px;
-  padding: 0 9px;
-  color: var(--catalog-muted);
-  font-size: 12px;
-}
-
-.copy-id-button:hover,
-.retry-button:hover {
-  border-color: color-mix(in srgb, var(--catalog-accent) 62%, var(--catalog-line));
-  color: var(--catalog-accent-strong);
-  background: var(--catalog-accent-soft);
-}
-
-.platform-model-id-row {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  margin-top: 14px;
-  border-radius: 6px;
-  padding: 8px 10px;
-  background: var(--catalog-surface-muted);
-  font-size: 11px;
-}
-
-.platform-model-id-row span {
-  flex: 0 0 auto;
-  color: var(--catalog-muted);
-  font-weight: 600;
-}
-
-.platform-model-id-row code {
-  overflow: hidden;
-  color: var(--catalog-text);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.platform-price-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  margin-top: 12px;
-  overflow: hidden;
-  border: 1px solid var(--catalog-line);
-  border-radius: 6px;
-  background: var(--catalog-surface-muted);
-}
-
-.price-metric {
-  min-width: 0;
-  padding: 9px;
-  background: var(--catalog-surface-muted);
-}
-
-.price-metric + .price-metric {
-  border-top: 1px solid var(--catalog-line);
-}
-
-.price-metric-title {
-  margin: 0;
-  color: var(--catalog-muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.price-metric-body {
-  display: grid;
-  gap: 3px;
-  margin-top: 6px;
-}
-
-.price-line {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.price-line > span:first-child {
-  color: var(--catalog-muted);
-  font-size: 10px;
-}
-
-.price-line strong {
-  color: var(--catalog-text-strong);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 14px;
-  font-weight: 750;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.price-line.official > span:last-child {
-  color: var(--catalog-text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 10px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.price-saving-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 7px;
-  border: 1px solid var(--catalog-saving-line);
-  border-radius: 5px;
-  padding: 3px 6px;
-  color: var(--catalog-saving);
-  background: var(--catalog-saving-bg);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.platform-footer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 12px;
-  border-top: 1px solid var(--catalog-line);
-  padding-top: 10px;
-  color: var(--catalog-muted);
-  font-size: 12px;
-}
-
-.platform-footer-row strong {
-  color: var(--catalog-text-strong);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 14px;
-}
-
-.platform-note-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.platform-note-chip {
-  color: var(--catalog-muted);
-  font-size: 10px;
-}
-
-@media (min-width: 640px) {
-  .platform-price-grid.price-grid-2,
-  .platform-price-grid.price-grid-3,
-  .platform-price-grid.price-grid-4 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .price-metric + .price-metric {
-    border-top: 0;
-    border-left: 1px solid var(--catalog-line);
-  }
-
-  .price-grid-3 .price-metric:nth-child(3) {
-    border-top: 1px solid var(--catalog-line);
-    border-left: 0;
-  }
-
-  .price-grid-4 .price-metric:nth-child(3) {
-    border-top: 1px solid var(--catalog-line);
-    border-left: 0;
-  }
-
-  .price-grid-4 .price-metric:nth-child(4) {
-    border-top: 1px solid var(--catalog-line);
-  }
-}
-
-@media (min-width: 980px) {
-  .platform-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1440px) {
-  .platform-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .pricing-group-panel {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-  }
-
-  .platform-card-header {
-    display: block;
-  }
-
-  .platform-header-actions {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 10px;
-  }
-
-  .best-group-pill {
-    max-width: calc(100% - 92px);
-  }
-
-  .copy-id-button span {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .state-spinner {
-    animation-duration: 2s;
-  }
-
-  .pricing-group-chip {
-    transition: none;
-  }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+.model-catalog { --catalog-surface: var(--kc-panel,#fff); --catalog-muted-surface: var(--kc-panel-muted,#f8faf9); --catalog-border: var(--kc-line,#e5e7eb); --catalog-text: var(--kc-ink,#182b29); --catalog-muted: var(--kc-muted,#7b8382); --catalog-accent: var(--kc-accent-strong,#0d766e); --catalog-tint: var(--kc-accent-soft,#edf7f4); width: 100%; max-width: none; margin: 0; color: var(--catalog-text); }
+.model-catalog.is-dark { --catalog-surface: var(--kc-panel,#192523); --catalog-muted-surface: var(--kc-panel-muted,#14211f); --catalog-border: var(--kc-line,#30413d); --catalog-text: var(--kc-ink,#e6eeec); --catalog-muted: var(--kc-muted,#9eaead); --catalog-accent: var(--kc-accent-strong,#6dcdbc); --catalog-tint: var(--kc-accent-soft,#163a33); }
+.product-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; border: 1px solid var(--catalog-border); border-radius: 8px; background: var(--catalog-surface); box-shadow: 0 1px 3px rgb(0 0 0 / 4%); }
+.product-tabs button { display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 10px 16px; border: 1px solid transparent; border-radius: 5px; font-size: 18px; color: var(--catalog-muted); }
+.is-dark .product-tabs :deep(path[fill="#000000"]) { fill: var(--catalog-text); }
+.product-tabs button.active { color: var(--catalog-accent); border-color: var(--catalog-accent); background: var(--catalog-muted-surface); box-shadow: 0 0 0 3px var(--catalog-tint); }
+.pricing-rule-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding: 13px 20px; border: 1px solid var(--catalog-border); border-radius: 8px; background: var(--catalog-surface); font-size: 12px; color: var(--catalog-muted); }
+.pricing-rule-bar strong { color: var(--catalog-text); white-space: nowrap; }
+.pricing-rule-bar > svg { color: var(--catalog-accent); }
+.pricing-list-panel { margin-top: 16px; border: 1px solid var(--catalog-border); border-radius: 8px; overflow: hidden; background: var(--catalog-surface); box-shadow: 0 1px 3px rgb(0 0 0 / 3%); }
+.pricing-list-heading { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 66px; padding: 16px 20px; border-bottom: 1px solid var(--catalog-border); }
+.pricing-list-heading h2 { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; margin-right: auto; }
+.pricing-list-heading p { font-size: 12px; color: var(--catalog-muted); }
+.price-mode-switch { display: flex; flex: 0 0 auto; border-radius: 99px; padding: 4px; background: var(--catalog-muted-surface); }
+.price-mode-switch button { padding: 5px 13px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.price-mode-switch button[aria-pressed='true'] { background: var(--catalog-accent); color: var(--catalog-surface); box-shadow: 0 1px 3px rgb(0 0 0 / 10%); }
+.pricing-list-body { padding: 20px; }
+.pricing-group-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 0 1px 10px; scrollbar-width: thin; scrollbar-color: #b7c0bd var(--catalog-muted-surface); }
+.pricing-group-card { flex: 0 0 auto; width: 270px; padding: 17px 16px; text-align: left; border: 1px solid var(--catalog-border); border-radius: 6px; background: var(--catalog-surface); }
+.pricing-group-card.active { border-color: var(--catalog-accent); background: var(--catalog-muted-surface); box-shadow: 0 0 0 2px var(--catalog-tint); }
+.pricing-group-title { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.pricing-group-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.5; }
+.pricing-group-title > svg { flex-shrink: 0; color: var(--catalog-accent); }
+.pricing-group-meta { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 12px; color: var(--catalog-muted); }
+.pricing-group-meta small { font-size: 12px; font-variant-numeric: tabular-nums; }
+.group-description { display: flex; gap: 14px; margin: 12px 0 16px; padding: 12px 16px; border: 1px solid var(--catalog-border); border-radius: 6px; background: color-mix(in srgb, var(--catalog-tint) 38%,var(--catalog-surface)); font-size: 13px; line-height: 1.5; }
+.group-description strong { flex-shrink: 0; color: var(--catalog-accent); }
+.group-description span { color: var(--catalog-muted); }
+.pricing-table-scroll { overflow-x: auto; border: 1px solid var(--catalog-border); border-radius: 7px; }
+.reference-pricing-table { width: 100%; min-width: 890px; border-collapse: collapse; font-size: 13px; text-align: left; }
+.reference-pricing-table th,.reference-pricing-table td { padding: 17px 16px; border-bottom: 1px solid var(--catalog-border); vertical-align: middle; }
+.reference-pricing-table thead th { background: var(--catalog-muted-surface); font-weight: 500; color: var(--catalog-muted); padding-block: 14px; white-space: nowrap; }
+.reference-pricing-table tr:last-child > * { border-bottom: 0; }
+.reference-pricing-table tbody tr:hover { background: var(--catalog-muted-surface); }
+.model-id-cell { font-weight: 500; min-width: 220px; max-width: 320px; }
+.model-id-cell > div { display: flex; align-items: center; gap: 10px; }
+.model-id-cell > .video-model-details { display: block; }
+.model-id-cell code { font-family: inherit; overflow-wrap: anywhere; }
+.copy-id-button { flex-shrink: 0; padding: 4px; color: var(--catalog-muted); border-radius: 4px; }
+.copy-id-button:hover { color: var(--catalog-accent); background: var(--catalog-tint); }
+.model-id-cell > small { display: block; margin-top: 6px; color: var(--catalog-muted); font-size: 10px; line-height: 1.6; }
+.model-id-cell > .period-label { color: var(--catalog-accent); }
+.price-primary { white-space: nowrap; }
+.price-primary strong { color: var(--catalog-accent); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.price-primary small { font-size: 10px; color: var(--catalog-muted); }
+.unit-billing-kind { margin-bottom: 4px; color: var(--catalog-muted); font-size: 11px; }
+.price-reference { margin-top: 4px; font-size: 10px; color: var(--catalog-muted); white-space: nowrap; }
+.video-reference-price { margin-top: 6px; font-size: 12px; color: var(--catalog-muted); }
+.price-cache-hour { margin-top: 6px; font-size: 10px; color: var(--catalog-muted); }
+.price-cache-hour .price-reference { display: block; }
+.price-reference.discounted { text-decoration: line-through; opacity: .8; }
+.saving-badge { display: inline-block; padding: 4px 9px; border-radius: 99px; color: #19844e; background: #effbf3; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.is-dark .saving-badge { color: #82d6a5; background: #1c3a2b; }
+.catalog-footnote,.catalog-notice { color: var(--catalog-muted); font-size: 12px; line-height: 1.7; margin-top: 14px; }
+.catalog-notice :deep(a) { text-decoration: underline; }
+.empty-price { font-size: 12px; color: var(--catalog-muted); }
+.state-panel { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--catalog-muted); }
+.retry-button { padding: 8px 20px; border-radius: 6px; color: var(--catalog-accent); background: var(--catalog-tint); }
+.state-spinner { height: 28px; width: 28px; border: 3px solid var(--catalog-border); border-top-color: var(--catalog-accent); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media(max-width: 767px) { .product-tabs { gap: 4px; } .product-tabs button { min-height: 42px; font-size: 14px; padding: 8px 10px; } .pricing-list-heading,.pricing-list-body { padding: 16px; } .pricing-list-heading p { display: none; } .pricing-list-heading h2 { font-size: 18px; } .pricing-group-card { width: 245px; } .group-description { flex-direction: column; gap: 5px; } .pricing-rule-bar { padding: 12px 16px; } }
 </style>

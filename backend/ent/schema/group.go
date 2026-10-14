@@ -65,6 +65,20 @@ func (Group) Fields() []ent.Field {
 			Comment("高峰时段叠加倍率，仅在 peak_rate_enabled 且处于 [peak_start, peak_end) 时乘入文本倍率"),
 		field.Bool("is_exclusive").
 			Default(false),
+		// security_policy_enabled: 分组安全策略总开关，默认关闭。
+		field.Bool("security_policy_enabled").
+			Default(false).
+			Comment("分组安全策略总开关，默认关闭"),
+		// security_policy_mode: 命中后处置，block_session 断会话（默认）/
+		// block_request 仅拦截当次请求。
+		field.String("security_policy_mode").
+			MaxLen(20).
+			Default("block_session").
+			Comment("安全策略命中后处置：block_session 断会话 / block_request 仅拦当次"),
+		// security_policy_email_enabled: 命中是否邮件提醒用户，可自由开关。
+		field.Bool("security_policy_email_enabled").
+			Default(true).
+			Comment("安全策略命中是否邮件提醒用户"),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
@@ -211,6 +225,11 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("无效请求兜底使用的分组 ID"),
+
+		// 仅允许流式请求 (added by migration 246)
+		field.Bool("stream_only").
+			Default(false).
+			Comment("是否仅允许流式请求：开启后非流式的对话生成请求在网关入口直接拒绝"),
 
 		// 模型路由配置 (added by migration 040)
 		field.JSON("model_routing", map[string][]int64{}).

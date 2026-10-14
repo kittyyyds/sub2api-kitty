@@ -42,6 +42,12 @@ export default {
 
     // Proxies Management
     proxies: {
+      managementSections: '代理管理分类',
+      proxyList: '静态代理 / IP 代理池',
+      subscriptions: '订阅',
+      dynamicProxies: '动态代理',
+      nodes: '节点',
+      kernelRules: '内核与规则',
       title: 'IP管理',
       description: '管理代理服务器配置',
       createProxy: '添加代理',
@@ -160,9 +166,11 @@ export default {
       standardAdd: '标准添加',
       batchAdd: '快捷添加',
       batchInput: '代理列表',
+      batchDefaultProtocol: '无协议头时使用',
+      batchDefaultProtocolHint: '不带协议头的代理将按此选项自动补全。',
       batchInputPlaceholder:
         "每行输入一个代理，支持以下格式：\nsocks5://user:pass{'@'}192.168.1.1:1080\nhttp://192.168.1.1:8080\nhttps://user:pass{'@'}proxy.example.com:443",
-      batchInputHint: "支持 http、https、socks5 协议，格式：协议://[用户名:密码{'@'}]主机:端口",
+      batchInputHint: "支持混合输入：主机:端口:用户名:密码、用户名:密码{'@'}主机:端口、用户名:密码:主机:端口，以及带协议的 URL。未写协议头时按上方选项自动补全。",
       parsedCount: '有效 {count} 个',
       invalidCount: '无效 {count} 个',
       duplicateCount: '重复 {count} 个',
@@ -229,12 +237,14 @@ export default {
       nDays: '{days} 天',
       expiryDaysPlaceholder: '自定义天数，留空 = 永不过期',
       expiryWarnDays: '到期提醒提前天数',
-      fallbackMode: '到期回退',
+      fallbackMode: '故障/到期回退',
+      fallbackModeHint: '到期时按所选策略处理；OpenAI HTTP 转发遇到符合条件的建连故障时，仅在确认请求尚未发出时回退，不重放已输出的流。直连使用 Sub2API 所在运行环境的网络。',
       fallbackNone: '不回退',
       fallbackProxy: '指定备用代理',
       fallbackDirect: '回退直连',
       backupProxy: '备用代理',
-    },
+
+  },
 
     // Redeem Codes Management
     redeem: {
@@ -417,9 +427,18 @@ export default {
         conditionType: '条件类型',
         conditionSubscription: '订阅套餐',
         conditionBalance: '余额',
+        conditionUser: '指定用户',
         operator: '运算符',
         balanceValue: '余额阈值',
-        selectPackages: '选择套餐'
+        selectPackages: '选择套餐',
+        targetingUsers: '指定用户',
+        targetingUsersHint: '只有选中的用户能看到这条公告，适合单独提醒或警告某个用户。通知方式选「弹窗」时，对方登录或刷新页面后会弹出提醒，直到点「标记已读」为止。',
+        selectUsers: '选择用户',
+        selectUsersRequired: '请至少选择一个用户',
+        searchUsersPlaceholder: '输入邮箱或用户名搜索',
+        noUsersFound: '没有找到匹配的用户',
+        noUsersSelected: '还没有选择用户',
+        userUnavailable: '用户不存在'
       },
       operators: {
         gt: '>',
@@ -430,6 +449,7 @@ export default {
       },
       targetingSummaryAll: '全部用户',
       targetingSummaryCustom: '自定义（{groups} 组）',
+      targetingSummaryUsers: '指定用户（{count} 人）',
       timeImmediate: '立即',
       timeNever: '永久',
       readStatus: '已读情况',
@@ -554,6 +574,7 @@ export default {
 	  upstreamModelMismatchOnly: '仅不一致',
 	  upstreamModelMatchedOnly: '仅一致',
       audit: {
+        localEstimateDisabled: '未进行本地核对',
         statusFilter: '审计结论',
         allStatuses: '全部审计结论',
         exportCSV: '导出 CSV',
@@ -633,6 +654,7 @@ export default {
         rawUsage: '原始 usage',
         noRawUsage: '未捕获原始 usage',
         reasonsMap: {
+          local_estimate_disabled: '未进行本地核对：已关闭额外 Token 复算，保留上游用量和正常计费',
           raw_usage_not_captured: '未捕获原始 usage',
           response_capture_truncated: '响应快照超过采集上限',
           local_input_unavailable: '无法估算本地输入',
@@ -699,4 +721,42 @@ export default {
     },
 
     // Ops Monitoring
+
+  tieredRouting: {
+      title: '分级路由',
+      description: '高级用户优先使用优选池账号，其他用户使用全部账号。请先在账号编辑页标记账号池。',
+      enable: '启用分级路由',
+      premiumUserIds: '高级用户编号',
+      premiumUserIdsPlaceholder: '如 12, 34, 56',
+      premiumUserIdsHint: '逗号或空格分隔的用户编号，这些用户优先使用优选池。',
+      minBalance: '高级用户最低余额（美元）',
+      minBalanceHint: '余额达到该值的用户视为高级用户，0 表示关闭余额规则。',
+      poolHint: '在账号编辑页（代理区域）把账号标记为 优选池；优选池无可用时回退全部账号。',
+      loadFailed: '加载分级路由设置失败',
+      saveFailed: '保存分级路由设置失败',
+      saveSuccess: '分级路由设置已保存',
+      invalidBalance: '最低余额必须是非负数字',
+    },
+
+  tickets: {
+      title: '工单管理',
+      description: '回复用户问题，关闭已解决的工单。',
+      user: '用户',
+      subject: '主题',
+      status: '状态',
+      open: '待处理',
+      answered: '已回复',
+      closed: '已关闭',
+      all: '全部',
+      support: '客服',
+      replyPlaceholder: '写下你的回复…',
+      sendReply: '发送回复',
+      closeTicket: '关闭工单',
+      noTickets: '暂无工单。',
+      replySuccess: '回复已发送',
+      closeSuccess: '工单已关闭',
+      loadFailed: '加载工单失败',
+      saveFailed: '操作失败',
+      openCount: '待处理 {count}',
+    },
 }

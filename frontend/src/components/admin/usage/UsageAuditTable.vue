@@ -22,7 +22,9 @@ const { t } = useI18n()
 
 const getAuditStatus = (row: AdminUsageLog): AuditRowStatus => row.usage_audit?.status ?? 'missing'
 
-const statusLabel = (status: AuditRowStatus) => t(`admin.usage.audit.status.${status}`)
+const statusLabel = (row: AdminUsageLog) => row.usage_audit?.reasons?.includes('local_estimate_disabled')
+  ? t('admin.usage.audit.localEstimateDisabled')
+  : t(`admin.usage.audit.status.${getAuditStatus(row)}`)
 
 const statusClass = (status: AuditRowStatus) => {
   switch (status) {
@@ -109,7 +111,7 @@ const evidenceLabel = (row: AdminUsageLog) => {
           <td class="px-4 py-3">
             <div class="flex flex-col items-start gap-1.5">
               <span :class="['inline-flex rounded px-2 py-0.5 text-xs font-semibold ring-1 ring-inset', statusClass(getAuditStatus(row))]">
-                {{ statusLabel(getAuditStatus(row)) }}
+                {{ statusLabel(row) }}
               </span>
               <span v-if="row.usage_audit" class="text-[11px] text-gray-400 dark:text-gray-500">
                 {{ confidenceLabel(row) }}

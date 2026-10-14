@@ -74,35 +74,38 @@ type OpenAIImagesUpload struct {
 }
 
 type OpenAIImagesRequest struct {
-	Endpoint           string
-	ContentType        string
-	Multipart          bool
-	Model              string
-	ExplicitModel      bool
-	Prompt             string
-	Stream             bool
-	N                  int
-	Size               string
-	ExplicitSize       bool
-	SizeTier           string
-	ResponseFormat     string
-	Quality            string
-	Background         string
-	OutputFormat       string
-	Moderation         string
-	InputFidelity      string
-	Style              string
-	OutputCompression  *int
-	PartialImages      *int
-	HasMask            bool
-	HasNativeOptions   bool
-	RequiredCapability OpenAIImagesCapability
-	InputImageURLs     []string
-	MaskImageURL       string
-	Uploads            []OpenAIImagesUpload
-	MaskUpload         *OpenAIImagesUpload
-	Body               []byte
-	bodyHash           string
+	Endpoint                         string
+	ContentType                      string
+	Multipart                        bool
+	Model                            string
+	ExplicitModel                    bool
+	Prompt                           string
+	Stream                           bool
+	N                                int
+	Size                             string
+	ExplicitSize                     bool
+	SizeTier                         string
+	ResponseFormat                   string
+	Quality                          string
+	Background                       string
+	OutputFormat                     string
+	Moderation                       string
+	InputFidelity                    string
+	Style                            string
+	OutputCompression                *int
+	PartialImages                    *int
+	HasMask                          bool
+	HasNativeOptions                 bool
+	RequiredCapability               OpenAIImagesCapability
+	InputImageURLs                   []string
+	MaskImageURL                     string
+	Uploads                          []OpenAIImagesUpload
+	MaskUpload                       *OpenAIImagesUpload
+	Body                             []byte
+	Suanli                           bool
+	SuanliSubscriptionID             *int64
+	SuanliIPAddress, SuanliUserAgent string
+	bodyHash                         string
 }
 
 func (r *OpenAIImagesRequest) ModerationBody() []byte {
@@ -224,6 +227,7 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 		if !gjson.ValidBytes(body) {
 			return nil, fmt.Errorf("failed to parse request body")
 		}
+		req.Suanli = configuredSuanliImage(c, gjson.GetBytes(body, "model").String()) != nil
 		if parseErr := parseOpenAIImagesJSONRequest(body, req); parseErr != nil {
 			return nil, parseErr
 		}
@@ -237,11 +241,18 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 			req.Model = model
 		}
 	}
-	if err := validateCompatibleImagesModel(req.Model); err != nil {
+	req.Suanli = configuredSuanliImage(c, req.Model) != nil
+	if err := validateCompatibleImagesModel(req.Model); err != nil && !req.Suanli {
 		return nil, err
 	}
 	req.SizeTier = normalizeOpenAIImageSizeTier(req.Size)
 	req.RequiredCapability = classifyOpenAIImagesCapability(req)
+	if req.Suanli {
+		req.RequiredCapability = OpenAIImagesCapabilityAPIKey
+		if _, _, err := suanliImageRequest(req, req.Model); err != nil {
+			return nil, err
+		}
+	}
 	return req, nil
 }
 
@@ -294,6 +305,19 @@ func parseOpenAIImagesJSONRequest(body []byte, req *OpenAIImagesRequest) error {
 		}
 		v := int(partialImages.Int())
 		req.PartialImages = &v
+	}
+	if req.Suanli {
+		refs := gjson.GetBytes(body, "image")
+		if refs.Type == gjson.String {
+			req.InputImageURLs = append(req.InputImageURLs, refs.String())
+		} else if refs.IsArray() {
+			for _, ref := range refs.Array() {
+				if ref.Type != gjson.String {
+					return fmt.Errorf("image 必须是图片地址数组")
+				}
+				req.InputImageURLs = append(req.InputImageURLs, ref.String())
+			}
+		}
 	}
 	if req.IsEdits() {
 		images := gjson.GetBytes(body, "images")
@@ -477,7 +501,8 @@ func applyOpenAIImagesDefaults(req *OpenAIImagesRequest) {
 }
 
 func isOpenAIImageGenerationModel(model string) bool {
-	return IsGPTImageGenerationModel(model) || isGrokImageGenerationModel(model)
+	return IsGPTImageGenerationModel(model) ||
+		isGrokImageGenerationModel(model)
 }
 
 // IsGPTImageGenerationModel identifies the GPT native image-generation model family.
@@ -513,8 +538,8 @@ func validateOpenAIImagesModel(model string) error {
 // drives native Responses tool conversion, pricing and rate-limit policy.
 func isGeminiCompatibleImageModel(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(model, "gemini-") &&
-		(strings.HasSuffix(model, "-image") || strings.Contains(model, "-image-"))
+	return strings.HasPrefix(model, "banana") || (strings.HasPrefix(model, "gemini-") &&
+		(strings.HasSuffix(model, "-image") || strings.Contains(model, "-image-")))
 }
 
 func validateCompatibleImagesModel(model string) error {
@@ -527,6 +552,9 @@ func validateCompatibleImagesModel(model string) error {
 // RequiredCapabilityForModel also applies the API-key-only fence when channel
 // mapping introduces a compatible provider model after request parsing.
 func (req *OpenAIImagesRequest) RequiredCapabilityForModel(model string) OpenAIImagesCapability {
+	if req.Suanli {
+		return OpenAIImagesCapabilityAPIKey
+	}
 	if isGeminiCompatibleImageModel(model) {
 		return OpenAIImagesCapabilityAPIKey
 	}
@@ -613,6 +641,15 @@ func (s *OpenAIGatewayService) ForwardImages(
 	if parsed == nil {
 		return nil, fmt.Errorf("parsed images request is required")
 	}
+	requestModel := strings.TrimSpace(parsed.Model)
+	if mapped := strings.TrimSpace(channelMappedModel); mapped != "" {
+		requestModel = mapped
+	}
+	latest, admissionErr := s.admitOpenAITurn(context.WithoutCancel(ctx), c, account, requestModel)
+	if admissionErr != nil {
+		return nil, admissionErr
+	}
+	account = latest
 	switch account.Type {
 	case AccountTypeAPIKey:
 		return s.forwardOpenAIImagesAPIKey(ctx, c, account, body, parsed, channelMappedModel)
@@ -635,6 +672,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	requestModel := strings.TrimSpace(parsed.Model)
 	if mapped := strings.TrimSpace(channelMappedModel); mapped != "" {
 		requestModel = mapped
+	}
+	if parsed.Suanli {
+		return s.forwardSuanliImages(ctx, c, account, parsed, parsed.Model, account.GetMappedModel(requestModel))
 	}
 	if err := validateCompatibleImagesModel(requestModel); err != nil {
 		return nil, err
@@ -704,6 +744,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 		if isOpenAIImagesInsufficientBalance(respBody) {
+			if s.rateLimitService != nil {
+				s.rateLimitService.accountOps.Observe(account, resp.StatusCode, resp.Header, respBody)
+			}
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				ProxyID:            opsUpstreamProxyID(account),
 				ProxyName:          opsUpstreamProxyName(account),
@@ -869,6 +912,7 @@ func (s *OpenAIGatewayService) buildOpenAIImagesRequest(
 		req.Header.Set("Content-Type", contentType)
 	}
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）
+	applyOpenAIAPIKeyIdentityHeaders(req.Header, account, s.codexIdentityOverrideUA(account))
 	account.ApplyHeaderOverrides(req.Header)
 	return req, nil
 }

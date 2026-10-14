@@ -3,25 +3,34 @@ import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 
 import AccountsView from '../AccountsView.vue'
+import UpstreamBillingRateCell from '@/components/account/UpstreamBillingRateCell.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
 
 const {
+  getSettings,
   listAccounts,
   listWithEtag,
   getById,
   getBatchTodayStats,
+  getManagementCapabilities,
   getUpstreamBillingProbeSettings,
+  getUpstreamBillingRatesWithEtag,
+  probeUpstreamBilling,
   getAllProxies,
   getAllGroups,
   refreshCredentials,
   showError,
   showWarning
 } = vi.hoisted(() => ({
+  getSettings: vi.fn(),
   listAccounts: vi.fn(),
   listWithEtag: vi.fn(),
   getById: vi.fn(),
   getBatchTodayStats: vi.fn(),
+  getManagementCapabilities: vi.fn(),
   getUpstreamBillingProbeSettings: vi.fn(),
+  getUpstreamBillingRatesWithEtag: vi.fn(),
+  probeUpstreamBilling: vi.fn(),
   getAllProxies: vi.fn(),
   getAllGroups: vi.fn(),
   refreshCredentials: vi.fn(),
@@ -31,12 +40,16 @@ const {
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
+    settings: { getSettings },
     accounts: {
+      getManagementCapabilities,
       list: listAccounts,
       getById,
       listWithEtag,
       getBatchTodayStats,
       getUpstreamBillingProbeSettings,
+      getUpstreamBillingRatesWithEtag,
+      probeUpstreamBilling,
       delete: vi.fn(),
       batchClearError: vi.fn(),
       batchRefresh: vi.fn(),
@@ -67,6 +80,8 @@ const DataTableStub = defineComponent({
     <div>
       <div v-for="row in data" :key="row.id" :data-account-name="row.name">
         <slot name="cell-groups" :row="row" />
+        <slot name="cell-capacity" :row="row" />
+        <slot name="cell-upstream_billing_rate" :row="row" />
         <slot name="cell-actions" :row="row" />
       </div>
     </div>
@@ -120,7 +135,7 @@ function mountView(stubActionMenu = true) {
         EditAccountModal: EditAccountModalStub,
         BulkEditAccountModal: true,
         PlatformTypeBadge: true,
-        AccountCapacityCell: true,
+        AccountCapacityCell: false,
         AccountStatusIndicator: true,
         AccountTodayStatsCell: true,
         AccountGroupsCell: AccountGroupsCellStub,
@@ -144,7 +159,7 @@ const listRow = {
   concurrency: 2,
   priority: 1,
   group_ids: [7],
-  extra: {},
+  extra: { auto_config_concurrency: { concurrency: 2, successes: 1, required: 20, maximum: 100, step: 1 } },
   credentials: {}
 }
 
@@ -159,13 +174,17 @@ const fullAccount = {
 describe('admin AccountsView lite account list', () => {
   beforeEach(() => {
     localStorage.clear()
+    getSettings.mockReset().mockResolvedValue({})
     listAccounts.mockReset().mockResolvedValue({ items: [listRow], total: 1, page: 1, page_size: 20, pages: 1 })
     listWithEtag.mockReset().mockResolvedValue({ notModified: true, etag: 'compact-etag', data: null })
     getById.mockReset().mockResolvedValue(fullAccount)
     getBatchTodayStats.mockReset().mockResolvedValue({ stats: {} })
+    getManagementCapabilities.mockReset().mockResolvedValue({ concurrency_upgrade_enabled: false })
     getUpstreamBillingProbeSettings.mockReset().mockResolvedValue({ enabled: true })
     getAllProxies.mockReset().mockResolvedValue([])
     getAllGroups.mockReset().mockResolvedValue([{ id: 7, name: 'codex', platform: 'openai' }])
+    getUpstreamBillingRatesWithEtag.mockReset().mockResolvedValue({ notModified: true, data: null })
+    probeUpstreamBilling.mockReset()
     refreshCredentials.mockReset()
     showError.mockReset()
     showWarning.mockReset()
@@ -174,6 +193,67 @@ describe('admin AccountsView lite account list', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('does not apply video snapshots to account rates during manual or periodic refresh', async () => {
+    const snapshot = { kind: 'video_model_prices', status: 'ok', synced_rate_multiplier: 99 }
+    const row = { ...listRow, platform: 'video', type: 'apikey', rate_multiplier: 1.25, extra: {} }
+    listAccounts.mockResolvedValue({ items: [row], total: 1, page: 1, page_size: 20, pages: 1 })
+    probeUpstreamBilling.mockResolvedValue({ account_id: row.id, snapshot })
+    getUpstreamBillingRatesWithEtag.mockResolvedValue({ notModified: false, data: {
+      items: [{ account_id: row.id, snapshot: { ...snapshot, synced_rate_multiplier: 98 } }], total: 1
+    } })
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.findComponent(UpstreamBillingRateCell).vm.$emit('probe')
+    await flushPromises()
+    expect(getUpstreamBillingRatesWithEtag).toHaveBeenCalled()
+    expect(wrapper.findComponent(UpstreamBillingRateCell).props('account').rate_multiplier).toBe(1.25)
+    expect(wrapper.findComponent(UpstreamBillingRateCell).props('account').extra?.upstream_billing_probe?.kind).toBe('video_model_prices')
+    wrapper.unmount()
+  })
+
+  it('disables rate sorting for video filters and clears a previously selected rate sort', async () => {
+    localStorage.setItem('account-table-sort', JSON.stringify({ key: 'upstream_billing_rate', order: 'desc' }))
+    const wrapper = mountView()
+    await flushPromises()
+    const filters = wrapper.findComponent({ name: 'AccountTableFilters' })
+    filters.vm.$emit('update:filters', { platform: 'video' })
+    filters.vm.$emit('change')
+    await flushPromises()
+    expect(filters.props('filters')).toMatchObject({ sort_by: 'name', sort_order: 'asc' })
+    const table = wrapper.findComponent(DataTableStub)
+    expect((table.vm.$attrs.columns as { key: string; sortable: boolean }[]).find(column => column.key === 'upstream_billing_rate')?.sortable).toBe(false)
+    // Trigger a normal sort to exercise the next request without waiting for debounce.
+    table.vm.$emit('sort', 'name', 'asc')
+    await flushPromises()
+    expect(listAccounts.mock.calls.at(-1)?.[2]).toMatchObject({ platform: 'video', sort_by: 'name', sort_order: 'asc' })
+    const callCount = listAccounts.mock.calls.length
+    table.vm.$emit('sort', 'upstream_billing_rate', 'desc')
+    await flushPromises()
+    expect(listAccounts).toHaveBeenCalledTimes(callCount)
+    filters.vm.$emit('update:filters', { platform: 'openai' })
+    await flushPromises()
+    expect((table.vm.$attrs.columns as { key: string; sortable: boolean }[]).find(column => column.key === 'upstream_billing_rate')?.sortable).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('refreshes the saved cost after probing even with unchanged snapshot and default sorting', async () => {
+    const snapshot = { status: 'ok', data: { effective_rate_multiplier: 0.14 } }
+    const row = { ...listRow, type: 'apikey', extra: { cost_multiplier: 0.1, upstream_billing_probe: snapshot } }
+    listAccounts.mockResolvedValue({ items: [row], total: 1, page: 1, page_size: 20, pages: 1 })
+    probeUpstreamBilling.mockResolvedValue({ account_id: row.id, snapshot })
+    getUpstreamBillingRatesWithEtag.mockResolvedValue({ notModified: false, data: {
+      items: [{ account_id: row.id, snapshot, cost_multiplier: 0.14 }], total: 1, page: 1, page_size: 20
+    } })
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.findComponent(UpstreamBillingRateCell).vm.$emit('probe')
+    await flushPromises()
+    expect(probeUpstreamBilling).toHaveBeenCalledWith(row.id)
+    expect(getUpstreamBillingRatesWithEtag).toHaveBeenCalled()
+    expect(wrapper.findComponent(UpstreamBillingRateCell).props('account').extra?.cost_multiplier).toBe(0.14)
+    wrapper.unmount()
   })
 
   it('keeps lite=1 on the initial list request', async () => {
@@ -186,6 +266,56 @@ describe('admin AccountsView lite account list', () => {
       expect.objectContaining({ lite: '1' }),
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
+    wrapper.unmount()
+  })
+
+  it('hides stored upgrade progress until the global switch is enabled', async () => {
+    let resolveCapabilities!: (value: { concurrency_upgrade_enabled: boolean }) => void
+    getManagementCapabilities.mockReturnValueOnce(new Promise(resolve => { resolveCapabilities = resolve }))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('progress').exists()).toBe(false)
+
+    resolveCapabilities({ concurrency_upgrade_enabled: true })
+    await flushPromises()
+    expect(wrapper.get('progress').attributes()).toMatchObject({ value: '1', max: '20' })
+    wrapper.unmount()
+  })
+
+  it.each([false, undefined])('hides historical progress when the upgrade flag is %s', async enabled => {
+    getManagementCapabilities.mockResolvedValue({ concurrency_upgrade_enabled: enabled })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('progress').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('autoConfig.tier')
+    expect(wrapper.text()).not.toContain('autoConfig.progress')
+    wrapper.unmount()
+  })
+
+  it('hides upgrade progress after disabling even when the account ETag is unchanged', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false)
+    localStorage.setItem('account-auto-refresh', JSON.stringify({ enabled: true, interval_seconds: 5 }))
+    getManagementCapabilities.mockResolvedValue({ concurrency_upgrade_enabled: true })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('progress').exists()).toBe(true)
+
+    getManagementCapabilities.mockResolvedValue({ concurrency_upgrade_enabled: false })
+    await vi.advanceTimersByTimeAsync(6000)
+    await flushPromises()
+    expect(listWithEtag).toHaveBeenCalled()
+    expect(wrapper.find('progress').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('autoConfig.tier')
+    wrapper.unmount()
+  })
+
+  it('hides upgrade progress if the switch cannot be read', async () => {
+    getManagementCapabilities.mockRejectedValue(new Error('settings unavailable'))
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-account-name]').exists()).toBe(true)
+    expect(wrapper.find('progress').exists()).toBe(false)
     wrapper.unmount()
   })
 

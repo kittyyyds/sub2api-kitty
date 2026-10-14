@@ -585,6 +585,48 @@ func (c *schedulerCache) GetAccount(ctx context.Context, accountID int64) (*serv
 	return account, nil
 }
 
+// GetAccounts hydrates candidate IDs from complete account snapshots. Never
+// expand sched:meta with OAuth credentials or ticket blobs to support a gate.
+func (c *schedulerCache) GetAccounts(ctx context.Context, accountIDs []int64) (map[int64]*service.Account, error) {
+	ids := make([]int64, 0, len(accountIDs))
+	seen := make(map[int64]struct{}, len(accountIDs))
+	keys := make([]string, 0, 2*len(accountIDs))
+	for _, accountID := range accountIDs {
+		if accountID <= 0 {
+			continue
+		}
+		if _, exists := seen[accountID]; exists {
+			continue
+		}
+		seen[accountID] = struct{}{}
+		ids = append(ids, accountID)
+		id := strconv.FormatInt(accountID, 10)
+		keys = append(keys, schedulerAccountKey(id), schedulerLastUsedKey(id))
+	}
+	values, err := c.mgetChunked(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	accounts := make(map[int64]*service.Account, len(ids))
+	for i, id := range ids {
+		if values[2*i] == nil {
+			continue
+		}
+		account, err := decodeCachedAccount(values[2*i])
+		if err != nil {
+			return nil, err
+		}
+		if account == nil || account.ID != id {
+			return nil, fmt.Errorf("scheduler account snapshot ID mismatch")
+		}
+		if err := applySchedulerLastUsed(account, values[2*i+1]); err != nil {
+			return nil, err
+		}
+		accounts[id] = account
+	}
+	return accounts, nil
+}
+
 func (c *schedulerCache) SetAccount(ctx context.Context, account *service.Account) error {
 	if account == nil || account.ID <= 0 {
 		return nil
@@ -872,6 +914,7 @@ func buildSchedulerMetadataAccount(account service.Account) service.Account {
 		LoadFactor:              account.LoadFactor,
 		Priority:                account.Priority,
 		RateMultiplier:          account.RateMultiplier,
+		GroupRateMultiplier:     account.GroupRateMultiplier,
 		Status:                  account.Status,
 		LastUsedAt:              account.LastUsedAt,
 		ExpiresAt:               account.ExpiresAt,
@@ -904,11 +947,13 @@ func filterSchedulerAccountGroups(accountGroups []service.AccountGroup) []servic
 		if ag.GroupID <= 0 {
 			continue
 		}
+		// 候选过滤读的是本投影：裁掉 AllowedModels，分组内的模型限制在选号阶段就会失效。
 		filtered = append(filtered, service.AccountGroup{
-			AccountID: ag.AccountID,
-			GroupID:   ag.GroupID,
-			Priority:  ag.Priority,
-			CreatedAt: ag.CreatedAt,
+			AccountID:     ag.AccountID,
+			GroupID:       ag.GroupID,
+			Priority:      ag.Priority,
+			AllowedModels: ag.AllowedModels,
+			CreatedAt:     ag.CreatedAt,
 		})
 	}
 	if len(filtered) == 0 {
@@ -954,8 +999,9 @@ func filterSchedulerCredentials(credentials map[string]any) map[string]any {
 	if len(credentials) == 0 {
 		return nil
 	}
-	// Keep Grok subscription metadata and the upstream per-account scheduling threshold.
-	keys := []string{"model_mapping", "compact_model_mapping", "api_key", "project_id", "oauth_type", "plan_type", "subscription_tier", "account_scheduling_threshold"}
+	// Candidate-list admission evaluates the account override before hydrating
+	// the full account. Dropping it silently falls back to the platform threshold.
+	keys := []string{"model_mapping", "model_mapping_mode", "compact_model_mapping", "api_key", "project_id", "oauth_type", "plan_type", "subscription_tier", "account_scheduling_threshold"}
 	filtered := make(map[string]any)
 	for _, key := range keys {
 		if value, ok := credentials[key]; ok && value != nil {
@@ -973,6 +1019,9 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		return nil
 	}
 	keys := []string{
+		// Priority scoring runs on candidate metadata before full hydration.
+		// Dropping saved procurement cost silently substitutes the 0.1 default.
+		service.AccountCostMultiplierExtraKey,
 		// Anthropic shared-window and Fable-only threshold checks run on this
 		// projection. UpdateExtra refreshes both payloads without a bucket rebuild.
 		"session_window_utilization",
@@ -1018,10 +1067,22 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		// 裁掉它们，透传账号在选号阶段会退回按(常为过期的)白名单判定并被误判为
 		// model_not_supported —— 转发阶段却仍按透传工作，表现为"单独测账号能通、
 		// 走网关报 no available accounts"。
+		"astra_model_disabled",
+		"astra_model_blocked_keys",
+		"astra_model_empty_mapping",
 		"openai_passthrough",
 		"openai_oauth_passthrough",
+		"openai_excel_bps",
+		"openai_excel_bps_auto_disable_on_403",
+		service.ExcelBPSAutoRecoverOn403Key,
+		service.ExcelBPS403RecoveryIntervalMinutesKey,
+		service.ExcelBPSAutoMoveOn403Key,
+		service.ExcelBPS403TargetGroupIDKey,
+		"openai_excel_bps_mihomo",
+		"openai_excel_bps_models",
 		"codex_fingerprint_mode",
 		"codex_fingerprint_seed",
+		service.OpenAICodexSkipHarvestExtraKey,
 		"codex_5h_used_percent",
 		"codex_7d_used_percent",
 		"codex_5h_reset_at",
@@ -1033,16 +1094,25 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"auto_pause_7d_threshold",
 		"auto_pause_5h_disabled",
 		"auto_pause_7d_disabled",
+		// 自动用卡：卡可用的 OpenAI 号在暂停阈值与用卡阈值之间继续调度。
+		// 候选过滤读的是本投影，缺这几个键时放行分支永远不会生效，
+		// 账号会在暂停阈值处被一刀切停调，直到窗口自然重置。
+		service.OpenAIAutoResetCreditEnabledExtraKey,
+		service.OpenAIAutoResetCredit5hThresholdExtraKey,
+		service.OpenAIAutoResetCredit7dThresholdExtraKey,
+		service.OpenAIAutoResetCreditStateExtraKey,
 		"model_rate_limits",
 		"subscription_tier",
 		"plan_type",
+		service.AccountPoolExtraKey,
+		service.AccountTieredRoutingEnabledExtraKey,
 		service.UpstreamBillingProbeExtraKey,
 		service.GrokMediaEligibleExtraKey,
 		"grok_billing_snapshot",
 	}
 	filtered := make(map[string]any)
 	for _, key := range keys {
-		if value, ok := extra[key]; ok && value != nil {
+		if value, ok := extra[key]; ok && (value != nil || key == "openai_excel_bps_models") {
 			if key == service.UpstreamBillingProbeExtraKey {
 				filteredProbe := filterSchedulerUpstreamBillingProbe(value)
 				if filteredProbe == nil {

@@ -3,6 +3,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/serverless"
 	"log"
 	"log/slog"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/websearch"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -22,6 +25,7 @@ import (
 
 // ProviderSet 提供服务器层的依赖
 var ProviderSet = wire.NewSet(
+	ProvideLifecycle,
 	ProvideRouter,
 	ProvideHTTPServer,
 )
@@ -40,8 +44,10 @@ func ProvideRouter(
 	subscriptionService *service.SubscriptionService,
 	opsService *service.OpsService,
 	settingService *service.SettingService,
+	userService *service.UserService,
 	compositeResolver *service.CompositeRouteResolver,
 	redisClient *redis.Client,
+	lifecycle *Lifecycle,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -87,7 +93,21 @@ func ProvideRouter(
 		service.SetWebSearchManager(websearch.NewManager(configs, redisClient))
 	})
 
-	return SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg, redisClient)
+	manager, err := serverless.New(serverless.Runtime{ID: cfg.Runtime.ServerlessID, Endpoint: cfg.Runtime.ServerlessEndpoint, Region: cfg.Runtime.ServerlessRegion, Secret: cfg.Runtime.ServerlessSecret, Gateway: cfg.Runtime.Role == config.RuntimeRoleGateway, Version: settingService.ServerlessVersion()}, redisClient, settingService.ServerlessStore())
+	if err != nil {
+		panic(err)
+	}
+	settingService.Serverless = manager
+	manager.Start(func(ctx context.Context) error {
+		if lifecycle.isDraining() {
+			return fmt.Errorf("draining")
+		}
+		return lifecycle.checkWithinBudget(ctx)
+	})
+	lifecycle.onDrain = append(lifecycle.onDrain, manager.Stop)
+	r.Use(manager.Ingress())
+	r.GET("/internal/serverless/probe", manager.ProbeHandler)
+	return SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, userService, compositeResolver, cfg, redisClient)
 }
 
 func configureTrustedProxies(r *gin.Engine, cfg config.ServerConfig) {
@@ -110,8 +130,8 @@ func configureTrustedProxies(r *gin.Engine, cfg config.ServerConfig) {
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器
-func ProvideHTTPServer(cfg *config.Config, router *gin.Engine) *http.Server {
-	httpHandler := http.Handler(router)
+func ProvideHTTPServer(cfg *config.Config, router *gin.Engine, lifecycle *Lifecycle) *http.Server {
+	httpHandler := managedinstance.WrapHTTP(http.Handler(router))
 	server := &http.Server{
 		Addr:           cfg.Server.Address(),
 		Handler:        httpHandler,
@@ -159,7 +179,7 @@ func ProvideHTTPServer(cfg *config.Config, router *gin.Engine) *http.Server {
 		}
 	}
 
-	server.Handler = httpHandler
+	server.Handler = lifecycle.Wrap(httpHandler)
 	return server
 }
 

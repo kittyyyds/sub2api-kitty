@@ -1,16 +1,20 @@
 <template>
   <AppLayout>
+    <div class="monitor-compact-page">
+    <header class="monitor-compact-heading"><div><div class="home-eyebrow">LIVE STATUS</div><h1>{{ ht('homeOverview.channel') }}</h1><p>{{ ht('homeOverview.channelHint') }}</p></div><span>{{ ht('homeOverview.channelCount', { n: items.length }) }}</span></header>
     <MonitorHero
       :overall-status="overallStatus"
       :interval-seconds="DEFAULT_INTERVAL_SECONDS"
       :window="currentWindow"
       :loading="loading"
+      :has-data="items.length > 0"
       :auto-refresh="autoRefresh"
       @update:window="handleWindowChange"
       @refresh="manualReload"
     />
 
     <MonitorCardGrid
+      compact
       :items="items"
       :window="currentWindow"
       :loading="loading"
@@ -18,6 +22,7 @@
       :rate-by-group-name="rateByGroupName"
       @card-click="openDetail"
     />
+    </div>
 
     <MonitorDetailDialog
       :show="showDetail"
@@ -49,8 +54,11 @@ import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
 import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
 import { DEFAULT_INTERVAL_SECONDS, STATUS_OPERATIONAL } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
+import '@/styles/dashboard-home.css'
+import '@/styles/monitor-compact.css'
 
 const { t } = useI18n()
+const { t: ht } = useI18n()
 const appStore = useAppStore()
 
 // ── State ──

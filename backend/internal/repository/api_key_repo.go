@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +47,7 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
 	builder := r.client.APIKey.Create().
 		SetUserID(key.UserID).
+		SetConcurrencyLimit(key.ConcurrencyLimit).
 		SetKey(key.Key).
 		SetName(key.Name).
 		SetStatus(key.Status).
@@ -97,7 +100,7 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIK
 func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (string, int64, error) {
 	m, err := r.activeQuery().
 		Where(apikey.IDEQ(id)).
-		Select(apikey.FieldKey, apikey.FieldUserID).
+		Select(apikey.FieldKey, apikey.FieldKeyHash, apikey.FieldUserID).
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -105,12 +108,12 @@ func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (stri
 		}
 		return "", 0, err
 	}
-	return m.Key, m.UserID, nil
+	return (&service.APIKey{Key: m.Key, KeyHash: m.KeyHash}).AuthCacheInvalidationKey(), m.UserID, nil
 }
 
 func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apikey.Or(apikey.KeyEQ(key), apikey.KeyHashEQ(legacyAPIKeyDigest(key)))).
 		WithUser(func(q *dbent.UserQuery) {
 			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
 				gq.Select(group.FieldID)
@@ -129,9 +132,11 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 
 func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apikey.Or(apikey.KeyEQ(key), apikey.KeyHashEQ(legacyAPIKeyDigest(key)))).
 		Select(
 			apikey.FieldID,
+			apikey.FieldKeyHash,
+			apikey.FieldKeyPrefix,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
 			apikey.FieldName,
@@ -142,6 +147,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldQuotaUsed,
 			apikey.FieldExpiresAt,
 			apikey.FieldRateLimit5h,
+			apikey.FieldConcurrencyLimit,
 			apikey.FieldRateLimit1d,
 			apikey.FieldRateLimit7d,
 		).
@@ -175,6 +181,9 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldName,
 				group.FieldPlatform,
 				group.FieldIsExclusive,
+				group.FieldSecurityPolicyEnabled,
+				group.FieldSecurityPolicyMode,
+				group.FieldSecurityPolicyEmailEnabled,
 				group.FieldStatus,
 				group.FieldSubscriptionType,
 				group.FieldRateMultiplier,
@@ -205,6 +214,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldClaudeCodeOnly,
 				group.FieldFallbackGroupID,
 				group.FieldFallbackGroupIDOnInvalidRequest,
+				group.FieldStreamOnly,
 				group.FieldModelRoutingEnabled,
 				group.FieldModelRouting,
 				group.FieldMcpXMLInject,
@@ -221,9 +231,6 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldMaxReasoningEffort,
 				group.FieldMaxReasoningEffortOverLimit,
 				group.FieldReasoningEffortMappings,
-				group.FieldGrokPromptEnabled,
-				group.FieldGrokPromptMode,
-				group.FieldGrokPromptContent,
 				group.FieldPeakRateEnabled,
 				group.FieldPeakStart,
 				group.FieldPeakEnd,
@@ -247,6 +254,9 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 }
 
 func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fields service.APIKeyUpdateFields) error {
+	if needsManagedResourceGuard(ctx) {
+		return withManagedResourceWrite(ctx, r.client, "api_keys", key.ID, 0, func(next context.Context) error { return r.Update(next, key, fields) })
+	}
 	// 空掩码代表调用方不改任何列，直接返回，避免产生一次无意义的整行写。
 	if fields.IsEmpty() {
 		return nil
@@ -262,6 +272,9 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fiel
 	builder := client.APIKey.Update().
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetUpdatedAt(now)
+	if fields.ConcurrencyLimit {
+		builder.SetConcurrencyLimit(key.ConcurrencyLimit)
+	}
 	if fields.Name {
 		builder.SetName(key.Name)
 	}
@@ -619,7 +632,7 @@ func (r *apiKeyRepository) CountByUserID(ctx context.Context, userID int64) (int
 }
 
 func (r *apiKeyRepository) ExistsByKey(ctx context.Context, key string) (bool, error) {
-	count, err := r.activeQuery().Where(apikey.KeyEQ(key)).Count(ctx)
+	count, err := r.activeQuery().Where(apikey.Or(apikey.KeyEQ(key), apikey.KeyHashEQ(legacyAPIKeyDigest(key)))).Count(ctx)
 	return count > 0, err
 }
 
@@ -655,6 +668,17 @@ func (r *apiKeyRepository) ListByGroupID(ctx context.Context, groupID int64, par
 func apiKeyListOrder(params pagination.PaginationParams) []func(*entsql.Selector) {
 	sortBy := strings.ToLower(strings.TrimSpace(params.SortBy))
 	sortOrder := params.NormalizedSortOrder(pagination.SortOrderDesc)
+
+	if sortBy == "group" {
+		// Sort before pagination, keeping ungrouped keys last in either direction.
+		opts := []entsql.OrderTermOption{entsql.OrderNullsLast()}
+		tieOrder := dbent.Asc(apikey.FieldID)
+		if sortOrder == pagination.SortOrderDesc {
+			opts = append(opts, entsql.OrderDesc())
+			tieOrder = dbent.Desc(apikey.FieldID)
+		}
+		return []func(*entsql.Selector){apikey.ByGroupField(group.FieldName, opts...), tieOrder}
+	}
 
 	var field string
 	switch sortBy {
@@ -737,23 +761,25 @@ func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (i
 }
 
 func (r *apiKeyRepository) ListKeysByUserID(ctx context.Context, userID int64) ([]string, error) {
-	keys, err := r.activeQuery().
-		Where(apikey.UserIDEQ(userID)).
-		Select(apikey.FieldKey).
-		Strings(ctx)
+	rows, err := r.activeQuery().Where(apikey.UserIDEQ(userID)).Select(apikey.FieldKey, apikey.FieldKeyHash).All(ctx)
 	if err != nil {
 		return nil, err
+	}
+	keys := make([]string, 0, len(rows))
+	for _, row := range rows {
+		keys = append(keys, (&service.APIKey{Key: row.Key, KeyHash: row.KeyHash}).AuthCacheInvalidationKey())
 	}
 	return keys, nil
 }
 
 func (r *apiKeyRepository) ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error) {
-	keys, err := r.activeQuery().
-		Where(apikey.GroupIDEQ(groupID)).
-		Select(apikey.FieldKey).
-		Strings(ctx)
+	rows, err := r.activeQuery().Where(apikey.GroupIDEQ(groupID)).Select(apikey.FieldKey, apikey.FieldKeyHash).All(ctx)
 	if err != nil {
 		return nil, err
+	}
+	keys := make([]string, 0, len(rows))
+	for _, row := range rows {
+		keys = append(keys, (&service.APIKey{Key: row.Key, KeyHash: row.KeyHash}).AuthCacheInvalidationKey())
 	}
 	return keys, nil
 }
@@ -786,7 +812,7 @@ func (r *apiKeyRepository) IncrementQuotaUsedAndGetState(ctx context.Context, id
 			END,
 			updated_at = NOW()
 		WHERE id = $3 AND deleted_at IS NULL
-		RETURNING quota_used, quota, key, status
+		RETURNING quota_used, quota, COALESCE(NULLIF(key, ''), 'legacy-sha256:' || key_hash, ''), status
 	`
 
 	state := &service.APIKeyQuotaUsageState{}
@@ -877,29 +903,32 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
-		ID:            m.ID,
-		UserID:        m.UserID,
-		Key:           m.Key,
-		Name:          m.Name,
-		Status:        m.Status,
-		IPWhitelist:   m.IPWhitelist,
-		IPBlacklist:   m.IPBlacklist,
-		LastUsedAt:    m.LastUsedAt,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
-		GroupID:       m.GroupID,
-		Quota:         m.Quota,
-		QuotaUsed:     m.QuotaUsed,
-		ExpiresAt:     m.ExpiresAt,
-		RateLimit5h:   m.RateLimit5h,
-		RateLimit1d:   m.RateLimit1d,
-		RateLimit7d:   m.RateLimit7d,
-		Usage5h:       m.Usage5h,
-		Usage1d:       m.Usage1d,
-		Usage7d:       m.Usage7d,
-		Window5hStart: m.Window5hStart,
-		Window1dStart: m.Window1dStart,
-		Window7dStart: m.Window7dStart,
+		ID:               m.ID,
+		UserID:           m.UserID,
+		Key:              m.Key,
+		Name:             m.Name,
+		Status:           m.Status,
+		IPWhitelist:      m.IPWhitelist,
+		IPBlacklist:      m.IPBlacklist,
+		LastUsedAt:       m.LastUsedAt,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
+		GroupID:          m.GroupID,
+		Quota:            m.Quota,
+		QuotaUsed:        m.QuotaUsed,
+		ExpiresAt:        m.ExpiresAt,
+		RateLimit5h:      m.RateLimit5h,
+		ConcurrencyLimit: m.ConcurrencyLimit,
+		RateLimit1d:      m.RateLimit1d,
+		RateLimit7d:      m.RateLimit7d,
+		Usage5h:          m.Usage5h,
+		Usage1d:          m.Usage1d,
+		Usage7d:          m.Usage7d,
+		Window5hStart:    m.Window5hStart,
+		Window1dStart:    m.Window1dStart,
+		Window7dStart:    m.Window7dStart,
+		KeyHash: m.KeyHash,
+		KeyPrefix: m.KeyPrefix,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -975,6 +1004,9 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
 		IsExclusive:                     g.IsExclusive,
+		SecurityPolicyEnabled:           g.SecurityPolicyEnabled,
+		SecurityPolicyMode:              g.SecurityPolicyMode,
+		SecurityPolicyEmailEnabled:      g.SecurityPolicyEmailEnabled,
 		Status:                          g.Status,
 		Hydrated:                        true,
 		DuplicateOperationID:            derefString(g.DuplicateOperationID),
@@ -1009,6 +1041,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
+		StreamOnly:                      g.StreamOnly,
 		ModelRouting:                    g.ModelRouting,
 		ModelRoutingEnabled:             g.ModelRoutingEnabled,
 		MCPXMLInject:                    g.McpXMLInject,
@@ -1028,9 +1061,6 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		MaxReasoningEffort:              g.MaxReasoningEffort,
 		MaxReasoningEffortOverLimit:     g.MaxReasoningEffortOverLimit,
 		ReasoningEffortMappings:         g.ReasoningEffortMappings,
-		GrokPromptEnabled:               g.GrokPromptEnabled,
-		GrokPromptMode:                  g.GrokPromptMode,
-		GrokPromptContent:               g.GrokPromptContent,
 		PeakRateEnabled:                 g.PeakRateEnabled,
 		PeakStart:                       g.PeakStart,
 		PeakEnd:                         g.PeakEnd,
@@ -1048,4 +1078,9 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func legacyAPIKeyDigest(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
 }

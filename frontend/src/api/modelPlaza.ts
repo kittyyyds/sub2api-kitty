@@ -43,11 +43,45 @@ export interface PlazaTimePricing {
   periods: PlazaTimePricingPeriod[]
 }
 
+/** Public selling prices for this group; never supplier costs or markup settings. */
+export interface PlazaModelPricing extends UserSupportedModelPricing {
+  final_unit_price?: boolean
+  reference_per_second?: number | null
+  resolution_prices?: Record<string, number | null>
+}
+
+export interface PlazaVideoCountRange {
+  min: number
+  max: number
+  fixed?: number
+}
+
+/** Customer-facing capabilities only. Private video configuration is not part of this DTO. */
+export interface PlazaVideoCapabilities {
+  generic?: boolean
+  media_type: string
+  supported: boolean
+  seconds?: PlazaVideoCountRange
+  second_options?: number[]
+  resolutions?: string[]
+  aspect_ratios?: string[]
+  reference_images?: PlazaVideoCountRange
+  reference_videos?: PlazaVideoCountRange
+  reference_audios?: PlazaVideoCountRange
+  max_reference_seconds?: number
+  max_combined_seconds?: number
+  allow_audio_only?: boolean
+  requires_visual_or_audio?: boolean
+  generate_audio?: boolean
+}
+
 export interface PlazaModel {
   name: string
   platform: string
+  description?: string
+  capabilities?: PlazaVideoCapabilities
   /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
-  pricing: UserSupportedModelPricing | null
+  pricing: PlazaModelPricing | null
   official_pricing: PlazaOfficialPricing | null
   /** Image tiers whose configured USD price is already the final customer charge. */
   final_image_price_tiers?: string[]
@@ -67,10 +101,10 @@ export interface ModelPlazaGroup {
   /** 'standard' | 'subscription' */
   subscription_type: string
   rate_multiplier: number
-  /** 图片模型是否使用独立倍率。 */
+  /** 非最终价图片档位使用独立倍率；不取分组/用户专属倍率。 */
   image_rate_independent: boolean
   image_rate_multiplier: number
-  /** 视频模型是否使用独立倍率。 */
+  /** 非最终价视频档位使用独立倍率；video 平台配置的最终余额价不叠加倍率。 */
   video_rate_independent: boolean
   video_rate_multiplier: number
   /** 登录且管理员为该用户配了专属倍率时返回；生效倍率 = user_rate ?? rate_multiplier。 */
@@ -80,7 +114,6 @@ export interface ModelPlazaGroup {
   peak_end: string
   peak_rate_multiplier: number
   is_exclusive: boolean
-  /** 生图独立倍率：true 时图片计费模型的实付倍率取 image_rate_multiplier，不取分组/专属倍率。 */
   /** 分组是否启用长上下文阶梯计费；false 时实付列只展示最低档，官方阶梯仅供参考。 */
   long_context_pricing_enabled: boolean
   models: PlazaModel[]

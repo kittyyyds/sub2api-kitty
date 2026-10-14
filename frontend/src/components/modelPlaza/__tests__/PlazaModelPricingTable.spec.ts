@@ -5,43 +5,11 @@ import type { PlazaModel } from '@/api/modelPlaza'
 
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
-  return {
-    ...actual,
-    useI18n: () => ({
-      t: (key: string) => key
-    })
-  }
+  return { ...actual, useI18n: () => ({ t: (key: string) => key }) }
 })
 
-function tokenModel(overrides: Partial<PlazaModel> = {}): PlazaModel {
-  return {
-    name: 'claude-sonnet',
-    platform: 'anthropic',
-    pricing: {
-      billing_mode: 'token',
-      input_price: 3e-6,
-      output_price: 1.5e-5,
-      cache_write_price: 3.75e-6,
-      cache_write_1h_price: null,
-      cache_read_price: 3e-7,
-      image_input_price: null,
-      image_output_price: null,
-      per_request_price: null,
-      intervals: []
-    },
-    official_pricing: {
-      input_price: 3e-6,
-      output_price: 1.5e-5,
-      cache_write_price: 3.75e-6,
-      cache_write_1h_price: 6e-6,
-      cache_read_price: 3e-7
-    },
-    ...overrides
-  }
-}
-
 function model(name: string, billingMode: 'token' | 'image' | 'video' | 'per_request' = 'token'): PlazaModel {
-  return tokenModel({
+  return {
     name,
     platform: 'grok',
     pricing: {
@@ -49,7 +17,6 @@ function model(name: string, billingMode: 'token' | 'image' | 'video' | 'per_req
       input_price: billingMode === 'token' ? 1e-6 : null,
       output_price: billingMode === 'token' ? 2e-6 : null,
       cache_write_price: billingMode === 'token' ? 5e-7 : null,
-      cache_write_1h_price: null,
       cache_read_price: billingMode === 'token' ? 2e-7 : null,
       image_input_price: null,
       image_output_price: null,
@@ -57,17 +24,94 @@ function model(name: string, billingMode: 'token' | 'image' | 'video' | 'per_req
       intervals: []
     },
     official_pricing: null
-  })
+  }
 }
 
 function mountTable(models: PlazaModel[], props: Record<string, unknown> = {}) {
   return mount(PlazaModelPricingTable, {
-    props: { models, rateMultiplier: 0.5, userRateMultiplier: null, ...props }
+    props: { models, rateMultiplier: 0.5, ...props }
   })
 }
 
 describe('PlazaModelPricingTable customer pricing ledger', () => {
-  it('shows reference and effective token prices in RMB and keeps newer model names first', () => {
+  it.each([
+    { enabled: true, multiplier: 1, userRate: 0.05, expectedPrice: '¥14.00' },
+    { enabled: true, multiplier: 0.5, userRate: null, expectedPrice: '¥7.00' },
+    { enabled: true, multiplier: 0, userRate: 0.05, expectedPrice: '¥0.00' },
+    { enabled: true, multiplier: -1, userRate: null, expectedPrice: '¥0.00' },
+    { enabled: false, multiplier: 1, userRate: 0.05, expectedPrice: '¥0.70' },
+    { enabled: false, multiplier: 1, userRate: null, expectedPrice: '¥2.10' }
+  ])('shows $expectedPrice for non-final video pricing when independent=$enabled', (tc) => {
+    const video = model('video-test', 'video')
+    video.pricing!.per_request_price = 2
+    const wrapper = mountTable([video], {
+      rateMultiplier: 0.15,
+      userRateMultiplier: tc.userRate,
+      imageRateIndependent: true,
+      imageRateMultiplier: 9,
+      videoRateIndependent: tc.enabled,
+      videoRateMultiplier: tc.multiplier
+    })
+    try {
+      expect(wrapper.get('tbody tr .customer-price').text()).toBe(tc.expectedPrice)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('applies the video independent rate to non-final resolution tiers', () => {
+    const video = model('video-tier-test', 'video')
+    video.pricing!.intervals = [{
+      min_tokens: 0, max_tokens: null, tier_label: '720p',
+      input_price: null, output_price: null, cache_write_price: null,
+      cache_read_price: null, per_request_price: 2
+    }]
+    const wrapper = mountTable([video], {
+      rateMultiplier: 0.15,
+      userRateMultiplier: 0.05,
+      videoRateIndependent: true,
+      videoRateMultiplier: 0.5
+    })
+    try {
+      expect(wrapper.get('tbody tr .tier-value').text()).toBe('720p')
+      expect(wrapper.get('tbody tr .customer-price').text()).toBe('¥7.00')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it.each(['image', 'video'] as const)('defaults a null independent %s multiplier to one', (billingMode) => {
+    const media = model('media-test', billingMode)
+    media.pricing!.per_request_price = 2
+    const wrapper = mountTable([media], {
+      rateMultiplier: 0.15,
+      userRateMultiplier: 0.05,
+      imageRateIndependent: true,
+      imageRateMultiplier: null,
+      videoRateIndependent: true,
+      videoRateMultiplier: null
+    })
+    try {
+      expect(wrapper.get('tbody tr .customer-price').text()).toBe('¥14.00')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it.each(['video', 'per_request'] as const)('shows video-platform %s balance prices without multipliers or currency conversion', (billingMode) => {
+    const video = { ...model('特价/官方h3-2k', billingMode), platform: 'video' }
+    video.pricing!.per_request_price = 0.25
+    video.time_pricing = { timezone: 'Asia/Shanghai', periods: [{ start_time: '00:00', end_time: '23:59', multiplier: 4 }] }
+    const wrapper = mountTable([video], { platform: 'video', rateMultiplier: 3, userRateMultiplier: 7, videoRateIndependent: true, videoRateMultiplier: 5 })
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    const prices = wrapper.get('tbody tr').findAll('.customer-price').map(cell => cell.text())
+    expect(prices).toEqual(billingMode === 'video' ? ['$0.25', '$1.25', '$2.50', '$3.75'] : ['$0.25'])
+    expect(wrapper.text()).not.toContain('modelPlaza.table.personalPrice')
+    expect(wrapper.text()).toContain('videoModule.customerPriceHint')
+    expect(wrapper.text()).not.toContain('modelPlaza.table.actualPriceNote')
+  })
+
+  it('shows reference and effective token prices and keeps newer model names first', () => {
     const wrapper = mountTable([model('z-model'), model('a-model')])
     const rows = wrapper.findAll('tbody tr')
 
@@ -131,6 +175,98 @@ describe('PlazaModelPricingTable customer pricing ledger', () => {
       'model-cheap',
       'model-no-official'
     ])
+  })
+
+  it('shows the 1h cache-write price when the pricing catalog provides it', () => {
+    const cached = model('cached-model')
+    cached.pricing!.cache_write_1h_price = 7e-6
+    const wrapper = mountTable([cached])
+    const headers = wrapper.findAll('thead th').map((cell) => cell.text())
+    const prices = wrapper.get('tbody tr').findAll('.customer-price').map((cell) => cell.text())
+
+    expect(headers).toContain('modelPlaza.table.cacheWrite (1h)modelPlaza.table.cnyPerMillion')
+    expect(prices).toContain('¥24.50')
+  })
+
+  it('uses matching official long-context tiers and labels marginal billing', () => {
+    const longContext = model('long-context-model')
+    longContext.pricing!.intervals = [
+      { min_tokens: 200000, max_tokens: null, tier_label: '', input_price: 3e-6, output_price: 4e-6, cache_write_price: 2e-6, cache_read_price: 1e-6, per_request_price: null },
+      { min_tokens: 0, max_tokens: 200000, tier_label: '', input_price: 1e-6, output_price: 2e-6, cache_write_price: 5e-7, cache_read_price: 2e-7, per_request_price: null }
+    ]
+    longContext.official_pricing = {
+      input_price: 1e-6,
+      output_price: 2e-6,
+      cache_write_price: 5e-7,
+      cache_read_price: 2e-7,
+      intervals: [
+        { min_tokens: 0, max_tokens: 200000, tier_label: '', input_price: 2e-6, output_price: 6e-6, cache_write_price: 1e-6, cache_read_price: 5e-7, per_request_price: null },
+        { min_tokens: 200000, max_tokens: null, tier_label: '', input_price: 4e-6, output_price: 8e-6, cache_write_price: 2e-6, cache_read_price: 1e-6, per_request_price: null }
+      ]
+    }
+    longContext.long_context_basis = 'marginal'
+
+    const rows = mountTable([longContext]).findAll('tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => row.get('.tier-value').text())).toEqual(['<=200K', '>200K'])
+    expect(rows[1].text()).toContain('modelPlaza.table.officialShort ¥56.00')
+    expect(rows[1].find('.context-basis-badge').attributes('title')).toBe('modelPlaza.table.tierHintMarginal')
+  })
+
+  it('resolves long-context multiplier-only prices from the base token prices', () => {
+    const longContext = model('multiplier-only-model')
+    longContext.pricing = {
+      billing_mode: 'token',
+      input_price: 10e-6,
+      output_price: 50e-6,
+      cache_write_price: 12.5e-6,
+      cache_write_1h_price: 12.5e-6,
+      cache_read_price: 2e-6,
+      image_input_price: null,
+      image_output_price: null,
+      per_request_price: null,
+      intervals: [{
+        min_tokens: 272000,
+        max_tokens: null,
+        tier_label: '>272K',
+        input_price: null,
+        output_price: null,
+        cache_write_price: null,
+        cache_write_1h_price: null,
+        cache_read_price: null,
+        input_multiplier: 2,
+        output_multiplier: 1.5,
+        cache_write_multiplier: 2,
+        cache_read_multiplier: 2,
+        per_request_price: null
+      }]
+    }
+
+    const prices = mountTable([longContext]).get('tbody tr')
+      .findAll('.customer-price')
+      .map((cell) => cell.text())
+
+    expect(prices).toEqual(['¥70.00', '¥262.50', '¥87.50', '¥87.50', '¥14.00'])
+  })
+
+  it('adds a separately priced row for each time-pricing period without applying the peak multiplier', () => {
+    const timed = model('timed-model')
+    timed.time_pricing = {
+      timezone: 'Asia/Shanghai',
+      weekdays_only: true,
+      periods: [{ start_time: '00:30', end_time: '08:30:00', multiplier: 0.4 }]
+    }
+
+    const rows = mountTable([timed], {
+      rateMultiplier: 0.5,
+      peakWindow: '14:00-18:00 x1.5',
+      peakRateMultiplier: 1.5
+    }).findAll('tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows[1].find('.time-period-badge').text()).toContain('00:30-08:30')
+    expect(rows[1].find('.time-period-badge').attributes('title')).toContain('modelPlaza.table.timePricingRowHintWeekdays')
+    expect(rows[1].find('.time-period-badge').attributes('title')).toContain('modelPlaza.table.timePricingRowHintPeak')
+    expect(rows[1].findAll('.customer-price').map((cell) => cell.text())).toContain('¥1.40')
   })
 
   it('renders image tiers with the independent image multiplier', () => {
@@ -209,9 +345,9 @@ describe('PlazaModelPricingTable customer pricing ledger', () => {
     expect(wrapper.get('tbody tr').text()).toContain('¥0.14')
   })
 
-  it('shows platform badges for composite groups', () => {
-    const anthropic = tokenModel({ name: 'shared-model', platform: 'anthropic' })
-    const openai = tokenModel({ name: 'shared-model', platform: 'openai' })
+  it('keeps same-name models distinguished by platform in composite groups', () => {
+    const anthropic = { ...model('shared-model'), platform: 'anthropic' }
+    const openai = { ...model('shared-model'), platform: 'openai' }
     const wrapper = mount(PlazaModelPricingTable, {
       props: {
         models: [anthropic, openai],
@@ -243,154 +379,5 @@ describe('PlazaModelPricingTable customer pricing ledger', () => {
 
     expect(headers.at(-1)?.text()).toBe('modelPlaza.table.savingsColumn')
     expect(cells.at(-1)?.find('.savings-badge').exists()).toBe(true)
-  })
-})
-
-describe('PlazaModelPricingTable long-context tiers', () => {
-  function ladderIntervals() {
-    return [
-      {
-        min_tokens: 0,
-        max_tokens: 272000,
-        tier_label: '≤272K',
-        input_price: 5e-6,
-        output_price: 3e-5,
-        cache_write_price: 6.25e-6,
-        cache_write_1h_price: null,
-        cache_read_price: 5e-7,
-        per_request_price: null
-      },
-      {
-        min_tokens: 272000,
-        max_tokens: null,
-        tier_label: '>272K',
-        input_price: 1e-5,
-        output_price: 4.5e-5,
-        cache_write_price: 1.25e-5,
-        cache_write_1h_price: null,
-        cache_read_price: 1e-6,
-        per_request_price: null
-      }
-    ]
-  }
-
-  function ladderModel(overrides: Partial<PlazaModel> = {}): PlazaModel {
-    return tokenModel({
-      name: 'gpt-5.6-sol',
-      platform: 'openai',
-      pricing: {
-        billing_mode: 'token',
-        input_price: 5e-6,
-        output_price: 3e-5,
-        cache_write_price: 6.25e-6,
-        cache_write_1h_price: null,
-        cache_read_price: 5e-7,
-        image_input_price: null,
-        image_output_price: null,
-        per_request_price: null,
-        intervals: ladderIntervals()
-      },
-      official_pricing: {
-        input_price: 5e-6,
-        output_price: 3e-5,
-        cache_write_price: 6.25e-6,
-        cache_read_price: 5e-7,
-        intervals: ladderIntervals()
-      },
-      long_context_basis: 'whole_request',
-      ...overrides
-    })
-  }
-
-  it('renders tiered RMB rows and keeps tier labels on the tier column', () => {
-    const wrapper = mountTable([ladderModel()])
-    const rows = wrapper.findAll('tbody tr')
-
-    expect(rows).toHaveLength(2)
-    expect(rows[0].text()).toContain('≤272K')
-    expect(rows[0].text()).toContain('¥17.50')
-    expect(rows[0].text()).toContain('¥105.00')
-    expect(rows[1].text()).toContain('>272K')
-    expect(rows[1].text()).toContain('¥35.00')
-    expect(rows[1].text()).toContain('¥157.50')
-  })
-
-  it('shows 1h cache write prices when present on flat pricing', () => {
-    const m = tokenModel()
-    m.pricing!.cache_write_1h_price = 7e-6
-
-    const wrapper = mountTable([m], { rateMultiplier: 1 })
-    expect(wrapper.text()).toContain('1h')
-    expect(wrapper.text()).toContain('¥49.00')
-    expect(wrapper.text()).toContain('¥42.00')
-  })
-
-  it('adds marginal long-context badges and tooltip hints', () => {
-    const wrapper = mountTable([ladderModel({ long_context_basis: 'marginal' })], { rateMultiplier: 1 })
-
-    expect(wrapper.find('.context-badge').text()).toBe('modelPlaza.table.marginalBadge')
-    expect(wrapper.find('.context-badge').attributes('title')).toBe('modelPlaza.table.tierHintMarginal')
-    expect(wrapper.find('.tier-value span').attributes('title')).toBe('modelPlaza.table.tierHintMarginal')
-  })
-
-  it('generates tier labels from unordered interval bounds', () => {
-    const m = ladderModel({
-      pricing: {
-        ...ladderModel().pricing!,
-        intervals: [
-          { ...ladderIntervals()[1], min_tokens: 1000000, tier_label: '' },
-          { ...ladderIntervals()[0], min_tokens: 100000, max_tokens: 200000, tier_label: '' },
-          { ...ladderIntervals()[0], max_tokens: 100000, tier_label: '' },
-          { ...ladderIntervals()[1], min_tokens: 200000, max_tokens: 1000000, tier_label: '' }
-        ]
-      }
-    })
-
-    const tiers = mountTable([m], { rateMultiplier: 1 })
-      .findAll('tbody tr')
-      .map((row) => row.find('.tier-value').text())
-    expect(tiers).toEqual(['≤100K', '≤200K', '≤1M', '>1M'])
-  })
-})
-
-describe('PlazaModelPricingTable time pricing', () => {
-  function timePricedModel() {
-    return tokenModel({
-      name: 'deepseek-chat',
-      platform: 'deepseek',
-      time_pricing: {
-        timezone: 'Asia/Shanghai',
-        periods: [
-          { start_time: '00:30', end_time: '08:30:00', multiplier: 0.5 },
-          { start_time: '18:00', end_time: '22:00', multiplier: 1.2 }
-        ]
-      }
-    })
-  }
-
-  it('expands time-priced token models into base and period rows', () => {
-    const wrapper = mountTable([timePricedModel()], { rateMultiplier: 0.8 })
-    const trs = wrapper.findAll('tbody tr')
-    expect(trs).toHaveLength(3)
-
-    expect(trs[0].text()).toContain('¥16.80')
-    expect(trs[1].text()).toContain('00:30–08:30')
-    expect(trs[1].text()).toContain('¥8.40')
-    expect(trs[2].text()).toContain('18:00–22:00')
-    expect(trs[2].text()).toContain('¥20.16')
-  })
-
-  it('uses weekday copy and peak disclosure in period tooltips', () => {
-    const m = timePricedModel()
-    m.time_pricing!.weekdays_only = true
-    const wrapper = mountTable([m], {
-      peakWindow: '14:00-18:00 ×1.5 (UTC+08:00)',
-      peakRateMultiplier: 1.5
-    })
-    const badge = wrapper.find('.period-badge')
-
-    expect(badge.text()).toContain('modelPlaza.table.timePricingWeekdays')
-    expect(badge.attributes('title')).toContain('modelPlaza.table.timePricingRowHintWeekdays')
-    expect(badge.attributes('title')).toContain('modelPlaza.table.timePricingRowHintPeak')
   })
 })

@@ -5,6 +5,8 @@
  * This utility extracts the user-facing message from any error shape.
  */
 
+import { localizeClientErrorMessage } from './clientErrorMessage'
+
 interface ApiErrorLike {
   status?: number
   code?: number | string
@@ -125,7 +127,7 @@ export function extractApiErrorMessage(
   fallback = 'Unknown error',
   i18nMap?: Record<string, string>,
 ): string {
-  if (!err) return fallback
+  if (!err) return localizeClientErrorMessage(fallback)
 
   // Try i18n mapping by error code first
   if (i18nMap) {
@@ -137,17 +139,19 @@ export function extractApiErrorMessage(
   if (typeof err === 'object' && err !== null) {
     const e = err as ApiErrorLike
     // Interceptor shape: { message, error }
-    if (e.message) return e.message
-    if (e.error) return e.error
+    const code = extractApiErrorCode(err)
+    const status = e.status
+    if (e.message) return localizeClientErrorMessage(e.message, { code, status })
+    if (e.error) return localizeClientErrorMessage(e.error, { code, status })
     // Legacy axios shape: { response.data.detail }
-    if (e.response?.data?.detail) return e.response.data.detail
-    if (e.response?.data?.message) return e.response.data.message
+    if (e.response?.data?.detail) return localizeClientErrorMessage(e.response.data.detail, { code, status })
+    if (e.response?.data?.message) return localizeClientErrorMessage(e.response.data.message, { code, status })
   }
 
   // Standard Error
-  if (err instanceof Error) return err.message
+  if (err instanceof Error) return localizeClientErrorMessage(err.message)
 
   // Last resort
   const str = String(err)
-  return str === '[object Object]' ? fallback : str
+  return str === '[object Object]' ? fallback : localizeClientErrorMessage(str, { fallback })
 }

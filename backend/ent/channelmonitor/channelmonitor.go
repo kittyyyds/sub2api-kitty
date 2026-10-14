@@ -31,6 +31,8 @@ const (
 	FieldAPIMode = "api_mode"
 	// FieldEndpoint holds the string denoting the endpoint field in the database.
 	FieldEndpoint = "endpoint"
+	// FieldRequestPath holds the string denoting the request_path field in the database.
+	FieldRequestPath = "request_path"
 	// FieldAPIKeyEncrypted holds the string denoting the api_key_encrypted field in the database.
 	FieldAPIKeyEncrypted = "api_key_encrypted"
 	// FieldPrimaryModel holds the string denoting the primary_model field in the database.
@@ -99,6 +101,7 @@ var Columns = []string{
 	FieldAccountID,
 	FieldAPIMode,
 	FieldEndpoint,
+	FieldRequestPath,
 	FieldAPIKeyEncrypted,
 	FieldPrimaryModel,
 	FieldExtraModels,
@@ -143,6 +146,10 @@ var (
 	APIModeValidator func(string) error
 	// EndpointValidator is a validator for the "endpoint" field. It is called by the builders before save.
 	EndpointValidator func(string) error
+	// DefaultRequestPath holds the default value on creation for the "request_path" field.
+	DefaultRequestPath string
+	// RequestPathValidator is a validator for the "request_path" field. It is called by the builders before save.
+	RequestPathValidator func(string) error
 	// APIKeyEncryptedValidator is a validator for the "api_key_encrypted" field. It is called by the builders before save.
 	APIKeyEncryptedValidator func(string) error
 	// PrimaryModelValidator is a validator for the "primary_model" field. It is called by the builders before save.
@@ -246,6 +253,11 @@ func ByAPIMode(opts ...sql.OrderTermOption) OrderOption {
 // ByEndpoint orders the results by the endpoint field.
 func ByEndpoint(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndpoint, opts...).ToFunc()
+}
+
+// ByRequestPath orders the results by the request_path field.
+func ByRequestPath(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestPath, opts...).ToFunc()
 }
 
 // ByAPIKeyEncrypted orders the results by the api_key_encrypted field.

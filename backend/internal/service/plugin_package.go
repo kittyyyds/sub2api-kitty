@@ -120,6 +120,9 @@ func (i *PluginPackageInstaller) Install(ctx context.Context, reader io.Reader, 
 	if err != nil {
 		return nil, err
 	}
+	if manifest.ID == gatewayPromptPluginID && (!isPinnedGatewayPrompt(manifest) || artifactSHA != gatewayPromptPackageSHA256) {
+		return nil, errors.New("分组提示词兼容包哈希不匹配，请使用已验证的原始发布包")
+	}
 	compatibility := EvaluatePluginCompatibility(manifest, i.hostInfo)
 	initialState := PluginStateDisabled
 	if !compatibility.Compatible {
@@ -290,6 +293,13 @@ func (i *PluginPackageInstaller) verifySignature(file *zip.File, manifestRaw []b
 }
 
 func trustedPluginPublisherKey(cfg *config.Config, keyID, pluginID string) string {
+	if keyID == gatewayPromptPublisherID {
+		if pluginID != gatewayPromptPluginID {
+			return ""
+		}
+		return gatewayPromptPublisherKey
+	}
+
 	// 内置公钥是官方私有插件的固定信任根，不允许被部署配置覆盖。
 	if keyID == builtInOpenAITransportPublisherKeyID {
 		if pluginID != builtInOpenAITransportPluginID {

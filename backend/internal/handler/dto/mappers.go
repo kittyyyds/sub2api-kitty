@@ -99,6 +99,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		UpdatedAt:          k.UpdatedAt,
 		CurrentConcurrency: k.CurrentConcurrency,
 		RateLimit5h:        k.RateLimit5h,
+		ConcurrencyLimit:   k.ConcurrencyLimit,
 		RateLimit1d:        k.RateLimit1d,
 		RateLimit7d:        k.RateLimit7d,
 		Usage5h:            k.EffectiveUsage5h(),
@@ -121,6 +122,9 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 	if k.Window7dStart != nil && !service.IsWindowExpired(k.Window7dStart, service.RateLimitWindow7d) {
 		t := k.Window7dStart.Add(service.RateLimitWindow7d)
 		out.Reset7dAt = &t
+	}
+	if k.Key == "" && k.KeyHash != "" {
+		out.KeyDisplay = k.KeyPrefix + "********"
 	}
 	return out
 }
@@ -148,11 +152,9 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 	}
 	out := &AdminGroup{
 		Group:                       groupFromServiceBase(g),
-		GrokPromptEnabled:           g.GrokPromptEnabled,
-		GrokPromptMode:              g.GrokPromptMode,
-		GrokPromptContent:           g.GrokPromptContent,
 		ForceOpenAIFast:             g.ForceOpenAIFast,
 		FreeOpenAIFast:              g.FreeOpenAIFast,
+		StreamOnly:                  g.StreamOnly,
 		ProfitControlEnabled:        g.ProfitControlEnabled,
 		ProfitMinMargin:             g.ProfitMinMargin,
 		ProfitSafetyBuffer:          g.ProfitSafetyBuffer,
@@ -188,6 +190,9 @@ func groupFromServiceBase(g *service.Group) Group {
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
 		IsExclusive:                     g.IsExclusive,
+		SecurityPolicyEnabled:           g.SecurityPolicyEnabled,
+		SecurityPolicyMode:              g.SecurityPolicyMode,
+		SecurityPolicyEmailEnabled:      g.SecurityPolicyEmailEnabled,
 		Status:                          g.Status,
 		SubscriptionType:                g.SubscriptionType,
 		DailyLimitUSD:                   g.DailyLimitUSD,
@@ -261,13 +266,13 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		OllamaCloudUsage:        ollamaCloudUsage,
 		OpenCodeGoUsage:         openCodeGoUsage,
 		ProxyID:                 a.ProxyID,
-		ProxyPool:               a.GetProxyPool(),
 		ProxyFallbackOriginID:   a.ProxyFallbackOriginID,
 		ProxyFallbackOriginName: a.ProxyFallbackOriginName,
 		Concurrency:             a.Concurrency,
 		LoadFactor:              a.LoadFactor,
 		Priority:                a.Priority,
 		RateMultiplier:          a.BillingRateMultiplier(),
+		GroupRateMultiplier:     a.UserGroupRateMultiplier(),
 		Status:                  a.Status,
 		ErrorMessage:            a.ErrorMessage,
 		LastUsedAt:              a.LastUsedAt,
@@ -289,7 +294,7 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		QuotaDimension:          a.QuotaDimension,
 	}
 
-	// 提取 5h 窗口费用控制和会话数量控制配置（仅 Anthropic OAuth/SetupToken 账号有效）
+	// 提取 Anthropic OAuth/SetupToken 的配额控制配置。
 	if a.IsAnthropicOAuthOrSetupToken() {
 		if limit := a.GetWindowCostLimit(); limit > 0 {
 			out.WindowCostLimit = &limit
@@ -342,6 +347,12 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 			if customURL := a.GetCustomBaseURL(); customURL != "" {
 				out.CustomBaseURL = &customURL
 			}
+		}
+	}
+	// OpenAI OAuth uses only a strict per-minute request ceiling.
+	if a.IsOpenAIOAuth() {
+		if rpm := a.GetBaseRPM(); rpm > 0 {
+			out.BaseRPM = &rpm
 		}
 	}
 
@@ -424,12 +435,19 @@ func redactAccountManagedExtra(extra map[string]any) map[string]any {
 	}
 	redacted := make(map[string]any, len(extra))
 	for key, value := range extra {
-		switch key {
-		case service.OllamaCloudUsageSessionExtraKey,
-			service.OllamaCloudUsageAutoRefreshExtraKey,
-			service.OllamaCloudUsageSnapshotExtraKey,
-			service.OpenCodeGoUsageAutoRefreshExtraKey,
-			service.OpenCodeGoUsageSnapshotExtraKey:
+		switch {
+		case key == service.OllamaCloudUsageSessionExtraKey,
+			key == service.OllamaCloudUsageAutoRefreshExtraKey,
+			key == service.OllamaCloudUsageSnapshotExtraKey,
+			key == service.OpenCodeGoUsageAutoRefreshExtraKey,
+			key == service.OpenCodeGoUsageSnapshotExtraKey:
+			continue
+		case key == "codex_fingerprint_seed",
+			key == "anti_degrade", key == "client_identity_compatibility",
+			key == "fingerprint_v2_seed", key == "client_installation_id":
+			// Retired identity snapshots retain private seeds and stay redacted.
+			continue
+		case service.IsRetiredAccountSecretKey(key) || service.IsOpenAICodexTicketPrivateExtraKey(key):
 			continue
 		default:
 			redacted[key] = value
@@ -470,10 +488,11 @@ func AccountListItemFromAccount(a *Account) *AccountListItem {
 	return &AccountListItem{
 		ID: a.ID, Name: a.Name, Notes: a.Notes, Platform: a.Platform, Type: a.Type,
 		Credentials: a.Credentials, CredentialsStatus: a.CredentialsStatus, Extra: a.Extra,
-		OllamaCloudUsage: a.OllamaCloudUsage, OpenCodeGoUsage: a.OpenCodeGoUsage,
+		OllamaCloudUsage: a.OllamaCloudUsage, CodexTurnTickets: a.CodexTurnTickets,
 		ProxyID: a.ProxyID, ProxyFallbackOriginID: a.ProxyFallbackOriginID, ProxyFallbackOriginName: a.ProxyFallbackOriginName,
-		Concurrency: a.Concurrency, LoadFactor: a.LoadFactor, Priority: a.Priority, RateMultiplier: a.RateMultiplier,
-		Status: a.Status, ErrorMessage: a.ErrorMessage, LastUsedAt: a.LastUsedAt, ExpiresAt: a.ExpiresAt,
+		Concurrency: a.Concurrency, LoadFactor: a.LoadFactor, Priority: a.Priority, RateMultiplier: a.RateMultiplier, GroupRateMultiplier: a.GroupRateMultiplier,
+		OpenCodeGoUsage: a.OpenCodeGoUsage,
+		Status:          a.Status, ErrorMessage: a.ErrorMessage, LastUsedAt: a.LastUsedAt, ExpiresAt: a.ExpiresAt,
 		AutoPauseOnExpired: a.AutoPauseOnExpired, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 		Schedulable: a.Schedulable, RateLimitedAt: a.RateLimitedAt, RateLimitResetAt: a.RateLimitResetAt,
 		OverloadUntil: a.OverloadUntil, TempUnschedulableUntil: a.TempUnschedulableUntil,
@@ -497,7 +516,7 @@ func AccountListItemFromAccount(a *Account) *AccountListItem {
 		QuotaNotifyTotalThreshold: a.QuotaNotifyTotalThreshold, ParentAccountID: a.ParentAccountID,
 		QuotaDimension: a.QuotaDimension, ParentEmail: a.ParentEmail, ParentPlanType: a.ParentPlanType,
 		ParentPrivacyMode: a.ParentPrivacyMode, ParentSubscriptionExpiresAt: a.ParentSubscriptionExpiresAt,
-		ParentChatGPTAccountID: a.ParentChatGPTAccountID, Proxy: a.Proxy, ProxyPool: a.ProxyPool, GroupIDs: a.GroupIDs,
+		ParentChatGPTAccountID: a.ParentChatGPTAccountID, Proxy: a.Proxy, GroupIDs: a.GroupIDs,
 	}
 }
 
@@ -514,12 +533,13 @@ func AccountGroupFromService(ag *service.AccountGroup) *AccountGroup {
 		return nil
 	}
 	return &AccountGroup{
-		AccountID: ag.AccountID,
-		GroupID:   ag.GroupID,
-		Priority:  ag.Priority,
-		CreatedAt: ag.CreatedAt,
-		Account:   AccountFromServiceShallow(ag.Account),
-		Group:     GroupFromServiceShallow(ag.Group),
+		AccountID:     ag.AccountID,
+		GroupID:       ag.GroupID,
+		Priority:      ag.Priority,
+		AllowedModels: ag.AllowedModels,
+		CreatedAt:     ag.CreatedAt,
+		Account:       AccountFromServiceShallow(ag.Account),
+		Group:         GroupFromServiceShallow(ag.Group),
 	}
 }
 
@@ -738,6 +758,9 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		ImageSizeSource:           l.ImageSizeSource,
 		ImageSizeBreakdown:        l.ImageSizeBreakdown,
 		MediaType:                 l.MediaType,
+		VideoCount:                l.VideoCount,
+		VideoResolution:           l.VideoResolution,
+		VideoDurationSeconds:      l.VideoDurationSeconds,
 		UserAgent:                 l.UserAgent,
 		IPAddress:                 l.IPAddress,
 		SessionID:                 l.SessionID,
@@ -969,3 +992,38 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 		User:        UserFromServiceShallow(u.User),
 	}
 }
+
+// SecurityPolicyKeywordFromService converts a service keyword to admin DTO.
+func SecurityPolicyKeywordFromService(w *service.SecurityPolicyKeyword) *SecurityPolicyKeyword {
+	if w == nil {
+		return nil
+	}
+	return &SecurityPolicyKeyword{
+		ID:        w.ID,
+		GroupID:   w.GroupID,
+		Keyword:   w.Keyword,
+		Category:  w.Category,
+		Enabled:   w.Enabled,
+		CreatedAt: w.CreatedAt,
+		UpdatedAt: w.UpdatedAt,
+	}
+}
+
+// SecurityPolicyKeywordsFromService converts a service keyword list to admin DTOs.
+func SecurityPolicyKeywordsFromService(words []service.SecurityPolicyKeyword) []SecurityPolicyKeyword {
+	out := make([]SecurityPolicyKeyword, 0, len(words))
+	for i := range words {
+		if dto := SecurityPolicyKeywordFromService(&words[i]); dto != nil {
+			out = append(out, *dto)
+		}
+	}
+	return out
+}
+
+// SecurityPolicyKeywordSeedFromService converts a builtin seed to admin DTO.
+func SecurityPolicyKeywordSeedFromService(seed service.SecurityPolicyKeywordSeed) SecurityPolicyKeywordSeed {
+	return SecurityPolicyKeywordSeed{Keyword: seed.Keyword, Category: seed.Category}
+}
+
+// ProxyWithAccountCountFromServiceAdmin converts a service ProxyWithAccountCount to AdminProxyWithAccountCount DTO.
+// It includes the password field - user-facing endpoints must not use this.

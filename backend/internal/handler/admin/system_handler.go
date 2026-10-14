@@ -4,22 +4,27 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/mihomo"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/setup"
 
 	"github.com/gin-gonic/gin"
 )
 
 // SystemHandler handles system-related operations
 type SystemHandler struct {
-	updateSvc systemUpdateService
-	lockSvc   *service.SystemOperationLockService
+	updateSvc   systemUpdateService
+	lockSvc     *service.SystemOperationLockService
+	kernel      *mihomo.Manager
+	nodeChecker mihomoNodeChecker
 }
 
 // systemUpdateTimeout bounds a full in-place update or rollback: the release
@@ -56,13 +61,18 @@ func NewSystemHandler(updateSvc systemUpdateService, lockSvc *service.SystemOper
 	return &SystemHandler{
 		updateSvc: updateSvc,
 		lockSvc:   lockSvc,
+		kernel:    mihomo.New(filepath.Join(setup.GetDataDir(), "mihomo-codex")),
 	}
 }
 
 // GetVersion returns the current version
 // GET /api/v1/admin/system/version
 func (h *SystemHandler) GetVersion(c *gin.Context) {
-	info, _ := h.updateSvc.CheckUpdate(c.Request.Context(), false)
+	info, err := h.updateSvc.CheckUpdate(c.Request.Context(), false)
+	if err != nil || info == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Version information unavailable")
+		return
+	}
 	response.Success(c, gin.H{
 		"version": info.CurrentVersion,
 	})
@@ -83,6 +93,9 @@ func (h *SystemHandler) CheckUpdates(c *gin.Context) {
 // PerformUpdate downloads and applies the update
 // POST /api/v1/admin/system/update
 func (h *SystemHandler) PerformUpdate(c *gin.Context) {
+	if !requireSystemSuperAdmin(c) {
+		return
+	}
 	operationID := buildSystemOperationID(c, "update")
 	payload := gin.H{"operation_id": operationID}
 	executeAdminIdempotentJSON(c, "admin.system.update", payload, service.DefaultSystemOperationIdempotencyTTL(), func(ctx context.Context) (any, error) {
@@ -147,6 +160,9 @@ func (h *SystemHandler) GetRollbackVersions(c *gin.Context) {
 // installs that specific release (must be one of the recent rollback versions).
 // POST /api/v1/admin/system/rollback
 func (h *SystemHandler) Rollback(c *gin.Context) {
+	if !requireSystemSuperAdmin(c) {
+		return
+	}
 	var req struct {
 		Version string `json:"version"`
 	}
@@ -201,6 +217,9 @@ func (h *SystemHandler) Rollback(c *gin.Context) {
 // RestartService restarts the systemd service
 // POST /api/v1/admin/system/restart
 func (h *SystemHandler) RestartService(c *gin.Context) {
+	if !requireSystemSuperAdmin(c) {
+		return
+	}
 	operationID := buildSystemOperationID(c, "restart")
 	payload := gin.H{"operation_id": operationID}
 	executeAdminIdempotentJSON(c, "admin.system.restart", payload, service.DefaultSystemOperationIdempotencyTTL(), func(ctx context.Context) (any, error) {
@@ -226,6 +245,18 @@ func (h *SystemHandler) RestartService(c *gin.Context) {
 			"operation_id": lock.OperationID(),
 		}, nil
 	})
+}
+
+// GetUpdateJob remains available through the same administrator authentication
+// while a host-owned job survives replacement of this application process.
+
+func requireSystemSuperAdmin(c *gin.Context) bool {
+	role, ok := middleware2.GetUserRoleFromContext(c)
+	if !ok || role != service.RoleSuperAdmin {
+		response.Forbidden(c, "Super administrator access required")
+		return false
+	}
+	return true
 }
 
 func (h *SystemHandler) acquireSystemLock(

@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
-	"github.com/Wei-Shaw/sub2api/internal/kittyrisk"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -12,16 +11,18 @@ import (
 
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
+	requestCaptureHandler *admin.RequestCaptureHandler,
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
+	userCleanupHandler *admin.UserCleanupHandler,
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
-	modelCapabilityAuditHandler *admin.ModelCapabilityAuditHandler,
 	announcementHandler *admin.AnnouncementHandler,
 	dataManagementHandler *admin.DataManagementHandler,
 	backupHandler *admin.BackupHandler,
 	oauthHandler *admin.OAuthHandler,
 	openaiOAuthHandler *admin.OpenAIOAuthHandler,
+	openaiOAuthReauthHandler *admin.OpenAIOAuthReauthHandler,
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
 	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
 	grokOAuthHandler *admin.GrokOAuthHandler,
@@ -40,11 +41,18 @@ func ProvideAdminHandlers(
 	pluginHandler *admin.PluginHandler,
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
+	pelicanGroupTestHandler *admin.PelicanGroupTestHandler,
+	accountOpsHandler *admin.AccountOpsHandler,
+	accountTokenGuardHandler *admin.AccountTokenGuardHandler,
+	accountTokenGuardV2Handler *admin.AccountTokenGuardV2Handler,
 	channelHandler *admin.ChannelHandler,
 	channelMonitorHandler *admin.ChannelMonitorHandler,
 	channelMonitorTemplateHandler *admin.ChannelMonitorRequestTemplateHandler,
 	contentModerationHandler *admin.ContentModerationHandler,
-	kittyRiskHandler *admin.KittyRiskHandler,
+	securityPolicyHandler *admin.SecurityPolicyHandler,
+	tieredRoutingHandler *admin.TieredRoutingHandler,
+	ticketHandler *admin.TicketHandler,
+	billingExportHandler *admin.BillingExportHandler,
 	promptAuditHandler *securityaudit.PromptAdminHandler,
 	paymentHandler *admin.PaymentHandler,
 	affiliateHandler *admin.AffiliateHandler,
@@ -53,21 +61,31 @@ func ProvideAdminHandlers(
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	opencodeGoUsage *service.OpenCodeGoUsageService,
+	settingService *service.SettingService,
+	codexHarvest *service.CodexHarvestService,
+	openAIGatewayService *service.OpenAIGatewayService,
+	claudeResetCredits *service.ClaudeResetCreditService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
+	accountHandler.SetCodexTicketSettings(settingService)
+	accountHandler.SetCodexHarvestService(codexHarvest)
+	accountHandler.SetOpenAIGatewayService(openAIGatewayService)
 	accountHandler.SetOpenCodeGoUsageService(opencodeGoUsage)
+	accountHandler.SetClaudeResetCreditService(claudeResetCredits)
 	return &AdminHandlers{
+		RequestCapture:         requestCaptureHandler,
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
+		UserCleanup:            userCleanupHandler,
 		Group:                  groupHandler,
 		Account:                accountHandler,
-		ModelCapabilityAudit:   modelCapabilityAuditHandler,
 		Announcement:           announcementHandler,
 		DataManagement:         dataManagementHandler,
 		Backup:                 backupHandler,
 		OAuth:                  oauthHandler,
 		OpenAIOAuth:            openaiOAuthHandler,
+		OpenAIOAuthReauth:      openaiOAuthReauthHandler,
 		GeminiOAuth:            geminiOAuthHandler,
 		AntigravityOAuth:       antigravityOAuthHandler,
 		GrokOAuth:              grokOAuthHandler,
@@ -85,12 +103,19 @@ func ProvideAdminHandlers(
 		TLSFingerprintProfile:  tlsFingerprintProfileHandler,
 		Plugin:                 pluginHandler,
 		APIKey:                 apiKeyHandler,
+		AccountOps:             accountOpsHandler,
+		AccountTokenGuard:      accountTokenGuardHandler,
+		AccountTokenGuardV2:    accountTokenGuardV2Handler,
 		ScheduledTest:          scheduledTestHandler,
+		PelicanGroupTest:       pelicanGroupTestHandler,
 		Channel:                channelHandler,
 		ChannelMonitor:         channelMonitorHandler,
 		ChannelMonitorTemplate: channelMonitorTemplateHandler,
 		ContentModeration:      contentModerationHandler,
-		KittyRisk:              kittyRiskHandler,
+		SecurityPolicy:         securityPolicyHandler,
+		TieredRouting:          tieredRoutingHandler,
+		Ticket:                 ticketHandler,
+		BillingExport:          billingExportHandler,
 		PromptAudit:            promptAuditHandler,
 		Payment:                paymentHandler,
 		Affiliate:              affiliateHandler,
@@ -116,13 +141,13 @@ func ProvideGatewayHandler(
 	cfg *config.Config,
 	settingService *service.SettingService,
 	coordinator *securityaudit.Coordinator,
-	kittyRisk *kittyrisk.ContentModerationService,
+	securityPolicyService *service.SecurityPolicyService,
 ) *GatewayHandler {
 	h := NewGatewayHandler(gatewayService, openAIGatewayService, geminiCompatService, antigravityGatewayService,
 		userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool,
 		errorPassthroughService, contentModerationService, userMsgQueueService, cfg, settingService)
 	h.securityAuditCoordinator = coordinator
-	h.kittyRiskService = kittyRisk
+	h.securityPolicyService = securityPolicyService
 	return h
 }
 
@@ -139,14 +164,17 @@ func ProvideOpenAIGatewayHandler(
 	grokQuotaService *service.GrokQuotaService,
 	cfg *config.Config,
 	coordinator *securityaudit.Coordinator,
-	kittyRisk *kittyrisk.ContentModerationService,
+	securityPolicyService *service.SecurityPolicyService,
+	compositeResolver *service.CompositeRouteResolver,
 ) *OpenAIGatewayHandler {
 	gatewayService.SetPluginManager(pluginManager)
 	h := NewOpenAIGatewayHandler(gatewayService, concurrencyService, billingCacheService, apiKeyService,
 		usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, cfg)
+	h.compositeResolver = compositeResolver
 	h.securityAuditCoordinator = coordinator
-	h.kittyRiskService = kittyRisk
+	h.securityPolicyService = securityPolicyService
 	h.grokMediaEligibilityProber = grokQuotaService
+	h.pluginManager = pluginManager
 	return h
 }
 
@@ -161,9 +189,12 @@ func ProvideBatchImageHandler(
 	return h
 }
 
-// ProvideSystemHandler creates admin.SystemHandler with UpdateService
-func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
-	return admin.NewSystemHandler(updateService, lockService)
+// ProvideSystemHandler creates admin.SystemHandler with UpdateService and the
+// Mihomo node checks backed by the admin proxy diagnostics.
+func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService, adminService service.AdminService) *admin.SystemHandler {
+	h := admin.NewSystemHandler(updateService, lockService)
+	h.SetMihomoNodeChecker(adminService)
+	return h
 }
 
 // ProvideSettingHandler creates SettingHandler with version from BuildInfo
@@ -191,10 +222,9 @@ func ProvideHandlers(
 	redeemHandler *RedeemHandler,
 	subscriptionHandler *SubscriptionHandler,
 	announcementHandler *AnnouncementHandler,
-	aiIntelligenceHandler *AIIntelligenceHandler,
-	candyTestHandler *CandyTestHandler,
 	channelMonitorUserHandler *ChannelMonitorUserHandler,
 	channelMonitorV2Handler *ChannelMonitorV2Handler,
+	channelMonitorV3Handler *ChannelMonitorV3Handler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
 	openaiGatewayHandler *OpenAIGatewayHandler,
@@ -205,6 +235,7 @@ func ProvideHandlers(
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
 	billingPreviewHandler *BillingPreviewHandler,
+	pelicanShowcaseHandler *PelicanShowcaseHandler,
 	modelPlazaHandler *ModelPlazaHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
@@ -221,10 +252,9 @@ func ProvideHandlers(
 		Redeem:            redeemHandler,
 		Subscription:      subscriptionHandler,
 		Announcement:      announcementHandler,
-		AIIntelligence:    aiIntelligenceHandler,
-		CandyTest:         candyTestHandler,
 		ChannelMonitor:    channelMonitorUserHandler,
 		ChannelMonitorV2:  channelMonitorV2Handler,
+		ChannelMonitorV3:  channelMonitorV3Handler,
 		Admin:             adminHandlers,
 		Gateway:           gatewayHandler,
 		OpenAIGateway:     openaiGatewayHandler,
@@ -235,6 +265,7 @@ func ProvideHandlers(
 		PaymentWebhook:    paymentWebhookHandler,
 		AvailableChannel:  availableChannelHandler,
 		BillingPreview:    billingPreviewHandler,
+		PelicanShowcase:   pelicanShowcaseHandler,
 		ModelPlaza:        modelPlazaHandler,
 		AsyncImage:        asyncImageHandler,
 		BatchImage:        batchImageHandler,
@@ -244,6 +275,7 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	admin.NewUserCleanupHandler,
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
@@ -252,10 +284,9 @@ var ProviderSet = wire.NewSet(
 	NewRedeemHandler,
 	NewSubscriptionHandler,
 	NewAnnouncementHandler,
-	NewAIIntelligenceHandler,
-	NewCandyTestHandler,
 	NewChannelMonitorUserHandler,
 	NewChannelMonitorV2Handler,
+	NewChannelMonitorV3Handler,
 	ProvideGatewayHandler,
 	ProvideOpenAIGatewayHandler,
 	NewTotpHandler,
@@ -265,6 +296,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
 	NewBillingPreviewHandler,
+	NewPelicanShowcaseHandler,
 	NewModelPlazaHandler,
 	NewAsyncImageHandler,
 	NewApplicationCenterHandler,
@@ -275,12 +307,12 @@ var ProviderSet = wire.NewSet(
 	admin.NewUserHandler,
 	admin.NewGroupHandlerWithConfig,
 	admin.ProvideAccountHandler,
-	admin.NewModelCapabilityAuditHandler,
 	admin.NewAnnouncementHandler,
 	admin.NewDataManagementHandler,
 	admin.NewBackupHandler,
 	admin.NewOAuthHandler,
 	admin.NewOpenAIOAuthHandler,
+	admin.NewOpenAIOAuthReauthHandler,
 	admin.NewGeminiOAuthHandler,
 	admin.NewAntigravityOAuthHandler,
 	admin.NewGrokOAuthHandler,
@@ -299,16 +331,23 @@ var ProviderSet = wire.NewSet(
 	admin.NewPluginHandler,
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
+	admin.NewPelicanGroupTestHandler,
+	admin.NewAccountOpsHandler,
+	admin.NewAccountTokenGuardHandler,
+	admin.NewAccountTokenGuardV2Handler,
 	admin.NewChannelHandler,
 	admin.NewChannelMonitorHandler,
 	admin.NewChannelMonitorRequestTemplateHandler,
 	admin.NewContentModerationHandler,
-	ProvideKittyRiskService,
-	admin.NewKittyRiskHandler,
+	admin.NewSecurityPolicyHandler,
+	admin.NewTieredRoutingHandler,
+	admin.NewTicketHandler,
+	admin.NewBillingExportHandler,
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
 	admin.NewAuditLogHandler,
+	admin.NewRequestCaptureHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

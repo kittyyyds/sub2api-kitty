@@ -2,6 +2,7 @@ package admin
 
 import (
 	"log/slog"
+	"reflect"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -32,6 +33,16 @@ func (h *SettingHandler) auditSettingsUpdate(c *gin.Context, before *service.Sys
 
 func diffSettings(before *service.SystemSettings, after *service.SystemSettings, beforeAuthSourceDefaults *service.AuthSourceDefaultSettings, afterAuthSourceDefaults *service.AuthSourceDefaultSettings, req UpdateSettingsRequest) []string {
 	changed := make([]string, 0, 20)
+	if before.RequestCaptureEnabled != after.RequestCaptureEnabled {
+		changed = append(changed, "request_capture_enabled")
+	}
+	if before.RequestCaptureQuotaMiB != after.RequestCaptureQuotaMiB {
+		changed = append(changed, "request_capture_quota_mib")
+	}
+	if before.RequestCaptureRetentionDays != after.RequestCaptureRetentionDays {
+		changed = append(changed, "request_capture_retention_days")
+	}
+
 	if before.RegistrationEnabled != after.RegistrationEnabled {
 		changed = append(changed, "registration_enabled")
 	}
@@ -329,6 +340,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.APIBaseURL != after.APIBaseURL {
 		changed = append(changed, "api_base_url")
 	}
+	if before.APIBaseURLDescription != after.APIBaseURLDescription {
+		changed = append(changed, "api_base_url_description")
+	}
 	if before.ContactInfo != after.ContactInfo {
 		changed = append(changed, "contact_info")
 	}
@@ -485,6 +499,27 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AntigravityUserAgentVersion != after.AntigravityUserAgentVersion {
 		changed = append(changed, "antigravity_user_agent_version")
 	}
+	if before.OpenAICodexTicketEnabled != after.OpenAICodexTicketEnabled {
+		changed = append(changed, "openai_codex_ticket_enabled")
+	}
+	if before.OpenAICodexTicketHarvestProxyURL != after.OpenAICodexTicketHarvestProxyURL {
+		changed = append(changed, "openai_codex_ticket_harvest_proxy_url")
+	}
+	if !reflect.DeepEqual(before.OpenAICodexTicketHarvestScope, after.OpenAICodexTicketHarvestScope) {
+		changed = append(changed, "openai_codex_ticket_harvest_scope")
+	}
+	if before.OpenAICodexTicketStrategy != after.OpenAICodexTicketStrategy {
+		changed = append(changed, "openai_codex_ticket_strategy")
+	}
+	if before.OpenAICodexTicketStrictResponse != after.OpenAICodexTicketStrictResponse {
+		changed = append(changed, "openai_codex_ticket_strict_response")
+	}
+	if before.OpenAICodexTicketFailClosed != after.OpenAICodexTicketFailClosed {
+		changed = append(changed, "openai_codex_ticket_fail_closed")
+	}
+	if !reflect.DeepEqual(before.OpenAICodexTicketModels, after.OpenAICodexTicketModels) {
+		changed = append(changed, "openai_codex_ticket_models")
+	}
 	if before.OpenAICodexUserAgent != after.OpenAICodexUserAgent {
 		changed = append(changed, "openai_codex_user_agent")
 	}
@@ -588,6 +623,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.AvailableChannelsEnabled != after.AvailableChannelsEnabled {
 		changed = append(changed, "available_channels_enabled")
 	}
+	if before.PelicanShowcaseEnabled != after.PelicanShowcaseEnabled {
+		changed = append(changed, "pelican_showcase_enabled")
+	}
+	if pelicanShowcaseConfigChanged(before.PelicanShowcase, after.PelicanShowcase) {
+		changed = append(changed, "pelican_showcase_config")
+	}
 	if before.SubscriptionEnabled != after.SubscriptionEnabled {
 		changed = append(changed, "subscription_enabled")
 	}
@@ -606,11 +647,17 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.RiskControlEnabled != after.RiskControlEnabled {
 		changed = append(changed, "risk_control_enabled")
 	}
+	if before.CyberPolicyUserAllowlist != after.CyberPolicyUserAllowlist {
+		changed = append(changed, "cyber_policy_user_allowlist")
+	}
 	if before.CyberSessionBlockEnabled != after.CyberSessionBlockEnabled {
 		changed = append(changed, "cyber_session_block_enabled")
 	}
 	if before.CyberSessionBlockTTLSeconds != after.CyberSessionBlockTTLSeconds {
 		changed = append(changed, "cyber_session_block_ttl_seconds")
+	}
+	if before.CyberSessionIdentityStrictEnabled != after.CyberSessionIdentityStrictEnabled {
+		changed = append(changed, "cyber_session_identity_strict_enabled")
 	}
 	// Default platform quotas（JSON map，整体比较）
 	if !equalPlatformQuotaSettings(before.DefaultPlatformQuotas, after.DefaultPlatformQuotas) {
@@ -875,4 +922,12 @@ func stringSetting(value *string, fallback string) string {
 		return fallback
 	}
 	return *value
+}
+
+// pelicanShowcaseConfigChanged compares normalized configs: the request may leave limits
+// at zero, which the stored config fills with defaults.
+func pelicanShowcaseConfigChanged(before, after service.PelicanShowcaseConfig) bool {
+	normalizedBefore, errBefore := service.NormalizePelicanShowcaseConfig(before)
+	normalizedAfter, errAfter := service.NormalizePelicanShowcaseConfig(after)
+	return errBefore != nil || errAfter != nil || !reflect.DeepEqual(normalizedBefore, normalizedAfter)
 }

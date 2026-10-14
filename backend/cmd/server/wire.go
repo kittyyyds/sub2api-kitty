@@ -5,7 +5,7 @@ package main
 
 import (
 	"context"
-	"github.com/Wei-Shaw/sub2api/internal/kittyrisk"
+	"github.com/Wei-Shaw/sub2api/internal/requestcapture"
 	"log"
 	"net/http"
 	"sync"
@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
@@ -26,6 +27,7 @@ import (
 )
 
 type Application struct {
+	Lifecycle     *server.Lifecycle
 	Server        *http.Server
 	PromptAudit   *securityaudit.PromptService
 	PluginManager *service.PluginManager
@@ -59,7 +61,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		provideCleanup,
 
 		// Application struct
-		wire.Struct(new(Application), "Server", "PromptAudit", "PluginManager", "Cleanup"),
+		wire.Struct(new(Application), "Server", "PromptAudit", "PluginManager", "Lifecycle", "Cleanup"),
 	)
 	return nil, nil
 }
@@ -83,6 +85,8 @@ func providePluginHostInfo(buildInfo handler.BuildInfo) service.PluginHostInfo {
 }
 
 func provideCleanup(
+	cfg *config.Config,
+	requestCaptures *requestcapture.Manager,
 	entClient *ent.Client,
 	rdb *redis.Client,
 	opsMetricsCollector *service.OpsMetricsCollector,
@@ -94,6 +98,7 @@ func provideCleanup(
 	opsService *service.OpsService,
 	opsIngressReject *service.OpsIngressRejectAggregator,
 	apiKeyService *service.APIKeyService,
+	concurrencyService *service.ConcurrencyService,
 	authCacheInvalidationWorker *service.AuthCacheInvalidationWorker,
 	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
@@ -119,11 +124,13 @@ func provideCleanup(
 	grokOAuth *service.GrokOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
 	scheduledTestRunner *service.ScheduledTestRunnerService,
+	accountOps *service.AccountOpsService,
+	accountTokenGuard *service.AccountTokenGuardService,
+	accountTokenGuardV2 *service.AccountTokenGuardV2Service,
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
 	rechargeBonusExpiry *service.RechargeBonusExpiryService,
 	channelMonitorRunner *service.ChannelMonitorRunner,
-	candyTestService *service.CandyTestService,
 	channelMonitorV2Aggregator *service.ChannelMonitorV2Aggregator,
 	quotaFlusher *service.UserPlatformQuotaUsageFlusher,
 	upstreamBillingProbe *service.UpstreamBillingProbeService,
@@ -132,9 +139,14 @@ func provideCleanup(
 	auditLog *service.AuditLogService,
 	openAIAutoReset *service.OpenAIQuotaAutoResetService,
 	promptAudit *securityaudit.PromptService,
-	kittyRisk *kittyrisk.ContentModerationService,
 	pluginManager *service.PluginManager,
 ) func() {
+	if openAIGateway != nil {
+		managedinstance.Register("BPSWarmPool", openAIGateway.StartBPSWarmPool, openAIGateway.StopBPSWarmPool)
+		if cfg.RunsBackgroundJobs() {
+			managedinstance.Register("BPS403Recovery", openAIGateway.StartBPS403Recovery, openAIGateway.StopBPS403Recovery)
+		}
+	}
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -146,7 +158,19 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
-			{"KittyRisk", func() error { kittyRisk.CloseContentModerationRuntime(); return nil }},
+			{"BPSWarmPool", func() error {
+				if openAIGateway != nil {
+					openAIGateway.StopBPS403Recovery()
+					openAIGateway.StopBPSWarmPool()
+				}
+				return nil
+			}},
+			{"AccountTokenGuardService", func() error {
+				if accountTokenGuard != nil {
+					accountTokenGuard.Stop()
+				}
+				return nil
+			}},
 			{"PluginManager", func() error {
 				if pluginManager != nil {
 					pluginManager.Stop()
@@ -183,6 +207,12 @@ func provideCleanup(
 				}
 				return nil
 			}},
+			{"APIKeyQueueWaiters", func() error {
+				if concurrencyService != nil {
+					concurrencyService.StopAPIKeyQueue()
+				}
+				return nil
+			}},
 			{"PromptAuditService", func() error {
 				if promptAudit != nil {
 					return promptAudit.Shutdown(ctx)
@@ -201,6 +231,7 @@ func provideCleanup(
 				}
 				return nil
 			}},
+			{"RequestCapture", func() error { requestCaptures.Close(); return nil }},
 			{"OpsCleanupService", func() error {
 				if opsCleanup != nil {
 					opsCleanup.Stop()
@@ -293,6 +324,7 @@ func provideCleanup(
 				proxyExpiry.Stop()
 				return nil
 			}},
+
 			{"SubscriptionExpiryService", func() error {
 				subscriptionExpiry.Stop()
 				return nil
@@ -343,9 +375,30 @@ func provideCleanup(
 				}
 				return nil
 			}},
+			{"ExcelBPSImages", func() error {
+				return openAIGateway.CloseExcelBPSImages()
+			}},
 			{"OpenAIWSPool", func() error {
 				if openAIGateway != nil {
 					openAIGateway.CloseOpenAIWSPool()
+				}
+				return nil
+			}},
+			{"OpenAICodexTicketHarvester", func() error {
+				if openAIGateway != nil {
+					openAIGateway.StopOpenAICodexTicketHarvester()
+				}
+				return nil
+			}},
+			{"AccountOpsService", func() error {
+				if accountOps != nil {
+					accountOps.Stop()
+				}
+				return nil
+			}},
+			{"AccountTokenGuardV2Service", func() error {
+				if accountTokenGuardV2 != nil {
+					accountTokenGuardV2.Stop()
 				}
 				return nil
 			}},
@@ -370,12 +423,6 @@ func provideCleanup(
 			{"ChannelMonitorV2Aggregator", func() error {
 				if channelMonitorV2Aggregator != nil {
 					channelMonitorV2Aggregator.Stop()
-				}
-				return nil
-			}},
-			{"CandyTestService", func() error {
-				if candyTestService != nil {
-					candyTestService.Stop()
 				}
 				return nil
 			}},

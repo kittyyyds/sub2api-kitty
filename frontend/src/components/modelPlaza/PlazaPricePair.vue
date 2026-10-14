@@ -2,13 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { formatCnyAmount, formatCnyScaled } from '@/utils/pricing'
+import { formatCnyAmount, formatCnyScaled, formatScaled } from '@/utils/pricing'
 
 const props = withDefaults(defineProps<{
   referencePrice: number | null
   chargedPrice: number | null
   scale?: number
-  priceCurrency?: 'usd' | 'cny'
+  priceCurrency?: 'usd' | 'cny' | 'balance'
 }>(), {
   scale: 1,
   priceCurrency: 'usd',
@@ -23,6 +23,7 @@ const discounted = computed(() => (
 ))
 
 function formatPrice(value: number | null): string {
+  if (props.priceCurrency === 'balance') return formatScaled(value, props.scale, 2)
   return props.priceCurrency === 'cny'
     ? formatCnyAmount(value, props.scale, 2)
     : formatCnyScaled(value, props.scale, 2)

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RegisterView from '@/views/auth/RegisterView.vue'
 
 const {
-  cachedSettings,
   fetchPublicSettingsMock,
   registerMock,
   routerPushMock,
@@ -13,7 +12,6 @@ const {
   showWarningMock,
   verifyActionMock
 } = vi.hoisted(() => ({
-  cachedSettings: { value: null as { promo_code_enabled?: boolean } | null },
   fetchPublicSettingsMock: vi.fn(),
   registerMock: vi.fn(),
   routerPushMock: vi.fn(),
@@ -45,7 +43,6 @@ vi.mock('vue-i18n', async () => {
 vi.mock('@/stores', () => ({
   useAuthStore: () => ({ register: registerMock }),
   useAppStore: () => ({
-    get cachedPublicSettings() { return cachedSettings.value },
     fetchPublicSettings: fetchPublicSettingsMock,
     showError: showErrorMock,
     showSuccess: showSuccessMock,
@@ -105,7 +102,6 @@ function mountView() {
 
 describe('RegisterView security settings bootstrap', () => {
   beforeEach(() => {
-    cachedSettings.value = null
     fetchPublicSettingsMock.mockReset()
     registerMock.mockReset()
     routerPushMock.mockReset()
@@ -123,6 +119,26 @@ describe('RegisterView security settings bootstrap', () => {
     vi.useRealTimers()
   })
 
+  it('does not flash a disabled promo code while public settings are loading', async () => {
+    let resolveSettings!: (settings: typeof enabledSettings) => void
+    fetchPublicSettingsMock.mockReturnValueOnce(new Promise<typeof enabledSettings>(resolve => {
+      resolveSettings = resolve
+    }))
+    const wrapper = mountView()
+    expect(wrapper.find('#promo_code').exists()).toBe(false)
+    resolveSettings(enabledSettings)
+    await flushPromises()
+    expect(wrapper.find('#promo_code').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows an enabled promo code after the trusted settings bootstrap finishes', async () => {
+    fetchPublicSettingsMock.mockResolvedValueOnce({ ...enabledSettings, promo_code_enabled: true })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('#promo_code').exists()).toBe(true)
+    wrapper.unmount()
+  })
   it('keeps registration closed while a transient settings failure is retried', async () => {
     vi.useFakeTimers()
     fetchPublicSettingsMock
@@ -142,29 +158,6 @@ describe('RegisterView security settings bootstrap', () => {
     expect(fetchPublicSettingsMock).toHaveBeenLastCalledWith(true)
     expect(wrapper.find('form').exists()).toBe(true)
     expect(wrapper.get('[data-testid="turnstile-widget"]').exists()).toBe(true)
-    wrapper.unmount()
-  })
-
-  it('does not flash the promo-code field before disabled settings finish loading', async () => {
-    let resolveSettings!: (settings: typeof enabledSettings) => void
-    fetchPublicSettingsMock.mockReturnValueOnce(new Promise<typeof enabledSettings>((resolve) => { resolveSettings = resolve }))
-    const wrapper = mountView()
-    expect(wrapper.find('#promo_code').exists()).toBe(false)
-    resolveSettings(enabledSettings)
-    await flushPromises()
-    expect(wrapper.find('#promo_code').exists()).toBe(false)
-    wrapper.unmount()
-  })
-
-  it('keeps the security bootstrap gate when injected settings enable promo codes', async () => {
-    cachedSettings.value = { promo_code_enabled: true }
-    let resolveSettings!: (settings: typeof enabledSettings) => void
-    fetchPublicSettingsMock.mockReturnValueOnce(new Promise<typeof enabledSettings>((resolve) => { resolveSettings = resolve }))
-    const wrapper = mountView()
-    expect(wrapper.find('form').exists()).toBe(false)
-    resolveSettings({ ...enabledSettings, promo_code_enabled: true })
-    await flushPromises()
-    expect(wrapper.find('#promo_code').exists()).toBe(true)
     wrapper.unmount()
   })
 

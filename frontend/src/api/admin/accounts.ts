@@ -3,7 +3,10 @@
  * Handles AI platform account management for administrators
  */
 
-import { apiClient } from '../client'
+import { apiClient, buildApiUrl } from '../client'
+import { ADMIN_UI_REQUEST_HEADER } from '../adminUIRequest'
+import type { CodexHarvestRuntime } from './codexHarvest'
+export { getCodexHarvestControls, saveCodexHarvestControls, getCodexHarvestNodes, resetCodexHarvestNodes } from './codexHarvest'
 import type { OpenAIReferralRefreshResult, OpenAIReferralSendResult } from '@/types/openaiReferrals'
 import type {
   Account,
@@ -33,33 +36,6 @@ import type {
   OpenCodeGoUsageSettings,
   OpenCodeGoUsageState
 } from '@/types'
-
-export type ModelCapabilityProbeProtocol = 'chat_completions' | 'responses' | 'responses_tools'
-
-export interface ModelCapabilityProbeResult {
-  protocol: ModelCapabilityProbeProtocol
-  status: 'verified' | 'model_mismatch' | 'unsupported' | 'timeout' | 'error' | 'needs_retest' | string
-  capability: string
-  requested_model: string
-  upstream_model?: string
-  http_status: number
-  latency_ms: number
-  tool_name?: string
-  tool_call_found: boolean
-  tool_arguments_valid: boolean
-  error?: string
-  evidence: string
-}
-
-export interface ModelCapabilityProbeResponse {
-  account_id: number
-  account_name: string
-  platform: string
-  requested_model: string
-  upstream_model?: string
-  results: ModelCapabilityProbeResult[]
-  disclaimer: string
-}
 
 /**
  * List all accounts with pagination
@@ -205,17 +181,6 @@ export async function getById(id: number): Promise<Account> {
   return data
 }
 
-export async function probeModelCapabilities(
-  id: number,
-  payload: { model_id?: string; protocols?: ModelCapabilityProbeProtocol[] }
-): Promise<ModelCapabilityProbeResponse> {
-  const { data } = await apiClient.post<ModelCapabilityProbeResponse>(
-    `/admin/accounts/${id}/capability-probe`,
-    payload
-  )
-  return data
-}
-
 /**
  * Create new account
  * @param accountData - Account data
@@ -278,40 +243,6 @@ export async function duplicate(id: number): Promise<Account> {
  */
 export async function update(id: number, updates: UpdateAccountRequest): Promise<Account> {
   const { data } = await apiClient.put<Account>(`/admin/accounts/${id}`, updates)
-  return data
-}
-
-export interface ClientProfileEgress {
-  account_id: number
-  ip: string
-  timezone: string
-  observed_at: string
-  proxy_id: number | null
-  proxy_name: string
-  city: string
-  region: string
-  country: string
-  country_code: string
-  latency_ms: number
-  timezone_sent: false
-  source: 'proxy' | 'direct'
-  binding: string
-}
-
-export async function getClientProfileEgress(id: number): Promise<ClientProfileEgress | null> {
-  const { data } = await apiClient.get<ClientProfileEgress | null>(`/admin/accounts/${id}/client-profile/egress`)
-  return data
-}
-
-export async function probeClientProfileEgress(id: number, proxyId?: number): Promise<ClientProfileEgress> {
-  const { data } = await apiClient.post<ClientProfileEgress>(`/admin/accounts/${id}/client-profile/egress`, proxyId === undefined ? {} : { proxy_id: proxyId })
-  return data
-}
-
-export async function updateClientProfile(id: number, profile: Record<string, unknown>, fingerprintMode?: string): Promise<Account> {
-  const payload: Record<string, unknown> = { profile }
-  if (fingerprintMode !== undefined) payload.fingerprint_mode = fingerprintMode
-  const { data } = await apiClient.put<Account>(`/admin/accounts/${id}/client-profile`, payload)
   return data
 }
 
@@ -1127,6 +1058,45 @@ export async function probeUpstreamBillingBatch(accountIds: number[]): Promise<U
   return data.results
 }
 
+export type OpenAICodexStateVerdict = 'healthy' | 'degraded' | 'inconclusive'
+
+export interface OpenAICodexStateProbeResult {
+  account_id: number
+  model: string
+  verdict: OpenAICodexStateVerdict
+  reason: string
+  failure?: string
+  detail?: string
+  mint_status: number
+  continue_status: number
+  minted: boolean
+  new_ticket: boolean
+  ticket_length: number
+  continue_ticket_length: number
+  reported_model?: string
+  latency_ms: number
+  started_at: string
+  finished_at: string
+}
+
+/**
+ * Two-shot Codex turn-state probe: mint a ticket, then continue with it. A new
+ * ticket on the continuation means the account is degraded. Each shot may take
+ * up to 45s upstream, so the default client timeout is too short.
+ */
+export async function probeOpenAICodexState(
+  id: number,
+  modelId?: string,
+  options?: { signal?: AbortSignal }
+): Promise<OpenAICodexStateProbeResult> {
+  const { data } = await apiClient.post<OpenAICodexStateProbeResult>(
+    `/admin/accounts/${id}/state-probe`,
+    { model_id: modelId?.trim() || undefined },
+    { timeout: 120_000, signal: options?.signal }
+  )
+  return data
+}
+
 export async function getOllamaCloudUsageSettings(): Promise<OllamaCloudUsageSettings> {
   const { data } = await apiClient.get<OllamaCloudUsageSettings>('/admin/accounts/ollama-cloud-usage/settings')
   return data
@@ -1171,6 +1141,136 @@ export async function refreshOllamaCloudUsage(id: number): Promise<OllamaCloudUs
   return data
 }
 
+export interface CodexHarvestFlowTicket {
+  transport?: string
+  gateway?: string
+  edge_ip?: string
+  model: string
+  length?: number
+  ready: boolean
+  remaining_seconds: number
+  blocked: boolean
+  expires_at?: string
+  standby_expires_at?: string
+  standby?: boolean
+  cookie_count?: number
+  cookie_expires_at?: string
+  probe?: {
+    result?: string
+    http_status?: number
+    checked_at?: string
+    next_probe_at?: string
+  }
+}
+
+export interface CodexHarvestFlowAccount {
+  id: number
+  name: string
+  status: string
+  schedulable: boolean
+  skip_harvest?: boolean
+  in_scope?: boolean
+  availability?: string
+  recover_at?: string
+  tickets: CodexHarvestFlowTicket[]
+  ready_count: number
+  blocked_count: number
+}
+
+export interface CodexHarvestFlowStage {
+  id: string
+  status: 'ok' | 'warn' | 'fail' | 'idle' | string
+  detail?: string
+  at?: string
+  node?: string
+  model?: string
+  http_status?: number
+  length?: number
+  blocks?: number
+  expected_length?: number
+  expected_blocks?: number
+}
+
+export interface CodexHarvestFlowEvent {
+  id: string
+  at: string
+  stage: string
+  kind: string
+  account_id?: number
+  account_name?: string
+  model?: string
+  node?: string
+  http_status?: number
+  length?: number
+  blocks?: number
+  expected_length?: number
+  expected_blocks?: number
+  accepted?: boolean
+  standby?: boolean
+  result?: string
+  reason?: string
+  detail?: string
+}
+
+export interface CodexHarvestFlowSnapshot {
+  generated_at: string
+  harvest: {
+    enabled: boolean
+    fail_closed: boolean
+    strategy: string
+    scope_mode?: string
+    scope_error?: boolean
+    account_policy?: string
+    group_ids?: number[]
+    models: string[]
+    target_length: number
+    probe_interval_seconds: number
+    cooldown_seconds: number
+    max_probes_per_round: number
+    refresh_before_seconds?: number
+    harvest_proxy?: string
+  }
+  sidecar: {
+    mode?: 'mihomo' | 'external' | 'unconfigured'
+    reachable: boolean
+    source?: string
+    controller?: string
+    group?: string
+    type?: string
+    now?: string
+    all_count?: number
+    error?: string
+    observed_at?: string
+  }
+  stages: CodexHarvestFlowStage[]
+  accounts: CodexHarvestFlowAccount[]
+  counts: {
+    probe_hit: number
+    probe_miss: number
+    ticket_accept: number
+    ticket_reject: number
+    select_ok: number
+    select_skip: number
+    select_fail: number
+    tickets_ready: number
+    tickets_blocked: number
+  }
+  events: CodexHarvestFlowEvent[]
+  runtime?: CodexHarvestRuntime
+}
+
+export async function getCodexHarvestFlow(): Promise<CodexHarvestFlowSnapshot> {
+  const { data } = await apiClient.get<CodexHarvestFlowSnapshot>('/admin/accounts/codex-harvest-flow')
+  return data
+}
+
+export async function updateCodexSkipHarvest(id: number, skipHarvest: boolean): Promise<{ account_id: number; skip_harvest: boolean }> {
+  const { data } = await apiClient.put<{ account_id: number; skip_harvest: boolean }>(`/admin/accounts/${id}/codex-skip-harvest`, {
+    skip_harvest: skipHarvest
+  })
+  return data
+}
+
 export async function getOpenCodeGoUsageSettings(): Promise<OpenCodeGoUsageSettings> {
   const { data } = await apiClient.get<OpenCodeGoUsageSettings>('/admin/accounts/opencode-go-usage/settings')
   return data
@@ -1198,23 +1298,133 @@ export async function setOpenCodeGoUsageAutoRefresh(id: number, enabled: boolean
   return data
 }
 
+export interface ManualHarvestRequest {
+  collect_lanes?: number
+  models?: string[]
+  probe_interval_seconds: number
+  rate_limit_cooldown_seconds: number
+  max_attempts: number
+  node_switch_rule: string
+  stop_on_success: boolean
+}
+
+export interface ManualHarvestProgress {
+  attempt?: number
+  max_attempts?: number
+  model?: string
+  node?: string
+  http_status?: number
+  length?: number
+  blocks?: number
+  expected_length?: number
+  expected_blocks?: number
+  result?: string
+  level?: string
+  message?: string
+  detail?: string
+  tickets_stored?: number
+  done?: boolean
+}
+
+export async function streamManualCodexHarvest(
+  accountId: number,
+  body: ManualHarvestRequest,
+  onProgress: (progress: ManualHarvestProgress) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+    [ADMIN_UI_REQUEST_HEADER]: '1'
+  }
+  const token = localStorage.getItem('auth_token')
+  if (token) headers.Authorization = `Bearer ${token}`
+  const res = await fetch(buildApiUrl(`/admin/accounts/${accountId}/manual-harvest`), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify(body),
+    signal
+  })
+  if (res.status === 401) {
+    const error = new Error('HTTP 401') as Error & { status: number }
+    error.status = 401
+    throw error
+  }
+  if (!res.ok || !res.body) {
+    let detail = ''
+    try {
+      detail = (await res.text()).slice(0, 200)
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail ? `HTTP ${res.status} - ${detail}` : `HTTP ${res.status}`)
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const frames = buffer.split('\n\n')
+    buffer = frames.pop() || ''
+    for (const frame of frames) {
+      if (!frame.startsWith('data: ')) continue
+      try {
+        onProgress(JSON.parse(frame.slice(6)) as ManualHarvestProgress)
+      } catch {
+        // ignore a malformed SSE frame
+      }
+    }
+  }
+  if (buffer.startsWith('data: ')) {
+    try {
+      onProgress(JSON.parse(buffer.slice(6)) as ManualHarvestProgress)
+    } catch {
+      // ignore a trailing malformed SSE frame
+    }
+  }
+}
+
 export async function refreshOpenCodeGoUsage(id: number): Promise<OpenCodeGoUsageState> {
   const { data } = await apiClient.post<OpenCodeGoUsageState>(`/admin/accounts/${id}/opencode-go-usage/refresh`)
   return data
 }
 
+export async function getOpenAIRequestTimezones(): Promise<{ default: string; timezones: string[] }> {
+  const { data } = await apiClient.get<{ default: string; timezones: string[] }>('/admin/accounts/openai-request-timezones')
+  return data
+}
+
+export interface ProxyTimezoneResult {
+  success: boolean
+  reason: string
+  timezone?: string
+  ip_address?: string
+  country?: string
+  city?: string
+  checked_at?: string
+  expires_at?: string
+  cached: boolean
+}
+
+export async function probeOpenAIProxyTimezone(proxyId: number, force = false): Promise<ProxyTimezoneResult> {
+  const { data } = await apiClient.post<ProxyTimezoneResult>(`/admin/accounts/openai-request-timezones/proxy/${proxyId}`, { force })
+  return data
+}
+
 export const accountsAPI = {
+  probeOpenAIProxyTimezone,
+  getManagementCapabilities,
+  getOpenAIRequestTimezones,
   list,
   listWithEtag,
   getUpstreamBillingRatesWithEtag,
   getById,
-  probeModelCapabilities,
   create,
   duplicate,
   update,
-  getClientProfileEgress,
-  probeClientProfileEgress,
-  updateClientProfile,
   getGrokMediaEligibility,
   updateGrokMediaEligibility,
   checkMixedChannelRisk,
@@ -1264,6 +1474,7 @@ export const accountsAPI = {
   setUpstreamBillingProbeEnabled,
   probeUpstreamBilling,
   probeUpstreamBillingBatch,
+  probeOpenAICodexState,
   getOllamaCloudUsageSettings,
   updateOllamaCloudUsageSettings,
   getOllamaCloudUsage,
@@ -1271,6 +1482,9 @@ export const accountsAPI = {
   deleteOllamaCloudUsageSession,
   setOllamaCloudUsageAutoRefresh,
   refreshOllamaCloudUsage,
+  getCodexHarvestFlow,
+  updateCodexSkipHarvest,
+  streamManualCodexHarvest,
   getOpenCodeGoUsageSettings,
   updateOpenCodeGoUsageSettings,
   getOpenCodeGoUsage,
@@ -1279,3 +1493,8 @@ export const accountsAPI = {
 }
 
 export default accountsAPI
+
+export async function getManagementCapabilities(): Promise<{ web_search_enabled: boolean; account_quota_notify_enabled: boolean; concurrency_upgrade_enabled?: boolean }> {
+  const { data } = await apiClient.get('/admin/accounts/management-capabilities')
+  return data
+}

@@ -34,10 +34,18 @@ func (APIKey) Mixin() []ent.Mixin {
 func (APIKey) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("user_id"),
+		field.Int("concurrency_limit").
+			Default(0).
+			NonNegative().
+			Comment("API key concurrency limit (0 = no additional limit)"),
 		field.String("key").
 			MaxLen(128).
+			Optional().
 			NotEmpty().
 			Unique(),
+		// Compatibility metadata for historical hash-only keys; new keys use key.
+		field.String("key_hash").MaxLen(64).Optional().Sensitive(),
+		field.String("key_prefix").MaxLen(16).Optional(),
 		field.String("name").
 			MaxLen(100).
 			NotEmpty(),

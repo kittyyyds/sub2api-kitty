@@ -102,13 +102,13 @@ type BillingPreviewService struct {
 
 func NewBillingPreviewService(
 	apiKeyService *APIKeyService,
-	modelPlazaService *ModelPlazaService,
+	channelService *ChannelService,
 	billingService *BillingService,
 	resolver *ModelPricingResolver,
 ) *BillingPreviewService {
 	return &BillingPreviewService{
 		groups:   apiKeyService,
-		catalog:  modelPlazaService,
+		catalog:  channelService,
 		billing:  billingService,
 		resolver: resolver,
 		now:      timezone.Now,

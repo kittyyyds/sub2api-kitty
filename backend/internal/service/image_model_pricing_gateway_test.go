@@ -48,7 +48,6 @@ func TestGatewayImageModelPriceOverridesTokenModeRouting(t *testing.T) {
 		1,
 		1.5,
 		time.Time{},
-		nil,
 	)
 
 	require.Equal(t, string(BillingModeImage), cost.BillingMode)

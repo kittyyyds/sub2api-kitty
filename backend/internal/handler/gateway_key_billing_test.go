@@ -48,7 +48,7 @@ func newKeyBillingGatewayService(repo service.UserGroupRateRepository) *service.
 
 func newKeyBillingOpenAIGatewayService(repo service.UserGroupRateRepository) *service.OpenAIGatewayService {
 	return service.NewOpenAIGatewayService(
-		nil, nil, nil, nil, nil, repo, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, repo, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 	)
 }
@@ -185,6 +185,33 @@ func TestBuildKeyBillingInfoAppliesPeakMultiplier(t *testing.T) {
 		"timezone",
 	} {
 		require.Contains(t, fields, field)
+	}
+}
+
+func TestVideoKeyBillingInfoUsesVideoRateWithoutTokenPeak(t *testing.T) {
+	group := &service.Group{
+		Platform: service.PlatformVideo, RateMultiplier: 1.2,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+		PeakRateEnabled:  true, PeakStart: "00:00", PeakEnd: "23:59", PeakRateMultiplier: 3,
+	}
+	now := time.Date(2026, time.July, 12, 12, 0, 0, 0, timezone.Location())
+	key := &service.APIKey{Group: group}
+	got := buildKeyBillingInfo(key, .8, now)
+	require.Equal(t, "video", got.BillingScope)
+	require.Equal(t, 1.2, got.GroupRateMultiplier)
+	require.Equal(t, .8, *got.UserRateMultiplier)
+	require.Equal(t, .8, got.EffectiveRateMultiplier)
+	require.False(t, got.PeakRateEnabled)
+	require.Nil(t, got.AppliedPeakMultiplier)
+	for _, videoRate := range []float64{.25, 0} {
+		group.VideoRateIndependent = true
+		group.VideoRateMultiplier = videoRate
+		got = buildKeyBillingInfo(key, .8, now)
+		require.Equal(t, videoRate, got.GroupRateMultiplier)
+		require.Equal(t, videoRate, got.ResolvedRateMultiplier)
+		require.Equal(t, videoRate, got.EffectiveRateMultiplier)
+		require.Nil(t, got.UserRateMultiplier)
+		require.Nil(t, got.PeakRateMultiplier)
 	}
 }
 

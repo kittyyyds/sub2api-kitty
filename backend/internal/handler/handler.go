@@ -7,16 +7,21 @@ import (
 
 // AdminHandlers contains all admin-related HTTP handlers
 type AdminHandlers struct {
+	RequestCapture         *admin.RequestCaptureHandler
+	AccountOps             *admin.AccountOpsHandler
+	AccountTokenGuard      *admin.AccountTokenGuardHandler
+	AccountTokenGuardV2    *admin.AccountTokenGuardV2Handler
 	Dashboard              *admin.DashboardHandler
 	User                   *admin.UserHandler
+	UserCleanup            *admin.UserCleanupHandler
 	Group                  *admin.GroupHandler
 	Account                *admin.AccountHandler
-	ModelCapabilityAudit   *admin.ModelCapabilityAuditHandler
 	Announcement           *admin.AnnouncementHandler
 	DataManagement         *admin.DataManagementHandler
 	Backup                 *admin.BackupHandler
 	OAuth                  *admin.OAuthHandler
 	OpenAIOAuth            *admin.OpenAIOAuthHandler
+	OpenAIOAuthReauth      *admin.OpenAIOAuthReauthHandler
 	GeminiOAuth            *admin.GeminiOAuthHandler
 	AntigravityOAuth       *admin.AntigravityOAuthHandler
 	GrokOAuth              *admin.GrokOAuthHandler
@@ -35,11 +40,15 @@ type AdminHandlers struct {
 	Plugin                 *admin.PluginHandler
 	APIKey                 *admin.AdminAPIKeyHandler
 	ScheduledTest          *admin.ScheduledTestHandler
+	PelicanGroupTest       *admin.PelicanGroupTestHandler
 	Channel                *admin.ChannelHandler
 	ChannelMonitor         *admin.ChannelMonitorHandler
 	ChannelMonitorTemplate *admin.ChannelMonitorRequestTemplateHandler
 	ContentModeration      *admin.ContentModerationHandler
-	KittyRisk              *admin.KittyRiskHandler
+	SecurityPolicy         *admin.SecurityPolicyHandler
+	TieredRouting          *admin.TieredRoutingHandler
+	Ticket                 *admin.TicketHandler
+	BillingExport          *admin.BillingExportHandler
 	PromptAudit            *securityaudit.PromptAdminHandler
 	Payment                *admin.PaymentHandler
 	Affiliate              *admin.AffiliateHandler
@@ -56,10 +65,9 @@ type Handlers struct {
 	Redeem            *RedeemHandler
 	Subscription      *SubscriptionHandler
 	Announcement      *AnnouncementHandler
-	AIIntelligence    *AIIntelligenceHandler
-	CandyTest         *CandyTestHandler
 	ChannelMonitor    *ChannelMonitorUserHandler
 	ChannelMonitorV2  *ChannelMonitorV2Handler
+	ChannelMonitorV3  *ChannelMonitorV3Handler
 	Admin             *AdminHandlers
 	Gateway           *GatewayHandler
 	OpenAIGateway     *OpenAIGatewayHandler
@@ -70,6 +78,7 @@ type Handlers struct {
 	PaymentWebhook    *PaymentWebhookHandler
 	AvailableChannel  *AvailableChannelHandler
 	BillingPreview    *BillingPreviewHandler
+	PelicanShowcase   *PelicanShowcaseHandler
 	ModelPlaza        *ModelPlazaHandler
 	AsyncImage        *AsyncImageHandler
 	BatchImage        *BatchImageHandler

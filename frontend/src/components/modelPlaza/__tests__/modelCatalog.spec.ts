@@ -62,6 +62,18 @@ function group(
 }
 
 describe('model catalog calculations', () => {
+  it.each(['video', 'per_request'] as const)('keeps video-platform %s final prices independent of all multipliers', (billingMode) => {
+    const video = tokenModel('特价/官方h3-2k', 'video')
+    video.pricing!.billing_mode = billingMode
+    video.pricing!.per_request_price = 0.25
+    video.time_pricing = { timezone: 'Asia/Shanghai', periods: [{ start_time: '00:00', end_time: '23:59', multiplier: 4 }] }
+    const videoGroup = { ...group(25, 'Video', 3, [video], 'video'), user_rate_multiplier: 7, video_rate_independent: true, video_rate_multiplier: 5 }
+    const card = buildCatalogSections([videoGroup], null)[0].cards[0]
+    expect(card.metrics[0].current).toBe(0.25)
+    expect(card.multiplier).toBe(1)
+    expect(card.hasTimePricing).toBe(false)
+  })
+
   it('normalizes provider model paths and creates readable names', () => {
     expect(normalizeModelId('publishers/openai/models/gpt-5.6-sol')).toBe('gpt-5.6-sol')
     expect(humanizeModelName('gpt-5.6-sol')).toBe('GPT 5.6 Sol')
@@ -137,4 +149,3 @@ describe('model catalog calculations', () => {
     expect(cards.map((card) => card.modelId)).toEqual(['visible'])
   })
 })
-

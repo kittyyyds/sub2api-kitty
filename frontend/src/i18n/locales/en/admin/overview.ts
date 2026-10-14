@@ -50,6 +50,7 @@ export default {
       accountCost: 'Cost',
       noDataAvailable: 'No data available',
       recentUsage: 'Recent Usage',
+      actualSpending: 'Actual spending ($)',
       viewModelDistribution: 'Model Distribution',
       viewSpendingRanking: 'User Spending Ranking',
       spendingRankingTitle: 'User Spending Ranking',
@@ -740,6 +741,7 @@ export default {
       createdAt: 'Created',
       totalRecharged: 'Total Recharged',
       roles: {
+        super_admin: 'Super administrator',
         admin: 'Admin',
         user: 'User'
       },
@@ -875,6 +877,7 @@ export default {
         rateMultiplier: 'Rate Multiplier',
         rpmOverride: 'RPM Override',
         rpmOverrideHint: 'Per-user RPM cap in this group; empty = group default; 0 = unlimited',
+        deniedModels: 'Denied models',
         rateDefault: 'default',
         rpmDefault: 'default',
         exclusive: 'Exclusive',
@@ -926,6 +929,9 @@ export default {
         rpmLimit: 'Requests Per Minute (RPM)',
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for each user in this group; 0 = unlimited. Once set, it takes over per-user rate limiting in this group (overrides the user-level rpm_limit fallback).',
+        streamOnly: 'Streaming requests only',
+        streamOnlyHint: 'When on, this group only accepts streaming chat requests: Messages, Chat Completions and Responses requests without "stream": true, and Gemini generateContent, are rejected with 400. Token counting, model lists, embeddings, images and videos are not affected. Note: some clients check connectivity with non-streaming requests, and those checks will fail.',
+        streamOnlyBadge: 'Stream only',
         maxReasoningEffort: 'Max reasoning effort',
         maxReasoningEffortUnlimited: 'Unlimited (follow request)',
         maxReasoningEffortHint: 'Limits explicit Anthropic and OpenAI reasoning effort requests. For Composite groups, it applies to the resolved target platform. Omitted effort stays omitted. The ceiling takes precedence over reasoning effort mappings.',
@@ -958,13 +964,6 @@ export default {
         unsupportedMatchType: 'Match type must be exact, prefix, or suffix',
         duplicateFrom: 'Request value A must be unique within the same model scope',
         duplicateScope: 'Type and model combination must be unique',
-        grokPromptEnabled: 'Enable Grok enhancement prompt',
-        grokPromptMode: 'Injection position',
-        grokPromptPrepend: 'Before client instructions',
-        grokPromptAppend: 'After client instructions',
-        grokPromptContent: 'Custom enhancement prompt',
-        grokPromptPlaceholder: 'Leave empty to use the built-in Grok enhancement prompt',
-        grokPromptHint: 'Empty uses the compact built-in prompt. Existing client, project, and user instructions remain intact.',
         exclusiveLabel: 'Exclusive Group',
         exclusiveHint: 'Exclusive group, can be manually assigned to users',
         platformLabel: 'Platform Restriction',
@@ -1022,6 +1021,13 @@ export default {
       noRpmOverrides: 'No users have an RPM override yet',
       rpmSaved: 'RPM overrides saved',
       groupRpmDefault: 'Group default RPM',
+      userDeniedModels: 'Model Limits',
+      userDeniedModelsTitle: 'Per-user Model Limits',
+      userDeniedModelsHint: 'Block specific users from using some models in this group; other models are unaffected. Case-insensitive; a trailing * matches a prefix (e.g. gpt-6-*).',
+      addUserDeniedModels: 'Add a user limit',
+      deniedModelsPlaceholder: 'Type a model and press Enter',
+      noUserDeniedModels: 'No user has model limits yet',
+      userDeniedModelsSaved: 'User model limits saved',
       searchUserPlaceholder: 'Search user email...',
       noRateMultipliers: 'No user rate multipliers configured',
       rateUpdated: 'Rate multiplier updated',
@@ -1046,11 +1052,13 @@ export default {
         gemini: 'Gemini',
         antigravity: 'Antigravity',
         grok: 'Grok',
+        video: 'Video',
         kimi: 'Kimi',
         zhipu: 'Zhipu GLM',
         deepseek: 'DeepSeek',
         minimax: 'MiniMax',
         opencode_go: 'OpenCode',
+        typesafe: 'TypeSafe / Jev',
         composite: 'Composite',
       },
       deleteConfirm:
@@ -1156,19 +1164,18 @@ export default {
       },
       modelAllowlist: {
         title: 'Model Allowlist',
-        hint: 'When enabled, models outside the allowlist are rejected with 404 model_not_found, and model listing endpoints only show allowlisted models. Entries support exact model IDs and trailing * wildcards. Note: Claude Code probes with haiku-family models for titles/summaries and /messages/count_tokens is also allowlist-controlled, so make sure the small models you need are selected too.',
+        hint: 'When enabled, models outside the allowlist are rejected with 404 model_not_found, and model listing endpoints only show allowlisted models. Entries support exact model IDs and * wildcards anywhere (e.g., gpt-*-codex). Note: Claude Code probes with haiku-family models for titles/summaries and /messages/count_tokens is also allowlist-controlled, so make sure the small models you need are selected too.',
         loading: 'Loading candidate models...',
         empty: 'No candidate models; add custom entries below',
         selectedSummary: 'Selected {selected} / {total}',
         selectAll: 'Select all',
         invertSelection: 'Invert',
         wildcardTag: 'wildcard',
-        customPlaceholder: 'Custom entry, e.g. claude-* or gpt-5.5-codex',
+        customPlaceholder: 'Custom entry, e.g. gpt-*-codex or claude-*',
         addCustom: 'Add',
         emptySelectionError: 'The model allowlist is enabled; select or add at least one model entry',
         errors: {
           empty: 'Please enter a model entry',
-          invalidWildcard: 'Wildcard * is only allowed at the end of an entry',
           duplicate: 'This entry already exists'
         }
       },
@@ -1336,7 +1343,16 @@ export default {
         geminiImage: 'Gemini Image',
         hint: 'Select at least one model family'
       }
-    },
+    ,
+    securityPolicy: {
+        title: 'Security Policy',
+        hint: 'When enabled, requests hitting sensitive topics (cracking, reversing, pentesting, etc.) are blocked. Off by default.',
+        mode: 'On-hit action',
+        modeSession: 'Terminate session (new session required)',
+        modeRequest: 'Block this request only',
+        email: 'Email the user on violation'
+      },
+  },
 
     // Available Channels (aggregated read-only view)
 }

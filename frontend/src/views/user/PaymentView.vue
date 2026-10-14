@@ -20,8 +20,8 @@
           <span>{{ tab.label }}</span>
         </button>
       </div>
-      <div class="checkout-body">
-      <header class="checkout-heading">
+      <div class="checkout-body" :class="{ 'is-package-selection': !cashierOpen && activeTab === 'recharge' && paymentPhase === 'select' }">
+      <header v-show="cashierOpen || activeTab !== 'recharge' || paymentPhase !== 'select'" class="checkout-heading">
         <div class="checkout-heading__mark" aria-hidden="true">
           <Icon name="creditCard" size="lg" :stroke-width="1.8" />
         </div>
@@ -69,42 +69,25 @@
               <p>{{ t('payment.notAvailable') }}</p>
             </div>
 
-            <div v-else class="checkout-shell">
+            <template v-else>
+              <div v-if="renderedBonusNotice" class="prose dark:prose-invert mb-4 max-w-none" v-html="renderedBonusNotice" />
+              <RechargePackages v-show="!cashierOpen" :amounts="rechargeAmounts" :bonus-rules="checkout.recharge_bonus_rules" :bonus-tiers="rechargeBonusTiers" :bonus-mode="rechargeBonusMode"
+                :recharge-multiplier="balanceRechargeMultiplier" :min="globalMinAmount" :max="globalMaxAmount" :currency="selectedCurrency"
+                :balance="balancePreviewReady ? user?.balance ?? 0 : null" @select="selectRechargePackage" />
+              <button v-if="cashierOpen" type="button" class="checkout-back-packages" @click="backToPackages"><Icon name="arrowLeft" size="sm" />{{ t('payment.packages.back') }}</button>
+            <div v-show="cashierOpen" class="checkout-shell">
               <div class="checkout-flow">
-                <section class="checkout-section" aria-labelledby="checkout-amount-title">
-                  <div class="checkout-section__heading">
-                    <span class="checkout-step">1</span>
-                    <div>
-                      <h2 id="checkout-amount-title">{{ t('payment.selectAmount') }}</h2>
-                      <p>{{ t('payment.selectAmountHint') }}</p>
-                    </div>
-                    <span v-if="globalMaxAmount > 0" class="checkout-limit">{{ t('payment.singlePaymentLimit', { amount: formatSelectedPaymentAmount(globalMaxAmount) }) }}</span>
-                  </div>
-                  <AmountInput
-                    v-model="amount"
-                    :amounts="rechargeAmounts"
-                    :min="globalMinAmount"
-                    :max="globalMaxAmount"
-                    :currency="selectedCurrency"
-                    :bonus-rules="checkout.recharge_bonus_rules"
-                    :recharge-multiplier="balanceRechargeMultiplier"
-                  />
-                  <p v-if="amountError" class="checkout-message checkout-message--warning" role="alert">
-                    {{ amountError }}
-                  </p>
-                  <div v-if="balanceRechargeMultiplier !== 1" class="checkout-offer">
-                    <Icon name="sparkles" size="sm" />
-                    <div>
-                      <p v-if="balanceRechargeMultiplier !== 1">
-                        {{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}
-                      </p>
-                    </div>
-                  </div>
+                <section class="checkout-selected-package" aria-labelledby="checkout-amount-title">
+                  <span>{{ t('payment.packages.selected') }}</span>
+                  <h2 id="checkout-amount-title" tabindex="-1">{{ formatSelectedPaymentAmount(validAmount) }}</h2>
+                  <p>{{ t('payment.creditedBalance') }} <strong>${{ creditedAmount.toFixed(2) }}</strong></p>
+                  <p v-if="balanceRechargeMultiplier !== 1">{{ t('payment.rechargeRatePreview', { currency: selectedCurrency, usd: balanceRechargeMultiplier.toFixed(2) }) }}</p>
+                  <p v-if="activeBonusRule" class="checkout-selected-bonus">{{ t(activeBonusRule.validity_days === 0 ? 'payment.permanentTierBonus' : 'payment.tierBonus', { amount: activeBonusRule.bonus_amount.toFixed(2), days: activeBonusRule.validity_days }) }}</p>
                 </section>
 
                 <section class="checkout-section" aria-labelledby="checkout-method-title">
                   <div class="checkout-section__heading">
-                    <span class="checkout-step checkout-step--mint">2</span>
+                    <span class="checkout-step checkout-step--mint">1</span>
                     <div>
                       <h2 id="checkout-method-title">{{ t('payment.selectMethod') }}</h2>
                       <p>{{ t('payment.selectMethodHint') }}</p>
@@ -116,6 +99,7 @@
                     :selected="selectedMethod"
                     @select="selectedMethod = $event"
                   />
+                  <p v-if="amountError" class="checkout-message checkout-message--warning" role="alert">{{ amountError }}</p>
                 </section>
               </div>
 
@@ -131,6 +115,10 @@
                     <dt>{{ t('payment.paymentAmount') }}</dt>
                     <dd>{{ formatSelectedPaymentAmount(validAmount) }}</dd>
                   </div>
+                  <div v-if="discountAmount > 0" class="checkout-breakdown__accent">
+                    <dt>{{ t('payment.rechargeBonus.discountLabelWithPercent', { percent: bonusQuote.percent }) }}</dt>
+                    <dd>-{{ formatSelectedPaymentAmount(discountAmount) }}</dd>
+                  </div>
                   <div v-if="feeRate > 0">
                     <dt>{{ t('payment.fee') }} ({{ feeRate }}%)</dt>
                     <dd>{{ formatSelectedPaymentAmount(feeAmount) }}</dd>
@@ -139,8 +127,11 @@
                     <dt>{{ t('payment.baseCredit') }}</dt>
                     <dd data-testid="base-credit">${{ baseCreditAmount.toFixed(2) }}</dd>
                   </div>
+                  <div v-if="showBonusRow" class="checkout-breakdown__accent">
+                    <dt>{{ t('payment.siteRechargeBonus') }}</dt><dd>+${{ bonusQuote.bonus.toFixed(2) }}</dd>
+                  </div>
                   <div v-if="activeBonusRule" class="checkout-breakdown__accent">
-                    <dt>{{ t('payment.rechargeBonus') }} / {{ activeBonusRule.validity_days }} {{ t('payment.days') }}</dt>
+                    <dt>{{ t('payment.siteRechargeBonus') }} / {{ activeBonusRule.validity_days === 0 ? t('payment.neverExpires') : activeBonusRule.validity_days + ' ' + t('payment.days') }}</dt>
                     <dd data-testid="new-bonus">+${{ activeBonusRule.bonus_amount.toFixed(2) }}</dd>
                   </div>
                   <div class="checkout-breakdown__accent">
@@ -200,6 +191,7 @@
                 <CheckoutSupport />
               </aside>
             </div>
+            </template>
           </template>
 
           <template v-else-if="activeTab === 'subscription'">
@@ -477,8 +469,9 @@ import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiErro
 import { isMobileDevice } from '@/utils/device'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel, type PeakRateFields } from '@/utils/peak-rate'
 import type { SubscriptionPlan, CheckoutInfoResponse, CreateOrderResult, OrderType } from '@/types/payment'
+import { normalizeRechargeBonusMode, normalizeRechargeBonusTiers, quoteRechargeBonus } from '@/utils/rechargeBonus'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import AmountInput from '@/components/payment/AmountInput.vue'
+import RechargePackages from '@/components/payment/RechargePackages.vue'
 import CheckoutSupport from '@/components/payment/CheckoutSupport.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
 import { METHOD_ORDER, getPaymentPopupFeatures, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from '@/components/payment/providerConfig'
@@ -535,6 +528,33 @@ const errorMessage = ref('')
 const errorHintMessage = ref('')
 const activeTab = ref<'recharge' | 'subscription'>('recharge')
 const amount = ref<number | null>(null)
+const cashierOpen = ref(false)
+async function selectRechargePackage(value: number) {
+  if (!rechargeAmounts.includes(value)) return
+  amount.value = value
+  cashierOpen.value = true
+  await router.push({ path: route.path, query: { ...route.query, checkout: '1', amount: String(value) } })
+  await nextTick()
+  const heading = document.getElementById('checkout-amount-title')
+  document.querySelector('.checkout-page')?.scrollIntoView({ block: 'start', behavior: 'auto' })
+  heading?.focus({ preventScroll: true })
+}
+async function backToPackages() {
+  cashierOpen.value = false
+  const query = { ...route.query }
+  delete query.checkout
+  delete query.amount
+  await router.push({ path: route.path, query })
+  await nextTick()
+  document.querySelector<HTMLButtonElement>(`[data-package-amount="${amount.value}"] button`)?.focus()
+}
+function syncCheckoutRoute() {
+  if (hasWechatResumeQuery(route.query)) return
+  const value = Number(route.query.amount)
+  cashierOpen.value = route.query.checkout === '1' && rechargeAmounts.includes(value)
+  if (cashierOpen.value) amount.value = value
+}
+watch(() => [route.query.checkout, route.query.amount], syncCheckoutRoute)
 const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
@@ -720,11 +740,19 @@ const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
   plans: [], balance_disabled: false, balance_recharge_multiplier: 1, subscription_usd_to_cny_rate: 0, recharge_fee_rate: 0, help_text: '', help_image_url: '', stripe_publishable_key: '',
   recharge_bonus_rules: [], recharge_bonus_summary: { available_amount: 0, active_grants: 0 },
+  recharge_bonus_tiers: [], recharge_bonus_mode: 'bonus', recharge_bonus_notice: '',
 })
 
 const renderedHelpText = computed(() => DOMPurify.sanitize(
   marked.parse(checkout.value.help_text || '', { async: false, gfm: true, breaks: false }),
 ))
+
+// 充值赠送活动文案：后台 Markdown 配置，空字符串时金额卡顶部不渲染
+const renderedBonusNotice = computed(() => {
+  const raw = (checkout.value.recharge_bonus_notice || '').trim()
+  if (!raw) return ''
+  return DOMPurify.sanitize(marked.parse(raw, { async: false, gfm: true, breaks: true }))
+})
 
 // 订阅功能开关（public settings 的 subscription_enabled，opt-out）。关闭后购买页只保留充值：
 // 不再渲染「订阅」tab，只剩单个 tab 时顶部切换器也随之隐藏。
@@ -754,17 +782,14 @@ const balanceRechargeMultiplier = computed(() => {
   return Number.isFinite(multiplier) && multiplier > 0 ? multiplier : 1
 })
 const activeBonusRule = computed(() => checkout.value.recharge_bonus_rules.find(rule => Math.abs(rule.recharge_amount - validAmount.value) < 0.00000001) || null)
-const rechargeAmounts = computed(() => {
-  const campaignAmounts = checkout.value.recharge_bonus_rules.map(rule => rule.recharge_amount)
-  return Array.from(new Set(campaignAmounts.length ? [10, ...campaignAmounts] : [10, 20])).sort((a, b) => a - b)
-})
+const rechargeAmounts = [5, 10, 30, 50, 100, 500, 1000, 5000]
+
 // 订阅 CNY 换算汇率（1 USD = X CNY）。0 = 未配置，订阅保持 price 直付（与后端 opt-in 条件严格镜像）。
 const subscriptionUsdToCnyRate = computed(() => {
   const rate = checkout.value.subscription_usd_to_cny_rate
   return Number.isFinite(rate) && rate > 0 ? rate : 0
 })
 const baseCreditAmount = computed(() => Math.round(validAmount.value * balanceRechargeMultiplier.value * 100) / 100)
-const creditedAmount = computed(() => Math.round((baseCreditAmount.value + (activeBonusRule.value?.bonus_amount || 0)) * 100) / 100)
 // Existing bonus grants are already included in users.balance.
 const projectedBalance = computed(() => (user.value?.balance ?? 0) + creditedAmount.value)
 
@@ -772,6 +797,8 @@ function formatBonusExpiry(value: string): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
+const rechargeBonusTiers = computed(() => normalizeRechargeBonusTiers(checkout.value.recharge_bonus_tiers))
+const rechargeBonusMode = computed(() => normalizeRechargeBonusMode(checkout.value.recharge_bonus_mode))
 
 // Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
 const planGridClass = computed(() => {
@@ -853,6 +880,18 @@ function formatSelectedSubscriptionPaymentAmount(value: number): string {
   return formatSelectedPaymentAmount(subscriptionPaymentAmountForCurrency(value, selectedCurrency.value))
 }
 
+// 充值优惠：阈值按输入金额命中；赠金模式按到账基数（输入 × 倍率）加赠送，折扣模式按百分比减实付。
+// 与后端 quoteRechargeBonus 一致；渠道限额、手续费、实付都按折后基数（payBaseAmount）计算，提交仍发送输入金额。
+const bonusQuote = computed(() => quoteRechargeBonus(activeBonusRule.value ? [] : rechargeBonusTiers.value, validAmount.value, {
+  multiplier: balanceRechargeMultiplier.value,
+  mode: rechargeBonusMode.value,
+  currencyDigits: currencyFractionDigits(selectedCurrency.value),
+}))
+const payBaseAmount = computed(() => bonusQuote.value.payBase)
+const discountAmount = computed(() => roundPaymentAmount(validAmount.value - payBaseAmount.value, selectedCurrency.value))
+const creditedAmount = computed(() => Math.round((bonusQuote.value.credited + (activeBonusRule.value?.bonus_amount || 0)) * 100) / 100)
+const showBonusRow = computed(() => bonusQuote.value.mode !== 'discount' && bonusQuote.value.bonus > 0)
+
 const methodOptions = computed<PaymentMethodOption[]>(() =>
   enabledMethods.value.map((type) => {
     const ml = visibleMethods.value[type]
@@ -860,41 +899,41 @@ const methodOptions = computed<PaymentMethodOption[]>(() =>
       type,
       display_name: ml?.display_name,
       fee_rate: ml?.fee_rate ?? 0,
-      available: ml?.available !== false && amountFitsMethod(validAmount.value, type),
+      available: ml?.available !== false && amountFitsMethod(payBaseAmount.value, type),
     }
   })
 )
 
 const feeRate = computed(() => checkout.value?.recharge_fee_rate ?? 0)
 const feeAmount = computed(() =>
-  feeRate.value > 0 && validAmount.value > 0
-    ? Math.ceil(((validAmount.value * feeRate.value) / 100) * 100) / 100
+  feeRate.value > 0 && payBaseAmount.value > 0
+    ? Math.ceil(((payBaseAmount.value * feeRate.value) / 100) * 100) / 100
     : 0
 )
 const totalAmount = computed(() =>
-  feeRate.value > 0 && validAmount.value > 0
-    ? Math.round((validAmount.value + feeAmount.value) * 100) / 100
-    : validAmount.value
+  feeRate.value > 0 && payBaseAmount.value > 0
+    ? Math.round((payBaseAmount.value + feeAmount.value) * 100) / 100
+    : payBaseAmount.value
 )
 
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
   // No method can handle this amount
-  if (!enabledMethods.value.some((m) => amountFitsMethod(validAmount.value, m))) {
+  if (!enabledMethods.value.some((m) => amountFitsMethod(payBaseAmount.value, m))) {
     return t('payment.amountNoMethod')
   }
   // Selected method can't handle this amount (but others can)
   const ml = selectedLimit.value
   if (ml) {
-    if (ml.single_min > 0 && validAmount.value < ml.single_min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(ml.single_min) })
-    if (ml.single_max > 0 && validAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(ml.single_max) })
+    if (ml.single_min > 0 && payBaseAmount.value < ml.single_min) return t('payment.amountTooLow', { min: formatSelectedPaymentAmount(ml.single_min) })
+    if (ml.single_max > 0 && payBaseAmount.value > ml.single_max) return t('payment.amountTooHigh', { max: formatSelectedPaymentAmount(ml.single_max) })
   }
   return ''
 })
 
 const canSubmit = computed(() =>
   validAmount.value > 0
-    && amountFitsMethod(validAmount.value, selectedMethod.value)
+    && amountFitsMethod(payBaseAmount.value, selectedMethod.value)
     && selectedLimit.value?.available !== false
 )
 
@@ -942,7 +981,7 @@ const canSubmitSubscription = computed(() =>
 )
 
 // Auto-switch to first available method when current selection can't handle the amount
-watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) => {
+watch(() => [payBaseAmount.value, selectedMethod.value] as const, ([amt, method]) => {
   if (amt <= 0 || amountFitsMethod(amt, method)) return
   const available = enabledMethods.value.find((m) => amountFitsMethod(amt, m))
   if (available) selectedMethod.value = available
@@ -1393,7 +1432,7 @@ onMounted(async () => {
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
       })
       selectedMethod.value = sorted[0]
-      amount.value = rechargeAmounts.value.find(value => sorted.some(method =>
+      amount.value = rechargeAmounts.find(value => sorted.some(method =>
         visibleMethods.value[method].available && amountFitsMethod(value, method)
       )) ?? null
     }
@@ -1422,6 +1461,7 @@ onMounted(async () => {
         removeRecoverySnapshot()
       }
     }
+    syncCheckoutRoute()
     await resumeWechatPaymentFromQuery()
     // balance_disabled → the tabs watcher above moves activeTab to the subscription tab (when enabled).
     // Handle renewal navigation: ?tab=subscription&group=123 (ignored when subscriptions are disabled)
@@ -1448,20 +1488,30 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.checkout-body.is-package-selection { padding: 0; border: 0; background: transparent; }
+.checkout-back-packages { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; margin-bottom: 16px; color: var(--kc-accent-strong,#9c3f00); font-size: 14px; }
+.checkout-selected-package { padding: 24px; border: 1px solid var(--kc-line,#e2e7e4); border-radius: 16px; background: var(--kc-panel-muted,#f7f8f5); }
+.checkout-selected-package > span { font-size: 13px; color: var(--kc-muted,#68736e); }
+.checkout-selected-package h2 { margin: 10px 0; font-size: 38px; line-height: 1.3; font-weight: 700; color: var(--kc-ink,#182b29); }
+.checkout-selected-package p { font-size: 14px; line-height: 1.8; color: var(--kc-muted,#68736e); }
+.checkout-selected-package strong { color: var(--kc-accent-strong,#9c3f00); }
+.checkout-selected-package .checkout-selected-bonus { margin-top: 8px; color: var(--kc-warm, #a36118); }
+
 .checkout-page {
-  --checkout-ink: #19201e;
-  --checkout-muted: #66706c;
-  --checkout-line: rgba(38, 52, 47, 0.13);
-  --checkout-line-strong: rgba(38, 52, 47, 0.22);
-  --checkout-surface: #ffffff;
-  --checkout-surface-soft: #f4f6f5;
-  --checkout-coral: #e96f62;
-  --checkout-coral-soft: #fff0ec;
-  --checkout-mint: #23847d;
-  --checkout-mint-soft: #e8f5f1;
-  --checkout-blue: #3977bd;
-  --checkout-settlement: #f6faf9;
-  --checkout-shadow: 0 18px 50px rgba(67, 72, 66, 0.08);
+  scroll-margin-top: calc(var(--kc-header-height, 72px) + 24px);
+  --checkout-ink: var(--kc-ink, #19201e);
+  --checkout-muted: var(--kc-muted, #66706c);
+  --checkout-line: var(--kc-line, rgba(38, 52, 47, 0.13));
+  --checkout-line-strong: var(--kc-line-strong, rgba(38, 52, 47, 0.22));
+  --checkout-surface: var(--kc-panel, #ffffff);
+  --checkout-surface-soft: var(--kc-panel-muted, #f4f6f5);
+  --checkout-coral: var(--kc-action, #e96f62);
+  --checkout-coral-soft: var(--kc-accent-soft, #fff0ec);
+  --checkout-mint: var(--kc-accent-strong, #23847d);
+  --checkout-mint-soft: var(--kc-accent-soft, #e8f5f1);
+  --checkout-blue: var(--kc-action, #3977bd);
+  --checkout-settlement: var(--kc-panel-muted, #f6faf9);
+  --checkout-shadow: var(--kc-shadow, 0 18px 50px rgba(67, 72, 66, 0.08));
   width: min(100%, 1240px);
   min-width: 0;
   margin: 0 auto;
@@ -1476,19 +1526,19 @@ onMounted(async () => {
 }
 
 .dark .checkout-page {
-  --checkout-ink: #f5f8f5;
-  --checkout-muted: #b7c2bd;
-  --checkout-line: rgba(231, 239, 235, 0.14);
-  --checkout-line-strong: rgba(231, 239, 235, 0.25);
-  --checkout-surface: #202a2d;
-  --checkout-surface-soft: #283337;
-  --checkout-settlement: #243331;
-  --checkout-coral: #ff8d7e;
-  --checkout-coral-soft: rgba(149, 66, 58, 0.24);
-  --checkout-mint: #65c8bd;
-  --checkout-mint-soft: rgba(36, 128, 119, 0.22);
-  --checkout-blue: #7bb3ef;
-  --checkout-shadow: 0 18px 50px rgba(0, 8, 10, 0.23);
+  --checkout-ink: var(--kc-ink, #f5f8f5);
+  --checkout-muted: var(--kc-muted, #b7c2bd);
+  --checkout-line: var(--kc-line, rgba(231, 239, 235, 0.14));
+  --checkout-line-strong: var(--kc-line-strong, rgba(231, 239, 235, 0.25));
+  --checkout-surface: var(--kc-panel, #202a2d);
+  --checkout-surface-soft: var(--kc-panel-muted, #283337);
+  --checkout-settlement: var(--kc-panel-muted, #243331);
+  --checkout-coral: var(--kc-action, #ff8d7e);
+  --checkout-coral-soft: var(--kc-accent-soft, rgba(149, 66, 58, 0.24));
+  --checkout-mint: var(--kc-accent-strong, #65c8bd);
+  --checkout-mint-soft: var(--kc-accent-soft, rgba(36, 128, 119, 0.22));
+  --checkout-blue: var(--kc-action, #7bb3ef);
+  --checkout-shadow: var(--kc-shadow, 0 18px 50px rgba(0, 8, 10, 0.23));
 }
 
 .checkout-heading {
@@ -1507,9 +1557,9 @@ onMounted(async () => {
   place-items: center;
   border: 1px solid var(--checkout-coral);
   border-radius: 8px;
-  color: #ffffff;
+  color: var(--kc-on-action, #ffffff);
   background: var(--checkout-coral);
-  box-shadow: 0 4px 10px rgba(233, 111, 98, 0.22);
+  box-shadow: var(--kc-shadow, 0 4px 10px rgba(233, 111, 98, 0.22));
 }
 
 .checkout-heading__eyebrow {
@@ -1545,7 +1595,7 @@ onMounted(async () => {
   align-items: center;
   gap: 7px;
   padding: 7px 10px;
-  border: 1px solid rgba(35, 132, 125, 0.2);
+  border: 1px solid var(--kc-line-strong, rgba(35, 132, 125, 0.2));
   border-radius: 8px;
   color: var(--checkout-mint);
   background: var(--checkout-mint-soft);
@@ -1610,7 +1660,7 @@ onMounted(async () => {
   border-color: var(--checkout-line);
   color: var(--checkout-mint);
   background: var(--checkout-surface);
-  box-shadow: 0 4px 14px rgba(52, 59, 55, 0.08);
+  box-shadow: var(--kc-shadow, 0 4px 14px rgba(52, 59, 55, 0.08));
 }
 
 .checkout-tabs button:focus-visible,
@@ -1696,14 +1746,14 @@ onMounted(async () => {
   flex: 0 0 32px;
   place-items: center;
   border-radius: 50%;
-  color: #ffffff;
+  color: var(--kc-on-action, #ffffff);
   background: var(--checkout-coral);
   font-size: 14px;
   font-weight: 800;
 }
 
 .checkout-step--mint {
-  color: #ffffff;
+  color: var(--kc-on-action, #ffffff);
   background: var(--checkout-mint);
 }
 
@@ -1721,13 +1771,13 @@ onMounted(async () => {
 }
 
 .checkout-message--warning {
-  border: 1px solid rgba(202, 128, 41, 0.25);
-  color: #99601e;
+  border: 1px solid var(--kc-line-strong, rgba(202, 128, 41, 0.25));
+  color: var(--kc-warm, #99601e);
   background: rgba(255, 244, 222, 0.9);
 }
 
 .dark .checkout-message--warning {
-  color: #ffd294;
+  color: var(--kc-warm, #ffd294);
   background: rgba(133, 82, 28, 0.22);
 }
 
@@ -1737,7 +1787,7 @@ onMounted(async () => {
   gap: 9px;
   margin-top: 14px;
   padding: 10px 12px;
-  border: 1px solid rgba(35, 132, 125, 0.18);
+  border: 1px solid var(--kc-line-strong, rgba(35, 132, 125, 0.18));
   color: var(--checkout-mint);
   background: var(--checkout-mint-soft);
 }
@@ -1752,7 +1802,7 @@ onMounted(async () => {
   border: 1px solid var(--checkout-line);
   border-radius: 8px;
   background: var(--checkout-surface);
-  box-shadow: 0 5px 16px rgba(38, 52, 47, 0.07);
+  box-shadow: var(--kc-shadow, 0 5px 16px rgba(38, 52, 47, 0.07));
   color: var(--checkout-ink);
 }
 
@@ -1882,7 +1932,7 @@ onMounted(async () => {
 }
 
 .checkout-summary__balance strong {
-  color: #8ed8ce;
+  color: var(--kc-accent-strong, #8ed8ce);
   font-size: 13px;
 }
 
@@ -1965,6 +2015,18 @@ onMounted(async () => {
   border-radius: 7px;
   font-size: 14px;
   font-weight: 700;
+}
+
+.checkout-page .checkout-submit {
+  color: var(--kc-on-action, #ffffff);
+  background: var(--kc-action, var(--checkout-blue));
+  border-color: var(--kc-action, var(--checkout-blue));
+  box-shadow: var(--kc-shadow, none);
+}
+
+.checkout-page .checkout-submit:hover:not(:disabled) {
+  background: var(--kc-action-hover, var(--checkout-blue));
+  border-color: var(--kc-action-hover, var(--checkout-blue));
 }
 
 .checkout-submit__content {
@@ -2217,10 +2279,10 @@ onMounted(async () => {
   width: min(100%, 760px);
   max-height: calc(100vh - 40px);
   overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--kc-line-strong, rgba(255, 255, 255, 0.24));
   border-radius: 8px;
-  color: #19201e;
-  background: #f8f8f4;
+  color: var(--kc-ink, #19201e);
+  background: var(--kc-panel, #f8f8f4);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.3);
 }
 
@@ -2250,10 +2312,10 @@ onMounted(async () => {
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid rgba(38, 52, 47, 0.14);
+  border: 1px solid var(--kc-line-strong, rgba(38, 52, 47, 0.14));
   border-radius: 7px;
-  color: #4d5753;
-  background: rgba(255, 255, 255, 0.82);
+  color: var(--kc-muted, #4d5753);
+  background: var(--kc-panel-muted, rgba(255, 255, 255, 0.82));
 }
 
 .checkout-image-modal {
@@ -2272,7 +2334,7 @@ onMounted(async () => {
 }
 
 .checkout-image-modal__close {
-  color: #19201e;
+  color: var(--kc-ink, #19201e);
 }
 
 .modal-enter-active,

@@ -356,6 +356,14 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 	requestID string,
 	userID, apiKeyID int64,
 ) (int64, error) {
+	if task, err := s.FindVideoTask(ctx, requestID, userID, apiKeyID); err != nil {
+		return 0, err
+	} else if task != nil {
+		if groupID == nil || *groupID != task.GroupID {
+			return 0, ErrStickySessionNotFound
+		}
+		return task.AccountID, nil
+	}
 	if s == nil || s.cache == nil {
 		return 0, fmt.Errorf("grok video request binding cache is unavailable")
 	}
@@ -415,7 +423,17 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 func (s *OpenAIGatewayService) SelectGrokMediaVideoRequestAccount(
 	ctx context.Context, groupID *int64, sessionHash string, accountID int64, requestedModel string,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	return s.SelectMediaVideoRequestAccount(ctx, groupID, sessionHash, accountID, requestedModel, PlatformGrok)
+	platform := PlatformGrok
+	if s.accountRepo != nil {
+		account, err := s.accountRepo.GetByID(ctx, accountID)
+		if err != nil {
+			return nil, OpenAIAccountScheduleDecision{}, errors.Join(ErrNoAvailableAccounts, err)
+		}
+		if account != nil && account.Platform == PlatformVideo {
+			platform = PlatformVideo
+		}
+	}
+	return s.SelectMediaVideoRequestAccount(ctx, groupID, sessionHash, accountID, requestedModel, platform)
 }
 
 func (s *OpenAIGatewayService) SelectMediaVideoRequestAccount(
@@ -449,12 +467,18 @@ func (s *OpenAIGatewayService) SelectMediaVideoRequestAccount(
 // first observes a completed video URL. Status may omit model/duration; we fall
 // back to this snapshot, then defaults.
 type GrokVideoPendingBilling struct {
-	Model                string `json:"model"`
-	BillingModel         string `json:"billing_model,omitempty"`
-	UpstreamModel        string `json:"upstream_model,omitempty"`
-	VideoResolution      string `json:"video_resolution,omitempty"`
-	VideoDurationSeconds int    `json:"video_duration_seconds,omitempty"`
-	OriginalModel        string `json:"original_model,omitempty"`
+	Unified              bool                      `json:"unified,omitempty"`
+	PrepaidAmount        float64                   `json:"prepaid_amount,omitempty"`
+	ReferenceIDs         []string                  `json:"reference_ids,omitempty"`
+	InflightReservation  *VideoInflightReservation `json:"inflight_reservation,omitempty"`
+	PriceSnapshot        *VideoPriceSnapshot       `json:"price_snapshot,omitempty"`
+	VideoProvider        string                    `json:"video_provider,omitempty"`
+	Model                string                    `json:"model"`
+	BillingModel         string                    `json:"billing_model,omitempty"`
+	UpstreamModel        string                    `json:"upstream_model,omitempty"`
+	VideoResolution      string                    `json:"video_resolution,omitempty"`
+	VideoDurationSeconds int                       `json:"video_duration_seconds,omitempty"`
+	OriginalModel        string                    `json:"original_model,omitempty"`
 	// CreatedAt is when the gateway accepted the async create (RFC3339Nano UTC).
 	// duration_ms for deferred billing is measured from this instant until the
 	// first official done+video.url observation (status poll or content download),
@@ -537,6 +561,15 @@ func (s *OpenAIGatewayService) StoreGrokVideoPendingBilling(
 	if key == "" {
 		return fmt.Errorf("grok video pending billing key is invalid")
 	}
+	if pending.InflightReservation == nil {
+		if reservation := InflightReservationFromContext(ctx); reservation != nil {
+			ref, err := reservation.transferToVideo(grokVideoPendingBillingTTL(s.cfg))
+			if err != nil {
+				return err
+			}
+			pending.InflightReservation = ref
+		}
+	}
 	pending.Model = strings.TrimSpace(pending.Model)
 	pending.BillingModel = strings.TrimSpace(pending.BillingModel)
 	pending.UpstreamModel = strings.TrimSpace(pending.UpstreamModel)
@@ -545,7 +578,7 @@ func (s *OpenAIGatewayService) StoreGrokVideoPendingBilling(
 		pending.VideoResolution = NormalizeVideoBillingResolutionOrDefault(pending.VideoResolution)
 	}
 	if pending.VideoDurationSeconds > 0 {
-		pending.VideoDurationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(pending.VideoDurationSeconds)
+		pending.VideoDurationSeconds = NormalizeVideoBillingDurationForProvider(pending.VideoProvider, pending.VideoDurationSeconds)
 	}
 	// Always stamp create-accept time when missing so deferred duration_ms is E2E.
 	if strings.TrimSpace(pending.CreatedAt) == "" {
@@ -566,6 +599,11 @@ func (s *OpenAIGatewayService) LoadGrokVideoPendingBilling(
 	requestID string,
 	userID, apiKeyID int64,
 ) (*GrokVideoPendingBilling, error) {
+	if task, err := s.FindVideoTask(ctx, requestID, userID, apiKeyID); err != nil {
+		return nil, err
+	} else if task != nil {
+		return &task.Pending, nil
+	}
 	if s == nil || s.cache == nil {
 		return nil, fmt.Errorf("grok video pending billing cache is unavailable")
 	}
@@ -660,7 +698,7 @@ func isOfficialGrokVideoStatusDone(statusBody []byte) bool {
 //   - duration: video.duration (seconds)
 //   - model: top-level model
 //   - resolution: not in status response → create-time pending snapshot → default 480p
-func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideoPendingBilling, requestID string) *OpenAIForwardResult {
+func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideoPendingBilling, requestID string, providers ...string) *OpenAIForwardResult {
 	if !IsGrokVideoStatusBillable(statusBody) {
 		return nil
 	}
@@ -669,6 +707,13 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 	upstreamModel := ""
 	resolution := ""
 	durationSeconds := 0
+	provider := ""
+	if len(providers) > 0 {
+		provider = providers[0]
+	}
+	if pending != nil && pending.VideoProvider != "" {
+		provider = pending.VideoProvider
+	}
 
 	if gjson.ValidBytes(statusBody) {
 		// Official: top-level model.
@@ -698,7 +743,7 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 			durationSeconds = pending.VideoDurationSeconds
 		}
 	}
-	if model == "" {
+	if model == "" && provider != SuanliSpecialVideoProvider {
 		// Official default video model family when status omits model.
 		model = "grok-imagine-video"
 	}
@@ -710,7 +755,7 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 		resolution = NormalizeVideoBillingResolutionOrDefault(resolution)
 	}
 	if durationSeconds > 0 {
-		durationSeconds = NormalizeVideoBillingDurationSecondsOrDefault(durationSeconds)
+		durationSeconds = NormalizeVideoBillingDurationForProvider(provider, durationSeconds)
 	}
 	responseID := extractGrokMediaVideoRequestID(statusBody)
 	if responseID == "" {
@@ -718,6 +763,7 @@ func ExtractGrokVideoBillingFromStatusBody(statusBody []byte, pending *GrokVideo
 	}
 	return &OpenAIForwardResult{
 		ResponseID:           responseID,
+		VideoProvider:        provider,
 		Model:                model,
 		BillingModel:         billingModel,
 		UpstreamModel:        upstreamModel,
@@ -740,7 +786,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if account == nil {
 		return nil, fmt.Errorf("grok account is required")
 	}
-	if account.Platform != PlatformGrok {
+	if account.Platform != PlatformGrok && !(account.Platform == PlatformVideo && account.Type == AccountTypeAPIKey) {
 		return nil, fmt.Errorf("account platform %s is not supported for grok media", account.Platform)
 	}
 
@@ -753,9 +799,17 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	targetURL, err := buildGrokMediaURL(account, s.cfg, endpoint, requestID)
 	if err != nil {
+		writeGrokMediaRequestValidationError(c, err)
 		return nil, err
 	}
 
+	preparedTask, _ := ctx.Value(videoTaskContextKey{}).(*VideoTask)
+	unified := preparedTask != nil && preparedTask.Pending.Unified
+	if unified {
+		c.Header("X-Video-Task-ID", preparedTask.ID)
+		body = preparedTask.PreparedBody
+		contentType = "application/json"
+	}
 	body, contentType, err = prepareGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
 	if err != nil {
 		return nil, err
@@ -771,11 +825,8 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	requestInfo.Model = billingModel
 
-	mappedModel := ""
-	mappedModelMatched := false
-	if endpoint.RequiresRequestBody() {
-		mappedModel, mappedModelMatched = account.ResolveMappedModel(originalModel)
-		mappedModel = strings.TrimSpace(mappedModel)
+	if endpoint.RequiresRequestBody() && !unified {
+		mappedModel := strings.TrimSpace(account.GetMappedModel(originalModel))
 		if mappedModel != "" && mappedModel != originalModel {
 			body, contentType, err = rewriteGrokMediaModel(body, contentType, mappedModel)
 			if err != nil {
@@ -783,26 +834,25 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			}
 		}
 	}
-	body, contentType, err = normalizeGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
+	if !unified {
+		body, contentType, err = normalizeGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
+	}
 	if err != nil {
 		writeGrokMediaRequestValidationError(c, err)
 		return nil, err
-	}
-	// For OpenAI-compatible relays, an explicit account mapping is the wire
-	// contract. Compatibility normalization still filters and reshapes fields,
-	// but must not canonicalize a mapped relay ID such as grok-imagine back to
-	// the official xAI grok-imagine-image-quality model.
-	if endpoint.RequiresRequestBody() && account.IsGrokOpenAICompatibleMedia() && mappedModelMatched && mappedModel != "" {
-		body, contentType, err = rewriteGrokMediaModel(body, contentType, mappedModel)
-		if err != nil {
-			return nil, fmt.Errorf("restore OpenAI-compatible grok media mapped model: %w", err)
-		}
 	}
 	upstreamModel := ParseGrokMediaRequest(contentType, body).Model
 	body, contentType, err = sanitizeGrokMediaForwardBodyForAccount(account, endpoint, body, contentType)
 	if err != nil {
 		writeGrokMediaRequestValidationError(c, err)
 		return nil, err
+	}
+	if account.IsSuanliSpecialVideo() && endpoint.RequiresRequestBody() {
+		suanliRequestBillingInfo(body, &requestInfo)
+	}
+	if unified {
+		requestInfo.DurationSeconds = preparedTask.Pending.VideoDurationSeconds
+		requestInfo.Resolution = preparedTask.Pending.VideoResolution
 	}
 
 	var bodyReader io.Reader
@@ -811,6 +861,9 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 	defer releaseUpstreamCtx()
+	if account.IsSuanliSpecialVideo() {
+		upstreamCtx = WithHTTPUpstreamRedirectsDisabled(upstreamCtx)
+	}
 	upstreamReq, err := http.NewRequestWithContext(upstreamCtx, endpoint.httpMethod(), targetURL, bodyReader)
 	if err != nil {
 		return nil, err
@@ -836,15 +889,34 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	}
 	upstreamStart := time.Now()
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	s.rateLimitService.observeQualityResponse(upstreamReq.Context(), account, resp, err)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
+		if account.IsSuanliSpecialVideo() && endpoint.IsGenerationRequest() {
+			// A timeout may occur after acceptance. Never transparently resubmit
+			// a potentially paid job to another account.
+			writeGrokMediaErrorResponse(c, http.StatusBadGateway, "submission_unknown", "Video submission state is unknown; check supplier tasks before retrying")
+			return nil, fmt.Errorf("suanli video submission transport failed: %w", err)
+		}
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	requestIDHeader := firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
 	requestModel := requestInfo.Model
+	if account.IsSuanliSpecialVideo() && resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		writeGrokMediaErrorResponse(c, http.StatusBadGateway, "video_redirect_rejected", "Video supplier redirects are not allowed")
+		return nil, fmt.Errorf("suanli video redirect is not allowed")
+	}
 	if resp.StatusCode >= 400 {
+		if account.IsSuanliSpecialVideo() && endpoint.IsGenerationRequest() {
+			if unified && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 404 || resp.StatusCode == 405 || resp.StatusCode == 413 || resp.StatusCode == 422 || resp.StatusCode == 429) {
+				writeGrokMediaErrorResponse(c, resp.StatusCode, "video_submission_rejected", "上游未接受任务，预扣费用将退回")
+				return nil, &VideoSubmissionRejected{}
+			}
+			writeGrokMediaErrorResponse(c, resp.StatusCode, "video_submission_error", "Video supplier rejected or could not confirm this submission; inspect supplier tasks before retrying")
+			return nil, fmt.Errorf("suanli video submission returned HTTP %d", resp.StatusCode)
+		}
 		return s.handleGrokMediaErrorResponse(ctx, resp, c, account, requestIDHeader, requestModel)
 	}
 
@@ -852,6 +924,13 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	respBody, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
+	}
+	if account.IsSuanliSpecialVideo() {
+		respBody, err = normalizeSuanliVideoResponse(endpoint, respBody, requestID)
+		if err != nil {
+			writeGrokMediaErrorResponse(c, http.StatusBadGateway, "invalid_video_response", err.Error())
+			return nil, err
+		}
 	}
 	if endpoint == GrokMediaEndpointImagesGenerations || endpoint == GrokMediaEndpointImagesEdits {
 		if countOpenAIResponseImageOutputsFromJSONBytes(respBody) <= 0 {
@@ -870,8 +949,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			grokMediaContentProxyURL(c, requestID),
 		)
 	}
-	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
-	usage := grokMediaUsageFromResponse(endpoint, requestInfo, respBody)
+	usage := grokMediaUsageFromResponse(endpoint, requestInfo, respBody, account.VideoMediaProvider())
 	resultModel := requestModel
 	resultBillingModel := requestModel
 	if endpoint == GrokMediaEndpointVideoStatus {
@@ -883,7 +961,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			resultBillingModel = m
 		}
 	}
-	return &OpenAIForwardResult{
+	result := &OpenAIForwardResult{
 		RequestID:            requestIDHeader,
 		UpstreamHeaders:      resp.Header,
 		ResponseID:           usage.ResponseID,
@@ -898,9 +976,28 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		ImageInputSize:       usage.ImageInputSize,
 		ImageOutputSizes:     usage.ImageOutputSizes,
 		VideoCount:           usage.VideoCount,
+		VideoProvider:        account.VideoMediaProvider(),
 		VideoResolution:      usage.VideoResolution,
 		VideoDurationSeconds: usage.VideoDurationSeconds,
-	}, nil
+	}
+	if unified {
+		result.VideoCount = 0
+		result.VideoDurationSeconds = preparedTask.Pending.VideoDurationSeconds
+		result.VideoResolution = preparedTask.Pending.VideoResolution
+	}
+	if endpoint.IsGenerationRequest() && account.Platform == PlatformVideo {
+		if err := s.acceptVideoTask(ctx, result); err != nil {
+			writeGrokMediaErrorResponse(c, http.StatusBadGateway, "video_task_persistence_failed", "Video submission could not be recorded; check supplier tasks before retrying")
+			return nil, err
+		}
+	}
+	if unified {
+		c.Header("Cache-Control", "no-store")
+		c.JSON(http.StatusAccepted, gin.H{"id": result.ResponseID, "request_id": result.ResponseID, "local_task_id": preparedTask.ID, "status": "queued", "model": preparedTask.Pending.Model, "prepaid_amount": preparedTask.Pending.PrepaidAmount})
+		return result, nil
+	}
+	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
+	return result, nil
 }
 
 func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
@@ -915,7 +1012,11 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 		return nil, err
 	}
 
-	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
+	parent := ctx
+	if c != nil && c.Request != nil {
+		parent = c.Request.Context()
+	}
+	upstreamCtx, downloadProgress, releaseUpstreamCtx := mediaDownloadContext(parent, 15*time.Minute, 45*time.Second)
 	defer releaseUpstreamCtx()
 	statusReq, err := http.NewRequestWithContext(
 		WithHTTPUpstreamRedirectsDisabled(upstreamCtx),
@@ -939,11 +1040,13 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 	}
 	upstreamStart := time.Now()
 	statusResp, err := s.httpUpstream.Do(statusReq, proxyURL, account.ID, account.Concurrency)
+	s.rateLimitService.observeQualityResponse(statusReq.Context(), account, statusResp, err)
 	if err != nil {
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
 	statusRequestID := firstNonEmpty(statusResp.Header.Get("x-request-id"), statusResp.Header.Get("xai-request-id"))
+	statusResp.Body = &mediaDownloadBody{ReadCloser: statusResp.Body, progress: downloadProgress}
 	if statusResp.StatusCode >= 300 {
 		defer func() { _ = statusResp.Body.Close() }()
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
@@ -959,7 +1062,12 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 		return nil, err
 	}
 
-	contentURL, err := grokMediaSignedVideoContentURL(statusBody, requestID)
+	contentURL := ""
+	if account.IsSuanliSpecialVideo() {
+		statusBody, err = normalizeSuanliVideoResponse(GrokMediaEndpointVideoStatus, statusBody, requestID)
+	} else {
+		contentURL, err = grokMediaSignedVideoContentURL(statusBody, requestID)
+	}
 	if err != nil {
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		return nil, err
@@ -987,6 +1095,9 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 	if c != nil {
 		if rangeHeader := strings.TrimSpace(c.GetHeader("Range")); rangeHeader != "" {
 			contentReq.Header.Set("Range", rangeHeader)
+			if ifRange := strings.TrimSpace(c.GetHeader("If-Range")); ifRange != "" {
+				contentReq.Header.Set("If-Range", ifRange)
+			}
 		}
 	}
 	if !signedContent {
@@ -998,11 +1109,13 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 	}
 
 	contentResp, err := s.httpUpstream.Do(contentReq, proxyURL, account.ID, account.Concurrency)
+	s.rateLimitService.observeQualityResponse(contentReq.Context(), account, contentResp, err)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
 	defer func() { _ = contentResp.Body.Close() }()
+	contentResp.Body = &mediaDownloadBody{ReadCloser: contentResp.Body, progress: downloadProgress}
 	contentRequestID := firstNonEmpty(contentResp.Header.Get("x-request-id"), contentResp.Header.Get("xai-request-id"), statusRequestID)
 	if contentResp.StatusCode >= 300 && contentResp.StatusCode < 400 {
 		return nil, fmt.Errorf("grok media signed content redirect is not allowed")
@@ -1020,11 +1133,12 @@ func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(
 	// (same path as status polling). Pending snapshot is merged in the handler.
 	result := &OpenAIForwardResult{
 		RequestID:       contentRequestID,
+		VideoProvider:   account.VideoMediaProvider(),
 		UpstreamHeaders: contentResp.Header,
 		ResponseHeaders: contentResp.Header.Clone(),
 		Duration:        time.Since(startTime),
 	}
-	if billed := ExtractGrokVideoBillingFromStatusBody(statusBody, nil, requestID); billed != nil {
+	if billed := ExtractGrokVideoBillingFromStatusBody(statusBody, nil, requestID, account.VideoMediaProvider()); billed != nil {
 		result.ResponseID = firstNonEmpty(billed.ResponseID, strings.TrimSpace(requestID))
 		result.Model = billed.Model
 		result.BillingModel = billed.BillingModel
@@ -1149,7 +1263,7 @@ func prepareGrokMediaForwardBodyForAccount(
 	body []byte,
 	contentType string,
 ) ([]byte, string, error) {
-	if account != nil && account.IsGrokOpenAICompatibleMedia() {
+	if account != nil && (account.IsGrokOpenAICompatibleMedia() || account.IsSuanliSpecialVideo()) {
 		return body, contentType, nil
 	}
 	return prepareGrokMediaForwardBody(endpoint, body, contentType)
@@ -1255,6 +1369,9 @@ func normalizeGrokMediaForwardBodyForAccount(
 	body []byte,
 	contentType string,
 ) ([]byte, string, error) {
+	if account.IsSuanliSpecialVideo() {
+		return normalizeSuanliVideoRequest(endpoint, body, contentType)
+	}
 	out, normalizedContentType, err := normalizeGrokMediaForwardBody(endpoint, body, contentType)
 	if err != nil || account == nil || !account.IsGrokOpenAICompatibleMedia() {
 		return out, normalizedContentType, err
@@ -1332,7 +1449,7 @@ func sanitizeGrokMediaForwardBodyForAccount(
 	body []byte,
 	contentType string,
 ) ([]byte, string, error) {
-	if account != nil && account.IsGrokOpenAICompatibleMedia() {
+	if account != nil && (account.IsGrokOpenAICompatibleMedia() || account.IsSuanliSpecialVideo()) {
 		return body, contentType, nil
 	}
 	return sanitizeGrokMediaForwardBody(endpoint, body, contentType)
@@ -1808,7 +1925,7 @@ type grokMediaUsageMetadata struct {
 	VideoDurationSeconds int
 }
 
-func grokMediaUsageFromResponse(endpoint GrokMediaEndpoint, requestInfo GrokMediaRequestInfo, responseBody []byte) grokMediaUsageMetadata {
+func grokMediaUsageFromResponse(endpoint GrokMediaEndpoint, requestInfo GrokMediaRequestInfo, responseBody []byte, providers ...string) grokMediaUsageMetadata {
 	usage, _ := extractOpenAIUsageFromJSONBytes(responseBody)
 	meta := grokMediaUsageMetadata{Usage: usage}
 	switch endpoint {
@@ -1827,7 +1944,7 @@ func grokMediaUsageFromResponse(endpoint GrokMediaEndpoint, requestInfo GrokMedi
 		// Prefer status-body URL success + upstream duration/resolution when present.
 		if IsGrokVideoStatusBillable(responseBody) {
 			// provisional units; handler merges with pending snapshot before RecordUsage.
-			if billed := ExtractGrokVideoBillingFromStatusBody(responseBody, nil, ""); billed != nil {
+			if billed := ExtractGrokVideoBillingFromStatusBody(responseBody, nil, "", providers...); billed != nil {
 				meta.ResponseID = billed.ResponseID
 				meta.Model = billed.Model
 				meta.BillingModel = billed.BillingModel
@@ -1863,7 +1980,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	body := s.readUpstreamErrorBody(resp)
 	// Reconcile readiness before configurable passthrough branches can return;
 	// otherwise a Grok 429 can remain schedulable.
-	s.handleGrokAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+	s.handleGrokAccountUpstreamError(withGrokTeamRateLimitModel(ctx, requestedModel), account, resp.StatusCode, resp.Header, body)
 	upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(body)))
 	if upstreamMsg == "" {
 		upstreamMsg = fmt.Sprintf("xAI upstream returned status %d", resp.StatusCode)
@@ -1894,7 +2011,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 		})
 		MarkResponseCommitted(c)
 		writeGrokMediaErrorResponse(c, http.StatusForbidden, "invalid_request_error", clientMsg)
-		return nil, fmt.Errorf("grok content policy rejection: %s", clientMsg)
+		return nil, &grokContentPolicyError{message: clientMsg}
 	}
 
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
@@ -1963,7 +2080,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 	})
 	if kind == "failover" {
 		retryable, retryDelay, retryDeadline, retryMax := grokSameAccountRetryMetadata(account, resp.StatusCode, body)
-		return nil, &UpstreamFailoverError{
+		return nil, (&UpstreamFailoverError{
 			StatusCode:               resp.StatusCode,
 			ResponseBody:             body,
 			ResponseHeaders:          resp.Header.Clone(),
@@ -1972,7 +2089,7 @@ func (s *OpenAIGatewayService) handleGrokMediaErrorResponse(
 			SameAccountRetryDelay:    retryDelay,
 			SameAccountRetryDeadline: retryDeadline,
 			SameAccountRetryMax:      retryMax,
-		}
+		}).WithGrokForbiddenPolicy(account)
 	}
 
 	MarkResponseCommitted(c)
@@ -2038,6 +2155,8 @@ func writeGrokMediaContentResponse(c *gin.Context, resp *http.Response) error {
 		"Content-Length",
 		"Content-Range",
 		"Accept-Ranges",
+		"ETag",
+		"Last-Modified",
 	} {
 		if value := strings.TrimSpace(resp.Header.Get(name)); value != "" {
 			c.Header(name, value)
@@ -2066,7 +2185,10 @@ func writeGrokMediaContentResponse(c *gin.Context, resp *http.Response) error {
 	}
 	c.Status(resp.StatusCode)
 	MarkResponseCommitted(c)
-	_, err := io.Copy(c.Writer, resp.Body)
+	n, err := io.Copy(c.Writer, resp.Body)
+	if err == nil && resp.ContentLength >= 0 && n != resp.ContentLength {
+		return io.ErrUnexpectedEOF
+	}
 	return err
 }
 

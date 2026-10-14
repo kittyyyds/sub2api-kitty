@@ -34,6 +34,7 @@ require (
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/refraction-networking/utls v1.8.2
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/shirou/gopsutil/v4 v4.25.6
 	github.com/shopspring/decimal v1.4.0
 	github.com/smartwalle/alipay/v3 v3.2.29
@@ -51,11 +52,12 @@ require (
 	github.com/zeromicro/go-zero v1.9.4
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.55.0
-	golang.org/x/image v0.41.0
+	golang.org/x/image v0.45.0
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sync v0.22.0
 	golang.org/x/term v0.45.0
+	golang.org/x/text v0.41.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -68,6 +70,7 @@ require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/abema/go-mp4 v1.4.1 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
@@ -128,6 +131,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
+	github.com/google/subcommands v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
@@ -202,7 +206,6 @@ require (
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect

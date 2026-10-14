@@ -77,7 +77,7 @@
               >
                 <span class="truncate">{{ priceGroup.name }}</span>
                 <span class="flex-shrink-0 text-primary-600 dark:text-primary-400">
-                  {{ t(prefixKey('actualPrice')) }} ×{{ effectiveRate(priceGroup) }}
+                  {{ isFinalVideoPrice(priceGroup) ? t('videoModule.finalPrice') : `${t(prefixKey('actualPrice'))} ×${effectiveRate(priceGroup)}` }}
                 </span>
               </div>
               <template v-if="model.pricing.billing_mode === BILLING_MODE_TOKEN">
@@ -192,7 +192,14 @@ const effectivePricingGroups = computed<PricingGroupView[]>(() => {
   }]
 })
 
+function isFinalVideoPrice(group: PricingGroupView): boolean {
+  return (group.platform === 'video' || effectivePlatform.value === 'video')
+    && (props.model.pricing?.billing_mode === BILLING_MODE_VIDEO
+      || props.model.pricing?.billing_mode === BILLING_MODE_PER_REQUEST)
+}
+
 function effectiveRate(group: PricingGroupView): number {
+  if (isFinalVideoPrice(group)) return 1
   switch (props.model.pricing?.billing_mode) {
     case BILLING_MODE_IMAGE:
       if (group.image_rate_independent) return group.image_rate_multiplier

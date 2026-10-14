@@ -32,3 +32,9 @@ import "embed"
 //
 //go:embed *.sql
 var FS embed.FS
+
+// HistoryFS retains immutable retired data operations for audit and restoration.
+// These files are not part of FS and must never be applied on application startup.
+//
+//go:embed history/*.sql
+var HistoryFS embed.FS

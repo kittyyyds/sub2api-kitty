@@ -142,6 +142,7 @@ const contactActions = [
   width: 100%;
   aspect-ratio: 1;
   border-radius: 4px;
+  background: #07151c;
   object-fit: contain;
 }
 

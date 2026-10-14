@@ -176,6 +176,48 @@ func (_c *GroupCreate) SetNillableIsExclusive(v *bool) *GroupCreate {
 	return _c
 }
 
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (_c *GroupCreate) SetSecurityPolicyEnabled(v bool) *GroupCreate {
+	_c.mutation.SetSecurityPolicyEnabled(v)
+	return _c
+}
+
+// SetNillableSecurityPolicyEnabled sets the "security_policy_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSecurityPolicyEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetSecurityPolicyEnabled(*v)
+	}
+	return _c
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (_c *GroupCreate) SetSecurityPolicyMode(v string) *GroupCreate {
+	_c.mutation.SetSecurityPolicyMode(v)
+	return _c
+}
+
+// SetNillableSecurityPolicyMode sets the "security_policy_mode" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSecurityPolicyMode(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetSecurityPolicyMode(*v)
+	}
+	return _c
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (_c *GroupCreate) SetSecurityPolicyEmailEnabled(v bool) *GroupCreate {
+	_c.mutation.SetSecurityPolicyEmailEnabled(v)
+	return _c
+}
+
+// SetNillableSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableSecurityPolicyEmailEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetSecurityPolicyEmailEnabled(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *GroupCreate) SetStatus(v string) *GroupCreate {
 	_c.mutation.SetStatus(v)
@@ -624,6 +666,20 @@ func (_c *GroupCreate) SetFallbackGroupIDOnInvalidRequest(v int64) *GroupCreate 
 func (_c *GroupCreate) SetNillableFallbackGroupIDOnInvalidRequest(v *int64) *GroupCreate {
 	if v != nil {
 		_c.SetFallbackGroupIDOnInvalidRequest(*v)
+	}
+	return _c
+}
+
+// SetStreamOnly sets the "stream_only" field.
+func (_c *GroupCreate) SetStreamOnly(v bool) *GroupCreate {
+	_c.mutation.SetStreamOnly(v)
+	return _c
+}
+
+// SetNillableStreamOnly sets the "stream_only" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableStreamOnly(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetStreamOnly(*v)
 	}
 	return _c
 }
@@ -1119,6 +1175,18 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultIsExclusive
 		_c.mutation.SetIsExclusive(v)
 	}
+	if _, ok := _c.mutation.SecurityPolicyEnabled(); !ok {
+		v := group.DefaultSecurityPolicyEnabled
+		_c.mutation.SetSecurityPolicyEnabled(v)
+	}
+	if _, ok := _c.mutation.SecurityPolicyMode(); !ok {
+		v := group.DefaultSecurityPolicyMode
+		_c.mutation.SetSecurityPolicyMode(v)
+	}
+	if _, ok := _c.mutation.SecurityPolicyEmailEnabled(); !ok {
+		v := group.DefaultSecurityPolicyEmailEnabled
+		_c.mutation.SetSecurityPolicyEmailEnabled(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := group.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -1174,6 +1242,10 @@ func (_c *GroupCreate) defaults() error {
 	if _, ok := _c.mutation.ClaudeCodeOnly(); !ok {
 		v := group.DefaultClaudeCodeOnly
 		_c.mutation.SetClaudeCodeOnly(v)
+	}
+	if _, ok := _c.mutation.StreamOnly(); !ok {
+		v := group.DefaultStreamOnly
+		_c.mutation.SetStreamOnly(v)
 	}
 	if _, ok := _c.mutation.ModelRoutingEnabled(); !ok {
 		v := group.DefaultModelRoutingEnabled
@@ -1318,6 +1390,20 @@ func (_c *GroupCreate) check() error {
 	if _, ok := _c.mutation.IsExclusive(); !ok {
 		return &ValidationError{Name: "is_exclusive", err: errors.New(`ent: missing required field "Group.is_exclusive"`)}
 	}
+	if _, ok := _c.mutation.SecurityPolicyEnabled(); !ok {
+		return &ValidationError{Name: "security_policy_enabled", err: errors.New(`ent: missing required field "Group.security_policy_enabled"`)}
+	}
+	if _, ok := _c.mutation.SecurityPolicyMode(); !ok {
+		return &ValidationError{Name: "security_policy_mode", err: errors.New(`ent: missing required field "Group.security_policy_mode"`)}
+	}
+	if v, ok := _c.mutation.SecurityPolicyMode(); ok {
+		if err := group.SecurityPolicyModeValidator(v); err != nil {
+			return &ValidationError{Name: "security_policy_mode", err: fmt.Errorf(`ent: validator failed for field "Group.security_policy_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SecurityPolicyEmailEnabled(); !ok {
+		return &ValidationError{Name: "security_policy_email_enabled", err: errors.New(`ent: missing required field "Group.security_policy_email_enabled"`)}
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Group.status"`)}
 	}
@@ -1399,6 +1485,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.ClaudeCodeOnly(); !ok {
 		return &ValidationError{Name: "claude_code_only", err: errors.New(`ent: missing required field "Group.claude_code_only"`)}
+	}
+	if _, ok := _c.mutation.StreamOnly(); !ok {
+		return &ValidationError{Name: "stream_only", err: errors.New(`ent: missing required field "Group.stream_only"`)}
 	}
 	if _, ok := _c.mutation.ModelRoutingEnabled(); !ok {
 		return &ValidationError{Name: "model_routing_enabled", err: errors.New(`ent: missing required field "Group.model_routing_enabled"`)}
@@ -1563,6 +1652,18 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
 		_node.IsExclusive = value
 	}
+	if value, ok := _c.mutation.SecurityPolicyEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEnabled, field.TypeBool, value)
+		_node.SecurityPolicyEnabled = value
+	}
+	if value, ok := _c.mutation.SecurityPolicyMode(); ok {
+		_spec.SetField(group.FieldSecurityPolicyMode, field.TypeString, value)
+		_node.SecurityPolicyMode = value
+	}
+	if value, ok := _c.mutation.SecurityPolicyEmailEnabled(); ok {
+		_spec.SetField(group.FieldSecurityPolicyEmailEnabled, field.TypeBool, value)
+		_node.SecurityPolicyEmailEnabled = value
+	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 		_node.Status = value
@@ -1698,6 +1799,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.FallbackGroupIDOnInvalidRequest(); ok {
 		_spec.SetField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64, value)
 		_node.FallbackGroupIDOnInvalidRequest = &value
+	}
+	if value, ok := _c.mutation.StreamOnly(); ok {
+		_spec.SetField(group.FieldStreamOnly, field.TypeBool, value)
+		_node.StreamOnly = value
 	}
 	if value, ok := _c.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -2096,6 +2201,42 @@ func (u *GroupUpsert) SetIsExclusive(v bool) *GroupUpsert {
 // UpdateIsExclusive sets the "is_exclusive" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateIsExclusive() *GroupUpsert {
 	u.SetExcluded(group.FieldIsExclusive)
+	return u
+}
+
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (u *GroupUpsert) SetSecurityPolicyEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldSecurityPolicyEnabled, v)
+	return u
+}
+
+// UpdateSecurityPolicyEnabled sets the "security_policy_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSecurityPolicyEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldSecurityPolicyEnabled)
+	return u
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (u *GroupUpsert) SetSecurityPolicyMode(v string) *GroupUpsert {
+	u.Set(group.FieldSecurityPolicyMode, v)
+	return u
+}
+
+// UpdateSecurityPolicyMode sets the "security_policy_mode" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSecurityPolicyMode() *GroupUpsert {
+	u.SetExcluded(group.FieldSecurityPolicyMode)
+	return u
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (u *GroupUpsert) SetSecurityPolicyEmailEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldSecurityPolicyEmailEnabled, v)
+	return u
+}
+
+// UpdateSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateSecurityPolicyEmailEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldSecurityPolicyEmailEnabled)
 	return u
 }
 
@@ -2735,6 +2876,18 @@ func (u *GroupUpsert) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsert {
 	return u
 }
 
+// SetStreamOnly sets the "stream_only" field.
+func (u *GroupUpsert) SetStreamOnly(v bool) *GroupUpsert {
+	u.Set(group.FieldStreamOnly, v)
+	return u
+}
+
+// UpdateStreamOnly sets the "stream_only" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateStreamOnly() *GroupUpsert {
+	u.SetExcluded(group.FieldStreamOnly)
+	return u
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (u *GroupUpsert) SetModelRouting(v map[string][]int64) *GroupUpsert {
 	u.Set(group.FieldModelRouting, v)
@@ -3278,6 +3431,48 @@ func (u *GroupUpsertOne) SetIsExclusive(v bool) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateIsExclusive() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateIsExclusive()
+	})
+}
+
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (u *GroupUpsertOne) SetSecurityPolicyEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEnabled sets the "security_policy_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSecurityPolicyEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEnabled()
+	})
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (u *GroupUpsertOne) SetSecurityPolicyMode(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyMode(v)
+	})
+}
+
+// UpdateSecurityPolicyMode sets the "security_policy_mode" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSecurityPolicyMode() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyMode()
+	})
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (u *GroupUpsertOne) SetSecurityPolicyEmailEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEmailEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateSecurityPolicyEmailEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEmailEnabled()
 	})
 }
 
@@ -4020,6 +4215,20 @@ func (u *GroupUpsertOne) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertOne
 func (u *GroupUpsertOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetStreamOnly sets the "stream_only" field.
+func (u *GroupUpsertOne) SetStreamOnly(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetStreamOnly(v)
+	})
+}
+
+// UpdateStreamOnly sets the "stream_only" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateStreamOnly() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateStreamOnly()
 	})
 }
 
@@ -4790,6 +4999,48 @@ func (u *GroupUpsertBulk) UpdateIsExclusive() *GroupUpsertBulk {
 	})
 }
 
+// SetSecurityPolicyEnabled sets the "security_policy_enabled" field.
+func (u *GroupUpsertBulk) SetSecurityPolicyEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEnabled sets the "security_policy_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSecurityPolicyEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEnabled()
+	})
+}
+
+// SetSecurityPolicyMode sets the "security_policy_mode" field.
+func (u *GroupUpsertBulk) SetSecurityPolicyMode(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyMode(v)
+	})
+}
+
+// UpdateSecurityPolicyMode sets the "security_policy_mode" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSecurityPolicyMode() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyMode()
+	})
+}
+
+// SetSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field.
+func (u *GroupUpsertBulk) SetSecurityPolicyEmailEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetSecurityPolicyEmailEnabled(v)
+	})
+}
+
+// UpdateSecurityPolicyEmailEnabled sets the "security_policy_email_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateSecurityPolicyEmailEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateSecurityPolicyEmailEnabled()
+	})
+}
+
 // SetStatus sets the "status" field.
 func (u *GroupUpsertBulk) SetStatus(v string) *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
@@ -5529,6 +5780,20 @@ func (u *GroupUpsertBulk) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertBu
 func (u *GroupUpsertBulk) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetStreamOnly sets the "stream_only" field.
+func (u *GroupUpsertBulk) SetStreamOnly(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetStreamOnly(v)
+	})
+}
+
+// UpdateStreamOnly sets the "stream_only" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateStreamOnly() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateStreamOnly()
 	})
 }
 

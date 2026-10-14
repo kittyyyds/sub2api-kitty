@@ -1,6 +1,10 @@
 import { effectScope, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { endpointHealthUrl, useEndpointLatency } from '../useEndpointLatency'
+import {
+  classifyEndpointLatency,
+  endpointHealthUrl,
+  useEndpointLatency,
+} from '../useEndpointLatency'
 
 function response(status: number): Response {
   return {
@@ -22,6 +26,14 @@ describe('useEndpointLatency', () => {
     expect(url.searchParams.has('_latency_probe')).toBe(true)
     expect(url.searchParams.has('foo')).toBe(false)
     expect(url.hash).toBe('')
+  })
+
+  it('按客户本地延迟将测速结果分为绿、黄、红三档', () => {
+    expect(classifyEndpointLatency(800)).toBe('fast')
+    expect(classifyEndpointLatency(801)).toBe('moderate')
+    expect(classifyEndpointLatency(1_500)).toBe('moderate')
+    expect(classifyEndpointLatency(1_501)).toBe('slow')
+    expect(classifyEndpointLatency(null)).toBe('unknown')
   })
 
   it('记录成功延迟，并将最快成功端点标记为推荐', async () => {

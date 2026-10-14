@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Wei-Shaw/sub2api/internal/kittyrisk"
 	"math"
 	"net/http"
 	"strconv"
@@ -25,6 +24,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -51,7 +51,7 @@ type GatewayHandler struct {
 	usageRecordWorkerPool     *service.UsageRecordWorkerPool
 	errorPassthroughService   *service.ErrorPassthroughService
 	contentModerationService  *service.ContentModerationService
-	kittyRiskService          *kittyrisk.ContentModerationService
+	securityPolicyService     *service.SecurityPolicyService
 	securityAuditCoordinator  *securityaudit.Coordinator
 	concurrencyHelper         *ConcurrencyHelper
 	userMsgQueueHelper        *UserMsgQueueHelper
@@ -158,7 +158,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
 		return
 	}
-	usageAuditCapture := beginUsageAuditCapture(c)
 
 	setOpsRequestContext(c, "", false)
 
@@ -225,6 +224,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by composite groups")
 		return
 	}
+	if rejectSystemOneOnlyPlatform(c, apiKey, h.errorResponse) {
+		return
+	}
 
 	if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && !decision.AllowNextStage {
 		h.anthropicSecurityAuditError(c, decision)
@@ -243,7 +245,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 
 	// 1. 首先获取用户并发槽位
-	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted)
+	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, subject.Concurrency, apiKey.ID, apiKey.ConcurrencyLimit, reqStream, &streamStarted)
 	if err != nil {
 		reqLog.Warn("gateway.user_slot_acquire_failed", zap.Error(err))
 		h.handleConcurrencyError(c, err, "user", streamStarted)
@@ -265,6 +267,19 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+
+	// 余额模式在途预留：防止并发请求在预检时看到同一份余额而集体透支。
+	inflightRelease, err := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, body))
+	if err != nil {
+		reqLog.Info("gateway.inflight_reservation_rejected", zap.Error(err))
+		status, code, message, retryAfter := billingErrorDetails(err)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
+		h.handleStreamingAwareError(c, status, code, message, streamStarted)
+		return
+	}
+	defer inflightRelease()
 
 	// 设置请求所属分组 ID（用于渠道级功能判断，如 WebSearch 模拟）
 	parsedReq.GroupID = apiKey.GroupID
@@ -333,6 +348,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		for {
 			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
 			if err != nil {
+				if failoverClientGone(c) {
+					reqLog.Info("gateway.account_select_aborted_client_disconnected", zap.Error(err))
+					return
+				}
 				if len(fs.FailedAccountIDs) == 0 {
 					cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel, service.PlatformGemini)
 					if !cls.ModelNotFound {
@@ -557,7 +576,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			requestPayloadHash := service.HashUsageRequestPayload(body)
 			inboundEndpoint := GetInboundEndpoint(c)
 			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
-			populateClaudeUsageAudit(result, inboundEndpoint, reqModel, body, usageAuditCapture)
+			populateClaudeUsageAudit(result, inboundEndpoint)
 
 			stampForwardRequestedReasoningEffort(result, service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort))
 			if result.ReasoningEffort == nil {
@@ -664,6 +683,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			)
 			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, parsedReq.MetadataUserID, subject.UserID)
 			if err != nil {
+				if failoverClientGone(c) {
+					reqLog.Info("gateway.account_select_aborted_client_disconnected", zap.Error(err))
+					return
+				}
 				if len(fs.FailedAccountIDs) == 0 {
 					cls := classifyNoAccountErrorFromGin(c, h.gatewayService, currentAPIKey, reqModel, reqModel, platform)
 					if !cls.ModelNotFound {
@@ -922,7 +945,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				requestPayloadHash := service.HashUsageRequestPayload(attemptParsedReq.Body.Bytes())
 				inboundEndpoint := GetInboundEndpoint(c)
 				upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
-				populateClaudeUsageAudit(result, inboundEndpoint, reqModel, attemptParsedReq.Body.Bytes(), usageAuditCapture)
+				populateClaudeUsageAudit(result, inboundEndpoint)
 
 				stampForwardRequestedReasoningEffort(result, service.NormalizeClaudeOutputEffort(attemptParsedReq.OutputEffort))
 				if result.ReasoningEffort == nil {
@@ -1127,6 +1150,26 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 // Falls back to default models if no whitelist is configured
 func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	if apiKey != nil && apiKey.ConcurrencyLimit > 0 {
+		release, err := h.concurrencyHelper.AcquireAPIKeySlot(c.Request.Context(), apiKey.ID, apiKey.ConcurrencyLimit)
+		if err != nil {
+			h.handleConcurrencyError(c, err, "API key", false)
+			return
+		}
+		defer release()
+	}
+	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == service.PlatformVideo {
+		models := service.VideoGroupModelIDs(apiKey.Group)
+		if apiKey.Group.ModelAllowlistEnabled() {
+			models = apiKey.Group.ModelAllowlist.FilterForListing(models)
+		}
+		items := make([]gin.H, 0, len(models))
+		for _, id := range models {
+			items = append(items, gin.H{"id": id, "object": "model", "created": 1704067200, "owned_by": "video", "capabilities": service.VideoGroupCapability(apiKey.Group, id)})
+		}
+		writeModelsListResponse(c, items)
+		return
+	}
 
 	var groupID *int64
 	var platform string
@@ -1146,7 +1189,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	}
 
 	if platform == service.PlatformComposite {
-		availableModels := h.compositeAvailableModels(c.Request.Context(), groupID)
+		availableModels := h.compositeAvailableModels(c.Request.Context(), groupID, true)
 		if apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
 			source := availableModels
 			if len(source) == 0 {
@@ -1190,6 +1233,10 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 		writeGrokModelsList(c, xai.DefaultModelIDs())
 		return
 	}
+	if platform == service.PlatformTypeSafe {
+		writeModelsList(c, platform, []string{typesafe.JevLatestModel})
+		return
+	}
 
 	writeModelsListResponse(c, claude.DefaultModels)
 }
@@ -1210,6 +1257,7 @@ func (h *GatewayHandler) CodexModels(c *gin.Context) {
 	}
 	modelIDs := h.codexModelIDsForGroup(c.Request.Context(), apiKey.Group, forcedPlatform)
 	modelIDs = service.FilterCodexModelIDsForGroup(modelIDs, apiKey.Group)
+	modelIDs = service.FilterUserGroupDeniedModelIDs(modelIDs, apiKey.DeniedModelsInGroup())
 	body, err := h.gatewayService.BuildCodexModelsManifestForGroup(
 		c.Request.Context(),
 		apiKey.Group,
@@ -1241,7 +1289,7 @@ func (h *GatewayHandler) codexModelIDsForGroup(ctx context.Context, group *servi
 		platform = group.Platform
 	}
 	if platform == service.PlatformComposite {
-		availableModels := h.compositeAvailableModels(ctx, groupID)
+		availableModels := h.compositeAvailableModels(ctx, groupID, false)
 		fallbackModels := defaultCodexModelIDsForPlatform(service.PlatformComposite)
 		if group.ModelAllowlistEnabled() {
 			source := availableModels
@@ -1267,14 +1315,20 @@ func (h *GatewayHandler) codexModelIDsForGroup(ctx context.Context, group *servi
 	return fallbackModels
 }
 
-func (h *GatewayHandler) compositeAvailableModels(ctx context.Context, groupID *int64) []string {
+// compositeAvailableModels lists the models the composite group can serve.
+// includeSystemOne adds TypeSafe models, which only work through /v1/systemone;
+// LLM client catalogs (Codex) must exclude them.
+func (h *GatewayHandler) compositeAvailableModels(ctx context.Context, groupID *int64, includeSystemOne bool) []string {
 	if h == nil || h.gatewayService == nil {
 		return nil
 	}
 	seen := make(map[string]struct{})
 	models := make([]string, 0)
 	schedulablePlatforms := h.gatewayService.GetSchedulablePlatforms(ctx, groupID)
-	for _, platform := range []string{service.PlatformAnthropic, service.PlatformGemini, service.PlatformOpenAI, service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo} {
+	for _, platform := range []string{service.PlatformAnthropic, service.PlatformGemini, service.PlatformOpenAI, service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo, service.PlatformTypeSafe} {
+		if platform == service.PlatformTypeSafe && !includeSystemOne {
+			continue
+		}
 		platformModels := h.gatewayService.GetAvailableModels(ctx, groupID, platform)
 		if len(platformModels) == 0 {
 			// CN 供应商没有静态默认模型列表（defaultModelIDsForPlatform 的
@@ -1299,7 +1353,7 @@ func (h *GatewayHandler) compositeAvailableModels(ctx context.Context, groupID *
 }
 
 func writeModelsList(c *gin.Context, platform string, modelIDs []string) {
-	if platform == service.PlatformOpenAI {
+	if platform == service.PlatformOpenAI || platform == service.PlatformVideo {
 		writeOpenAIModelsList(c, modelIDs)
 		return
 	}
@@ -1454,13 +1508,20 @@ func defaultModelIDsForPlatform(platform string) []string {
 		return ids
 	case service.PlatformAnthropic:
 		return claude.DefaultModelIDs()
+	case service.PlatformVideo:
+		return []string{}
 	case service.PlatformGrok:
 		return xai.DefaultModelIDs()
 	case service.PlatformOpenCodeGo:
 		return service.DefaultOpenCodeGoModelIDs()
+	case service.PlatformTypeSafe:
+		return []string{"jev-latest"}
 	case service.PlatformComposite:
 		ids := make([]string, 0)
 		seen := make(map[string]struct{})
+		// TypeSafe is deliberately absent: jev-latest only works through
+		// /v1/systemone, so the static fallback never advertises it to LLM
+		// clients. compositeAvailableModels lists it when the group can serve it.
 		for _, concretePlatform := range []string{service.PlatformAnthropic, service.PlatformGemini, service.PlatformOpenAI, service.PlatformAntigravity, service.PlatformGrok, service.PlatformKimi, service.PlatformZhipu, service.PlatformDeepseek, service.PlatformMiniMax, service.PlatformOpenCodeGo} {
 			for _, id := range defaultModelIDsForPlatform(concretePlatform) {
 				if _, ok := seen[id]; ok {
@@ -1504,10 +1565,13 @@ func mergeModelIDs(primary, secondary []string) []string {
 // 分组级模型白名单开启时按白名单过滤。
 func (h *GatewayHandler) AntigravityModels(c *gin.Context) {
 	models := antigravity.DefaultModels()
-	if apiKey, ok := middleware2.GetAPIKeyFromContext(c); ok && apiKey != nil && apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled() {
+	if apiKey, ok := middleware2.GetAPIKeyFromContext(c); ok && apiKey != nil &&
+		((apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled()) || len(apiKey.DeniedModelsInGroup()) > 0) {
+		allowlistEnabled := apiKey.Group != nil && apiKey.Group.ModelAllowlistEnabled()
+		denied := apiKey.DeniedModelsInGroup()
 		filtered := make([]antigravity.ClaudeModel, 0, len(models))
 		for _, model := range models {
-			if apiKey.Group.ModelAllowlist.Allows(model.ID) {
+			if (!allowlistEnabled || apiKey.Group.ModelAllowlist.Allows(model.ID)) && !service.UserGroupDeniesModel(denied, model.ID) {
 				filtered = append(filtered, model)
 			}
 		}
@@ -1866,6 +1930,7 @@ func (h *GatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotT
 }
 
 func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, platform string, streamStarted bool) {
+
 	statusCode := failoverErr.StatusCode
 	responseBody := failoverErr.ResponseBody
 	if service.IsOpenAISilentRefusalErrorBody(responseBody) {
@@ -1976,8 +2041,13 @@ func (h *GatewayHandler) handleStreamingAwareErrorWithCode(c *gin.Context, statu
 // Writer 已被写过时（ping 已 flush）走 streamStarted 分支，
 // 让 handleStreamingAwareError 通过 SSE 发协议合规的终止事件，
 // 否则下游收到的就是 silent EOF。
+// 客户端已断开时不补写，响应未提交则标记 499（见 failoverClientGone）。
 func (h *GatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarted bool) bool {
 	if c == nil || c.Writer == nil {
+		return false
+	}
+	if c.Request != nil && errors.Is(c.Request.Context().Err(), context.Canceled) {
+		failoverClientGone(c)
 		return false
 	}
 	if service.IsResponseCommitted(c) {
@@ -2141,6 +2211,9 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Model is not supported by composite groups")
 		return
 	}
+	if rejectSystemOneOnlyPlatform(c, apiKey, h.errorResponse) {
+		return
+	}
 
 	setOpsRequestContext(c, parsedReq.Model, parsedReq.Stream)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(parsedReq.Stream, false)))
@@ -2149,7 +2222,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 
 	// 校验 billing eligibility（订阅/余额）
-	// 【注意】不计算并发，但需要校验订阅/余额
+	// count_tokens 不占用户/账号槽，API key 限额仍约束上游请求。
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		status, code, message, retryAfter := billingErrorDetails(err)
 		if retryAfter > 0 {
@@ -2160,6 +2233,13 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	}
 
 	// 计算粘性会话 hash
+	keyRelease, err := h.concurrencyHelper.AcquireAPIKeySlot(c.Request.Context(), apiKey.ID, apiKey.ConcurrencyLimit)
+	if err != nil {
+		h.handleConcurrencyError(c, err, "API key", false)
+		return
+	}
+	defer keyRelease()
+
 	parsedReq.SessionContext = &service.SessionContext{
 		ClientIP:  ip.GetClientIP(c),
 		UserAgent: c.GetHeader("User-Agent"),
@@ -2506,9 +2586,12 @@ func (h *GatewayHandler) submitUsageRecordTask(parent context.Context, task serv
 	if task == nil {
 		return
 	}
-	task = wrapUsageRecordTaskContext(parent, task)
+	task, abandon := wrapUsageRecordTaskContext(parent, task)
 	if h.usageRecordWorkerPool != nil {
 		if mode := h.usageRecordWorkerPool.Submit(task); mode != service.UsageRecordSubmitModeDroppedStopped {
+			if mode.Dropped() {
+				abandon()
+			}
 			return
 		}
 		// 池已停止（进程关停窗口）：计费任务不能静默丢失，降级为内联同步执行。
@@ -2536,7 +2619,7 @@ func (h *GatewayHandler) submitMandatoryUsageRecordTask(parent context.Context, 
 	if task == nil {
 		return
 	}
-	task = wrapUsageRecordTaskContext(parent, task)
+	task, _ = wrapUsageRecordTaskContext(parent, task)
 	if h.usageRecordWorkerPool != nil {
 		if mode := h.usageRecordWorkerPool.Submit(task); !mode.Dropped() {
 			return

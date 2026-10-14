@@ -33,6 +33,10 @@ func (h *GroupHandler) GetLiveCapability(c *gin.Context) {
 	if h.rejectUnsupportedSimpleModeOperation(c, "live_capability") {
 		return
 	}
+	if !service.LiveBillingAvailable() {
+		response.Success(c, gin.H{"supported": false, "reason": service.ErrLiveBillingUnavailable.Message})
+		return
+	}
 	err := liveattestation.NewProvider().Check(c.Request.Context())
 	result := gin.H{"supported": err == nil}
 	if err != nil {
@@ -182,17 +186,20 @@ func sanitizeUpdateGroupRequestForSimpleMode(req *UpdateGroupRequest) {
 
 // CreateGroupRequest represents create group request
 type CreateGroupRequest struct {
-	Name                      string                        `json:"name" binding:"required"`
-	Description               string                        `json:"description"`
-	Platform                  string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
-	RateMultiplier            float64                       `json:"rate_multiplier"`
-	IsExclusive               bool                          `json:"is_exclusive"`
-	SubscriptionType          string                        `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
-	DailyLimitUSD             optionalLimitField            `json:"daily_limit_usd"`
-	WeeklyLimitUSD            optionalLimitField            `json:"weekly_limit_usd"`
-	MonthlyLimitUSD           optionalLimitField            `json:"monthly_limit_usd"`
-	LongContextPricingEnabled bool                          `json:"long_context_pricing_enabled"`
-	ModelPricing              []service.ChannelModelPricing `json:"model_pricing"`
+	Name                       string                        `json:"name" binding:"required"`
+	Description                string                        `json:"description"`
+	Platform                   string                        `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok video kimi zhipu deepseek minimax opencode_go typesafe composite"`
+	RateMultiplier             float64                       `json:"rate_multiplier"`
+	IsExclusive                bool                          `json:"is_exclusive"`
+	SubscriptionType           string                        `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
+	DailyLimitUSD              optionalLimitField            `json:"daily_limit_usd"`
+	WeeklyLimitUSD             optionalLimitField            `json:"weekly_limit_usd"`
+	MonthlyLimitUSD            optionalLimitField            `json:"monthly_limit_usd"`
+	LongContextPricingEnabled  bool                          `json:"long_context_pricing_enabled"`
+	ModelPricing               []service.ChannelModelPricing `json:"model_pricing"`
+	SecurityPolicyEnabled      bool                          `json:"security_policy_enabled"`
+	SecurityPolicyMode         string                        `json:"security_policy_mode"`
+	SecurityPolicyEmailEnabled *bool                         `json:"security_policy_email_enabled"`
 	// 图片生成计费配置（antigravity 和 gemini 平台使用，负数表示清除配置）
 	AllowImageGeneration            bool                          `json:"allow_image_generation"`
 	AllowBatchImageGeneration       bool                          `json:"allow_batch_image_generation"`
@@ -223,6 +230,7 @@ type CreateGroupRequest struct {
 	AudioTtsPricePerMillionChars    *float64                      `json:"audio_tts_price_per_million_chars"`
 	AudioSttPricePerHour            *float64                      `json:"audio_stt_price_per_hour"`
 	ClaudeCodeOnly                  bool                          `json:"claude_code_only"`
+	StreamOnly                      bool                          `json:"stream_only"`
 	FallbackGroupID                 *int64                        `json:"fallback_group_id"`
 	FallbackGroupIDOnInvalidRequest *int64                        `json:"fallback_group_id_on_invalid_request"`
 	// 模型路由配置（仅 anthropic 平台使用）
@@ -251,27 +259,27 @@ type CreateGroupRequest struct {
 	MaxReasoningEffortOverLimit string `json:"max_reasoning_effort_over_limit"`
 	// Anthropic/OpenAI 推理强度映射，可按模型精确名、前缀或后缀限定。
 	ReasoningEffortMappings []service.ReasoningEffortMapping `json:"reasoning_effort_mappings"`
-	GrokPromptEnabled       bool                             `json:"grok_prompt_enabled"`
-	GrokPromptMode          string                           `json:"grok_prompt_mode"`
-	GrokPromptContent       string                           `json:"grok_prompt_content"`
 	// 从指定分组复制账号（创建后自动绑定）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
 
 // UpdateGroupRequest represents update group request
 type UpdateGroupRequest struct {
-	Name                      string                         `json:"name"`
-	Description               *string                        `json:"description"`
-	Platform                  string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go composite"`
-	RateMultiplier            *float64                       `json:"rate_multiplier"`
-	IsExclusive               *bool                          `json:"is_exclusive"`
-	Status                    string                         `json:"status" binding:"omitempty,oneof=active inactive"`
-	SubscriptionType          string                         `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
-	DailyLimitUSD             optionalLimitField             `json:"daily_limit_usd"`
-	WeeklyLimitUSD            optionalLimitField             `json:"weekly_limit_usd"`
-	MonthlyLimitUSD           optionalLimitField             `json:"monthly_limit_usd"`
-	LongContextPricingEnabled *bool                          `json:"long_context_pricing_enabled"`
-	ModelPricing              *[]service.ChannelModelPricing `json:"model_pricing"`
+	Name                       string                         `json:"name"`
+	Description                *string                        `json:"description"`
+	Platform                   string                         `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok video kimi zhipu deepseek minimax opencode_go typesafe composite"`
+	RateMultiplier             *float64                       `json:"rate_multiplier"`
+	IsExclusive                *bool                          `json:"is_exclusive"`
+	Status                     string                         `json:"status" binding:"omitempty,oneof=active inactive"`
+	SubscriptionType           string                         `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
+	DailyLimitUSD              optionalLimitField             `json:"daily_limit_usd"`
+	WeeklyLimitUSD             optionalLimitField             `json:"weekly_limit_usd"`
+	MonthlyLimitUSD            optionalLimitField             `json:"monthly_limit_usd"`
+	LongContextPricingEnabled  *bool                          `json:"long_context_pricing_enabled"`
+	ModelPricing               *[]service.ChannelModelPricing `json:"model_pricing"`
+	SecurityPolicyEnabled      *bool                          `json:"security_policy_enabled"`
+	SecurityPolicyMode         *string                        `json:"security_policy_mode"`
+	SecurityPolicyEmailEnabled *bool                          `json:"security_policy_email_enabled"`
 	// 图片生成计费配置（antigravity 和 gemini 平台使用，负数表示清除配置）
 	AllowImageGeneration            *bool                         `json:"allow_image_generation"`
 	AllowBatchImageGeneration       *bool                         `json:"allow_batch_image_generation"`
@@ -302,6 +310,7 @@ type UpdateGroupRequest struct {
 	AudioTtsPricePerMillionChars    *float64                      `json:"audio_tts_price_per_million_chars"`
 	AudioSttPricePerHour            *float64                      `json:"audio_stt_price_per_hour"`
 	ClaudeCodeOnly                  *bool                         `json:"claude_code_only"`
+	StreamOnly                      *bool                         `json:"stream_only"`
 	FallbackGroupID                 *int64                        `json:"fallback_group_id"`
 	FallbackGroupIDOnInvalidRequest *int64                        `json:"fallback_group_id_on_invalid_request"`
 	// 模型路由配置（仅 anthropic 平台使用）
@@ -330,9 +339,6 @@ type UpdateGroupRequest struct {
 	MaxReasoningEffortOverLimit *string `json:"max_reasoning_effort_over_limit"`
 	// nil 不修改，空数组清空，非空数组替换。
 	ReasoningEffortMappings *[]service.ReasoningEffortMapping `json:"reasoning_effort_mappings"`
-	GrokPromptEnabled       *bool                             `json:"grok_prompt_enabled"`
-	GrokPromptMode          *string                           `json:"grok_prompt_mode"`
-	GrokPromptContent       *string                           `json:"grok_prompt_content"`
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
@@ -340,7 +346,7 @@ type UpdateGroupRequest struct {
 type CompositeRouteRequest struct {
 	PublicModel    string `json:"public_model" binding:"required"`
 	MatchType      string `json:"match_type" binding:"omitempty,oneof=exact prefix"`
-	TargetPlatform string `json:"target_platform" binding:"required,oneof=anthropic openai gemini antigravity grok kimi zhipu deepseek minimax opencode_go"`
+	TargetPlatform string `json:"target_platform" binding:"required,oneof=anthropic openai gemini antigravity grok video kimi zhipu deepseek minimax opencode_go typesafe"`
 	UpstreamModel  string `json:"upstream_model"`
 	Endpoint       string `json:"endpoint" binding:"omitempty,oneof=any messages count_tokens responses chat_completions embeddings images gemini"`
 	Priority       int    `json:"priority"`
@@ -675,6 +681,9 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		Platform:                        req.Platform,
 		RateMultiplier:                  req.RateMultiplier,
 		IsExclusive:                     req.IsExclusive,
+		SecurityPolicyEnabled:           req.SecurityPolicyEnabled,
+		SecurityPolicyMode:              req.SecurityPolicyMode,
+		SecurityPolicyEmailEnabled:      req.SecurityPolicyEmailEnabled,
 		SubscriptionType:                req.SubscriptionType,
 		DailyLimitUSD:                   req.DailyLimitUSD.ToServiceInput(),
 		WeeklyLimitUSD:                  req.WeeklyLimitUSD.ToServiceInput(),
@@ -710,6 +719,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		AudioTTSPricePerMillionChars:    req.AudioTtsPricePerMillionChars,
 		AudioSTTPricePerHour:            req.AudioSttPricePerHour,
 		ClaudeCodeOnly:                  req.ClaudeCodeOnly,
+		StreamOnly:                      req.StreamOnly,
 		FallbackGroupID:                 req.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: req.FallbackGroupIDOnInvalidRequest,
 		ModelRouting:                    req.ModelRouting,
@@ -730,9 +740,6 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		MaxReasoningEffort:              req.MaxReasoningEffort,
 		MaxReasoningEffortOverLimit:     req.MaxReasoningEffortOverLimit,
 		ReasoningEffortMappings:         req.ReasoningEffortMappings,
-		GrokPromptEnabled:               req.GrokPromptEnabled,
-		GrokPromptMode:                  req.GrokPromptMode,
-		GrokPromptContent:               req.GrokPromptContent,
 		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
@@ -824,6 +831,9 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		Platform:                        req.Platform,
 		RateMultiplier:                  req.RateMultiplier,
 		IsExclusive:                     req.IsExclusive,
+		SecurityPolicyEnabled:           req.SecurityPolicyEnabled,
+		SecurityPolicyMode:              req.SecurityPolicyMode,
+		SecurityPolicyEmailEnabled:      req.SecurityPolicyEmailEnabled,
 		Status:                          req.Status,
 		SubscriptionType:                req.SubscriptionType,
 		DailyLimitUSD:                   req.DailyLimitUSD.ToServiceInput(),
@@ -860,6 +870,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		AudioTTSPricePerMillionChars:    req.AudioTtsPricePerMillionChars,
 		AudioSTTPricePerHour:            req.AudioSttPricePerHour,
 		ClaudeCodeOnly:                  req.ClaudeCodeOnly,
+		StreamOnly:                      req.StreamOnly,
 		FallbackGroupID:                 req.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: req.FallbackGroupIDOnInvalidRequest,
 		ModelRouting:                    req.ModelRouting,
@@ -880,9 +891,6 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		MaxReasoningEffort:              req.MaxReasoningEffort,
 		MaxReasoningEffortOverLimit:     req.MaxReasoningEffortOverLimit,
 		ReasoningEffortMappings:         req.ReasoningEffortMappings,
-		GrokPromptEnabled:               req.GrokPromptEnabled,
-		GrokPromptMode:                  req.GrokPromptMode,
-		GrokPromptContent:               req.GrokPromptContent,
 		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
@@ -925,23 +933,28 @@ func (h *GroupHandler) Delete(c *gin.Context) {
 // GetStats handles getting group statistics
 // GET /api/v1/admin/groups/:id/stats
 func (h *GroupHandler) GetStats(c *gin.Context) {
-	if h.rejectUnsupportedSimpleModeOperation(c, "stats") {
-		return
-	}
+	c.Header("Cache-Control", "no-store")
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
+	if err != nil || groupID < 1 {
 		response.BadRequest(c, "Invalid group ID")
 		return
 	}
 
-	// Return mock data for now
-	response.Success(c, gin.H{
-		"total_api_keys":  0,
-		"active_api_keys": 0,
-		"total_requests":  0,
-		"total_cost":      0.0,
-	})
-	_ = groupID // TODO: implement actual stats
+	var from, to *time.Time
+	for key, target := range map[string]**time.Time{"from": &from, "to": &to} {
+		if raw := strings.TrimSpace(c.Query(key)); raw != "" {
+			value, parseErr := time.Parse(time.RFC3339, raw)
+			if parseErr != nil {
+				response.BadRequest(c, "时间必须使用 ISO 8601 格式")
+				return
+			}
+			*target = &value
+		}
+	}
+	stats, err := h.dashboardService.GetGroupDetailStats(c.Request.Context(), groupID, from, to)
+	if !response.ErrorFrom(c, err) {
+		response.Success(c, stats)
+	}
 }
 
 // GetUsageSummary returns today's, yesterday's, and cumulative cost for all groups.
@@ -1126,6 +1139,57 @@ func (h *GroupHandler) ClearGroupRPMOverrides(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "RPM overrides cleared successfully"})
+}
+
+// BatchSetGroupUserDeniedModelsRequest represents batch set user denied models request
+type BatchSetGroupUserDeniedModelsRequest struct {
+	Entries []service.GroupUserDeniedModelsInput `json:"entries" binding:"required"`
+}
+
+// BatchSetGroupUserDeniedModels replaces the models each user may not use in a group
+// PUT /api/v1/admin/groups/:id/user-denied-models
+func (h *GroupHandler) BatchSetGroupUserDeniedModels(c *gin.Context) {
+	if h.rejectUnsupportedSimpleModeOperation(c, "advanced") {
+		return
+	}
+	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid group ID")
+		return
+	}
+
+	var req BatchSetGroupUserDeniedModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.adminService.BatchSetGroupUserDeniedModels(c.Request.Context(), groupID, req.Entries); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{"message": "User denied models updated successfully"})
+}
+
+// ClearGroupUserDeniedModels clears the denied models of every user in a group
+// DELETE /api/v1/admin/groups/:id/user-denied-models
+func (h *GroupHandler) ClearGroupUserDeniedModels(c *gin.Context) {
+	if h.rejectUnsupportedSimpleModeOperation(c, "advanced") {
+		return
+	}
+	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid group ID")
+		return
+	}
+
+	if err := h.adminService.ClearGroupUserDeniedModels(c.Request.Context(), groupID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{"message": "User denied models cleared successfully"})
 }
 
 // UpdateSortOrderRequest represents the request to update group sort orders

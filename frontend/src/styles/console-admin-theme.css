@@ -1,0 +1,193 @@
+/* Admin pages keep their compact working layout. Palette, typography and
+   portaled surfaces come from console-theme.css, shared with customers. */
+.kitty-admin-shell {
+  position: relative;
+  isolation: isolate;
+  color: var(--kc-ink);
+  background: var(--kc-bg);
+  font-family: var(--kc-font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.kitty-admin-shell .kitty-console-main,
+.kitty-admin-shell .kitty-console-content { min-width: 0; }
+.kitty-admin-shell .kitty-console-content {
+  width: 100%;
+  max-width: 2320px;
+  margin: 0 auto;
+}
+.kitty-admin-shell [data-console-header],
+.kitty-admin-shell [data-console-header] .app-header-shell { min-height: 58px; }
+.kitty-admin-shell [data-console-header] .app-header-shell { gap: 8px; }
+.kitty-admin-shell [data-console-header] h1 { letter-spacing: -.025em; }
+.kitty-admin-shell .kitty-console-sidebar .sidebar-header {
+  height: 58px;
+  min-height: 58px;
+  padding-inline: 18px;
+}
+.kitty-admin-shell .kitty-console-sidebar .sidebar-nav { padding: 12px 10px; }
+.kitty-admin-shell .kitty-console-sidebar .sidebar-link {
+  min-height: 37px;
+  border-radius: 8px;
+  padding-block: 7px;
+}
+.kitty-admin-shell .sidebar,
+.kitty-admin-shell header.glass {
+  color: var(--kc-ink);
+  border-color: var(--kc-line);
+  background: var(--kc-panel);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.kitty-admin-shell .sidebar-header,
+.kitty-admin-shell .sidebar > .mt-auto { border-color: var(--kc-line); }
+.kitty-admin-shell .sidebar-logo { box-shadow: none; }
+.kitty-admin-shell .sidebar-brand-title { color: var(--kc-ink); }
+.kitty-admin-shell .sidebar-link,
+.kitty-admin-shell .sidebar-section-title,
+.kitty-admin-shell .dropdown-item { color: var(--kc-muted); }
+.kitty-admin-shell .sidebar-link:hover,
+.kitty-admin-shell .dropdown-item:hover {
+  color: var(--kc-ink);
+  background: var(--kc-hover);
+}
+.kitty-admin-shell .sidebar-link-active,
+.kitty-admin-shell .sidebar-link-active:hover {
+  color: var(--kc-accent-strong);
+  background: var(--kc-accent-soft);
+  box-shadow: none;
+}
+.kitty-admin-shell .sidebar-section-title { letter-spacing: .04em; }
+.kitty-admin-shell .sidebar-section-title::after { background: var(--kc-line); }
+.kitty-admin-shell .app-header-customer-toolbar,
+.kitty-admin-shell .app-header-controls { gap: 6px; }
+.kitty-admin-shell .customer-header-shortcut,
+.kitty-admin-shell .customer-contact-action,
+.kitty-admin-shell .customer-support__trigger,
+.kitty-admin-shell .announcement-header-button,
+.kitty-admin-shell .app-header-getting-started {
+  min-height: 28px;
+  height: 28px;
+  border: 1px solid var(--kc-line);
+  border-radius: 6px;
+  padding-inline: 9px;
+  color: var(--kc-muted);
+  background: var(--kc-panel);
+  box-shadow: none;
+  font-size: .72rem;
+}
+.kitty-admin-shell .customer-header-shortcut:hover,
+.kitty-admin-shell .customer-contact-action:hover,
+.kitty-admin-shell .customer-support__trigger:hover,
+.kitty-admin-shell .announcement-header-button:hover,
+.kitty-admin-shell .announcement-header-button--unread,
+.kitty-admin-shell .app-header-getting-started:hover {
+  color: var(--kc-accent-strong);
+  background: var(--kc-accent-soft);
+  box-shadow: none;
+  transform: none;
+}
+.kitty-admin-shell .table tbody tr:hover { background: var(--kc-hover); }
+
+/* Existing dashboard proportions stay intact; status and provider colors are
+   intentionally left to their components instead of being recolored globally. */
+.kitty-admin-shell .dashboard-view-content,
+.kitty-admin-shell .dashboard-charts-section { display: grid; min-width: 0; gap: 16px; }
+.kitty-admin-shell .dashboard-stats-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.kitty-admin-shell .dashboard-stats-row > .card {
+  min-width: 0;
+  min-height: 76px;
+  border-radius: 12px;
+}
+.kitty-admin-shell .dashboard-stats-row [data-stat-tone] > .flex,
+.kitty-admin-shell .dashboard-stats-row [data-stat-tone] > .flex > :last-child { min-width: 0; }
+.kitty-admin-shell .dashboard-stats-row [data-stat-tone] p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kitty-admin-shell .dashboard-platform-section { min-width: 0; padding: 14px; border-radius: 12px; }
+.kitty-admin-shell .dashboard-platform-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+.kitty-admin-shell .dashboard-platform-card {
+  min-width: 0;
+  align-self: stretch;
+  border-radius: 8px;
+  background: var(--kc-panel-muted);
+}
+.kitty-admin-shell .dashboard-platform-card > * { min-width: 0; }
+.kitty-admin-shell .dashboard-filter-bar { min-width: 0; min-height: 56px; padding: 12px; border-radius: 10px; }
+.kitty-admin-shell .dashboard-filter-bar > .flex { min-width: 0; gap: 10px; }
+.kitty-admin-shell .dashboard-charts-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 16px;
+}
+.kitty-admin-shell .dashboard-chart-panel { min-width: 0; min-height: 300px; border-radius: 12px; }
+.kitty-admin-shell .dashboard-chart-panel canvas { max-width: 100%; }
+.kitty-admin-shell .dashboard-recent-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 16px;
+}
+.kitty-admin-shell .dashboard-recent-usage,
+.kitty-admin-shell .dashboard-quick-actions { min-width: 0; border-radius: 12px; }
+.kitty-admin-shell .dashboard-recent-usage .space-y-3 > div,
+.kitty-admin-shell .dashboard-quick-actions button { border-radius: 8px; }
+.kitty-admin-shell[data-console-performance='lite'] .dashboard-chart-panel .backdrop-blur-sm { backdrop-filter: none; }
+.kitty-admin-shell[data-console-performance='lite'] .dashboard-platform-card,
+.kitty-admin-shell[data-console-performance='lite'] .dashboard-quick-actions button,
+.kitty-admin-shell[data-console-performance='lite'] .dashboard-recent-usage .space-y-3 > div { transition: none; }
+
+@media (min-width: 1200px) {
+  .kitty-admin-shell [data-console-header] .app-header-shell { flex-wrap: nowrap; }
+  .kitty-admin-shell .app-header-customer-toolbar {
+    order: initial;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .kitty-admin-shell .app-header-customer-toolbar::-webkit-scrollbar { display: none; }
+  .kitty-admin-shell .app-header-controls { flex: 0 1 auto; min-width: 0; }
+}
+@media (max-width: 1199px) {
+  .kitty-admin-shell .dashboard-stats-row,
+  .kitty-admin-shell .dashboard-platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kitty-admin-shell .dashboard-charts-grid { grid-template-columns: 1fr; }
+  .kitty-admin-shell .kitty-console-content { max-width: none; }
+}
+@media (max-width: 899px) {
+  .kitty-admin-shell .dashboard-recent-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 767px) {
+  .kitty-admin-shell main { padding: 1rem; }
+  .kitty-admin-shell .dashboard-filter-bar > .flex { align-items: stretch; }
+  .kitty-admin-shell .dashboard-filter-bar .ml-auto { width: 100%; margin-left: 0; }
+  .kitty-admin-shell .dashboard-filter-bar .ml-auto > .w-28 { width: min(10rem, 100%); }
+  .kitty-admin-shell .dashboard-chart-panel { min-height: 272px; }
+}
+@media (max-width: 599px) {
+  .kitty-admin-shell .dashboard-stats-row,
+  .kitty-admin-shell .dashboard-platform-grid { grid-template-columns: 1fr; }
+  .kitty-admin-shell .dashboard-platform-section,
+  .kitty-admin-shell .dashboard-filter-bar,
+  .kitty-admin-shell .dashboard-chart-panel,
+  .kitty-admin-shell .dashboard-recent-usage,
+  .kitty-admin-shell .dashboard-quick-actions { border-radius: 10px; }
+}

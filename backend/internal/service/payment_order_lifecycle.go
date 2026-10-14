@@ -165,6 +165,24 @@ func (s *PaymentService) checkPaidWithOptions(ctx context.Context, o *dbent.Paym
 		slog.Warn("query upstream failed", "orderID", o.ID, "error", err)
 		return ""
 	}
+	if resp == nil {
+		return ""
+	}
+	if prov.ProviderKey() == payment.TypeEasyPay && resp.Status == payment.ProviderStatusPaid {
+		if err := validateEasyPayPaidQuery(o, resp, resp.TradeNo, resp.Amount); err != nil {
+			s.writeAuditLog(ctx, o.ID, "PAYMENT_VERIFICATION_PENDING", payment.TypeEasyPay, map[string]any{"reason": err.Error()})
+			return ""
+		}
+		verifiedCtx := context.WithValue(ctx, easyPayProofKey{}, easyPayProof{s, easyPayOrderMerchant(o), o.ID, o.OutTradeNo, resp.TradeNo, resp.Amount})
+		if err := s.confirmPayment(verifiedCtx, o.ID, resp.TradeNo, resp.Amount, prov.ProviderKey(), resp.Metadata); err != nil {
+			slog.Warn("verified easypay fulfillment deferred", "orderID", o.ID)
+			current, loadErr := s.entClient.PaymentOrder.Get(ctx, o.ID)
+			if loadErr != nil || (current.Status != OrderStatusPaid && current.Status != OrderStatusRecharging && current.Status != OrderStatusFailed && current.Status != OrderStatusCompleted) {
+				return ""
+			}
+		}
+		return checkPaidResultAlreadyPaid
+	}
 	if resp.Status == payment.ProviderStatusPaid {
 		if !isValidProviderAmount(resp.Amount) {
 			s.writeAuditLog(ctx, o.ID, "PAYMENT_INVALID_AMOUNT", prov.ProviderKey(), map[string]any{

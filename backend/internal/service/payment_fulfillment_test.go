@@ -1148,6 +1148,7 @@ func createPaymentFulfillmentSubscriptionOrder(
 		SetRechargeCode("PAY-SUB-" + strconv.FormatInt(time.Now().UnixNano(), 10)).
 		SetOutTradeNo("sub2_fulfillment_" + strconv.FormatInt(time.Now().UnixNano(), 10)).
 		SetPaymentType(payment.TypeAlipay).
+		SetProviderKey(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-fulfillment").
 		SetOrderType(payment.OrderTypeSubscription).
 		SetPlanID(100).
@@ -1193,6 +1194,7 @@ func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {
 		SetRechargeCode("PAY-SUB-AFFILIATE").
 		SetOutTradeNo("sub2_subscription_affiliate").
 		SetPaymentType(payment.TypeAlipay).
+		SetProviderKey(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-sub-affiliate").
 		SetOrderType(payment.OrderTypeSubscription).
 		SetPlanID(99).
@@ -1279,6 +1281,7 @@ func TestExecuteSubscriptionFulfillmentDoesNotDuplicateWorkAfterLegacySuccessAud
 		SetRechargeCode("PAY-SUB-AFFILIATE-IDEMPOTENT").
 		SetOutTradeNo("sub2_subscription_affiliate_idempotent").
 		SetPaymentType(payment.TypeAlipay).
+		SetProviderKey(payment.TypeAlipay).
 		SetPaymentTradeNo("trade-sub-affiliate-idempotent").
 		SetOrderType(payment.OrderTypeSubscription).
 		SetPlanID(100).

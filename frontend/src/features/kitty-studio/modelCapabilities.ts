@@ -122,8 +122,10 @@ export function studioModelOptions(
 ): StudioModelOption[] {
   const normalized = normalizedPlatform(platform)
   if (isVideoMode(mode)) {
+    if (normalized === 'video') return uniqueOptions(availableModelIds.map(id => id.trim()).filter(id => id && !/[*?]/.test(id)).map(id => ({ id, label: id, description: '视频生成', strategy: 'video-gateway' as const, type: 'video' as const })))
     return ['grok', 'composite'].includes(normalized) ? GROK_VIDEO_OPTIONS : []
   }
+  if (normalized === 'video') return []
 
   const ids = new Set(availableModelIds.map((id) => id.trim()).filter(Boolean))
   const options: StudioModelOption[] = []

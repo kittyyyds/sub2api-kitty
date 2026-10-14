@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -292,10 +293,14 @@ func defaultModelsListCandidateIDs(platform string) []string {
 			ids = append(ids, model.ID)
 		}
 		return ids
+	case PlatformVideo:
+		return []string{}
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
 	case PlatformOpenCodeGo:
 		return DefaultOpenCodeGoModelIDs()
+	case PlatformTypeSafe:
+		return []string{typesafe.JevLatestModel}
 	case PlatformComposite:
 		return compositeDefaultModelsListCandidateIDs()
 	default:
@@ -310,13 +315,16 @@ func defaultModelsListCandidateIDs(platform string) []string {
 func defaultAllowImageGenerationForPlatform(platform string) bool {
 	// Grok image and video generation routes share the legacy image-generation gate.
 	// Older clients send the false zero value, so Grok groups must default enabled.
-	return platform == PlatformGrok
+	return platform == PlatformGrok || platform == PlatformVideo
 }
 
 func compositeDefaultModelsListCandidateIDs() []string {
 	seen := make(map[string]struct{})
 	ids := make([]string, 0)
-	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo} {
+	// TypeSafe stays out of the static composite candidates (jev-latest only works
+	// through /v1/systemone); groups with TypeSafe accounts still get it from the
+	// account model mappings collected by GetGroupModelsListCandidates.
+	for _, platform := range []string{PlatformAnthropic, PlatformGemini, PlatformOpenAI, PlatformAntigravity, PlatformGrok, PlatformVideo, PlatformKimi, PlatformZhipu, PlatformDeepseek, PlatformMiniMax, PlatformOpenCodeGo} {
 		for _, id := range defaultModelsListCandidateIDs(platform) {
 			if _, ok := seen[id]; ok {
 				continue
@@ -329,6 +337,9 @@ func compositeDefaultModelsListCandidateIDs() []string {
 }
 
 func canCopyAccountsFromGroupPlatform(targetPlatform, sourcePlatform string) bool {
+	if targetPlatform == PlatformVideo || sourcePlatform == PlatformVideo {
+		return targetPlatform == sourcePlatform
+	}
 	if targetPlatform == PlatformComposite {
 		return sourcePlatform == PlatformComposite || isConcreteRequestPlatform(sourcePlatform)
 	}
@@ -391,7 +402,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	if normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig).Enabled {
 		return nil, infraerrors.New(http.StatusBadRequest, "INVALID_CODEX_MODELS_MANIFEST_CONFIG", "codex models manifest config cannot be enabled at group creation; configure it after creation in the group editor")
 	}
-	modelPricing, err := normalizeGroupModelPricing(platform, input.ModelPricing)
+	modelPricing, err := s.normalizeSavedGroupModelPricing(ctx, platform, input.ModelPricing, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -406,12 +417,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	reasoningEffortMappings, err := NormalizeReasoningEffortMappings(platform, input.ReasoningEffortMappings)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadRequest, "INVALID_REASONING_EFFORT_MAPPING", "%v", err)
-	}
-	grokPromptEnabled, grokPromptMode, grokPromptContent, err := NormalizeGrokPromptSettings(
-		platform, input.GrokPromptEnabled, input.GrokPromptMode, input.GrokPromptContent,
-	)
-	if err != nil {
-		return nil, infraerrors.Newf(http.StatusBadRequest, "INVALID_GROK_PROMPT", "%v", err)
 	}
 
 	subscriptionType := input.SubscriptionType
@@ -511,6 +516,15 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 	}
 
+	securityPolicyMode, err := validateSecurityPolicyModeForWrite(input.SecurityPolicyMode)
+	if err != nil {
+		return nil, err
+	}
+	securityPolicyEmailEnabled := true
+	if input.SecurityPolicyEmailEnabled != nil {
+		securityPolicyEmailEnabled = *input.SecurityPolicyEmailEnabled
+	}
+
 	// MCPXMLInject：默认为 true，仅当显式传入 false 时关闭
 	mcpXMLInject := true
 	if input.MCPXMLInject != nil {
@@ -564,6 +578,9 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
 		IsExclusive:                     input.IsExclusive,
+		SecurityPolicyEnabled:           input.SecurityPolicyEnabled,
+		SecurityPolicyMode:              securityPolicyMode,
+		SecurityPolicyEmailEnabled:      securityPolicyEmailEnabled,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
 		DailyLimitUSD:                   dailyLimit,
@@ -600,6 +617,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		AudioTTSPricePerMillionChars:    audioTTSPricePerMillionChars,
 		AudioSTTPricePerHour:            audioSTTPricePerHour,
 		ClaudeCodeOnly:                  input.ClaudeCodeOnly,
+		StreamOnly:                      input.StreamOnly,
 		FallbackGroupID:                 input.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: fallbackOnInvalidRequest,
 		ModelRouting:                    input.ModelRouting,
@@ -621,9 +639,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		MaxReasoningEffort:          maxReasoningEffort,
 		MaxReasoningEffortOverLimit: maxReasoningEffortOverLimit,
 		ReasoningEffortMappings:     reasoningEffortMappings,
-		GrokPromptEnabled:           grokPromptEnabled,
-		GrokPromptMode:              grokPromptMode,
-		GrokPromptContent:           grokPromptContent,
 	}
 	sanitizeGroupMessagesDispatchFields(group)
 	sanitizeGroupOpenAIFast(group)
@@ -779,11 +794,38 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.Platform != "" {
 		group.Platform = input.Platform
 	}
+	if previousPlatform != group.Platform && (previousPlatform == PlatformVideo || group.Platform == PlatformVideo) {
+		total, _, err := s.groupRepo.GetAccountCount(ctx, group.ID)
+		if err != nil {
+			return nil, err
+		}
+		if total > 0 {
+			return nil, infraerrors.BadRequest("VIDEO_GROUP_PLATFORM_LOCKED", "unbind accounts before changing a video group's platform")
+		}
+	}
+	if group.Platform == PlatformVideo && input.ModelPricing == nil {
+		if err := validateVideoGroupPricing(group.ModelPricing); err != nil {
+			return nil, err
+		}
+	}
 	if input.RateMultiplier != nil {
 		if *input.RateMultiplier <= 0 {
 			return nil, errors.New("rate_multiplier must be > 0")
 		}
 		group.RateMultiplier = *input.RateMultiplier
+	}
+	if input.SecurityPolicyEnabled != nil {
+		group.SecurityPolicyEnabled = *input.SecurityPolicyEnabled
+	}
+	if input.SecurityPolicyMode != nil {
+		mode, err := validateSecurityPolicyModeForWrite(*input.SecurityPolicyMode)
+		if err != nil {
+			return nil, err
+		}
+		group.SecurityPolicyMode = mode
+	}
+	if input.SecurityPolicyEmailEnabled != nil {
+		group.SecurityPolicyEmailEnabled = *input.SecurityPolicyEmailEnabled
 	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
@@ -795,7 +837,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		group.LongContextPricingEnabled = *input.LongContextPricingEnabled
 	}
 	if input.ModelPricing != nil {
-		modelPricing, normalizeErr := normalizeGroupModelPricing(group.Platform, *input.ModelPricing)
+		modelPricing, normalizeErr := s.normalizeSavedGroupModelPricing(ctx, group.Platform, *input.ModelPricing, group.ModelPricing)
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
@@ -942,6 +984,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.ClaudeCodeOnly != nil {
 		group.ClaudeCodeOnly = *input.ClaudeCodeOnly
 	}
+	if input.StreamOnly != nil {
+		group.StreamOnly = *input.StreamOnly
+	}
 	if input.FallbackGroupID != nil {
 		// 校验降级分组
 		if *input.FallbackGroupID > 0 {
@@ -1044,21 +1089,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 		}
 		group.ReasoningEffortMappings = reasoningEffortMappings
 	}
-	if input.GrokPromptEnabled != nil {
-		group.GrokPromptEnabled = *input.GrokPromptEnabled
-	}
-	if input.GrokPromptMode != nil {
-		group.GrokPromptMode = *input.GrokPromptMode
-	}
-	if input.GrokPromptContent != nil {
-		group.GrokPromptContent = *input.GrokPromptContent
-	}
-	group.GrokPromptEnabled, group.GrokPromptMode, group.GrokPromptContent, err = NormalizeGrokPromptSettings(
-		group.Platform, group.GrokPromptEnabled, group.GrokPromptMode, group.GrokPromptContent,
-	)
-	if err != nil {
-		return nil, infraerrors.Newf(http.StatusBadRequest, "INVALID_GROK_PROMPT", "%v", err)
-	}
+
 	sanitizeGroupMessagesDispatchFields(group)
 	sanitizeGroupOpenAIFast(group)
 	if group.Platform != PlatformOpenAI && group.Platform != PlatformComposite {
@@ -1162,6 +1193,11 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 }
 
 func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) ([]ChannelModelPricing, error) {
+	if platform == PlatformVideo {
+		if err := validateVideoGroupPricing(pricing); err != nil {
+			return nil, err
+		}
+	}
 	out := make([]ChannelModelPricing, len(pricing))
 	for i := range pricing {
 		out[i] = pricing[i].Clone()
@@ -1182,6 +1218,9 @@ func normalizeGroupModelPricing(platform string, pricing []ChannelModelPricing) 
 		if len(out[i].Models) == 0 {
 			return nil, infraerrors.New(http.StatusBadRequest, "GROUP_MODEL_PRICING_MODELS_REQUIRED", "group model pricing entry requires at least one model")
 		}
+	}
+	if platform == PlatformVideo {
+		return out, nil
 	}
 	if err := validatePricingEntries(out); err != nil {
 		return nil, err
@@ -1336,6 +1375,58 @@ func (s *adminServiceImpl) BatchSetGroupRPMOverrides(ctx context.Context, groupI
 	return nil
 }
 
+// ClearGroupUserDeniedModels 清空分组内所有用户的禁用模型。
+func (s *adminServiceImpl) ClearGroupUserDeniedModels(ctx context.Context, groupID int64) error {
+	if err := s.ValidateSimpleModeGroupOperation(AdminGroupOperationDeniedModels); err != nil {
+		return err
+	}
+	if s.userGroupRateRepo == nil {
+		return nil
+	}
+	if err := s.userGroupRateRepo.ClearGroupDeniedModels(ctx, groupID); err != nil {
+		return err
+	}
+	// 禁用模型嵌入 auth cache snapshot (v25)，变更后必须失效相关缓存。
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, groupID)
+	}
+	return nil
+}
+
+// BatchSetGroupUserDeniedModels 整组覆盖用户的禁用模型：未列出的用户、清单为空的条目都恢复为不限制。
+func (s *adminServiceImpl) BatchSetGroupUserDeniedModels(ctx context.Context, groupID int64, entries []GroupUserDeniedModelsInput) error {
+	if err := s.ValidateSimpleModeGroupOperation(AdminGroupOperationDeniedModels); err != nil {
+		return err
+	}
+	if s.userGroupRateRepo == nil {
+		return nil
+	}
+	normalized := make([]GroupUserDeniedModelsInput, 0, len(entries))
+	seen := make(map[int64]struct{}, len(entries))
+	for _, e := range entries {
+		if e.UserID <= 0 {
+			return infraerrors.BadRequest("INVALID_USER_GROUP_DENIED_MODELS", "user_id must be positive")
+		}
+		if _, dup := seen[e.UserID]; dup {
+			return infraerrors.BadRequest("INVALID_USER_GROUP_DENIED_MODELS", fmt.Sprintf("duplicate user_id %d", e.UserID))
+		}
+		seen[e.UserID] = struct{}{}
+		models, err := NormalizeUserGroupDeniedModels(e.DeniedModels)
+		if err != nil {
+			return err
+		}
+		normalized = append(normalized, GroupUserDeniedModelsInput{UserID: e.UserID, DeniedModels: models})
+	}
+	if err := s.userGroupRateRepo.SyncGroupDeniedModels(ctx, groupID, normalized); err != nil {
+		return err
+	}
+	// 禁用模型嵌入 auth cache snapshot (v25)，变更后必须失效相关缓存。
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, groupID)
+	}
+	return nil
+}
+
 func (s *adminServiceImpl) UpdateGroupSortOrders(ctx context.Context, updates []GroupSortOrderUpdate) error {
 	if err := s.ValidateSimpleModeGroupOperation(AdminGroupOperationSort); err != nil {
 		return err
@@ -1348,6 +1439,9 @@ func (s *adminServiceImpl) UpdateGroupSortOrders(ctx context.Context, updates []
 func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID int64, groupID *int64) (*AdminUpdateAPIKeyGroupIDResult, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.authorizeManagedUserResource(ctx, apiKey.UserID); err != nil {
 		return nil, err
 	}
 
@@ -1426,7 +1520,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 			// 失效认证缓存（在事务提交后执行）
 			if s.authCacheInvalidator != nil {
-				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.AuthCacheInvalidationKey())
 			}
 
 			result.APIKey = apiKey
@@ -1441,7 +1535,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 	// 失效认证缓存
 	if s.authCacheInvalidator != nil {
-		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.AuthCacheInvalidationKey())
 	}
 
 	result.APIKey = apiKey
@@ -1454,6 +1548,9 @@ func (s *adminServiceImpl) AdminResetAPIKeyRateLimitUsage(ctx context.Context, k
 	if err != nil {
 		return nil, err
 	}
+	if err := s.authorizeManagedUserResource(ctx, apiKey.UserID); err != nil {
+		return nil, err
+	}
 	apiKey.Usage5h = 0
 	apiKey.Usage1d = 0
 	apiKey.Usage7d = 0
@@ -1464,7 +1561,7 @@ func (s *adminServiceImpl) AdminResetAPIKeyRateLimitUsage(ctx context.Context, k
 		return nil, fmt.Errorf("reset api key rate limit usage: %w", err)
 	}
 	if s.authCacheInvalidator != nil {
-		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.AuthCacheInvalidationKey())
 	}
 	if s.billingCacheService != nil {
 		_ = s.billingCacheService.InvalidateAPIKeyRateLimit(ctx, apiKey.ID)
@@ -1535,4 +1632,15 @@ func (s *adminServiceImpl) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 	}
 
 	return &ReplaceUserGroupResult{MigratedKeys: migrated}, nil
+}
+
+func validateSecurityPolicyModeForWrite(mode string) (string, error) {
+	trimmed := strings.TrimSpace(mode)
+	if trimmed == "" {
+		return SecurityPolicyModeBlockSession, nil
+	}
+	if trimmed == SecurityPolicyModeBlockSession || trimmed == SecurityPolicyModeBlockRequest {
+		return trimmed, nil
+	}
+	return "", infraerrors.Newf(http.StatusBadRequest, "INVALID_SECURITY_POLICY_MODE", "security_policy_mode must be block_session or block_request, got %q", mode)
 }

@@ -14,12 +14,13 @@ const (
 )
 
 type RechargeBonusRule struct {
-	ID             int64      `json:"id"`
-	RechargeAmount float64    `json:"recharge_amount"`
-	BonusAmount    float64    `json:"bonus_amount"`
-	ValidityDays   int        `json:"validity_days"`
-	StartsAt       *time.Time `json:"starts_at,omitempty"`
-	EndsAt         *time.Time `json:"ends_at,omitempty"`
+	ID             int64   `json:"id"`
+	RechargeAmount float64 `json:"recharge_amount"`
+	BonusAmount    float64 `json:"bonus_amount"`
+	// ValidityDays is zero for permanent credit and positive for finite credit.
+	ValidityDays int        `json:"validity_days"`
+	StartsAt     *time.Time `json:"starts_at,omitempty"`
+	EndsAt       *time.Time `json:"ends_at,omitempty"`
 }
 
 type RechargeBonusSummary struct {
@@ -33,8 +34,10 @@ type RechargeBonusGrantResult struct {
 	GrantID     int64
 	BonusAmount float64
 	Remaining   float64
-	ExpiresAt   time.Time
-	NewBalance  float64
+	// ExpiresAt is nil only for permanent credit. Historical finite grants keep
+	// their original expiry; changing a rule never changes an existing grant.
+	ExpiresAt  *time.Time
+	NewBalance float64
 }
 
 type RechargeBonusExpiryResult struct {

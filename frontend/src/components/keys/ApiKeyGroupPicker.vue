@@ -7,8 +7,9 @@ import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { Group, GroupPlatform } from '@/types'
+import { getKeyGroupProvider, type KeyGroupProvider } from '@/utils/keyGroupProviders'
 
-type GroupCategory = 'openai' | 'anthropic' | 'gemini' | 'grok' | 'other'
+type GroupCategory = KeyGroupProvider
 
 interface Props {
   modelValue: number | null
@@ -49,14 +50,13 @@ const categories = computed<CategoryItem[]>(() => [
   { id: 'anthropic', label: t('keys.groupPicker.claude'), platform: 'anthropic' },
   { id: 'gemini', label: t('keys.groupPicker.gemini'), platform: 'gemini' },
   { id: 'grok', label: t('keys.groupPicker.grok'), platform: 'grok' },
+  { id: 'domestic', label: t('keys.providers.domestic'), platform: 'deepseek' },
+  { id: 'video', label: t('keys.providers.video'), platform: 'video' },
   { id: 'other', label: t('keys.groupPicker.other') }
 ])
 
 const getCategory = (platform: GroupPlatform): GroupCategory => {
-  if (platform === 'openai' || platform === 'anthropic' || platform === 'gemini' || platform === 'grok') {
-    return platform
-  }
-  return 'other'
+  return getKeyGroupProvider(platform)
 }
 
 const selectedGroup = computed(() => props.groups.find((group) => group.id === props.modelValue) ?? null)
@@ -94,10 +94,7 @@ const updatePanelPosition = () => {
   const rect = triggerRef.value.getBoundingClientRect()
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
-  const width = Math.max(
-    Math.min(rect.width, viewportWidth - margin * 2),
-    Math.min(960, viewportWidth - margin * 2)
-  )
+  const width = Math.min(Math.max(320, rect.width), viewportWidth - margin * 2)
   const left = Math.min(
     Math.max(margin, rect.left),
     Math.max(margin, viewportWidth - width - margin)
@@ -159,6 +156,8 @@ const categoryTabClass = (category: GroupCategory) => {
     anthropic: 'bg-white text-amber-700 shadow-sm ring-1 ring-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-800',
     gemini: 'bg-white text-sky-700 shadow-sm ring-1 ring-sky-200 dark:bg-sky-900/20 dark:text-sky-300 dark:ring-sky-800',
     grok: 'bg-white text-zinc-800 shadow-sm ring-1 ring-zinc-300 dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-600',
+    domestic: 'bg-white text-teal-700 shadow-sm ring-1 ring-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:ring-teal-800',
+    video: 'bg-white text-cyan-700 shadow-sm ring-1 ring-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:ring-cyan-800',
     other: 'bg-white text-violet-700 shadow-sm ring-1 ring-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:ring-violet-800'
   }
   return activeClasses[category]
@@ -258,6 +257,7 @@ onUnmounted(() => {
           class="group-picker-panel"
           :style="panelStyle"
           @click.stop
+          @keydown.esc.stop.prevent="handleDocumentKeydown"
         >
           <div class="group-picker-search">
             <Icon name="search" size="sm" class="shrink-0 text-gray-400" />
