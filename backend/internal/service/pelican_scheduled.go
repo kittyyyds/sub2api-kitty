@@ -83,7 +83,7 @@ func (s *AccountTestService) RunPelicanBackground(ctx context.Context, accountID
 	snapshot := *cfg
 	snapshot.ModelID = model
 	if snapshot.ScheduleMode == IQCompletionInterval {
-		snapshot.IQVerdict = IQAnswerVerdict(status, output)
+		snapshot.IQVerdict = IQAnswerVerdict(status, output, message)
 	}
 	return &ScheduledTestResult{Status: status, ResponseText: output, ErrorMessage: message, LatencyMs: finished.Sub(started).Milliseconds(), StartedAt: started, FinishedAt: finished, PelicanConfig: &snapshot}, nil
 }
@@ -260,7 +260,7 @@ func (s *ScheduledTestRunnerService) runPelicanPlan(ctx context.Context, plan *S
 		if IsIQIntervalPlan(plan) {
 			snapshot := *plan.PelicanConfig
 			snapshot.ModelID = plan.ModelID
-			snapshot.IQVerdict = IQAnswerVerdict(result.Status, result.ResponseText)
+			snapshot.IQVerdict = IQAnswerVerdict(result.Status, result.ResponseText, result.ErrorMessage)
 			result.PelicanConfig = &snapshot
 		}
 		if err := s.scheduledSvc.SaveResult(saveCtx, plan.ID, plan.MaxResults, result); err != nil {

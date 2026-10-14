@@ -47,3 +47,30 @@ func TestIQIntervalPersistsVerdictAfterRunnerSnapshot(t *testing.T) {
 		require.Equal(t, p.ModelID, results.results[0].PelicanConfig.ModelID)
 	}
 }
+
+func TestIQAnswerMismatchIsCompletedAnswer(t *testing.T) {
+	for _, answer := range []string{"29", "32", "21 or 29"} {
+		message := intelligenceTestOutputError(&PelicanTestConfig{QuestionKind: "candy"}, answer)
+		require.Equal(t, "answer_mismatch: expected 21", message)
+		require.Equal(t, "other", IQAnswerVerdict("failed", answer, message))
+	}
+	require.Equal(t, "error", IQAnswerVerdict("failed", "29", "API returned 403"))
+	require.Equal(t, "error", IQAnswerVerdict("failed", "", "answer_mismatch: expected 21"))
+	require.Equal(t, "error", IQAnswerVerdict("failed", "21", "timeout"))
+}
+
+func TestIQIntervalPersistsRealMismatchStatus(t *testing.T) {
+	plans := &pelicanPlanRepo{}
+	results := &pelicanResults{}
+	runner := &ScheduledTestRunnerService{planRepo: plans, scheduledSvc: NewScheduledTestService(plans, results)}
+	runner.runPelican = func(context.Context, int64, string, *PelicanTestConfig) (*ScheduledTestResult, error) {
+		return &ScheduledTestResult{Status: "failed", ResponseText: "29", ErrorMessage: intelligenceTestOutputError(&PelicanTestConfig{QuestionKind: "candy"}, "29")}, nil
+	}
+	p := pelicanPlan()
+	p.PelicanConfig.ScheduleMode = IQCompletionInterval
+	p.PelicanConfig.IntervalSeconds = 60
+	runner.runOnePlan(context.Background(), p)
+	require.Len(t, results.results, 1)
+	require.Equal(t, "other", results.results[0].PelicanConfig.IQVerdict)
+	require.Equal(t, "29", results.results[0].ResponseText)
+}

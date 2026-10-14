@@ -65,11 +65,9 @@ func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int
 				}
 			}
 			result := service.IQResult{ID: id.Int64, Verdict: config.IQVerdict, Answer: answer.String, Model: config.ModelID, Reasoning: config.ReasoningEffort, FinishedAt: finished.Time}
-			if result.Verdict == "" {
-				result.Verdict = "other"
-				if status.String != "success" {
-					result.Verdict = "error"
-				}
+			if result.Verdict == "" || result.Verdict == "error" {
+				// Reinterpret historic answer mismatches without rewriting saved rows.
+				result.Verdict = service.IQAnswerVerdict(status.String, answer.String, message.String)
 			}
 			if result.Verdict == "error" {
 				result.Error = service.IQErrorSummary(message.String)

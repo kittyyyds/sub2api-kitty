@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"strings"
 	"time"
 )
 
@@ -40,8 +41,10 @@ type IQSummary struct {
 	Results         []IQResult `json:"results"`
 }
 
-func IQAnswerVerdict(status, answer string) string {
-	if status != "success" {
+func IQAnswerVerdict(status, answer string, errorMessage ...string) string {
+	// A completed answer mismatch is a yellow result, not a transport failure.
+	answerMismatch := len(errorMessage) > 0 && strings.TrimSpace(errorMessage[0]) == "answer_mismatch: expected 21" && strings.TrimSpace(answer) != ""
+	if status != "success" && !answerMismatch {
 		return "error"
 	}
 	if CandyAnswerCorrect(answer) {
