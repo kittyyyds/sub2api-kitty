@@ -90,5 +90,8 @@ func (s *OpenAIGatewayService) normalizeRequestTimezone(ctx context.Context, acc
 	if !s.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) {
 		return body
 	}
+	if s.settingService.GetOpenAIRequestTimezoneAuto(ctx, false) {
+		return body
+	}
 	return normalizeUpstreamOpenAIRequestLocale(ctx, account, body, transport)
 }

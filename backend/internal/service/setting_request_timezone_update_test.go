@@ -18,6 +18,19 @@ func TestRequestTimezoneSettingsPersistAndInvalidate(t *testing.T) {
 		require.NoError(t, svc.UpdateSettings(context.Background(), &SystemSettings{OpenAIRequestTimezoneEnabled: enabled}))
 		require.Equal(t, map[bool]string{false: "false", true: "true"}[enabled], repo.updates[SettingKeyOpenAIRequestTimezoneEnabled])
 		require.Zero(t, svc.openAIRequestTimezoneEnabledCache.Load().(*cachedOpenAIRequestTimezoneEnabled).expiresAt)
+		require.Equal(t, "false", repo.updates[SettingKeyOpenAIRequestTimezoneAuto])
+	}
+}
+
+func TestRequestTimezoneAutoSettingsPersistAndInvalidate(t *testing.T) {
+	for _, auto := range []bool{false, true} {
+		repo := &settingUpdateRepoStub{}
+		svc := NewSettingService(repo, &config.Config{})
+		svc.openAIRequestTimezoneAutoCache.Store(&cachedOpenAIRequestTimezoneAuto{value: !auto, expiresAt: time.Now().Add(time.Hour).UnixNano()})
+		require.NoError(t, svc.UpdateSettings(context.Background(), &SystemSettings{OpenAIRequestTimezoneEnabled: false, OpenAIRequestTimezoneAuto: auto}))
+		require.Equal(t, map[bool]string{false: "false", true: "true"}[auto], repo.updates[SettingKeyOpenAIRequestTimezoneAuto])
+		require.Equal(t, "false", repo.updates[SettingKeyOpenAIRequestTimezoneEnabled])
+		require.Zero(t, svc.openAIRequestTimezoneAutoCache.Load().(*cachedOpenAIRequestTimezoneAuto).expiresAt)
 	}
 }
 

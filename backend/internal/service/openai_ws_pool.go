@@ -70,6 +70,8 @@ func (e *openAIWSDialError) Unwrap() error {
 }
 
 type openAIWSAcquireRequest struct {
+	timezoneBinding *requestTimezoneBinding
+	timezoneMode    string
 	// Private experiment connections must never serve a different client scope.
 	AnchorScope string
 	Account     *Account
@@ -90,6 +92,8 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSHandshakeCompatibilityKey struct {
+	timezoneMode        string
+	timezoneHeaders     [3]string
 	anchorScope         string
 	betaFeatures        string
 	codexInstallationID string
@@ -1117,6 +1121,10 @@ type openAIWSAcquireQueueWait struct {
 }
 
 func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireRequest) (*openAIWSConnLease, error) {
+	if ctx != nil {
+		req.timezoneBinding, _ = ctx.Value(requestTimezoneEgressKey{}).(*requestTimezoneBinding)
+	}
+	req.timezoneMode = req.timezoneBinding.mode(ctx)
 	if err := ValidateConfiguredAccountProxy(req.Account, req.ProxyURL); err != nil {
 		return nil, err
 	}
@@ -2163,6 +2171,9 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 	if req.Account != nil {
 		ctx = upstreamroute.WithAccountID(ctx, req.Account.ID)
 	}
+	if req.timezoneBinding != nil {
+		ctx = context.WithValue(ctx, requestTimezoneEgressKey{}, req.timezoneBinding)
+	}
 	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, headers, req.ProxyURL)
 	if err != nil {
 		var handshakeErr *openAIWSHandshakeError
@@ -2359,6 +2370,7 @@ func openAIWSAcquireCompatibility(req openAIWSAcquireRequest) openAIWSHandshakeC
 	key := normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
 	key.proxyURL = stringsTrim(req.ProxyURL)
 	key.anchorScope = req.AnchorScope
+	key.timezoneMode = req.timezoneMode
 	return key
 }
 
@@ -2380,7 +2392,7 @@ func cloneOpenAIWSAcquireRequestPtr(req *openAIWSAcquireRequest) *openAIWSAcquir
 }
 
 func sameOpenAIWSPrewarmTarget(a, b openAIWSAcquireRequest) bool {
-	return stringsTrim(a.WSURL) == stringsTrim(b.WSURL) &&
+	return a.timezoneMode == b.timezoneMode && stringsTrim(a.WSURL) == stringsTrim(b.WSURL) &&
 		stringsTrim(a.ProxyURL) == stringsTrim(b.ProxyURL) &&
 		normalizeOpenAIWSHandshakeCompatibility(a.Account, a.Headers) == normalizeOpenAIWSHandshakeCompatibility(b.Account, b.Headers)
 }
@@ -2412,7 +2424,8 @@ func normalizeOpenAIWSBetaFeatures(headers http.Header) string {
 
 func normalizeOpenAIWSHandshakeCompatibility(account *Account, headers http.Header) openAIWSHandshakeCompatibilityKey {
 	key := openAIWSHandshakeCompatibilityKey{
-		betaFeatures: normalizeOpenAIWSBetaFeatures(headers),
+		betaFeatures:    normalizeOpenAIWSBetaFeatures(headers),
+		timezoneHeaders: [3]string{headers.Get("Oai-Client-Timezone"), headers.Get("X-Openai-Timezone"), headers.Get("X-Timezone")},
 	}
 	mode := activeCodexFingerprintMode(account)
 	if mode == codexFingerprintOff {

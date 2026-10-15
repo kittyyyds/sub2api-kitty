@@ -46,7 +46,10 @@ func ProvideOpenAIGatewayService(d OpenAIGatewayDependencies) *OpenAIGatewayServ
 		d.BillingCache, d.Upstream, d.Deferred, d.OpenAITokens, d.GrokTokens, d.Pricing,
 		d.Channels, d.BalanceNotify, d.Settings, d.Quotas,
 		WithOpenAIRPMCache(d.RPMCache),
-		func(s *OpenAIGatewayService) { s.proxyTimezone = newProxyTimezoneResolver(d.ProxyProber) },
+		func(s *OpenAIGatewayService) {
+			s.proxyTimezone = newProxyTimezoneResolver(d.ProxyProber)
+			s.requestTimezoneProber = d.ProxyProber
+		},
 		WithRegionalMetering(d.RegionalMetering),
 		func(s *OpenAIGatewayService) { s.codexHarvest = d.Harvest })
 }

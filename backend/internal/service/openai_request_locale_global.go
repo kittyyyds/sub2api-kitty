@@ -16,7 +16,13 @@ func normalizeUpstreamOpenAIRequestLocale(ctx context.Context, account *Account,
 	if account == nil || !account.IsOpenAI() {
 		return body
 	}
-	timezone := account.OpenAIRequestTimezone()
+	return normalizeUpstreamOpenAIRequestLocaleTimezone(ctx, account, body, transport, account.OpenAIRequestTimezone())
+}
+
+func normalizeUpstreamOpenAIRequestLocaleTimezone(ctx context.Context, account *Account, body []byte, transport, timezone string) []byte {
+	if account == nil || !account.IsOpenAI() || !openAIRequestTimezoneAllowed[timezone] || !gjson.ValidBytes(body) {
+		return body
+	}
 	before := make([]*string, 0)
 	after := make([]*string, 0)
 	matched := 0
