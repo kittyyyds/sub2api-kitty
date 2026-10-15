@@ -88,6 +88,7 @@ type CreateOrderRequest struct {
 	OrderType         string
 	PlanID            int64
 	Locale            string
+	RenewalMode       string
 }
 
 type CreateOrderResponse struct {

@@ -60,7 +60,7 @@ async function moveTab(event: KeyboardEvent, index: number) {
         <article v-if="activeTab === 'after-sales'" class="contact-dialog-card contact-dialog-ticket">
           <h2>{{ t('nav.tickets') }}</h2>
           <div class="contact-ticket-well"><span aria-hidden="true">?</span><p>{{ t('nav.contactTicketHint') }}</p></div>
-          <router-link to="/tickets" class="contact-caption" @click="emit('close')">{{ t('nav.contactOpenTicket') }}</router-link>
+          <router-link to="/support-tickets" class="contact-caption" @click="emit('close')">{{ t('nav.contactOpenTicket') }}</router-link>
         </article>
       </div>
     </div>

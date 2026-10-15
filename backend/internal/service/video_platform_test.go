@@ -142,7 +142,7 @@ func TestVideoSnapshotCostRemainsFixedAfterGroupEdits(t *testing.T) {
 		VideoPriceSnapshot: &VideoPriceSnapshot{Model: "exact-video", BillingMode: BillingModeVideo,
 			UnitPrice: .25, RateMultiplier: 2, DurationSeconds: 30}}
 	service := &OpenAIGatewayService{}
-	cost, err := service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, []string{"exact-video"}, "", 999, 999, 999, 999, UsageTokens{}, "", nil, time.Now())
+	cost, err := service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, []string{"exact-video"}, "", 999, 999, 999, 999, UsageTokens{}, "", nil, false, time.Now())
 	require.NoError(t, err)
 	require.Equal(t, 7.5, cost.TotalCost)
 	require.Equal(t, 15.0, cost.ActualCost)
@@ -153,7 +153,7 @@ func TestVideoSnapshotCostRemainsFixedAfterGroupEdits(t *testing.T) {
 	require.Equal(t, .5, cost.ActualCost)
 	require.Equal(t, string(BillingModePerRequest), cost.BillingMode)
 	result.VideoPriceSnapshot = nil
-	_, err = service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, []string{"exact-video"}, "", 1, 1, 1, 1, UsageTokens{}, "", nil, time.Now())
+	_, err = service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, []string{"exact-video"}, "", 1, 1, 1, 1, UsageTokens{}, "", nil, false, time.Now())
 	require.Error(t, err)
 }
 
@@ -161,12 +161,12 @@ func TestVideoLegacyPendingUsesExplicitGroupPrice(t *testing.T) {
 	group := videoTestGroup(BillingModePerRequest, 4)
 	result := &OpenAIForwardResult{Model: "exact-video", VideoCount: 1, VideoLegacyPricing: true, VideoDurationSeconds: 30}
 	service := &OpenAIGatewayService{}
-	cost, err := service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, []string{"exact-video"}, "", 1, 1, 2, 1, UsageTokens{}, "", nil, time.Now())
+	cost, err := service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, []string{"exact-video"}, "", 1, 1, 2, 1, UsageTokens{}, "", nil, false, time.Now())
 	require.NoError(t, err)
 	require.Equal(t, 4.0, cost.TotalCost)
 	require.Equal(t, 8.0, cost.ActualCost)
 	result.Model = "missing"
-	_, err = service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, nil, "", 1, 1, 1, 1, UsageTokens{}, "", nil, time.Now())
+	_, err = service.calculateOpenAIRecordUsageCost(context.Background(), result, &APIKey{Group: group}, nil, "", 1, 1, 1, 1, UsageTokens{}, "", nil, false, time.Now())
 	require.Error(t, err)
 }
 

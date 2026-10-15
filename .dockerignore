@@ -92,3 +92,7 @@ CLAUDE.md
 # Local-only console preview and synthetic payment server.
 /preview/
 /frontend/preview/
+# Persistent encrypted 2FA recovery archives and their keys are never build inputs.
+**/totp-recovery/
+**/*.sealed
+**/credential-operations.key

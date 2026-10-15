@@ -69,7 +69,7 @@ func TestOfficialAccountRestoreMissingProxyNeverReachesTransport(t *testing.T) {
 			return err
 		},
 		"account test": func() error {
-			_, err := (&AccountTestService{}).doOpenAIAccountTestUpstream(request, "", account, false)
+			_, err := (&AccountTestService{}).doOpenAIAccountTestUpstream(request, "", account, false, nil)
 			return err
 		},
 		"websocket acquire": func() error {

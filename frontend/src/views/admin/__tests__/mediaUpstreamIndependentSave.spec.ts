@@ -1,3 +1,4 @@
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import View from '../VideoUpstreamView.vue'

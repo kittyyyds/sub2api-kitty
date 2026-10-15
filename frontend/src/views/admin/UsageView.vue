@@ -133,6 +133,7 @@
             :default-sort-key="'created_at'"
             :default-sort-order="'desc'"
             :show-cache-hit-rate="true"
+            cache-rate-audience="admin"
             @sort="handleSort"
             @userClick="handleUserClick"
             @ipGeoBatchFailed="handleIpGeoBatchFailed"

@@ -41,13 +41,13 @@ type AdminHandlers struct {
 	APIKey                 *admin.AdminAPIKeyHandler
 	ScheduledTest          *admin.ScheduledTestHandler
 	PelicanGroupTest       *admin.PelicanGroupTestHandler
+	ControlledExperiment   *admin.ControlledExperimentHandler
 	Channel                *admin.ChannelHandler
 	ChannelMonitor         *admin.ChannelMonitorHandler
 	ChannelMonitorTemplate *admin.ChannelMonitorRequestTemplateHandler
 	ContentModeration      *admin.ContentModerationHandler
 	SecurityPolicy         *admin.SecurityPolicyHandler
 	TieredRouting          *admin.TieredRoutingHandler
-	Ticket                 *admin.TicketHandler
 	BillingExport          *admin.BillingExportHandler
 	PromptAudit            *securityaudit.PromptAdminHandler
 	Payment                *admin.PaymentHandler
@@ -83,6 +83,7 @@ type Handlers struct {
 	AsyncImage        *AsyncImageHandler
 	BatchImage        *BatchImageHandler
 	ApplicationCenter *ApplicationCenterHandler
+	SupportTicket     *SupportTicketHandler
 }
 
 // BuildInfo contains build-time information

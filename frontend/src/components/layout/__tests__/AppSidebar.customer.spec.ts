@@ -41,6 +41,7 @@ const refreshBatchImageAccess = vi.fn()
 
 vi.mock('@/stores', () => ({
   useAppStore: () => appStore,
+  useSupportTicketStore: () => ({ userUnread: 0, adminPending: 0, refresh: vi.fn() }),
   useAuthStore: () => authStore,
   useAdminSettingsStore: () => adminSettingsStore,
   useOnboardingStore: () => onboardingStore
@@ -177,7 +178,7 @@ describe('AppSidebar customer grouped navigation', () => {
     expect(push).not.toHaveBeenCalled()
     expect(router.currentRoute.value.fullPath).toBe('/dashboard')
     push.mockRestore()
-    expect(paths('other')).toEqual(['/profile','/tickets','/pelican-showcase'])
+    expect(paths('other')).toEqual(['/profile','/support-tickets','/pelican-showcase'])
     expect(wrapper.find('button.sidebar-category').exists()).toBe(false)
     for (const section of ['api', 'billing', 'media', 'other']) expect(wrapper.get(`#sidebar-category-${section}`).isVisible()).toBe(true)
     const contacts = wrapper.findAll('[data-customer-section="other"] > div > button')

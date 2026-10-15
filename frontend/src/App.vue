@@ -7,7 +7,7 @@ import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
 import { resolveRouteDocumentTitle } from '@/router/title'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
-import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore, useAdminSettingsStore } from '@/stores'
+import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore, useAdminComplianceStore, useAdminSettingsStore, useSupportTicketStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
@@ -20,6 +20,7 @@ const authStore = useAuthStore()
 const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
+const supportTicketStore = useSupportTicketStore()
 const adminSettingsStore = useAdminSettingsStore()
 const showAuthBackdrop = computed(() => route.path === '/login' || route.path === '/register')
 
@@ -59,8 +60,17 @@ watch(
 function onVisibilityChange() {
   if (document.visibilityState === 'visible' && authStore.isAuthenticated) {
     announcementStore.fetchAnnouncements()
+    supportTicketStore.refresh()
   }
 }
+
+// Public settings may arrive after login; fetch the ticket badge once they say the feature is on.
+watch(
+  () => appStore.cachedPublicSettings?.support_ticket_enabled,
+  (enabled) => {
+    if (enabled && authStore.isAuthenticated) supportTicketStore.refresh(true)
+  }
+)
 
 function onAdminComplianceRequired(event: Event) {
   const detail = (event as CustomEvent<Record<string, string>>).detail || {}
@@ -111,6 +121,9 @@ watch(
         announcementStore.fetchAnnouncements()
       }
 
+      // Support ticket badge (skips itself while the feature is off)
+      supportTicketStore.refresh(true)
+
       // Register visibility change listener
       document.addEventListener('visibilitychange', onVisibilityChange)
     } else {
@@ -118,6 +131,7 @@ watch(
       subscriptionStore.clear()
       announcementStore.reset()
       adminComplianceStore.reset()
+      supportTicketStore.reset()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   },
@@ -128,6 +142,7 @@ watch(
 router.afterEach(() => {
   if (authStore.isAuthenticated) {
     announcementStore.fetchAnnouncements()
+    supportTicketStore.refresh()
   }
 })
 

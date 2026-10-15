@@ -54,7 +54,7 @@ func CORS(cfg config.CORSConfig) gin.HandlerFunc {
 	allowHeaders := []string{
 		"Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization",
 		"accept", "origin", "Cache-Control", "X-Requested-With", "X-API-Key", "X-Admin-UI-Request", "X-User-UI-Request",
-		"Range", "If-Range", "X-Canvas-Key-ID",
+		"Range", "If-Range", "X-Canvas-Key-ID", "Anthropic-Version",
 	}
 	// OpenAI Node SDK 会发送 x-stainless-* 请求头，需在 CORS 中显式放行。
 	openAIProperties := []string{
@@ -106,7 +106,7 @@ func CORS(cfg config.CORSConfig) gin.HandlerFunc {
 			}
 			c.Writer.Header().Set("Access-Control-Allow-Headers", allowHeadersValue)
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
-			c.Writer.Header().Set("Access-Control-Expose-Headers", "ETag, Last-Modified, Server-Timing, Content-Length, Content-Range, Accept-Ranges, Content-Disposition")
+			c.Writer.Header().Set("Access-Control-Expose-Headers", "ETag, Last-Modified, Server-Timing, Content-Length, Content-Range, Accept-Ranges, Content-Disposition, X-Client-Request-ID")
 			c.Writer.Header().Set("Access-Control-Max-Age", "86400")
 		}
 		// 处理预检请求

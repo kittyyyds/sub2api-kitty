@@ -35,7 +35,6 @@ import affiliatesAPI from './affiliates'
 import riskControlAPI from './riskControl'
 import securityPolicyAPI from './securityPolicy'
 import tieredRoutingAPI from './tieredRouting'
-import adminTicketsAPI from './tickets'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
 import pluginsAPI from './plugins'
@@ -76,7 +75,6 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   securityPolicy: securityPolicyAPI,
   tieredRouting: tieredRoutingAPI,
-  tickets: adminTicketsAPI,
   compliance: adminComplianceAPI,
   audit: auditAPI,
   plugins: pluginsAPI,
@@ -115,7 +113,6 @@ export {
   riskControlAPI,
   securityPolicyAPI,
   tieredRoutingAPI,
-  adminTicketsAPI,
   adminComplianceAPI,
   auditAPI,
   pluginsAPI,

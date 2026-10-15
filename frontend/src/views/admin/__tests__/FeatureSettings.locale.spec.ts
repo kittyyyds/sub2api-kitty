@@ -5,9 +5,7 @@ import type { Component } from 'vue'
 import zh from '@/i18n/locales/zh'
 import en from '@/i18n/locales/en'
 import TieredRoutingView from '../TieredRoutingView.vue'
-import TicketsAdminView from '../TicketsAdminView.vue'
 import BillingView from '@/views/user/BillingView.vue'
-import TicketsView from '@/views/user/TicketsView.vue'
 import RiskControlView from '../RiskControlView.vue'
 
 const { showError } = vi.hoisted(() => ({
@@ -24,7 +22,6 @@ vi.mock('@/api/admin', () => ({ adminAPI: {
   securityPolicy: { listBuiltin: vi.fn().mockResolvedValue({ count: 10 }), listKeywords: vi.fn().mockResolvedValue({ keywords: [] }) },
 } }))
 vi.mock('@/api/billing', () => ({ default: { statement: vi.fn().mockResolvedValue({ rows: [], requests: 0, cost: 0 }) } }))
-vi.mock('@/api/tickets', () => ({ default: { list: vi.fn().mockResolvedValue({ items: [] }) } }))
 
 function render(component: Component) {
   const missing: string[] = []
@@ -45,24 +42,10 @@ function render(component: Component) {
 afterEach(() => { expect(showError).not.toHaveBeenCalled(); vi.clearAllMocks() })
 
 describe('new feature settings in Chinese', () => {
-  it.each([
-    { view: TicketsView, title: '工单支持', button: '新建工单', fields: ['主题', '问题描述', '发送', '取消'] },
-  ])('renders $title and its settings without translation fallbacks', async ({ view, title, button, fields }) => {
-    const { wrapper, missing } = render(view)
-    await flushPromises()
-    expect(wrapper.find('h1').text()).toBe(title)
-    const opener = wrapper.findAll('button').find(node => node.text() === button)
-    expect(opener).toBeDefined()
-    await opener!.trigger('click')
-    await flushPromises()
-    for (const text of fields) expect(wrapper.text()).toContain(text)
-    expect(missing).toEqual([])
-    wrapper.unmount()
-  })
+
 
   it.each([
     { view: TieredRoutingView, title: '分级路由', fields: ['启用分级路由', '高级用户编号', '高级用户最低余额（美元）', '优选池'] },
-    { view: TicketsAdminView, title: '工单管理', fields: ['待处理 3', '已回复', '已关闭', '暂无工单'] },
     { view: BillingView, title: '账单', fields: ['请求数', '总费用', '开始日期', '结束日期', '导出 CSV'] },
   ])('renders $title with Chinese labels', async ({ view, title, fields }) => {
     const { wrapper, missing } = render(view)

@@ -42,7 +42,7 @@ func TestOpenAIGatewayRefreshesMissingImageModelPriceFromPartialSnapshot(t *test
 		UsageTokens{},
 		"",
 		boolPtr(true),
-		time.Time{},
+		false, time.Time{},
 	)
 
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestOpenAIGatewayRefreshesModelOnlyImagePriceFromPartialSnapshot(t *testing
 		UsageTokens{},
 		"",
 		boolPtr(true),
-		time.Time{},
+		false, time.Time{},
 	)
 
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestOpenAIGatewayRefreshesMissingVideoModelPriceFromPartialSnapshot(t *test
 		UsageTokens{},
 		"",
 		boolPtr(true),
-		time.Time{},
+		false, time.Time{},
 	)
 
 	require.NoError(t, err)
@@ -162,7 +162,7 @@ func TestOpenAIGatewayRefreshesModelOnlyVideoPriceFromPartialSnapshot(t *testing
 		UsageTokens{},
 		"",
 		boolPtr(true),
-		time.Time{},
+		false, time.Time{},
 	)
 
 	require.NoError(t, err)

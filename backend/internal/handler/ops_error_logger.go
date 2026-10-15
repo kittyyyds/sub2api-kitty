@@ -1216,9 +1216,18 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			}
 		}
 
+		// Google 格式错误体没有 type 字段：按网关回写时登记的错误类型补齐。
+		if errType, code := service.OpsLocalErrorType(c); errType != "" && !parsed.StreamFailure &&
+			(parsed.ErrorType == "" || parsed.ErrorType == "api_error") {
+			parsed.ErrorType = errType
+			if code != "" {
+				parsed.Code = code
+			}
+		}
 		normalizedType := normalizeOpsErrorType(parsed.ErrorType, parsed.Code)
 
 		phase, isBusinessLimited, errorOwner, errorSource := classifyOpsErrorLog(c, normalizedType, parsed.Message, parsed.Code, status)
+		normalizedType = normalizeOpsLocalBalanceType(normalizedType, parsed.Message, phase, errorOwner)
 
 		entry := &service.OpsInsertErrorLogInput{
 			RequestID:       requestID,
@@ -1285,7 +1294,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				entry.UpstreamStatusCode = &finalStatus
 			}
 		}
-		suppressOpsUpstreamAttributionForLocalModelConfiguration(c, entry)
+		suppressOpsUpstreamAttributionForClientRejection(entry)
 
 		if apiKey != nil {
 			entry.APIKeyID = &apiKey.ID
@@ -1501,6 +1510,7 @@ func logOpsStreamErrorValue(c *gin.Context, ops *service.OpsService, wireStatus 
 	} else {
 		phase, isBusinessLimited, errorOwner, errorSource = classifyOpsErrorLog(c, normalizedType, streamErr.Message, streamErr.Code, classifyStatus)
 	}
+	normalizedType = normalizeOpsLocalBalanceType(normalizedType, streamErr.Message, phase, errorOwner)
 	recordedStatus := wireStatus
 	if streamErr.IntendedStatus >= 400 && (streamErr.CountTowardsSLA || streamErr.RequestScoped) {
 		recordedStatus = streamErr.IntendedStatus
@@ -1601,6 +1611,7 @@ func logOpsStreamErrorValue(c *gin.Context, ops *service.OpsService, wireStatus 
 	if streamErr.Turn > 0 && !streamErr.RequestScoped {
 		applyOpsStreamErrorSnapshot(entry, streamErr)
 	}
+	suppressOpsUpstreamAttributionForClientRejection(entry)
 
 	if apiKey != nil {
 		entry.APIKeyID = &apiKey.ID
@@ -1792,8 +1803,8 @@ func applyOpsUpstreamErrorEvents(entry *service.OpsInsertErrorLogInput, events [
 	}
 }
 
-func suppressOpsUpstreamAttributionForLocalModelConfiguration(c *gin.Context, entry *service.OpsInsertErrorLogInput) {
-	if entry == nil || !service.HasOpsClientBusinessLimited(c) || service.OpsClientBusinessLimitedReason(c) != service.OpsClientBusinessLimitedReasonLocalModelConfiguration {
+func suppressOpsUpstreamAttributionForClientRejection(entry *service.OpsInsertErrorLogInput) {
+	if entry == nil || entry.ErrorOwner != "client" || !entry.IsBusinessLimited {
 		return
 	}
 	entry.AccountID = nil
@@ -2208,6 +2219,15 @@ func normalizeOpsErrorType(errType string, code string) string {
 	}
 }
 
+// Normalize only an explicitly local user-balance rejection. Upstream errors
+// retain their provider attribution even if they use the same message.
+func normalizeOpsLocalBalanceType(errType, message, phase, owner string) string {
+	if owner == "client" && phase == "request" && strings.EqualFold(strings.TrimSpace(message), service.InsufficientUserBalanceMessage) {
+		return "billing_error"
+	}
+	return errType
+}
+
 func classifyOpsPhase(errType, message, code string) string {
 	msg := strings.ToLower(message)
 	// Standardized phases: request|auth|account_auth|routing|upstream|network|internal
@@ -2262,21 +2282,20 @@ func classifyOpsSeverity(errType string, status int) string {
 
 func classifyOpsErrorLog(c *gin.Context, errType, message, code string, status int) (phase string, isBusinessLimited bool, errorOwner string, errorSource string) {
 	phase = classifyOpsPhase(errType, message, code)
+	if service.IsOpsRequestScopedError(c) {
+		// 失败由请求内容决定：只按错误类型分类，上游错误上下文不参与归因。
+		isBusinessLimited = classifyOpsIsBusinessLimited(errType, phase, code, status, message)
+		return phase, isBusinessLimited, classifyOpsErrorOwner(phase, message), classifyOpsErrorSource(phase, message)
+	}
 	routingCapacityLimited := isOpsRoutingCapacityLimited(c)
 	clientBusinessLimited := service.HasOpsClientBusinessLimited(c)
 	localModelConfiguration := clientBusinessLimited && service.OpsClientBusinessLimitedReason(c) == service.OpsClientBusinessLimitedReasonLocalModelConfiguration
-	// 分组模型白名单的入口拒绝发生在调度之前（本地面请求策略，业务限流原因与
-	// 账号模型映射复用 local_model_configuration）：保持 classifyOpsPhase 的
-	// 自然分类（not_found/invalid_request → request，owner=client），不落到
-	// routing；上游归因仍由 suppressOpsUpstreamAttributionForLocalModelConfiguration 清空。
-	ingressModelNotAllowed := false
-	if reason, rejected := middleware2.GetIngressRejectReason(c); rejected && reason == middleware2.IngressRejectModelNotAllowed {
-		ingressModelNotAllowed = true
-	}
 	upstreamError := hasOpsUpstreamErrorContext(c)
 	accountAuthFailure := hasOpsAccountAuthFailure(c)
-	if localModelConfiguration && !ingressModelNotAllowed {
-		phase = "routing"
+	if localModelConfiguration {
+		// The requested model is outside this group's configured capabilities.
+		// This is a client rejection, not a platform or account failure.
+		phase = "request"
 	} else if accountAuthFailure && !routingCapacityLimited {
 		phase = "account_auth"
 	} else if upstreamError && !routingCapacityLimited {

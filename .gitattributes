@@ -28,3 +28,8 @@ backend/resources/content-moderation/**/*.json text eol=lf
 
 # Explicit ticket schema package uses the same byte checksums on every host.
 deploy/kitty-updater/ticket-schema-sql/*.sql text eol=lf
+
+# Historical production migrations retain the exact deployed checksum.
+backend/migrations/241_add_typesafe_platform.sql -text
+backend/migrations/263_kitty_typesafe_video_platforms.sql -text
+backend/migrations/264_retire_kitty_manual_prism.sql -text

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -52,5 +53,79 @@ func TestPrioritySavePreservesOmittedProtocolPreference(t *testing.T) {
 		var saved service.PrioritySchedulingConfig
 		require.NoError(t, json.Unmarshal([]byte(repo.value), &saved))
 		require.Equal(t, explicit, saved.BalanceProtocols)
+	}
+}
+
+func TestPrioritySavePreservesAndDisablesOAuthQuotaPolicy(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		cfg := service.DefaultPrioritySchedulingConfig()
+		cfg.OAuthQuotaPriority = true
+		cfg.OAuthQuotaThreshold = 85
+		raw, err := json.Marshal(cfg)
+		require.NoError(t, err)
+		repo := &priorityCompatSettings{value: string(raw)}
+		h := &SettingHandler{settingService: service.NewSettingService(repo, nil)}
+		var body map[string]any
+		require.NoError(t, json.Unmarshal(raw, &body))
+		delete(body, "oauth_quota_priority")
+		delete(body, "oauth_quota_threshold")
+		if explicit {
+			body["oauth_quota_priority"] = false
+			body["oauth_quota_threshold"] = 90
+		}
+		raw, err = json.Marshal(body)
+		require.NoError(t, err)
+		router := gin.New()
+		router.PUT("/config", h.SavePriorityScheduling)
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPut, "/config", bytes.NewReader(raw))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(recorder, request)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		var saved service.PrioritySchedulingConfig
+		require.NoError(t, json.Unmarshal([]byte(repo.value), &saved))
+		require.Equal(t, !explicit, saved.OAuthQuotaPriority)
+		if explicit {
+			require.Equal(t, 90, saved.OAuthQuotaThreshold)
+		} else {
+			require.Equal(t, 85, saved.OAuthQuotaThreshold)
+		}
+	}
+}
+
+func TestPrioritySavePreservesOrExplicitlyChangesLatencyPenalty(t *testing.T) {
+	for _, value := range []int{-1, 0, 20, 1441} {
+		t.Run(fmt.Sprint(value), func(t *testing.T) {
+			cfg := service.DefaultPrioritySchedulingConfig()
+			cfg.LatencyPenaltyMinutes = 15
+			raw, err := json.Marshal(cfg)
+			require.NoError(t, err)
+			repo := &priorityCompatSettings{value: string(raw)}
+			h := &SettingHandler{settingService: service.NewSettingService(repo, nil)}
+			var body map[string]any
+			require.NoError(t, json.Unmarshal(raw, &body))
+			delete(body, "latency_penalty_minutes")
+			want := 15
+			if value >= 0 {
+				body["latency_penalty_minutes"] = value
+				want = value
+			}
+			raw, err = json.Marshal(body)
+			require.NoError(t, err)
+			router := gin.New()
+			router.PUT("/config", h.SavePriorityScheduling)
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPut, "/config", bytes.NewReader(raw))
+			req.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(recorder, req)
+			if value > 1440 {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				return
+			}
+			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			var saved service.PrioritySchedulingConfig
+			require.NoError(t, json.Unmarshal([]byte(repo.value), &saved))
+			require.Equal(t, want, saved.LatencyPenaltyMinutes)
+		})
 	}
 }

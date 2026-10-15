@@ -28,6 +28,7 @@ type AvailableGroupRef struct {
 	ImageRateMultiplier  float64
 	VideoRateIndependent bool
 	VideoRateMultiplier  float64
+	I18n                 GroupI18n
 }
 
 // AvailableChannel 可用渠道视图：用于「可用渠道」页面展示渠道基础信息 +
@@ -82,6 +83,7 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 			ImageRateMultiplier:  g.ImageRateMultiplier,
 			VideoRateIndependent: g.VideoRateIndependent,
 			VideoRateMultiplier:  g.VideoRateMultiplier,
+			I18n:                 g.I18n,
 		}
 	}
 

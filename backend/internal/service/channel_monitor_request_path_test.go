@@ -24,7 +24,7 @@ func TestMonitorRequestPathValidation(t *testing.T) {
 func TestMonitorRequestPathAdapterAndChallenge(t *testing.T) {
 	swapMonitorHTTPClient(t)
 	for _, tc := range []struct{ provider, override, basePath, expected string }{
-		{MonitorProviderZhipu, "", "", "/api/paas/v4/chat/completions"},
+		{MonitorProviderZhipu, "", "", "/v1/chat/completions"},
 		{MonitorProviderZhipu, "/v1/chat/completions", "", "/v1/chat/completions"},
 		{MonitorProviderZhipu, "/v1/chat/completions", "/proxy/v1", "/proxy/v1/chat/completions"},
 		{MonitorProviderDeepseek, "", "", "/v1/chat/completions"},

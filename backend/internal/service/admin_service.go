@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -134,6 +135,7 @@ type AdminService interface {
 	CheckProxyQuality(ctx context.Context, id int64) (*ProxyQualityCheckResult, error)
 	TestMihomoNode(ctx context.Context, kernel MihomoNodeProber, name string) (*ProxyTestResult, error)
 	CheckMihomoNodeQuality(ctx context.Context, kernel MihomoNodeProber, name string) (*ProxyQualityCheckResult, error)
+	CreateMihomoNodeProxies(ctx context.Context, kernel MihomoStaticNodeBinder, names []string) (*MihomoNodeProxyImportResult, error)
 
 	// Redeem code management
 	ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string, sortBy, sortOrder string) ([]RedeemCode, int64, error)
@@ -253,6 +255,7 @@ type CreateGroupInput struct {
 	MonthlyLimitUSD            *float64 // 月限额 (USD)
 	LongContextPricingEnabled  bool
 	ModelPricing               []ChannelModelPricing
+	I18n                       GroupI18n // 名称与描述的界面语言译文
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         bool
 	AllowBatchImageGeneration    bool
@@ -341,6 +344,7 @@ type UpdateGroupInput struct {
 	MonthlyLimitUSD            *float64 // 月限额 (USD)
 	LongContextPricingEnabled  *bool
 	ModelPricing               *[]ChannelModelPricing
+	I18n                       *GroupI18n // nil 表示不修改；非 nil 整体替换
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	AllowImageGeneration         *bool
 	AllowBatchImageGeneration    *bool
@@ -414,6 +418,7 @@ type UpdateGroupInput struct {
 }
 
 type CreateAccountInput struct {
+	InitialQualityPlan  *ScheduledTestPlan `json:"-"`
 	Name                string
 	Notes               *string
 	Platform            string
@@ -552,6 +557,7 @@ type CreateProxyInput struct {
 	Protocol       string
 	Host           string
 	Port           int
+	MihomoNodeID   string
 	Username       string
 	Password       string
 	ExpiresAt      *time.Time
@@ -711,6 +717,8 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
+	mihomoProxyMu        sync.Mutex
+	excelOAuthReauth     *OpenAIOAuthReauthService
 	cfg                  *config.Config
 	userRepo             UserRepository
 	groupRepo            GroupRepository

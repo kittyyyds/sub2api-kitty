@@ -26,6 +26,7 @@ const adminSettingsStore = {
 }
 
 vi.mock('@/stores', () => ({
+  useSupportTicketStore: () => ({ userUnread: 0, adminUnread: 0, fetchUnread: vi.fn() }),
   useAppStore: () => appStore,
   useAuthStore: () => authStore,
   useAdminSettingsStore: () => adminSettingsStore,

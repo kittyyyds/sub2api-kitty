@@ -83,7 +83,7 @@ func TestOpenAIGatewayImageModelPriceOverridesTokenModeRouting(t *testing.T) {
 		UsageTokens{},
 		"",
 		boolPtr(true),
-		time.Time{},
+		false, time.Time{},
 	)
 
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestOpenAIGatewayGPTImageModelPriceIsFinalUSDCustomerPrice(t *testing.T) {
 		UsageTokens{},
 		"",
 		boolPtr(true),
-		time.Time{},
+		false, time.Time{},
 	)
 
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestOpenAIGatewayVideoModelPriceOverridesTokenModeAsFinalPerSecondPrice(t *
 		UsageTokens{InputTokens: 100, OutputTokens: 200},
 		"",
 		boolPtr(true),
-		time.Time{},
+		false, time.Time{},
 	)
 
 	require.NoError(t, err)

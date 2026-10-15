@@ -77,7 +77,7 @@ func (h *ChannelHandler) DeleteContextRule(c *gin.Context) {
 
 func (h *ChannelHandler) ContextRuleModels(c *gin.Context) {
 	platform := strings.ToLower(strings.TrimSpace(c.Query("platform")))
-	provider, known := platformToLiteLLMProvider[platform]
+	provider, known := platformLiteLLMProvider(platform)
 	if !known && platform != "openai-compatible" {
 		response.BadRequest(c, "不支持的平台")
 		return

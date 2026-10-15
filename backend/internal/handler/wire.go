@@ -42,6 +42,7 @@ func ProvideAdminHandlers(
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
 	pelicanGroupTestHandler *admin.PelicanGroupTestHandler,
+	controlledExperimentHandler *admin.ControlledExperimentHandler,
 	accountOpsHandler *admin.AccountOpsHandler,
 	accountTokenGuardHandler *admin.AccountTokenGuardHandler,
 	accountTokenGuardV2Handler *admin.AccountTokenGuardV2Handler,
@@ -51,7 +52,6 @@ func ProvideAdminHandlers(
 	contentModerationHandler *admin.ContentModerationHandler,
 	securityPolicyHandler *admin.SecurityPolicyHandler,
 	tieredRoutingHandler *admin.TieredRoutingHandler,
-	ticketHandler *admin.TicketHandler,
 	billingExportHandler *admin.BillingExportHandler,
 	promptAuditHandler *securityaudit.PromptAdminHandler,
 	paymentHandler *admin.PaymentHandler,
@@ -108,13 +108,13 @@ func ProvideAdminHandlers(
 		AccountTokenGuardV2:    accountTokenGuardV2Handler,
 		ScheduledTest:          scheduledTestHandler,
 		PelicanGroupTest:       pelicanGroupTestHandler,
+		ControlledExperiment:   controlledExperimentHandler,
 		Channel:                channelHandler,
 		ChannelMonitor:         channelMonitorHandler,
 		ChannelMonitorTemplate: channelMonitorTemplateHandler,
 		ContentModeration:      contentModerationHandler,
 		SecurityPolicy:         securityPolicyHandler,
 		TieredRouting:          tieredRoutingHandler,
-		Ticket:                 ticketHandler,
 		BillingExport:          billingExportHandler,
 		PromptAudit:            promptAuditHandler,
 		Payment:                paymentHandler,
@@ -142,12 +142,14 @@ func ProvideGatewayHandler(
 	settingService *service.SettingService,
 	coordinator *securityaudit.Coordinator,
 	securityPolicyService *service.SecurityPolicyService,
+	geminiCachedContentService *service.GeminiCachedContentService,
 ) *GatewayHandler {
 	h := NewGatewayHandler(gatewayService, openAIGatewayService, geminiCompatService, antigravityGatewayService,
 		userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool,
 		errorPassthroughService, contentModerationService, userMsgQueueService, cfg, settingService)
 	h.securityAuditCoordinator = coordinator
 	h.securityPolicyService = securityPolicyService
+	h.geminiCachedContentService = geminiCachedContentService
 	return h
 }
 
@@ -236,6 +238,7 @@ func ProvideHandlers(
 	availableChannelHandler *AvailableChannelHandler,
 	billingPreviewHandler *BillingPreviewHandler,
 	pelicanShowcaseHandler *PelicanShowcaseHandler,
+	supportTicketHandler *SupportTicketHandler,
 	modelPlazaHandler *ModelPlazaHandler,
 	asyncImageHandler *AsyncImageHandler,
 	batchImageHandler *BatchImageHandler,
@@ -270,6 +273,7 @@ func ProvideHandlers(
 		AsyncImage:        asyncImageHandler,
 		BatchImage:        batchImageHandler,
 		ApplicationCenter: applicationCenterHandler,
+		SupportTicket:     supportTicketHandler,
 	}
 }
 
@@ -297,6 +301,7 @@ var ProviderSet = wire.NewSet(
 	NewAvailableChannelHandler,
 	NewBillingPreviewHandler,
 	NewPelicanShowcaseHandler,
+	NewSupportTicketHandler,
 	NewModelPlazaHandler,
 	NewAsyncImageHandler,
 	NewApplicationCenterHandler,
@@ -332,6 +337,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 	admin.NewPelicanGroupTestHandler,
+	admin.NewControlledExperimentHandler,
 	admin.NewAccountOpsHandler,
 	admin.NewAccountTokenGuardHandler,
 	admin.NewAccountTokenGuardV2Handler,
@@ -341,7 +347,6 @@ var ProviderSet = wire.NewSet(
 	admin.NewContentModerationHandler,
 	admin.NewSecurityPolicyHandler,
 	admin.NewTieredRoutingHandler,
-	admin.NewTicketHandler,
 	admin.NewBillingExportHandler,
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,

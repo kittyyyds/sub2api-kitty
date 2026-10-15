@@ -144,20 +144,24 @@ func RegisterUserRoutes(
 			apps.POST("/runs/:run_id/retry", h.ApplicationCenter.RetryRun)
 		}
 		// 工单
-		tickets := authenticated.Group("/tickets")
-		{
-			tickets.GET("", h.Admin.Ticket.ListMine)
-			tickets.POST("", h.Admin.Ticket.Create)
-			tickets.GET("/:id", h.Admin.Ticket.GetMine)
-			tickets.POST("/:id/replies", h.Admin.Ticket.ReplyMine)
-			tickets.POST("/:id/close", h.Admin.Ticket.CloseMine)
-		}
 
 		// 账单：月账单与用量导出
 		billingReports := authenticated.Group("/billing")
 		{
 			billingReports.GET("/statement", h.Admin.BillingExport.Statement)
 			billingReports.GET("/export", h.Admin.BillingExport.Export)
+		}
+
+		// 网站工单（关闭时 service 返回 SUPPORT_TICKET_DISABLED）
+		supportTickets := authenticated.Group("/support-tickets")
+		{
+			supportTickets.GET("", h.SupportTicket.List)
+			supportTickets.POST("", h.SupportTicket.Create)
+			supportTickets.GET("/summary", h.SupportTicket.Summary)
+			supportTickets.GET("/:id", h.SupportTicket.Get)
+			supportTickets.POST("/:id/messages", h.SupportTicket.Reply)
+			supportTickets.POST("/:id/close", h.SupportTicket.Close)
+			supportTickets.POST("/:id/reopen", h.SupportTicket.Reopen)
 		}
 
 		// 卡密兑换

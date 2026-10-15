@@ -198,6 +198,7 @@ describe('CreateAccountModal auto BPS switch', () => {
     const wrapper = await openOAuthStep({ twoFA: true })
     const importer = wrapper.getComponent(OpenAITwoFAImport)
     const login = { email: 'user@example.com', password: 'test-password', mfa_secret: 'test-secret' }
+    await importer.props('prepare')()
     await expect(importer.props('importCredential')({ access_token: 'at', refresh_token: 'rt', account_id: 'ws' }, login.email, login)).resolves.toBe('created')
     expect(mocks.createPlan).toHaveBeenCalledTimes(1)
     expect(mocks.createPlan.mock.calls[0][0].account_id).toBe(93)

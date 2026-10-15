@@ -727,6 +727,8 @@ func (s *defaultOpenAIAccountScheduler) shouldEscapeStickyAccountAt(accountID in
 }
 
 type openAIAccountCandidateScore struct {
+	priorityOAuthSpare    int
+	priorityAPIStandby    bool
 	priorityLatencyFactor float64
 	priorityUnhealthy     bool
 	priorityExploration   bool
@@ -1028,6 +1030,11 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAIAccountLoadPlan(
 		loadRateSumSquares += loadRate * loadRate
 	}
 	plan.loadSkew = calcLoadSkewByMoments(loadRateSum, loadRateSumSquares, len(candidates))
+	// Priority scheduling supplies its own scores and uses every overflow peer.
+	// Do not read legacy weights or calculate reset/cost factors only to discard them.
+	if s.applyPriorityScheduling(req, &plan) {
+		return plan
+	}
 
 	weights := s.service.openAIWSSchedulerWeightsForRequest(ctx)
 	now := time.Now()
@@ -1137,7 +1144,6 @@ func (s *defaultOpenAIAccountScheduler) buildOpenAIAccountLoadPlan(
 		plan.topK = 1
 	}
 
-	s.applyPriorityScheduling(req, &plan)
 	plan.selectionOrder = s.buildOpenAISelectionOrder(req, plan)
 	return plan
 }
@@ -1618,6 +1624,10 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			filterStats.exclude("platform_mismatch")
 			continue
 		}
+		if s.service.isExcelBPSModelCoolingDown(account, req.RequestedModel) {
+			filterStats.exclude(excelBPSModelPermissionFilterReason)
+			continue
+		}
 		if s.service.isExcelBPSCoolingDown(account, req.RequestedModel) {
 			filterStats.exclude(excelBPSRateLimitedFilterReason)
 			continue
@@ -1975,6 +1985,9 @@ func (s *defaultOpenAIAccountScheduler) lookupShadowParentAccount(ctx context.Co
 			return account
 		}
 	}
+	if s.service.schedulerSnapshot != nil && s.service.schedulerSnapshot.localSnapshotReader != nil {
+		return nil
+	}
 	if s.service.accountRepo == nil {
 		return nil
 	}
@@ -1995,6 +2008,9 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatibleReason(ctx con
 	ctx = withOpenAIProxyQuarantineTransport(ctx, req.RequiredTransport)
 	if account == nil {
 		return false, "account_nil"
+	}
+	if account.IsExcelOAuth() && s != nil && s.service != nil && !s.service.excelBPSGloballyEnabled(ctx) {
+		return false, "excel_bps_disabled"
 	}
 	if source, ok := CompositeRouteSourceFromContext(ctx); ok && source == CompositeRouteSourceAccount {
 		if publicModel, modelOK := RequestedPublicModelFromContext(ctx); modelOK && !explicitModelMappingClaims(*account, publicModel) {
