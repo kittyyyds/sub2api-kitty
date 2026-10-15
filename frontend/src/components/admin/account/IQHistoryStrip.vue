@@ -32,10 +32,10 @@ function tooltip(result: IQResult | null): string {
 </script>
 
 <template>
-  <div class="mt-1.5 min-w-[180px] max-w-[260px]" data-testid="iq-history-strip">
-    <p class="break-words text-xs font-medium" :class="color" data-testid="iq-headline" role="status">答案测试：{{ headline }}</p>
-    <p v-if="!error && latest?.verdict === 'error'" class="mt-0.5 break-words text-[11px] text-red-600 dark:text-red-400" data-testid="iq-error">{{ running ? '上次报错：' : '' }}{{ latest.error || '请求失败，请查看测试详情' }}</p>
-    <p v-else-if="!error && running && latest" class="mt-0.5 break-words text-[10px] text-gray-500">上次：{{ resultLabel(latest) }}</p>
+  <div class="mt-1.5 w-[260px] min-w-0 max-w-full whitespace-normal" data-testid="iq-history-strip">
+    <p class="line-clamp-2 [overflow-wrap:anywhere] text-xs font-medium" :class="color" :title="`答案测试：${headline}`" data-testid="iq-headline" role="status">答案测试：{{ headline }}</p>
+    <p v-if="!error && latest?.verdict === 'error'" class="mt-0.5 line-clamp-2 [overflow-wrap:anywhere] text-[11px] text-red-600 dark:text-red-400" :title="tooltip(latest)" data-testid="iq-error">{{ running ? '上次报错：' : '' }}{{ latest.error || '请求失败，请查看测试详情' }}</p>
+    <p v-else-if="!error && running && latest" class="mt-0.5 line-clamp-2 [overflow-wrap:anywhere] text-[10px] text-gray-500" :title="tooltip(latest)">上次：{{ resultLabel(latest) }}</p>
     <div class="mt-1 flex gap-0.5" aria-label="最近20次定时测试，由左到右从旧到新">
       <span v-for="(r, i) in cells" :key="r?.id ?? `empty-${i}`" class="h-3 min-w-0 flex-1 rounded-sm focus:outline focus:outline-2 focus:outline-blue-500" :class="!r ? 'bg-gray-300 dark:bg-dark-500' : r.verdict === 'correct' ? 'bg-emerald-500' : r.verdict === 'error' ? 'bg-red-500' : 'bg-amber-400'" :title="tooltip(r)" :aria-label="tooltip(r)" :tabindex="r ? 0 : undefined" :data-verdict="r?.verdict ?? 'untested'"></span>
     </div>
