@@ -103,7 +103,7 @@ func TestNormalizeOpenAIRequestLocaleWebSearchOnlyAndDST(t *testing.T) {
 	require.Equal(t, int64(1), observed.All()[0].ContextMap()["replaced_count"])
 
 	marked := localeTestBody([]string{text}, []string{"environments.environment_context"})
-	next := normalizeOpenAIRequestLocale(context.Background(), account, marked, "ws", time.Date(2026, 3, 8, 3, 0, 0, 0, time.UTC))
+	next := normalizeOpenAIRequestLocaleTimezone(context.Background(), account, marked, "ws", "America/New_York")
 	require.Contains(t, gjson.GetBytes(next, "input.0.content.0.text").String(), "<current_date>old</current_date>")
 	require.Contains(t, gjson.GetBytes(next, "input.0.content.0.text").String(), "<timezone>America/New_York</timezone>")
 }
@@ -127,7 +127,7 @@ func TestForwardOpenAIRequestLocaleUsesFormalPath(t *testing.T) {
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(strings.NewReader("{\"id\":\"resp_locale\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}")),
 	}}
-	service := &OpenAIGatewayService{httpUpstream: upstream}
+	service := &OpenAIGatewayService{httpUpstream: upstream, settingService: timezoneAutoService(true, false, nil).settingService}
 	account := &Account{ID: 100, Name: "openai-oauth", Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 		Extra:       map[string]any{openAIRequestTimezoneEnabledExtraKey: true},
 		Concurrency: 1, Status: StatusActive, Schedulable: true,

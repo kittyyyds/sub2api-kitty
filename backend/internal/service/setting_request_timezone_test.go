@@ -19,6 +19,9 @@ func (*timezoneSettingsRepo) GetValue(_ context.Context, key string) (string, er
 	if key == SettingKeyOpenAIRequestTimezoneEnabled {
 		return "true", nil
 	}
+	if key == SettingKeyOpenAIRequestTimezoneAuto {
+		return "false", nil
+	}
 	return "", ErrSettingNotFound
 }
 func (*timezoneSettingsRepo) GetMultiple(context.Context, []string) (map[string]string, error) {
@@ -36,7 +39,7 @@ func TestRequestTimezoneSwitch(t *testing.T) {
 		err         error
 		enabled     bool
 	}{
-		{name: "missing", err: ErrSettingNotFound}, {name: "disabled", value: "false"},
+		{name: "missing", err: ErrSettingNotFound, enabled: true}, {name: "empty", enabled: true}, {name: "disabled", value: "false"},
 		{name: "invalid", value: "invalid"}, {name: "read failure", err: errors.New("offline")},
 		{name: "enabled", value: "true", enabled: true},
 	} {
@@ -53,8 +56,8 @@ func TestRequestTimezoneSwitch(t *testing.T) {
 					require.Equal(t, body, got)
 					continue
 				}
-				require.Contains(t, gjson.GetBytes(got, "input.0.content.0.text").String(), "Asia/Tokyo")
-				require.Equal(t, "Asia/Tokyo", gjson.GetBytes(got, "tools.0.user_location.timezone").String())
+				require.Contains(t, gjson.GetBytes(got, "input.0.content.0.text").String(), DefaultOpenAIRequestTimezone)
+				require.Equal(t, DefaultOpenAIRequestTimezone, gjson.GetBytes(got, "tools.0.user_location.timezone").String())
 			}
 		})
 	}
@@ -70,6 +73,6 @@ func TestRequestTimezoneSettingCacheInvalidation(t *testing.T) {
 	value = "false"
 	settings.InvalidateOpenAIRequestTimezoneEnabledCache()
 	require.False(t, settings.GetOpenAIRequestTimezoneEnabled(context.Background(), false))
-	require.False(t, settings.parseSettings(map[string]string{}).OpenAIRequestTimezoneEnabled)
+	require.True(t, settings.parseSettings(map[string]string{}).OpenAIRequestTimezoneEnabled)
 	require.True(t, settings.parseSettings(map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: "true"}).OpenAIRequestTimezoneEnabled)
 }

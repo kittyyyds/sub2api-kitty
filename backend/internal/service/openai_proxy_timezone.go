@@ -143,27 +143,7 @@ func (s *OpenAIGatewayService) ProbeOpenAIProxyTimezone(ctx context.Context, pro
 	return s.proxyTimezone.resolve(ctx, proxy, force)
 }
 
+// Deprecated account-policy adapter. All live normalization uses the global pipeline.
 func (s *OpenAIGatewayService) normalizeOpenAIRequestLocale(ctx context.Context, account *Account, body []byte, transport string, now time.Time) []byte {
-	if account == nil || !account.OpenAIRequestTimezoneEnabled() || account.Extra[openAIRequestTimezoneModeExtraKey] != "proxy" {
-		return normalizeOpenAIRequestLocale(ctx, account, body, transport, now)
-	}
-	// Use the selected account's proxy for each attempt, never a global/default
-	// proxy or the client's IP. Missing/failed detection preserves client data.
-	if account.ProxyID == nil || account.Proxy == nil || account.Proxy.ID != *account.ProxyID {
-		return body
-	}
-	result := s.ProbeOpenAIProxyTimezone(ctx, account.Proxy, false)
-	if !result.Success {
-		return body
-	}
-	// Scheduler accounts are shared between requests. Never mutate their Extra
-	// or persist a detected timezone over the user's saved manual preference.
-	copyAccount := *account
-	copyAccount.Extra = make(map[string]any, len(account.Extra))
-	for k, v := range account.Extra {
-		copyAccount.Extra[k] = v
-	}
-	copyAccount.Extra[openAIRequestTimezoneExtraKey] = result.Timezone
-	copyAccount.Extra[openAIRequestTimezoneModeExtraKey] = "manual"
-	return normalizeOpenAIRequestLocale(ctx, &copyAccount, body, transport, now)
+	return body
 }

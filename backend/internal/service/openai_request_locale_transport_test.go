@@ -104,7 +104,7 @@ func TestOpenAIRequestLocaleWebSocketFirstAndLaterTurns(t *testing.T) {
 					require.NoError(t, err)
 				}
 				sent := requirePassthroughUpstreamWrite(t, upstream, 5*time.Second)
-				require.Equal(t, strings.Replace(text, "Asia/Shanghai", "America/New_York", 1), gjson.GetBytes(sent, "input.0.content.0.text").String())
+				require.Equal(t, strings.Replace(text, "Asia/Shanghai", DefaultOpenAIRequestTimezone, 1), gjson.GetBytes(sent, "input.0.content.0.text").String())
 				upstream.Send(fmt.Sprintf(`{"type":"response.completed","response":{"id":"resp_locale_%d","model":"gpt-5.1","usage":{"input_tokens":1,"output_tokens":1}}}`, turn))
 				response, err := readPassthroughLifecycleFrame(t, client, 5*time.Second)
 				require.NoError(t, err)

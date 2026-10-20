@@ -17,7 +17,6 @@
             @refresh="handleManualRefresh"
             @create="showCreate = true"
           >
-            <template #beforeCreate><button class="btn btn-secondary" @click="showTwoFA = true">2FA添加 / 批量</button></template>
             <template #after>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
@@ -359,7 +358,7 @@
             <span class="inline-flex items-center gap-1 text-sm font-mono text-gray-700 dark:text-gray-300">
               <span>{{ formatMultiplier(row.rate_multiplier ?? 1) }}x</span>
               <span
-                v-if="!usesModelPriceProbe(row) && row.extra?.upstream_billing_rate_sync_enabled === true"
+                v-if="!usesModelPriceProbe(row) && row.extra?.upstream_billing_rate_sync_enabled === true && row.extra?.upstream_billing_probe?.data?.billing_mode !== 'multi_group'"
                 class="inline-flex cursor-help text-emerald-600 dark:text-emerald-400"
                 :aria-label="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
                 :title="t('admin.accounts.upstreamBilling.syncedRateTooltip')"
@@ -464,7 +463,6 @@
       </template>
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
-    <TwoFABatchImportModal v-if="showTwoFA" :proxies="proxies" :groups="groups" @close="showTwoFA = false" @created="reload" />
     <NewAPIUpstreamConfigDialog v-if="authStore.isAdmin" :show="newAPIConfigAccount !== null" :account="newAPIConfigAccount" @close="newAPIConfigAccount = null" @saved="reload" />
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
@@ -523,7 +521,6 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
-import TwoFABatchImportModal from '@/components/account/TwoFABatchImportModal.vue'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
@@ -643,7 +640,6 @@ const handleConfigureNewAPIUpstream = (account: Account) => {
   if (authStore.isAdmin && account.type === 'apikey') newAPIConfigAccount.value = account
 }
 const showCreate = ref(false)
-const showTwoFA = ref(false)
 const showEdit = ref(false)
 const showSync = ref(false)
 const showImportData = ref(false)
@@ -1434,7 +1430,7 @@ watch(accounts, (rows) => {
 const isAnyModalOpen = computed(() => {
   return (
     newAPIConfigAccount.value !== null ||
-    showCreate.value || showTwoFA.value ||
+    showCreate.value ||
     showEdit.value ||
     showSync.value ||
     showImportData.value ||

@@ -11,14 +11,79 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tidwall/gjson"
 	"golang.org/x/sync/singleflight"
 )
 
 type requestTimezoneEgressKey struct{}
 
 type requestTimezoneBinding struct {
-	service *OpenAIGatewayService
-	account *Account
+	service    *OpenAIGatewayService
+	account    *Account
+	textMu     sync.RWMutex
+	ordinary   map[[32]byte]struct{}
+	protectAll bool
+}
+
+// Compatibility normalization removes client-only content-kind metadata. Keep
+// hashes of explicit ordinary environment examples inside this request/session,
+// never in the wire payload or logs. Ambiguous identical examples stay unchanged.
+func (b *requestTimezoneBinding) rememberOrdinaryText(body []byte) {
+	if b == nil {
+		return
+	}
+	b.textMu.Lock()
+	defer b.textMu.Unlock()
+	for _, item := range gjson.GetBytes(body, "input").Array() {
+		if item.Get("role").String() != "user" {
+			continue
+		}
+		kinds := item.Get("internal_chat_message_metadata_passthrough.content_item_kinds")
+		if !kinds.Exists() || kinds.Type == gjson.Null {
+			continue
+		}
+		remember := func(index int, text string) {
+			if !strings.HasPrefix(strings.TrimSpace(text), "<environment_context") {
+				return
+			}
+			values := kinds.Array()
+			if kinds.IsArray() && index < len(values) && values[index].String() == "environments.environment_context" {
+				return
+			}
+			if len(b.ordinary) >= 1024 {
+				b.protectAll = true
+				return
+			}
+			if b.ordinary == nil {
+				b.ordinary = make(map[[32]byte]struct{})
+			}
+			b.ordinary[sha256.Sum256([]byte(text))] = struct{}{}
+		}
+		content := item.Get("content")
+		if content.Type == gjson.String {
+			remember(0, content.String())
+		} else {
+			for i, part := range content.Array() {
+				if part.Get("type").String() == "input_text" {
+					remember(i, part.Get("text").String())
+				}
+			}
+		}
+	}
+}
+
+func protectedOpenAIRequestText(ctx context.Context, text string) bool {
+	if ctx == nil {
+		return false
+	}
+	b, _ := ctx.Value(requestTimezoneEgressKey{}).(*requestTimezoneBinding)
+	if b == nil {
+		return false
+	}
+	b.textMu.RLock()
+	defer b.textMu.RUnlock()
+	_, protected := b.ordinary[sha256.Sum256([]byte(text))]
+	return protected || b.protectAll
 }
 
 type egressTimezoneEntry struct {
@@ -41,28 +106,12 @@ func (s *OpenAIGatewayService) withRequestTimezoneEgress(ctx context.Context, ac
 	if s == nil || account == nil || !account.IsOpenAI() {
 		return ctx
 	}
-	return context.WithValue(ctx, requestTimezoneEgressKey{}, &requestTimezoneBinding{s, account})
+	return context.WithValue(ctx, requestTimezoneEgressKey{}, &requestTimezoneBinding{service: s, account: account})
 }
 
 func (b *requestTimezoneBinding) enabled(ctx context.Context) bool {
-	return b.mode(ctx) == "auto"
-}
-
-func (b *requestTimezoneBinding) mode(ctx context.Context) string {
-	if b == nil || b.service == nil || b.account == nil || !b.account.IsOpenAI() {
-		return ""
-	}
-	// Explicit account settings, including OFF, are never overridden globally.
-	if _, configured := b.account.Extra[openAIRequestTimezoneEnabledExtraKey]; configured {
-		return ""
-	}
-	if !b.service.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) {
-		return ""
-	}
-	if b.service.settingService.GetOpenAIRequestTimezoneAuto(ctx, false) {
-		return "auto"
-	}
-	return "manual"
+	return b != nil && b.service.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) &&
+		b.service.settingService.GetOpenAIRequestTimezoneAuto(ctx, false)
 }
 
 func (s *OpenAIGatewayService) egressRequestTimezone(ctx context.Context, proxy string) string {
@@ -89,7 +138,7 @@ func (s *OpenAIGatewayService) egressRequestTimezone(ctx context.Context, proxy 
 		info, _, err := s.requestTimezoneProber.ProbeProxy(probeCtx, proxy)
 		name := ""
 		ttl := 15 * time.Second
-		if err == nil && info != nil && net.ParseIP(info.IP) != nil && openAIRequestTimezoneAllowed[info.Timezone] {
+		if err == nil && info != nil && net.ParseIP(info.IP) != nil && isAllowedOpenAIRequestTimezone(info.Timezone) {
 			name = info.Timezone
 			ttl = time.Minute
 		}
@@ -164,7 +213,7 @@ func BindOpenAIRequestTimezone(req *http.Request, proxy string) (*http.Request, 
 	if err != nil {
 		return nil, err
 	}
-	body = normalizeUpstreamOpenAIRequestLocaleTimezone(req.Context(), b.account, body, "http", name)
+	body = normalizeOpenAIRequestLocaleTimezone(req.Context(), b.account, body, "http", name)
 	clone.Body = &requestTimezoneBody{Reader: bytes.NewReader(body), original: req.Body}
 	clone.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
 	clone.ContentLength = int64(len(body))
@@ -186,8 +235,7 @@ func (b *requestTimezoneBody) Close() error {
 // Keep the timezone headers alongside the existing client header allowlist only
 // while timezone binding is enabled. No header is invented when none is sent.
 func (s *OpenAIGatewayService) requestTimezoneHeaders(ctx context.Context, account *Account, source, target http.Header) {
-	mode := (&requestTimezoneBinding{service: s, account: account}).mode(ctx)
-	if mode == "" {
+	if s == nil || account == nil || !account.IsOpenAI() || !s.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) {
 		return
 	}
 	for key, values := range source {
@@ -198,7 +246,7 @@ func (s *OpenAIGatewayService) requestTimezoneHeaders(ctx context.Context, accou
 			}
 		}
 	}
-	if mode == "manual" {
+	if !s.settingService.GetOpenAIRequestTimezoneAuto(ctx, false) {
 		rewriteRequestTimezoneHeaders(target, account.OpenAIRequestTimezone())
 	}
 }

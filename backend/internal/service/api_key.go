@@ -34,6 +34,7 @@ type APIKey struct {
 	KeyHash     string // Historical hash-only credentials, never returned by DTOs.
 	KeyPrefix   string
 	Name        string
+	GroupIDs    []int64 // Configured groups; GroupID is the selected group for a request.
 	GroupID     *int64
 	Status      string
 	IPWhitelist []string

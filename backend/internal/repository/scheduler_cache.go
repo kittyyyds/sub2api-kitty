@@ -1139,6 +1139,7 @@ func filterSchedulerExtra(extra map[string]any) map[string]any {
 		"plan_type",
 		service.AccountPoolExtraKey,
 		service.AccountTieredRoutingEnabledExtraKey,
+		service.QualityModelIsolationKey,
 		service.UpstreamBillingProbeExtraKey,
 		service.GrokMediaEligibleExtraKey,
 		"grok_billing_snapshot",

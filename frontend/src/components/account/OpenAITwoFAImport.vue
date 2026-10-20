@@ -2,7 +2,7 @@
   <div class="space-y-4">
     <CredentialEncryptionSetup @ready="encryptionReady = $event" />
     <p class="input-hint">一行一个账号：邮箱----密码----2FA密钥，也支持 --、Tab 或逗号分隔，最多200行。仅在内存中处理，关闭窗口会停止未完成任务。</p>
-    <p class="input-hint">{{ proxyId ? '首次登录即通过所选代理；需要安全验证时可打开服务器登录窗口。' : '未选代理：沿用原登录服务网络；时区设置只用于导入后的请求。' }}</p>
+    <p class="input-hint">{{ proxyId ? '通过所选代理在后台完成协议登录，无需打开登录窗口。' : '未选代理：沿用已配置的后台登录服务网络。' }}</p>
     <a href="/admin/token-guard" target="_blank" rel="noopener noreferrer" class="text-primary-600">
       {{ t('tokenGuard.twoFA.settings') }}
     </a>
@@ -20,11 +20,9 @@
          <span>{{ t(`tokenGuard.twoFA.states.${row.status}`) }}</span>
          <p v-if="row.detail" class="text-xs text-gray-500">{{ row.detail }}</p>
          <p v-if="row.job?.message" class="text-xs text-amber-600">{{ row.job.message }}</p>
-         <button v-if="row.jobId && row.job?.browser_available" type="button" class="btn btn-secondary" data-testid="two-fa-browser" @click="browserJob = row.jobId">打开登录 / 验证窗口</button>
        </div>
       </li>
     </ul>
-    <TwoFABrowserDialog v-if="browserJob" :job-id="browserJob" @close="browserJob = undefined" />
     <div class="flex gap-3">
       <button v-if="!busy && (!rows.length || hasPending)" type="button" class="btn btn-primary" :disabled="!encryptionReady" data-testid="two-fa-start" @click="run">
         {{ t(rows.length ? 'tokenGuard.twoFA.retry' : 'tokenGuard.twoFA.start') }}
@@ -42,7 +40,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import CredentialEncryptionSetup from './CredentialEncryptionSetup.vue'
-import TwoFABrowserDialog from './TwoFABrowserDialog.vue'
 import { useI18n } from 'vue-i18n'
 import { deleteTwoFALogin, getTwoFALogin, parseTwoFALoginText, startTwoFALogin } from '@/api/admin/accountTokenGuard'
 import type { TokenGuardReloginAccount, TwoFALoginJob, TwoFALoginEnvironment } from '@/api/admin/accountTokenGuard'
@@ -63,7 +60,6 @@ type Row = {
   job?: TwoFALoginJob
   detail?: string
 }
-const browserJob = ref<string>()
 const raw = ref('')
 const encryptionReady = ref(false)
 const error = ref('')
@@ -73,8 +69,7 @@ const stopRequested = ref(false)
 const hasPending = computed(() => rows.value.some(row => row.status !== 'created' && row.status !== 'skipped'))
 let disposed = false
 let batchProxy: number | null | undefined
-let batchEnvironment: TwoFALoginEnvironment | undefined
-const stages: Record<string,string> = {queued:'排队中',timezone_probe:'检测代理时区',browser_starting:'启动登录窗口',navigation:'打开官方页面',security_verification:'等待安全验证',email:'账号验证',password:'密码验证',totp:'两步验证',authorization:'授权确认',token_exchange:'交换授权凭证',succeeded:'登录完成',failed:'登录未完成'}
+const stages: Record<string,string> = {queued:'排队中',protocol_login:'后台协议登录',timezone_probe:'检测代理时区',browser_starting:'启动登录窗口',navigation:'打开官方页面',security_verification:'等待安全验证',email:'账号验证',password:'密码验证',totp:'两步验证',authorization:'授权确认',token_exchange:'交换授权凭证',succeeded:'登录完成',failed:'登录未完成'}
 function showProgress(row: Row, job: TwoFALoginJob) {
  row.job = {...job, credential: undefined}
  row.detail = [job.stage ? (stages[job.stage] || '处理中') : '', job.timezone ? `登录时区：${job.timezone}` : '', job.http_status ? `HTTP ${job.http_status}` : '', job.error_code || ''].filter(Boolean).join(' · ')
@@ -83,7 +78,6 @@ function showProgress(row: Row, job: TwoFALoginJob) {
 async function discardJob(row: Row) {
   if (!row.jobId) return
   const id = row.jobId
-  if (browserJob.value === id) browserJob.value = undefined
   row.jobId = undefined
   // Server expiry also cleans up jobs if the browser loses its connection.
   await deleteTwoFALogin(id).catch(() => {})
@@ -100,11 +94,9 @@ async function run() {
       try {
         const entries = parseTwoFALoginText(raw.value)
         const selectedProxy = props.proxyId
-        const selectedEnvironment = props.loginEnvironment ? {...props.loginEnvironment} : undefined
         await props.prepare?.()
         if (disposed || stopRequested.value) return
         batchProxy = selectedProxy
-        batchEnvironment = selectedEnvironment && selectedProxy ? selectedEnvironment : undefined
         rows.value = entries.map(entry => ({ entry, status: 'pending' }))
         raw.value = ''
       } catch (cause) {
@@ -121,7 +113,7 @@ async function run() {
         if (!row.credential) {
           row.status = 'login'
           // Keep the job ID on polling failures; retry resumes the same login.
-          if (!row.jobId) row.jobId = (await (batchEnvironment ? startTwoFALogin(row.entry, batchProxy, batchEnvironment) : startTwoFALogin(row.entry, batchProxy))).id
+          if (!row.jobId) row.jobId = (await startTwoFALogin(row.entry, batchProxy)).id
           let job = await getTwoFALogin(row.jobId)
           showProgress(row, job)
           while ((job.status === 'running' || job.status === 'waiting_interaction') && !stopRequested.value && !disposed) {
@@ -137,12 +129,10 @@ async function run() {
           }
           if (job.status !== 'succeeded' || !job.credential) {
             // Terminal diagnostic records remain until their server-side expiry.
-            if (browserJob.value === row.jobId) browserJob.value = undefined
             row.jobId = undefined
             throw new Error('login_failed')
           }
           row.credential = job.credential
-          if (browserJob.value === row.jobId) browserJob.value = undefined
           await discardJob(row)
         }
         if (stopRequested.value || disposed) { row.status = 'pending'; break }
@@ -170,8 +160,6 @@ function reset() {
   for (const row of rows.value) void discardJob(row)
   rows.value = []
   batchProxy = undefined
-  batchEnvironment = undefined
-  browserJob.value = undefined
   emit('reset')
   raw.value = ''
   error.value = ''

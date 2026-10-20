@@ -151,7 +151,7 @@ it('validates proxy-timezone selection before starting a login',async()=>{
  expect(wrapper.emitted('busy')).toEqual([[true],[false]])
 })
 
-it('waits for human verification and freezes timezone together with the proxy',async()=>{
+it('shows a readable protocol failure without opening a browser and keeps the proxy for retry',async()=>{
  vi.useFakeTimers()
  const importCredential=vi.fn().mockResolvedValue('created')
  const environment={enabled:true,mode:'proxy',timezone:'Asia/Tokyo'}
@@ -159,9 +159,9 @@ it('waits for human verification and freezes timezone together with the proxy',a
  try{
   vi.mocked(getTwoFALogin).mockResolvedValue({id:'job-1',status:'waiting_interaction',stage:'security_verification',error_code:'security_verification_required',http_status:403,timezone:'America/Los_Angeles',browser_available:true,message:'需要人工验证'})
   await start(w,'u@example.com----password----SECRET')
-  expect(startTwoFALogin).toHaveBeenCalledWith(expect.anything(),17,environment)
+  expect(startTwoFALogin).toHaveBeenCalledWith(expect.anything(),17)
   expect(w.text()).toContain('America/Los_Angeles');expect(w.text()).toContain('HTTP 403')
-  expect(w.find('[data-testid="two-fa-browser"]').exists()).toBe(true)
+  expect(w.find('[data-testid="two-fa-browser"]').exists()).toBe(false)
   expect(importCredential).not.toHaveBeenCalled();expect(w.text()).not.toContain('SECRET')
   await w.setProps({proxyId:99,loginEnvironment:{enabled:true,mode:'manual',timezone:'UTC'}})
   vi.mocked(getTwoFALogin).mockResolvedValueOnce({id:'job-1',status:'failed',stage:'security_verification',error_code:'login_timeout'})
@@ -169,7 +169,7 @@ it('waits for human verification and freezes timezone together with the proxy',a
   expect(importCredential).not.toHaveBeenCalled();expect(deleteTwoFALogin).not.toHaveBeenCalled()
   vi.mocked(getTwoFALogin).mockResolvedValue({id:'job-2',status:'succeeded',credential:{access_token:'fixture'}})
   await w.get('[data-testid="two-fa-start"]').trigger('click');await flushPromises()
-  expect(startTwoFALogin).toHaveBeenLastCalledWith(expect.anything(),17,environment)
+  expect(startTwoFALogin).toHaveBeenLastCalledWith(expect.anything(),17)
   expect(importCredential).toHaveBeenCalledOnce()
  }finally{w.unmount();vi.useRealTimers()}
 })

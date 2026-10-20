@@ -160,7 +160,7 @@ func TestProxyTimezoneProbeDeadline(t *testing.T) {
 	require.Less(t, time.Since(start), 7*time.Second)
 }
 
-func TestProxyTimezoneNormalizerPreservesBodyAndSharedAccount(t *testing.T) {
+func TestRetiredAccountTimezoneNormalizerDoesNotMutateBodyOrAccount(t *testing.T) {
 	for _, zone := range []string{"America/Los_Angeles", "Asia/Tokyo"} {
 		for _, search := range []bool{false, true} {
 			t.Run(zone+"/"+map[bool]string{false: "search-off", true: "search-on"}[search], func(t *testing.T) {
@@ -173,16 +173,13 @@ func TestProxyTimezoneNormalizerPreservesBodyAndSharedAccount(t *testing.T) {
 				original := bytes.Clone(body)
 				for _, transport := range []string{"http", "ws"} {
 					out := svc.normalizeOpenAIRequestLocale(context.Background(), account, body, transport, time.Now())
-					require.Contains(t, gjson.GetBytes(out, "input.0.content.0.text").String(), "<timezone>"+zone+"</timezone>")
+					require.Equal(t, original, out)
 					require.Contains(t, gjson.GetBytes(out, "input.0.content.0.text").String(), "<current_date>2026-10-14</current_date>")
 					require.Equal(t, text, gjson.GetBytes(out, "input.0.content.1.text").String())
 					for _, path := range []string{"model", "reasoning", "prompt_cache_key", "previous_response_id", "tools.0.user_location.city", "tools.0.user_location.country"} {
 						require.Equal(t, gjson.GetBytes(body, path).Raw, gjson.GetBytes(out, path).Raw)
 					}
 					expectedSearch := "America/New_York"
-					if search {
-						expectedSearch = zone
-					}
 					require.Equal(t, expectedSearch, gjson.GetBytes(out, "tools.0.user_location.timezone").String())
 				}
 				extra, _ := json.Marshal(account.Extra)

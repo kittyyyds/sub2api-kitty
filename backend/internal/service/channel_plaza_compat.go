@@ -10,5 +10,5 @@ func (s *ChannelService) ListPlazaGroups(ctx context.Context) ([]PlazaGroup, err
 	if s == nil {
 		return nil, nil
 	}
-	return NewModelPlazaService(s.repo, s.groupRepo, s.pricingService, nil, nil).ListGroups(ctx)
+	return NewModelPlazaService(s.repo, s.groupRepo, s.pricingService, nil, nil, nil).ListGroups(ctx)
 }

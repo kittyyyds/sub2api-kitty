@@ -68,7 +68,6 @@
       </div>
 
       <AccountTierRoutingFields v-model:enabled="tierRoutingEnabled" v-model:pool="tierRoutingPool" />
-      <OpenAIRequestTimezoneField v-if="form.platform === 'openai'" v-model="requestTimezone" :proxy-id="form.proxy_id" />
 
       <!-- Platform Selection - Segmented Control Style -->
       <div>
@@ -3410,6 +3409,36 @@
         </div>
       </div>
 
+      <!-- Anthropic API Key 抹除 Claude Code 身份开关 -->
+      <div
+        v-if="form.platform === 'anthropic' && accountCategory === 'apikey'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.anthropic.stripClaudeCodeIdentity') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.anthropic.stripClaudeCodeIdentityDesc') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="anthropicStripClaudeCodeIdentityEnabled = !anthropicStripClaudeCodeIdentityEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              anthropicStripClaudeCodeIdentityEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                anthropicStripClaudeCodeIdentityEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <div
         v-if="form.platform === 'anthropic' && accountCategory === 'apikey'"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
@@ -3775,7 +3804,7 @@
 
     <!-- Step 2: OAuth Authorization -->
     <div v-else class="space-y-5">
-      <OpenAITwoFAImport v-if="isOpenAITwoFA" :proxy-id="form.proxy_id" :login-environment="{enabled:requestTimezone.enabled, mode:requestTimezone.mode || 'manual', timezone:requestTimezone.timezone}" :prepare="prepareTwoFABatch" :import-credential="importTwoFACredential" @busy="twoFABusy = $event" @reset="resetTwoFABatch" />
+      <OpenAITwoFAImport v-if="isOpenAITwoFA" :proxy-id="form.proxy_id" :prepare="prepareTwoFABatch" :import-credential="importTwoFACredential" @busy="twoFABusy = $event" @reset="resetTwoFABatch" />
       <OAuthAuthorizationFlow
         v-else
         ref="oauthFlowRef"
@@ -4129,8 +4158,6 @@
 
 <script setup lang="ts">
 import { usesImagePriceProbe } from "@/utils/modelPriceProbe"
-import OpenAIRequestTimezoneField from './OpenAIRequestTimezoneField.vue'
-import { readOpenAIRequestTimezone, withOpenAIRequestTimezone } from '@/utils/openAIRequestTimezone'
 import AccountTierRoutingFields from './AccountTierRoutingFields.vue'
 import { withAccountTierRouting, type AccountTierPool } from '@/utils/accountTierRouting'
 import { DEFAULT_ACCOUNT_COST_MULTIPLIER, isValidAccountCostMultiplier } from '@/utils/accountCost'
@@ -4689,7 +4716,6 @@ const upstreamModelsPreviewed = ref(false)
 const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
-const requestTimezone = ref(readOpenAIRequestTimezone())
 const tierRoutingEnabled = ref(false)
 const tierRoutingPool = ref<AccountTierPool>('standard')
 
@@ -4784,6 +4810,7 @@ const codexFingerprintModeOptions = computed(() => [
 ])
 type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
 const anthropicPassthroughEnabled = ref(false)
+const anthropicStripClaudeCodeIdentityEnabled = ref(false)
 const anthropicAPIKeyAuthScheme = ref<AnthropicAPIKeyAuthScheme>('x_api_key')
 const webSearchEmulationMode = ref('default')
 const webSearchGlobalEnabled = ref(false)
@@ -5292,6 +5319,7 @@ watch(
     }
     if (newPlatform !== 'anthropic') {
       anthropicPassthroughEnabled.value = false
+      anthropicStripClaudeCodeIdentityEnabled.value = false
       anthropicAPIKeyAuthScheme.value = 'x_api_key'
       webSearchEmulationMode.value = 'default'
     }
@@ -5322,6 +5350,7 @@ watch(
     }
     if (platform !== 'anthropic' || category !== 'apikey') {
       anthropicPassthroughEnabled.value = false
+      anthropicStripClaudeCodeIdentityEnabled.value = false
       anthropicAPIKeyAuthScheme.value = 'x_api_key'
       webSearchEmulationMode.value = 'default'
     }
@@ -5742,7 +5771,6 @@ const resetForm = () => {
   fetchAntigravityDefaultMappings().then(mappings => {
     antigravityModelMappings.value = [...mappings]
   })
-  requestTimezone.value = readOpenAIRequestTimezone()
   tierRoutingEnabled.value = false
   tierRoutingPool.value = 'standard'
   poolModeEnabled.value = false
@@ -5775,6 +5803,7 @@ const resetForm = () => {
   codexCLIOnlyAppServerEnabled.value = false
   codexFingerprintMode.value = 'off'
   anthropicPassthroughEnabled.value = false
+  anthropicStripClaudeCodeIdentityEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
   webSearchEmulationMode.value = 'default'
   // Reset quota control state
@@ -5836,7 +5865,7 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     return base
   }
 
-  const extra: Record<string, unknown> = withOpenAIRequestTimezone(base, requestTimezone.value)
+  const extra: Record<string, unknown> = { ...base }
   if (isOpenAIBPSOAuth.value) {
     extra.openai_excel_bps = true
     extra.openai_excel_bps_models = [...new Set(bpsOAuthModels.value.map(m => m.trim()).filter(Boolean))]
@@ -5947,6 +5976,11 @@ const buildAnthropicExtra = (base?: Record<string, unknown>): Record<string, unk
     extra.anthropic_passthrough = true
   } else {
     delete extra.anthropic_passthrough
+  }
+  if (anthropicStripClaudeCodeIdentityEnabled.value) {
+    extra.anthropic_strip_claude_code_identity = true
+  } else {
+    delete extra.anthropic_strip_claude_code_identity
   }
   if (anthropicAPIKeyAuthScheme.value === 'authorization_bearer') {
     extra.anthropic_apikey_auth_scheme = 'authorization_bearer'
@@ -6925,7 +6959,6 @@ let twoFABatchBPS: typeof autoBPS.draft.value | null = null
 const twoFACreated = new Map<string, number>()
 const resetTwoFABatch = () => { twoFABatchSettings = null; twoFABatchBPS = null; twoFACreated.clear() }
 const prepareTwoFABatch = () => {
-  if (requestTimezone.value.enabled && requestTimezone.value.mode === 'proxy' && !form.proxy_id) throw new Error('select_proxy')
   const credentialExtras = buildOpenAICodexImportCredentialExtras()
   if (credentialExtras === null) throw new Error('invalid_account_settings')
   twoFABatchSettings = JSON.parse(JSON.stringify({

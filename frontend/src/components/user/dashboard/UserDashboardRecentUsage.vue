@@ -20,6 +20,9 @@
             </div>
             <div class="min-w-0">
               <p class="break-all text-sm font-medium text-gray-900 dark:text-white">{{ log.model }}</p>
+              <p v-if="visibleResponseModel(log)" class="text-xs text-gray-500 dark:text-dark-400">
+                {{ t('usage.upstreamResponseModel') }}: {{ visibleResponseModel(log) }}
+              </p>
               <p class="text-xs text-gray-500 dark:text-dark-400">{{ formatDateTime(log.created_at) }}</p>
             </div>
           </div>
@@ -46,7 +49,9 @@ import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { useAppStore } from '@/stores/app'
 import { formatDateTime } from '@/utils/format'
+import { userVisibleUpstreamResponseModel } from '@/utils/upstreamResponseModel'
 import type { UsageLog } from '@/types'
 
 defineProps<{
@@ -55,5 +60,7 @@ defineProps<{
   error?: string
 }>()
 const { t } = useI18n()
+const appStore = useAppStore()
+const visibleResponseModel = (log: UsageLog) => userVisibleUpstreamResponseModel(appStore.cachedPublicSettings, log)
 const formatCost = (c: number) => c.toFixed(4)
 </script>

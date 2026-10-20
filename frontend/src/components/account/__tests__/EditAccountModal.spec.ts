@@ -345,17 +345,14 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 }
 
 describe('EditAccountModal', () => {
-  it('saves timezone and tier routing together without discarding unrelated account settings', async () => {
+  it('saves tier routing without retired timezone controls or loss of unrelated settings', async () => {
     const account = buildAccount()
     account.extra = { custom_setting: 'keep', quota_daily_limit: 50, pool: 'standard', tiered_routing_enabled: false }
     updateAccountMock.mockReset().mockResolvedValue(account)
     const wrapper = mountModal(account)
     await flushPromises()
-    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
+    expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
     await flushPromises()
-    const timezone = wrapper.getComponent({ name: 'OpenAIRequestTimezoneField' })
-    await timezone.get('[data-testid="request-timezone-target"]').setValue('America/New_York')
-    await timezone.get('[data-testid="request-timezone-search"]').setValue(true)
     const tier = wrapper.getComponent({ name: 'AccountTierRoutingFields' })
     tier.vm.$emit('update:enabled', true)
     tier.vm.$emit('update:pool', 'premium')
@@ -365,7 +362,6 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0][1].extra).toMatchObject({
       custom_setting: 'keep', quota_daily_limit: 50, pool: 'premium', tiered_routing_enabled: true,
-      openai_request_timezone_enabled: true, openai_request_timezone: 'America/New_York', openai_request_timezone_sync_search: true
     })
     expect(updateAccountMock.mock.calls[0][1].credentials.model_mapping).toEqual(account.credentials.model_mapping)
     wrapper.unmount()

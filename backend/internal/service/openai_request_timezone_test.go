@@ -54,7 +54,8 @@ func TestRequestTimezoneDisabledAndNonOpenAIKeepRequestBytes(t *testing.T) {
 		{Platform: PlatformGrok, Extra: map[string]any{openAIRequestTimezoneEnabledExtraKey: true}},
 		{Platform: PlatformOpenAI, Extra: map[string]any{openAIRequestTimezoneEnabledExtraKey: true, openAIRequestTimezoneExtraKey: "invalid"}},
 	} {
-		out := normalizeOpenAIRequestLocale(context.Background(), a, body, "http", time.Now())
+		svc := timezoneAutoService(false, true, nil)
+		out := svc.normalizeRequestTimezone(context.Background(), a, body, "http")
 		require.Equal(t, body, out)
 	}
 }
@@ -66,18 +67,18 @@ func TestRequestTimezonePreservesRoutingBillingAndFailoverInput(t *testing.T) {
 	b := &Account{Platform: PlatformOpenAI, Extra: map[string]any{openAIRequestTimezoneEnabledExtraKey: true, openAIRequestTimezoneExtraKey: "Asia/Tokyo"}}
 	now := time.Date(2026, 9, 24, 1, 0, 0, 0, time.UTC)
 	out := normalizeOpenAIRequestLocale(context.Background(), a, body, "http", now)
-	for _, path := range []string{"model", "reasoning", "service_tier", "prompt_cache_key", "previous_response_id", "client_metadata", "input.0.content.1", "input.0.content.2", "input.1", "tools"} {
+	for _, path := range []string{"model", "reasoning", "service_tier", "prompt_cache_key", "previous_response_id", "client_metadata", "input.0.content.1", "input.0.content.2", "input.1", "tools.0.user_location.country", "tools.0.user_location.city"} {
 		require.Equal(t, gjson.GetBytes(original, path).Raw, gjson.GetBytes(out, path).Raw, path)
 	}
 	require.Contains(t, gjson.GetBytes(out, "input.0.content.0.text").String(), "<current_date>old</current_date>")
 	require.Contains(t, gjson.GetBytes(out, "input.0.content.0.text").String(), "D:/project")
 	require.Equal(t, original, body, "account retry must retain the original request")
 	next := normalizeOpenAIRequestLocale(context.Background(), b, body, "ws", now)
-	require.Contains(t, gjson.GetBytes(next, "input.0.content.0.text").String(), "Asia/Tokyo")
+	require.Contains(t, gjson.GetBytes(next, "input.0.content.0.text").String(), DefaultOpenAIRequestTimezone)
 	require.Contains(t, gjson.GetBytes(next, "input.0.content.0.text").String(), "<current_date>old</current_date>")
 	a.Extra[openAIRequestTimezoneSyncSearchExtraKey] = true
 	search := normalizeOpenAIRequestLocale(context.Background(), a, body, "ws", now)
-	require.Equal(t, "America/New_York", gjson.GetBytes(search, "tools.0.user_location.timezone").String())
+	require.Equal(t, DefaultOpenAIRequestTimezone, gjson.GetBytes(search, "tools.0.user_location.timezone").String())
 	require.Equal(t, "CN", gjson.GetBytes(search, "tools.0.user_location.country").String())
 	require.Equal(t, "Shanghai", gjson.GetBytes(search, "tools.0.user_location.city").String())
 }
@@ -101,7 +102,7 @@ func TestRequestTimezoneLooseEnvironmentPreservesDatesAndOtherBytes(t *testing.T
 	for _, content := range []any{text, []map[string]any{{"type": "input_text", "text": text}}} {
 		body, _ := json.Marshal(map[string]any{"input": []map[string]any{{"role": "user", "content": content}}})
 		out := normalizeOpenAIRequestLocale(context.Background(), a, body, "http", time.Now())
-		expected := bytes.Replace(body, []byte("Asia/Shanghai"), []byte("UTC"), 1)
+		expected := bytes.Replace(body, []byte("Asia/Shanghai"), []byte(DefaultOpenAIRequestTimezone), 1)
 		require.JSONEq(t, string(expected), string(out))
 	}
 	ordinary := []byte(`{"input":[{"role":"user","content":"Please explain <environment_context><cwd>/app</cwd><timezone>Asia/Shanghai</timezone></environment_context>"}]}`)

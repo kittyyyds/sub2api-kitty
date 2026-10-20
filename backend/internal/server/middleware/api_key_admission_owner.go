@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -26,6 +27,16 @@ func nextWithAPIKeyAdmissionOwner(c *gin.Context, apiKeyService *service.APIKeyS
 				return apiKeyService.GetOwnedForCanvas(ctx, userID, keyID)
 			}
 			credential = "canvas-owner-checked"
+		}
+	}
+	if apiKeyService != nil && lookup != nil && len(key.ConfiguredGroupIDs()) > 1 && key.GroupID != nil {
+		baseLookup, groupID := lookup, *key.GroupID
+		lookup = func(ctx context.Context, credential string) (*service.APIKey, error) {
+			latest, err := baseLookup(ctx, credential)
+			if err != nil {
+				return nil, err
+			}
+			return apiKeyService.PinAPIKeyGroup(ctx, latest, groupID)
 		}
 	}
 	nextWithAPIKeyAdmissionLookup(c, lookup, credential, trustedClientIP, key, googleStyle)
@@ -167,11 +178,16 @@ func newAPIKeyAuthRevalidator(lookup func(context.Context, string) (*service.API
 // value when the revalidator is installed. It deliberately excludes everything
 // that may legitimately change without affecting this request's permissions.
 type apiKeyQueueInitialIdentity struct {
-	keyID            int64
-	userID           int64
-	groupID          *int64
-	platform         string
-	subscriptionType string
+	keyID              int64
+	userID             int64
+	groupID            *int64
+	platform           string
+	subscriptionType   string
+	codexCLIOnly       bool
+	blockSubagents     bool
+	maxReasoningEffort string
+	reasoningOverLimit string
+	reasoningMappings  []service.ReasoningEffortMapping
 }
 
 func captureAPIKeyQueueIdentity(initial *service.APIKey) apiKeyQueueInitialIdentity {
@@ -188,14 +204,19 @@ func captureAPIKeyQueueIdentity(initial *service.APIKey) apiKeyQueueInitialIdent
 	if initial.Group != nil {
 		identity.platform = initial.Group.Platform
 		identity.subscriptionType = initial.Group.SubscriptionType
+		identity.codexCLIOnly = initial.Group.CodexCLIOnly
+		identity.blockSubagents = initial.Group.BlockSubagents
+		identity.maxReasoningEffort = initial.Group.MaxReasoningEffort
+		identity.reasoningOverLimit = initial.Group.MaxReasoningEffortOverLimit
+		identity.reasoningMappings = append([]service.ReasoningEffortMapping(nil), initial.Group.ReasoningEffortMappings...)
 	}
 	return identity
 }
 
-// apiKeyQueueCoreIdentityChanged reports a genuine binding/platform/charging
-// change. Group existence and ID are compared, but no field snapshots: name,
-// pricing, routing, permission tweaks and nil/empty collection shapes are not
-// authorization identity.
+// apiKeyQueueCoreIdentityChanged reports binding, platform, charging or employee
+// usage policy changes that require fresh admission. Names, pricing, routing,
+// other permissions and nil/empty collection shapes remain outside this
+// identity. A WS session opened before enforcement must re-enter admission.
 func apiKeyQueueCoreIdentityChanged(initial apiKeyQueueInitialIdentity, latest *service.APIKey) bool {
 	if latest == nil {
 		return true
@@ -210,11 +231,20 @@ func apiKeyQueueCoreIdentityChanged(initial apiKeyQueueInitialIdentity, latest *
 		return true
 	}
 	platform, subscriptionType := "", ""
+	codexCLIOnly := false
+	blockSubagents := false
 	if latest.Group != nil {
 		platform = latest.Group.Platform
 		subscriptionType = latest.Group.SubscriptionType
+		codexCLIOnly = latest.Group.CodexCLIOnly
+		blockSubagents = latest.Group.BlockSubagents
+		if initial.maxReasoningEffort != latest.Group.MaxReasoningEffort || initial.reasoningOverLimit != latest.Group.MaxReasoningEffortOverLimit || !slices.Equal(initial.reasoningMappings, latest.Group.ReasoningEffortMappings) {
+			return true
+		}
 	}
-	return initial.platform != platform || initial.subscriptionType != subscriptionType
+	// A queued request or persistent WS connection must re-enter the public
+	// client gate after this policy changes, including off -> on transitions.
+	return initial.platform != platform || initial.subscriptionType != subscriptionType || initial.codexCLIOnly != codexCLIOnly || initial.blockSubagents != blockSubagents
 }
 
 // apiKeyQueueBlockedModel re-checks only the client-written model candidates

@@ -1,5 +1,8 @@
+import ipRisk from './ipRisk'
+
 export default {
     settings: {
+      ipRisk,
       title: 'System Settings',
       description: 'Manage registration, email verification, default values, and SMTP settings',
       tabs: {
@@ -243,6 +246,8 @@ export default {
           'Please configure TOTP_ENCRYPTION_KEY in environment variables first. Generate a key with: openssl rand -hex 32'
       },
       security: {
+        loginRateLimit: 'Login rate limiting',
+        loginRateLimitHint: 'Enabled by default. Limits sign-in requests and bans an IP for 1 hour after 10 failed verifications within 15 minutes. Disabling bypasses request limits and IP bans for password, two-factor, Passkey, and OAuth account-binding sign-ins. Saving takes effect immediately for admins and users. Existing bans retain their original expiry when re-enabled.',
         passkey: 'Passkey Sign-in',
         passkeyHint: 'Allow passwordless sign-in and user-managed passkeys when the relying party configuration is valid.',
         passkeyConfigured: 'WebAuthn relying party configuration is valid.',
@@ -631,12 +636,12 @@ export default {
         claudeCodeVersionAutoSyncHint: 'Fetches the latest Claude Code client version from the official release channel every hour, so you never need to upgrade this service just to keep the version current. When disabled, fetching stops but the previously synced version remains available. The manual version above always takes priority.',
         claudeCodeVersionSyncedValue: 'Currently synced: {version}',
         codexHardeningTitle: "Codex Settings",
-        requestTimezoneEnabled: 'Global request timezone binding',
-        requestTimezoneEnabledDesc: 'Disabled by default. Explicit account settings take priority; unconfigured OpenAI accounts inherit the global policy. Dates, ordinary text and first-login settings stay unchanged.',
+        requestTimezoneEnabled: 'Bind request timezone',
+        requestTimezoneEnabledDesc: 'Enabled with automatic egress IP detection by default. Choose fixed Asia/Singapore or automatic egress IP detection for existing environment context, web search timezone fields and supported timezone headers. Dates and ordinary text stay unchanged. Disabled means no rewriting. This does not guarantee improved model quality.',
         requestTimezoneMode: 'Timezone source',
-        requestTimezoneManual: 'Manual: account timezone',
-        requestTimezoneAuto: 'Automatic: actual egress IP',
-        requestTimezoneModeDesc: 'Failed automatic detection preserves the original request. Manual mode defaults to Asia/Singapore when no timezone is configured.',
+        requestTimezoneManual: 'Fixed: Asia/Singapore',
+        requestTimezoneAuto: 'Automatic: egress IP',
+        requestTimezoneModeDesc: 'Fixed mode uses Asia/Singapore; legacy account overrides are ignored. Automatic mode detects the timezone through the request egress and resolves again after proxy changes; failed detection preserves the original request. Dates and ordinary text stay unchanged. This does not guarantee improved model quality.',
         codexTicketEnabled: "Automatic ticket harvesting",
         codexTicketEnabledDesc:
           "Controls background harvesting and ticket injection into model requests. Manual harvesting is started separately on this page.",
@@ -1426,6 +1431,10 @@ export default {
       cache_rate_to_users: {
         label: 'Show cache rate to users',
         description: 'When enabled, users can see the per-request cache rate on their own usage page. Off by default, so only admins see it.',
+      },
+      upstream_response_model_to_users: {
+        label: 'Show users the actual upstream response model',
+        description: 'When enabled, users can see the model declared by the upstream response on their usage records. Off by default, so only admins see it. Billing is unchanged, and mapped request models and account details stay hidden.',
       },
       saveSettings: 'Save Settings',
       saving: 'Saving...',

@@ -456,7 +456,7 @@ func (c *coderOpenAIWSClientConn) WriteFrame(ctx context.Context, msgType coderw
 		name := c.requestTimezone
 		c.timezoneMu.Unlock()
 		if name != "" {
-			payload = normalizeUpstreamOpenAIRequestLocaleTimezone(ctx, c.timezoneBinding.account, payload, "ws", name)
+			payload = normalizeOpenAIRequestLocaleTimezone(ctx, c.timezoneBinding.account, payload, "ws", name)
 		}
 	}
 	return c.conn.Write(ctx, msgType, payload)

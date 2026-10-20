@@ -9,7 +9,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func TestTimezoneUpgradeExplicitAccountPolicyOverridesGlobalDefault(t *testing.T) {
+func TestTimezoneUpgradeLegacyAccountPolicyIsIgnored(t *testing.T) {
 	env := "<environment_context><timezone>Asia/Shanghai</timezone><current_date>2026-10-15</current_date></environment_context>"
 	body := localeTestBody([]string{env, env}, []string{"environments.environment_context", "user.text"})
 	for _, search := range []bool{false, true} {
@@ -21,22 +21,19 @@ func TestTimezoneUpgradeExplicitAccountPolicyOverridesGlobalDefault(t *testing.T
 			}}
 			before, err := json.Marshal(account.Extra)
 			require.NoError(t, err)
-			for _, global := range []*SettingService{nil, timezoneEnabledSettings()} {
+			for _, global := range []*SettingService{nil, timezoneAutoService(true, false, nil).settingService} {
 				svc := &OpenAIGatewayService{settingService: global, proxyTimezone: newProxyTimezoneResolver(timezoneProberFunc(func(context.Context, string) (*ProxyExitInfo, int64, error) {
-					return timezoneResult("America/Los_Angeles"), 0, nil
+					return timezoneResult("Asia/Singapore"), 0, nil
 				}))}
 				for _, transport := range []string{"http", "ws"} {
 					got := svc.normalizeRequestTimezone(context.Background(), account, body, transport)
-					if !enabled {
+					if global == nil {
 						require.Equal(t, body, got)
 						continue
 					}
-					require.Contains(t, gjson.GetBytes(got, "input.0.content.0.text").String(), "America/Los_Angeles")
+					require.Contains(t, gjson.GetBytes(got, "input.0.content.0.text").String(), "Asia/Singapore")
 					require.Equal(t, env, gjson.GetBytes(got, "input.0.content.1.text").String())
-					wantSearch := "America/New_York"
-					if search {
-						wantSearch = "America/Los_Angeles"
-					}
+					wantSearch := "Asia/Singapore"
 					require.Equal(t, wantSearch, gjson.GetBytes(got, "tools.0.user_location.timezone").String())
 				}
 			}
@@ -50,6 +47,6 @@ func TestTimezoneUpgradeExplicitAccountPolicyOverridesGlobalDefault(t *testing.T
 func TestTimezoneUpgradeFailedProxyDoesNotFallBackToGlobalTimezone(t *testing.T) {
 	account := &Account{Platform: PlatformOpenAI, Extra: map[string]any{openAIRequestTimezoneEnabledExtraKey: true, openAIRequestTimezoneModeExtraKey: "proxy"}}
 	body := localeTestBody([]string{"<environment_context><timezone>Asia/Tokyo</timezone><cwd>/keep</cwd></environment_context>"}, nil)
-	svc := &OpenAIGatewayService{settingService: timezoneEnabledSettings()}
+	svc := &OpenAIGatewayService{settingService: timezoneAutoService(true, true, nil).settingService}
 	require.Equal(t, body, svc.normalizeRequestTimezone(context.Background(), account, body, "http"))
 }

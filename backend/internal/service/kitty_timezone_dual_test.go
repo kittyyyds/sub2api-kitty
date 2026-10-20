@@ -11,12 +11,11 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func TestTimezoneDualExplicitAccountPolicyNeverUsesGlobalEgress(t *testing.T) {
+func TestTimezoneLegacyAccountPolicyCannotOverrideGlobalEgress(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		for _, search := range []bool{false, true} {
 			probe := &egressTimezoneProber{probe: func(context.Context, string) (*ProxyExitInfo, int64, error) {
-				t.Fatal("explicit account policy must not trigger global probing")
-				return nil, 0, nil
+				return timezoneResult("Asia/Tokyo"), 0, nil
 			}}
 			svc := timezoneAutoService(true, true, probe)
 			account := &Account{Platform: PlatformOpenAI, Extra: map[string]any{
@@ -33,21 +32,15 @@ func TestTimezoneDualExplicitAccountPolicyNeverUsesGlobalEgress(t *testing.T) {
 			svc.requestTimezoneHeaders(ctx, account, nil, req.Header)
 			bound, err := BindOpenAIRequestTimezone(req, "http://tokyo.example:8080")
 			require.NoError(t, err)
-			require.Same(t, req, bound)
+			require.NotSame(t, req, bound)
 			got, err := io.ReadAll(bound.Body)
 			require.NoError(t, err)
-			want := "Asia/Shanghai"
-			if enabled {
-				want = "America/Los_Angeles"
-			}
+			want := "Asia/Tokyo"
 			require.Contains(t, gjson.GetBytes(got, "input.0.content.0.text").String(), want)
-			wantSearch := "America/New_York"
-			if enabled && search {
-				wantSearch = "America/Los_Angeles"
-			}
+			wantSearch := "Asia/Tokyo"
 			require.Equal(t, wantSearch, gjson.GetBytes(got, "tools.0.user_location.timezone").String())
-			require.Empty(t, probe.calls)
-			require.Equal(t, "Asia/Shanghai", bound.Header.Get("X-Timezone"))
+			require.Len(t, probe.calls, 1)
+			require.Equal(t, "Asia/Tokyo", bound.Header.Get("X-Timezone"))
 		}
 	}
 }

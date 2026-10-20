@@ -1,7 +1,7 @@
 package service
 
 // Adapted from MACOS-DO/sub4api v1.1.4 (c2fbf1ba), LGPL-3.0-or-later.
-// Kitty keeps opt-in, independent search sync and explicit content-kind protection.
+// Global request policy retains explicit ordinary-text protection.
 import (
 	"context"
 	"regexp"
@@ -99,12 +99,15 @@ func rewriteOpenAIRequestEnvironment(text, timezone string) (rewritten, previous
 	return text[:base+valueStart] + timezone + text[base+valueEnd:], previous, "replaced"
 }
 
-func normalizeOpenAIRequestLocale(ctx context.Context, account *Account, body []byte, transport string, _ time.Time) []byte {
-	if account == nil || !account.OpenAIRequestTimezoneEnabled() || !gjson.ValidBytes(body) {
+func normalizeOpenAIRequestLocale(ctx context.Context, account *Account, body []byte, transport string, _ ...time.Time) []byte {
+	if account == nil || !account.IsOpenAI() || !gjson.ValidBytes(body) {
 		return body
 	}
-	timezone := account.OpenAIRequestTimezone()
-	if timezone == "" {
+	return normalizeOpenAIRequestLocaleTimezone(ctx, account, body, transport, account.OpenAIRequestTimezone())
+}
+
+func normalizeOpenAIRequestLocaleTimezone(ctx context.Context, account *Account, body []byte, transport, timezone string) []byte {
+	if !isAllowedOpenAIRequestTimezone(timezone) {
 		return body
 	}
 	before := make([]*string, 0)
@@ -155,12 +158,15 @@ func normalizeOpenAIRequestLocale(ctx context.Context, account *Account, body []
 			// Explicitly classified ordinary text never becomes environment metadata.
 			// Missing metadata is accepted only for a complete structured block.
 			eligible := func(index int, text gjson.Result) bool {
-				if kinds.Exists() {
+				if kinds.Exists() && kinds.Type != gjson.Null {
 					values := kinds.Array()
 					return kinds.IsArray() && index < len(values) && values[index].String() == "environments.environment_context"
 				}
 				value := text.String()
-				return strings.Contains(value, "<cwd>") || strings.Contains(value, "<shell>") || strings.Contains(value, "<current_date")
+				if protectedOpenAIRequestText(ctx, value) {
+					return false
+				}
+				return strings.HasPrefix(strings.TrimSpace(value), "<environment_context")
 			}
 			path := "input." + strconv.Itoa(inputIndex) + ".content"
 			if content.Type == gjson.String {
@@ -179,7 +185,7 @@ func normalizeOpenAIRequestLocale(ctx context.Context, account *Account, body []
 	webSearchBefore := make([]*string, 0)
 	webSearchAfter := make([]*string, 0)
 	tools := gjson.GetBytes(body, "tools")
-	if account.OpenAIRequestTimezoneSyncSearch() && tools.IsArray() {
+	if tools.IsArray() {
 		for index, tool := range tools.Array() {
 			kind := tool.Get("type").String()
 			if kind != "web_search" && !strings.HasPrefix(kind, "web_search_") {

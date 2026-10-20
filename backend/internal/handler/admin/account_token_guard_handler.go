@@ -165,10 +165,6 @@ func (h *AccountTokenGuardHandler) StartTwoFALogin(c *gin.Context) {
 			}
 			job, err = h.svc.StartTwoFAProxyLogin(c.Request.Context(), entry, login)
 		} else {
-			if input.LoginEnvironment != nil && input.LoginEnvironment.Enabled {
-				response.BadRequest(c, "登录时区设置需要先选择账号代理")
-				return
-			}
 			job, err = h.svc.StartTwoFALoginForOperations(c.Request.Context(), entry)
 		}
 	case "", "guard": // Preserve the contract for older clients.

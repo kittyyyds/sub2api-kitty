@@ -35,6 +35,7 @@ func ReportLoginProgress(ctx context.Context, p LoginProgress) {
 }
 
 var loginCodes = map[string]string{
+	"protocol_login_failed":          "后台协议登录未完成，可能需要官方额外验证；请核对账号、2FA 密钥和代理后重试。",
 	"authorization_rejected":         "官方授权页面拒绝访问，请查看登录窗口与 HTTP 状态。",
 	"login_failed":                   "登录未完成，请查看失败阶段。",
 	"browser_unavailable":            "服务器登录浏览器不可用，请稍后重试。",
@@ -54,7 +55,7 @@ var loginCodes = map[string]string{
 	"invalid_oauth_callback":         "授权回调校验失败，未导入。",
 	"credential_save_failed":         "登录完成，但账号凭据保存失败。",
 }
-var loginStages = map[string]bool{"queued": true, "timezone_probe": true, "browser_starting": true, "navigation": true, "security_verification": true, "email": true, "password": true, "totp": true, "authorization": true, "token_exchange": true, "succeeded": true, "failed": true}
+var loginStages = map[string]bool{"queued": true, "protocol_login": true, "timezone_probe": true, "browser_starting": true, "navigation": true, "security_verification": true, "email": true, "password": true, "totp": true, "authorization": true, "token_exchange": true, "succeeded": true, "failed": true}
 
 func SafeLoginProgress(p LoginProgress) LoginProgress {
 	if !loginStages[p.Stage] {

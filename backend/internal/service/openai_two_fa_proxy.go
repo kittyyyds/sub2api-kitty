@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/Wei-Shaw/sub2api/internal/reauthruntime"
 	"strings"
 )
 
@@ -21,6 +22,7 @@ func (s *OpenAIOAuthReauthService) TwoFAProxyLogin(ctx context.Context, entry Ac
 	}
 	s.EnsureWorker()
 	return func(c context.Context) (map[string]any, error) {
+		reauthruntime.ReportLoginProgress(c, reauthruntime.LoginProgress{Status: "running", Stage: "protocol_login"})
 		return s.worker.PasswordLogin(c, strings.ToLower(strings.TrimSpace(entry.Email)), entry.Password, strings.TrimSpace(entry.MFASecret), proxyURL)
 	}, nil
 }

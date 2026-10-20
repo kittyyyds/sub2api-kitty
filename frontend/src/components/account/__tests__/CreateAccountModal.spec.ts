@@ -532,8 +532,8 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
   it('offers 2FA initial login with optional name and imports through Session deduplication', async () => {
     const wrapper = mountModal()
     await selectButtonByText(wrapper, 'OpenAI')
-    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
-    await wrapper.get('[data-testid="request-timezone-search"]').setValue(true)
+    expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
     const tier = wrapper.getComponent({ name: 'AccountTierRoutingFields' })
     tier.vm.$emit('update:enabled', true)
     tier.vm.$emit('update:pool', 'premium')
@@ -552,8 +552,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
       content: JSON.stringify(credential), name: 'user@example.com', update_existing: false, skip_existing: true,
       concurrency: 10, group_ids: [], proxy_id: null,
       extra: expect.objectContaining({
-        tiered_routing_enabled: true, pool: 'premium', openai_request_timezone_enabled: true,
-        openai_request_timezone: 'Asia/Singapore', openai_request_timezone_sync_search: true,
+        tiered_routing_enabled: true, pool: 'premium',
       }),
     }))
     expect(wrapper.emitted('created')).toHaveLength(1)
@@ -1288,11 +1287,11 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
   it.each([
     ['import-codex-session', importCodexSessionMock],
     ['import-codex-pat', createOpenAICodexPATMock]
-  ] as const)('preserves timezone and the selected account pool on %s', async (event, request) => {
+  ] as const)('preserves the selected account pool without retired timezone settings on %s', async (event, request) => {
     const wrapper = mountModal()
     await selectButtonByText(wrapper, 'OpenAI')
-    await wrapper.get('[data-testid="request-timezone-enabled"]').setValue(true)
-    await wrapper.get('[data-testid="request-timezone-search"]').setValue(true)
+    expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
     const fields = wrapper.findComponent({ name: 'AccountTierRoutingFields' })
     fields.vm.$emit('update:enabled', true)
     fields.vm.$emit('update:pool', 'premium')
@@ -1302,8 +1301,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     await wrapper.get(`[data-testid="${event}"]`).trigger('click')
     await flushPromises()
     expect(request.mock.calls[0]?.[0]?.extra).toMatchObject({
-      tiered_routing_enabled: true, pool: 'premium', openai_request_timezone_enabled: true,
-      openai_request_timezone: 'Asia/Singapore', openai_request_timezone_sync_search: true
+      tiered_routing_enabled: true, pool: 'premium'
     })
   })
 

@@ -35,6 +35,10 @@ func OpenAIRequestTimezoneOptions() []string {
 	return append([]string(nil), openAIRequestTimezoneOptions...)
 }
 
+func isAllowedOpenAIRequestTimezone(name string) bool {
+	return openAIRequestTimezoneAllowed[name]
+}
+
 func isOpenAIRequestTimezoneKey(key string) bool {
 	return key == openAIRequestTimezoneExtraKey || key == openAIRequestTimezoneEnabledExtraKey || key == openAIRequestTimezoneSyncSearchExtraKey || key == openAIRequestTimezoneModeExtraKey
 }
@@ -94,25 +98,9 @@ func preserveOpenAIRequestTimezoneExtra(account *Account, incoming map[string]an
 	return merged
 }
 
-func (account *Account) OpenAIRequestTimezoneEnabled() bool {
-	return account != nil && account.IsOpenAI() && account.Extra[openAIRequestTimezoneEnabledExtraKey] == true
-}
+func (account *Account) OpenAIRequestTimezoneEnabled() bool { return false }
 
-func (account *Account) OpenAIRequestTimezoneSyncSearch() bool {
-	return account.OpenAIRequestTimezoneEnabled() && account.Extra[openAIRequestTimezoneSyncSearchExtraKey] == true
-}
+func (account *Account) OpenAIRequestTimezoneSyncSearch() bool { return false }
 
-func (account *Account) OpenAIRequestTimezone() string {
-	if account == nil {
-		return ""
-	}
-	raw, present := account.Extra[openAIRequestTimezoneExtraKey]
-	if !present {
-		return DefaultOpenAIRequestTimezone
-	}
-	name, ok := raw.(string)
-	if !ok || !openAIRequestTimezoneAllowed[name] {
-		return ""
-	}
-	return name
-}
+// Legacy per-account timezone values no longer influence request forwarding.
+func (account *Account) OpenAIRequestTimezone() string { return DefaultOpenAIRequestTimezone }

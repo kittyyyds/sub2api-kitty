@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -237,6 +238,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if result.VideoPriceSnapshot != nil {
 		videoMultiplier = result.VideoPriceSnapshot.RateMultiplier
 	}
+	if result.MiniMaxH3BaseCost != nil && apiKey.Group != nil {
+		videoMultiplier = math.Max(0, apiKey.Group.RateMultiplier)
+	}
 
 	var cost *CostBreakdown
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
@@ -263,7 +267,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
 	}
 	longContextBillingGate := openAILongContextBillingGate(billingAccount)
-	modelLongContextExempt := openAISubscriptionLongContextExempt(billingAccount, result)
+	modelLongContextExempt := openAIGPT61SolLongContextExempt(billingAccount, result)
 	cost, err = s.calculateOpenAIRecordUsageCost(
 		ctx,
 		result,
@@ -449,6 +453,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if isVideoUsage {
 		usageLog.VideoCount = result.VideoCount
 		usageLog.VideoResolution = optionalTrimmedStringPtr(NormalizeVideoBillingResolutionOrDefault(result.VideoResolution))
+		if result.MiniMaxH3BaseCost != nil {
+			usageLog.VideoResolution = optionalTrimmedStringPtr(result.VideoResolution)
+		}
 		videoDurationSeconds := NormalizeVideoBillingDurationForProvider(result.VideoProvider, result.VideoDurationSeconds)
 		if result.VideoPriceSnapshot != nil {
 			videoDurationSeconds = result.VideoPriceSnapshot.DurationSeconds
@@ -643,11 +650,18 @@ func openAILongContextBillingGate(account *Account) *bool {
 	return &enabled
 }
 
-// openAISubscriptionLongContextExempt 按实际凭据和最终发送模型判断订阅豁免。
-// GPT-6.1 Sol 的订阅请求不再收取模型长上下文附加费；API Key 仍使用 API 价卡。
-// 使用发送模型，避免客户别名、渠道计费模型或响应模型计费切换改变上游订阅规则。
-func openAISubscriptionLongContextExempt(account *Account, result *OpenAIForwardResult) bool {
-	if !account.IsOpenAIOAuthLike() || result == nil {
+// openAIGPT61SolLongContextExempt 按实际上游凭据和最终发送模型判断是否豁免
+// 官方模型价卡的长上下文附加费。
+//
+// GPT-6.1 Sol（IsGPT61SolModelSpelling）在 OpenAI OAuth、Setup Token 和 API Key
+// 账号上都不收取该附加费。其它模型保持原价卡阶梯，不因账号类型被一并豁免。
+// 该标志只关闭官方模型长上下文阶梯（DisableModelLongContextPricing），
+// 分组自定义区间价格不受影响。
+//
+// 使用发送模型（UpstreamModel，空则回退 Model），避免客户别名、渠道计费模型
+// 或响应模型计费切换改变规则。
+func openAIGPT61SolLongContextExempt(account *Account, result *OpenAIForwardResult) bool {
+	if result == nil || !openAIAccountSkipsGPT61SolLongContext(account) {
 		return false
 	}
 	model := strings.TrimSpace(result.UpstreamModel)
@@ -655,6 +669,20 @@ func openAISubscriptionLongContextExempt(account *Account, result *OpenAIForward
 		model = result.Model
 	}
 	return openai.IsGPT61SolModelSpelling(model)
+}
+
+// openAIAccountSkipsGPT61SolLongContext 限定豁免凭据：OpenAI 的 OAuth、
+// Setup Token，以及 API Key。其它平台和其它账号类型（例如 upstream 透传）不豁免。
+func openAIAccountSkipsGPT61SolLongContext(account *Account) bool {
+	if account == nil || !account.IsOpenAI() {
+		return false
+	}
+	switch account.Type {
+	case AccountTypeOAuth, AccountTypeSetupToken, AccountTypeAPIKey:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
@@ -679,6 +707,9 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	}
 	if result != nil && result.VideoCount > 0 && apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == PlatformVideo {
 		return s.calculateLegacyVideoPriceCost(ctx, apiKey, result, firstNonEmpty(result.Model, billingModel), videoMultiplier)
+	}
+	if result != nil && result.MiniMaxH3BaseCost != nil && result.VideoCount > 0 {
+		return s.calculateOpenAIVideoCost(ctx, billingModel, requestedModel, apiKey, result, videoMultiplier), nil
 	}
 	if result != nil && result.WebSearchCalls > 0 {
 		// Codex alpha/search 网页搜索按次计费：上游不返回 usage/token 字段，单价只取
@@ -982,6 +1013,9 @@ func (s *OpenAIGatewayService) calculateOpenAIVideoCost(
 	if apiKey != nil && apiKey.Group != nil && apiKey.Group.Platform == PlatformVideo {
 		cost, _ := s.calculateLegacyVideoPriceCost(ctx, apiKey, result, firstNonEmpty(result.Model, billingModel), multiplier)
 		return cost
+	}
+	if result.MiniMaxH3BaseCost != nil {
+		return &CostBreakdown{TotalCost: *result.MiniMaxH3BaseCost, ActualCost: *result.MiniMaxH3BaseCost * multiplier, BillingMode: string(BillingModeVideo)}
 	}
 	videoCount := result.VideoCount
 	if videoCount <= 0 {

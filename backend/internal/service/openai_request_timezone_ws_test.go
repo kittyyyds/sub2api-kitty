@@ -41,6 +41,7 @@ func TestRequestTimezonePassthroughFirstAndLaterTurns(t *testing.T) {
 			cfg := passthroughLifecycleConfig()
 			cfg.Gateway.OpenAIWS.OAuthEnabled = true
 			svc := newPassthroughLifecycleService(cfg, upstream)
+			svc.settingService = timezoneAutoService(enabled, false, nil).settingService
 			if test.proxyZone != "" {
 				p := timezoneProxyFixture()
 				account.ProxyID, account.Proxy = &p.ID, p
@@ -67,11 +68,9 @@ func TestRequestTimezonePassthroughFirstAndLaterTurns(t *testing.T) {
 				request := requirePassthroughUpstreamWrite(t, upstream, 3*time.Second)
 				wanted := "Asia/Shanghai"
 				if enabled {
-					wanted = "Asia/Tokyo"
+					wanted = DefaultOpenAIRequestTimezone
 				}
-				if test.proxyZone != "" {
-					wanted = test.proxyZone
-				}
+
 				require.Contains(t, gjson.GetBytes(request, "input.0.content.0.text").String(), "<timezone>"+wanted+"</timezone>")
 				require.Contains(t, gjson.GetBytes(request, "input.0.content.0.text").String(), "<cwd>/keep</cwd>")
 				require.Equal(t, text, gjson.GetBytes(request, "input.0.content.1.text").String())
@@ -85,7 +84,11 @@ func TestRequestTimezonePassthroughFirstAndLaterTurns(t *testing.T) {
 				}
 				require.NotEmpty(t, cacheKey)
 				require.Equal(t, baselineCacheKeys[test.accountType], cacheKey)
-				require.Equal(t, "America/New_York", gjson.GetBytes(request, "tools.0.user_location.timezone").String())
+				searchZone := "America/New_York"
+				if enabled {
+					searchZone = DefaultOpenAIRequestTimezone
+				}
+				require.Equal(t, searchZone, gjson.GetBytes(request, "tools.0.user_location.timezone").String())
 				require.Equal(t, !account.IsOpenAIOAuthLike(), gjson.GetBytes(request, "input.0.internal_chat_message_metadata_passthrough").Exists())
 				if turn == 2 {
 					require.Equal(t, "resp_timezone_1", gjson.GetBytes(request, "previous_response_id").String())

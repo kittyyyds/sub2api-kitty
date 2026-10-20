@@ -65,6 +65,7 @@ type Group struct {
 	// VideoModelPrices is optional final per-second pricing
 	// (groups.video_model_prices JSONB). Shape: family → resolution → final USD/s.
 	// A populated model tier overrides VideoPrice* and does not receive rate multipliers.
+	// MiniMax-H3 stores per_second or request_<1..15>s tariffs; absence disables creation.
 	VideoModelPrices map[string]map[string]float64
 	// Codex alpha/search 网页搜索单次价格（USD/次，仅 openai 平台使用）；
 	// nil 表示使用默认价 defaultWebSearchPricePerCall（官方 $10/1000 次）。
@@ -90,6 +91,10 @@ type Group struct {
 
 	// StreamOnly 仅允许流式请求：非流式的对话生成请求在网关入口拒绝（见 middleware.GroupStreamOnly）。
 	StreamOnly bool
+
+	// CodexCLIOnly 仅在员工 API 入口限制客户端；后台账号测试与质量判题不受影响。
+	CodexCLIOnly   bool
+	BlockSubagents bool
 
 	// 模型路由配置
 	// key: 模型匹配模式（支持 * 通配符，如 "claude-opus-*"）

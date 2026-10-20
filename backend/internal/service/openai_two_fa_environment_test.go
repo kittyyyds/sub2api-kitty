@@ -2,75 +2,42 @@ package service
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"github.com/Wei-Shaw/sub2api/internal/reauthruntime"
 	"github.com/stretchr/testify/require"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 )
 
-func TestTwoFAEnvironmentSnapshotsProxyBeforeLogin(t *testing.T) {
-	proxy := timezoneProxyFixture()
-	proxy.Protocol = "socks5"
-	original := proxy.URL()
-	reader := &reauthTestAccountReader{proxy: proxy}
-	svc := &OpenAIOAuthReauthService{accounts: reader}
-	environment := &TwoFALoginEnvironment{Enabled: true, Mode: "proxy"}
-	probeCalls := 0
-	prober := timezoneProberFunc(func(_ context.Context, u string) (*ProxyExitInfo, int64, error) {
-		probeCalls++
-		require.Equal(t, original, u)
-		return timezoneResult("America/Los_Angeles"), 1, nil
-	})
-	entry := AccountTokenGuardReloginAccount{Email: "fixture@example.invalid", Password: "fixture", MFASecret: "fixture"}
-	login, err := svc.TwoFAImportLogin(context.Background(), entry, 7, environment, prober)
-	require.NoError(t, err)
-	proxy.Host = "changed.invalid"
-	environment.Mode = "manual"
-	environment.Timezone = "Asia/Tokyo"
-	id := strings.Repeat("b", 48)
-	posted := false
-	worker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			var body map[string]string
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			require.Equal(t, original, body["proxy"])
-			require.Equal(t, "America/Los_Angeles", body["timezone"])
-			posted = true
-			json.NewEncoder(w).Encode(map[string]string{"id": id})
-			return
-		}
-		if r.Method == "DELETE" {
-			w.Write([]byte(`{}`))
-			return
-		}
-		w.Write([]byte(`{"status":"failed","stage":"navigation","code":"security_verification_required","http_status":403}`))
-	}))
-	defer worker.Close()
-	t.Setenv("KITTY_LOGIN_BROWSER_URL", worker.URL)
-	t.Setenv("KITTY_LOGIN_BROWSER_TOKEN", strings.Repeat("fixture", 8))
-	_, err = login(context.Background())
-	require.Error(t, err)
-	require.Equal(t, 1, probeCalls)
-	require.True(t, posted)
+func TestTwoFALegacyEnvironmentAlwaysSelectsBackgroundProtocol(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "disabled", true: "enabled"}[enabled], func(t *testing.T) {
+			worker := reauthruntime.New(t.TempDir(), "2.10.7", "http://127.0.0.1", "fixture")
+			defer worker.Stop()
+			proxy := timezoneProxyFixture()
+			svc := &OpenAIOAuthReauthService{accounts: &reauthTestAccountReader{proxy: proxy}, worker: worker}
+			probe := timezoneProberFunc(func(context.Context, string) (*ProxyExitInfo, int64, error) {
+				t.Fatal("retired account environment must not probe or select a browser")
+				return nil, 0, nil
+			})
+			entry := AccountTokenGuardReloginAccount{Email: "a@example.invalid", Password: "fixture", MFASecret: "fixture"}
+			login, err := svc.TwoFAImportLogin(context.Background(), entry, proxy.ID, &TwoFALoginEnvironment{Enabled: enabled, Mode: "proxy", Timezone: "Asia/Tokyo"}, probe)
+			require.NoError(t, err)
+			require.NotNil(t, login)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			_, err = login(ctx)
+			require.ErrorIs(t, err, context.Canceled)
+		})
+	}
 }
-
-func TestTwoFAEnvironmentProbeFailureStopsBeforeCredentials(t *testing.T) {
-	svc := &OpenAIOAuthReauthService{accounts: &reauthTestAccountReader{proxy: timezoneProxyFixture()}}
-	prober := timezoneProberFunc(func(context.Context, string) (*ProxyExitInfo, int64, error) {
-		return nil, 0, errors.New("private proxy password")
-	})
-	login, err := svc.TwoFAImportLogin(context.Background(), AccountTokenGuardReloginAccount{Email: "a@example.invalid", Password: "fixture", MFASecret: "fixture"}, 7, &TwoFALoginEnvironment{Enabled: true, Mode: "proxy"}, prober)
-	require.NoError(t, err)
-	_, err = login(context.Background())
+func TestTwoFAUnavailableSelectedProxyNeverFallsBack(t *testing.T) {
+	worker := reauthruntime.New(t.TempDir(), "2.10.7", "http://127.0.0.1", "fixture")
+	defer worker.Stop()
+	svc := &OpenAIOAuthReauthService{accounts: &reauthTestAccountReader{}, worker: worker}
+	login, err := svc.TwoFAImportLogin(context.Background(), AccountTokenGuardReloginAccount{Email: "a@example.invalid", Password: "fixture", MFASecret: "fixture"}, 7, nil, nil)
 	require.Error(t, err)
-	p := reauthruntime.LoginFailure(err)
-	require.Equal(t, "timezone_probe_failed", p.Code)
-	require.NotContains(t, err.Error(), "private")
+	require.Nil(t, login)
+	require.NotContains(t, err.Error(), "fixture")
 }
 
 func TestTwoFATerminalDiagnosticsDoNotBlockBatchAndRemainBounded(t *testing.T) {

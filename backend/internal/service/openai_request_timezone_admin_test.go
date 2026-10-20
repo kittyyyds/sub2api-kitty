@@ -33,7 +33,7 @@ func TestRequestTimezoneAdminUpdatePreservesCustomSettings(t *testing.T) {
 		require.Equal(t, value, updated.Extra[key], key)
 	}
 	require.Equal(t, credentials, updated.Credentials)
-	require.True(t, updated.OpenAIRequestTimezoneEnabled())
+	require.False(t, updated.OpenAIRequestTimezoneEnabled())
 
 	// A normal full edit may intentionally remove quota limits, but must keep the
 	// separate timezone policy and the server-managed usage/fingerprint fields.
@@ -41,8 +41,8 @@ func TestRequestTimezoneAdminUpdatePreservesCustomSettings(t *testing.T) {
 		"pool": "standard", "tiered_routing_enabled": false,
 	}})
 	require.NoError(t, err)
-	require.True(t, updated.OpenAIRequestTimezoneEnabled())
-	require.Equal(t, "America/New_York", updated.OpenAIRequestTimezone())
+	require.False(t, updated.OpenAIRequestTimezoneEnabled())
+	require.Equal(t, DefaultOpenAIRequestTimezone, updated.OpenAIRequestTimezone())
 	require.NotContains(t, updated.Extra, "quota_daily_limit")
 	require.Equal(t, float64(12), updated.Extra["quota_daily_used"])
 	require.Equal(t, testCodexFingerprintSeed, updated.Extra[codexFingerprintSeedExtraKey])

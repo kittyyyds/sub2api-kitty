@@ -14,7 +14,8 @@ type cachedOpenAIRequestTimezoneEnabled struct {
 
 const openAIRequestTimezoneEnabledCacheTTL = 5 * time.Second
 
-// GetOpenAIRequestTimezoneEnabled reads the request timezone switch (default off).
+// GetOpenAIRequestTimezoneEnabled defaults missing/empty settings to true.
+// fallback is used only when settings cannot be read.
 func (s *SettingService) GetOpenAIRequestTimezoneEnabled(ctx context.Context, fallback bool) bool {
 	if ctx == nil {
 		ctx = context.Background()
@@ -49,7 +50,7 @@ func (s *SettingService) GetOpenAIRequestTimezoneEnabled(ctx context.Context, fa
 			}
 			return fallback, nil
 		}
-		enabled := fallback
+		enabled := true
 		if err == nil && strings.TrimSpace(value) != "" {
 			enabled = value == "true"
 		}
@@ -84,14 +85,15 @@ func (s *OpenAIGatewayService) normalizeRequestTimezone(ctx context.Context, acc
 	if account == nil || !account.IsOpenAI() || s == nil {
 		return body
 	}
-	if _, configured := account.Extra[openAIRequestTimezoneEnabledExtraKey]; configured {
-		return s.normalizeOpenAIRequestLocale(ctx, account, body, transport, time.Now())
-	}
 	if !s.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) {
 		return body
 	}
+	if binding, _ := ctx.Value(requestTimezoneEgressKey{}).(*requestTimezoneBinding); binding != nil {
+		binding.rememberOrdinaryText(body)
+	}
+	// Automatic mode must wait until transport routing has selected the actual egress.
 	if s.settingService.GetOpenAIRequestTimezoneAuto(ctx, false) {
 		return body
 	}
-	return normalizeUpstreamOpenAIRequestLocale(ctx, account, body, transport)
+	return normalizeOpenAIRequestLocale(ctx, account, body, transport)
 }

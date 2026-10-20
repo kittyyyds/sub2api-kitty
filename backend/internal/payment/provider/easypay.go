@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -891,4 +892,23 @@ var easyPayNotifyAllowedParams = map[string]bool{
 	"param":        true,
 	"sign":         true,
 	"sign_type":    true,
+}
+
+// ConfirmNotification checks the gateway's own order, amount and identity before crediting.
+func (e *EasyPay) ConfirmNotification(ctx context.Context, n *payment.PaymentNotification) error {
+	if n == nil || n.Status != payment.NotificationStatusSuccess {
+		return nil
+	}
+	r, err := e.QueryOrder(ctx, n.OrderID)
+	if err != nil {
+		return fmt.Errorf("easypay confirm: order verification failed")
+	}
+	if r.Status != payment.ProviderStatusPaid || math.Abs(r.Amount-n.Amount) > 0.005 {
+		return fmt.Errorf("easypay confirm: order state or amount mismatch")
+	}
+	if r.TradeNo == "" || (n.TradeNo != "" && n.TradeNo != r.TradeNo) {
+		return fmt.Errorf("easypay confirm: trade_no mismatch")
+	}
+	n.TradeNo = r.TradeNo
+	return nil
 }

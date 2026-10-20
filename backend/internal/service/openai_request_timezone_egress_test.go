@@ -44,7 +44,7 @@ func TestRequestTimezoneHeadersManualAndAuto(t *testing.T) {
 		name string
 		auto bool
 		want string
-	}{{"manual", false, "Asia/Tokyo"}, {"automatic", true, "Asia/Shanghai"}} {
+	}{{"manual", false, "Asia/Singapore"}, {"automatic", true, "Asia/Shanghai"}} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := timezoneAutoService(true, tc.auto, nil)
 			source := http.Header{"X-Timezone": []string{"Asia/Shanghai"}}
@@ -86,6 +86,7 @@ func TestRequestTimezoneEgressModesAndSwitch(t *testing.T) {
 			require.NoError(t, got.Body.Close())
 			require.Contains(t, gjson.GetBytes(data, "input.0.content.0.text").String(), tc.want)
 			require.Contains(t, string(data), "2001-01-01")
+
 			require.Contains(t, string(data), "ordinary Asia/Shanghai")
 			require.Equal(t, tc.want, got.Header.Get("X-Timezone"))
 			require.Len(t, probe.calls, tc.calls)
@@ -102,12 +103,11 @@ func TestRequestTimezoneEgressDefaultSettings(t *testing.T) {
 		want          string
 		calls         int
 	}{
-		{name: "missing", auto: true, want: "Asia/Shanghai"},
-		{name: "empty", settings: map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: "", SettingKeyOpenAIRequestTimezoneAuto: ""}, auto: true, want: "Asia/Shanghai"},
-		{name: "whitespace", settings: map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: " ", SettingKeyOpenAIRequestTimezoneAuto: " "}, auto: true, want: "Asia/Shanghai"},
-		{name: "enabled automatic", settings: map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: "true"}, enabled: true, auto: true, want: "Asia/Tokyo", calls: 1},
+		{name: "missing", enabled: true, auto: true, want: "Asia/Tokyo", calls: 1},
+		{name: "empty", settings: map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: "", SettingKeyOpenAIRequestTimezoneAuto: ""}, enabled: true, auto: true, want: "Asia/Tokyo", calls: 1},
+		{name: "whitespace", settings: map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: " ", SettingKeyOpenAIRequestTimezoneAuto: " "}, enabled: true, auto: true, want: "Asia/Tokyo", calls: 1},
 		{name: "saved disabled", settings: map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: "false"}, auto: true, want: "Asia/Shanghai"},
-		{name: "saved manual", settings: map[string]string{SettingKeyOpenAIRequestTimezoneEnabled: "true", SettingKeyOpenAIRequestTimezoneAuto: "false"}, enabled: true, want: "Asia/Singapore"},
+		{name: "saved manual", settings: map[string]string{SettingKeyOpenAIRequestTimezoneAuto: "false"}, enabled: true, want: "Asia/Singapore"},
 		{name: "read failure", readErr: errors.New("offline"), want: "Asia/Shanghai"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -257,7 +257,11 @@ func TestRequestTimezoneEgressWebSocketFrames(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = conn.Close() }()
 	require.Equal(t, "Asia/Tokyo", (<-headers).Get("X-Timezone"))
-	body := localeTestBody([]string{"<environment_context><current_date>2001-01-01</current_date><timezone>Asia/Shanghai</timezone></environment_context>"}, nil)
+	ordinary := "<environment_context><cwd>/ordinary-example</cwd><timezone>Asia/Shanghai</timezone></environment_context>"
+	body := localeTestBody([]string{"<environment_context><current_date>2001-01-01</current_date><timezone>Asia/Shanghai</timezone></environment_context>", ordinary}, []string{"environments.environment_context", "user.text"})
+	body = svc.normalizeRequestTimezone(ctx, account, body, "ws")
+	body, _, err = normalizeOpenAIOAuthResponsesCompatibilityBody(body)
+	require.NoError(t, err)
 	require.NoError(t, conn.WriteJSON(ctx, json.RawMessage(body)))
 	client, ok := conn.(*coderOpenAIWSClientConn)
 	require.True(t, ok)
@@ -268,9 +272,38 @@ func TestRequestTimezoneEgressWebSocketFrames(t *testing.T) {
 		case data := <-received:
 			require.Contains(t, string(data), "Asia/Tokyo")
 			require.Contains(t, string(data), "2001-01-01")
+			require.Equal(t, ordinary, gjson.GetBytes(data, "input.0.content.1.text").String())
+			require.False(t, gjson.GetBytes(data, "input.0.internal_chat_message_metadata_passthrough").Exists())
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
 		}
 	}
 	require.Len(t, probe.calls, 1)
+}
+
+func TestGlobalTimezoneHTTPPreservesOrdinaryTextAfterCompatibilityCleanup(t *testing.T) {
+	probe := &egressTimezoneProber{probe: func(context.Context, string) (*ProxyExitInfo, int64, error) {
+		return timezoneResult("America/Los_Angeles"), 0, nil
+	}}
+	svc := timezoneAutoService(true, true, probe)
+	account := &Account{ID: 1, Platform: PlatformOpenAI}
+	ctx := svc.withRequestTimezoneEgress(context.Background(), account)
+	ordinary := "<environment_context><cwd>/quoted-example</cwd><timezone>Asia/Shanghai</timezone></environment_context>"
+	body := localeTestBody([]string{"<environment_context><current_date>2001-01-01</current_date><timezone>Asia/Shanghai</timezone></environment_context>", ordinary}, []string{"environments.environment_context", "user.text"})
+	body = svc.normalizeRequestTimezone(ctx, account, body, "http")
+	cleaned, _, err := normalizeOpenAIOAuthResponsesCompatibilityBody(body)
+	require.NoError(t, err)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://example.invalid/v1/responses", strings.NewReader(string(cleaned)))
+	require.NoError(t, err)
+	bound, err := BindOpenAIRequestTimezone(req, "socks5://selected-proxy:1080")
+	require.NoError(t, err)
+	data, err := io.ReadAll(bound.Body)
+	require.NoError(t, err)
+	require.NoError(t, bound.Body.Close())
+	require.Contains(t, gjson.GetBytes(data, "input.0.content.0.text").String(), "America/Los_Angeles")
+	require.Equal(t, ordinary, gjson.GetBytes(data, "input.0.content.1.text").String())
+	require.False(t, gjson.GetBytes(data, "input.0.internal_chat_message_metadata_passthrough").Exists())
+	require.Contains(t, string(data), "2001-01-01")
+	require.Equal(t, "America/Los_Angeles", gjson.GetBytes(data, "tools.0.user_location.timezone").String())
+	require.Equal(t, "New York", gjson.GetBytes(data, "tools.0.user_location.city").String())
 }

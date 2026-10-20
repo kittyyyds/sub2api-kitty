@@ -1,5 +1,8 @@
+import ipRisk from './ipRisk'
+
 export default {
     settings: {
+      ipRisk,
       title: '系统设置',
       description: '管理注册、邮箱验证、默认值和 SMTP 设置',
       tabs: {
@@ -243,6 +246,8 @@ export default {
           '请先在环境变量中配置 TOTP_ENCRYPTION_KEY。使用命令 openssl rand -hex 32 生成密钥。'
       },
       security: {
+        loginRateLimit: '登录限流',
+        loginRateLimitHint: '默认开启。限制登录请求频率，15 分钟内验证失败 10 次后封禁 IP 1 小时。关闭后，密码、二次验证、Passkey 及第三方绑定登录将跳过频率限制和 IP 封禁；保存后立即生效，对管理员和普通用户均有效。已有封禁在重新开启后仍按原有效期生效。',
         passkey: 'Passkey 登录',
         passkeyHint: '当依赖方配置有效时，允许无密码登录及用户自行管理 Passkey。',
         passkeyConfigured: 'WebAuthn 依赖方配置有效。',
@@ -624,12 +629,12 @@ export default {
         claudeCodeVersionAutoSyncHint: '每小时从官方发布渠道获取最新版本的 Claude Code 客户端版本号，无需为了跟版本而升级本服务。关闭后停止获取新版本，已同步的版本仍可使用；上方手填版本始终优先。',
         claudeCodeVersionSyncedValue: '当前同步到：{version}',
         codexHardeningTitle: 'Codex 设置',
-        requestTimezoneEnabled: '全局请求时区绑定',
-        requestTimezoneEnabledDesc: '默认关闭；账号独立设置优先，未单独配置的 OpenAI 账号继承全局。保留日期和普通对话，不改变首次登录设置。',
+        requestTimezoneEnabled: '请求时区绑定',
+        requestTimezoneEnabledDesc: '默认开启并跟随出口 IP；可选手动账号时区或按请求出口 IP 自动识别，替换已有环境上下文、网页搜索时区及受支持的时区请求头。保留日期和普通对话；关闭后不改写。此功能不保证改善模型表现。',
         requestTimezoneMode: '时区来源',
-        requestTimezoneManual: '手动：使用账号时区',
-        requestTimezoneAuto: '自动：跟随实际出口 IP',
-        requestTimezoneModeDesc: '自动模式探测失败时保留原请求；手动模式未指定时区时使用 Asia/Singapore。',
+        requestTimezoneManual: '手动：使用账号配置',
+        requestTimezoneAuto: '自动：跟随出口 IP',
+        requestTimezoneModeDesc: '固定模式使用 Asia/Singapore；历史账号级时区设置不再生效；自动模式经请求出口识别 IP 时区，切换代理后重新识别，失败时保留原文。保留日期和普通对话，不保证改善模型表现。',
         codexTicketEnabled: '自动打票',
         codexTicketEnabledDesc:
           '控制后台自动采票和业务请求中的票据注入。手动采票在本页单独发起。',
@@ -1420,6 +1425,10 @@ export default {
       cache_rate_to_users: {
         label: '向用户展示缓存率',
         description: '开启后，用户在自己的用量页也能看到单条请求的缓存率。默认关闭，仅管理端可见。',
+      },
+      upstream_response_model_to_users: {
+        label: '向用户展示上游实际响应模型',
+        description: '开启后，用户在用量记录中可以看到上游响应里声明的实际模型。默认关闭，仅管理端可见。不影响计费，也不会展示映射后的请求模型或账号信息。',
       },
       saveSettings: '保存设置',
       saving: '保存中...',

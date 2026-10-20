@@ -75,7 +75,10 @@ func passwordLoginProcess(ctx context.Context, dir, email, password, totp, proxy
 	}
 	cmd := passwordLoginCommand(ctx, dir, tmp, email, password, totp, proxy)
 	if err = cmd.Run(); err != nil {
-		return nil, errors.New("proxy login failed or requires interactive verification; no direct fallback")
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, &LoginError{Progress: LoginProgress{Status: "failed", Stage: "protocol_login", Code: "protocol_login_failed"}}
 	}
 	f, err := os.Open(filepath.Join(tmp, "oauth.json"))
 	if err != nil {

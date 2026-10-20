@@ -119,6 +119,9 @@ var auditSensitiveReads = map[string]string{
 	"GET /api/v1/admin/redeem-codes/export":       "admin.redeem_codes.export",
 	"GET /api/v1/admin/backups/:id/download-url":  "admin.backups.download",
 	"GET /api/v1/admin/settings/admin-api-key":    "admin.admin_api_key.read",
+	"GET /api/v1/admin/settings/ip-risk":          "admin.ip_risk.config.read",
+	"GET /api/v1/admin/settings/ip-risk/events":   "admin.ip_risk.events.read",
+	"GET /api/v1/admin/settings/ip-risk/bans":     "admin.ip_risk.bans.read",
 	"GET /api/v1/admin/users/:id/api-keys":        "admin.users.api_keys.read",
 	"GET /api/v1/admin/groups/:id/api-keys":       "admin.groups.api_keys.read",
 	"GET /api/v1/admin/backups/s3-config":         "admin.backups.s3_config.read",
@@ -152,6 +155,7 @@ var auditActionOverrides = map[string]string{
 // auditBodyOmittedRoutes 请求体几乎整体由凭证构成的路由（如整块粘贴 auth JSON 的导入接口）。
 // 这类 body 的凭证内嵌在普通字符串值里，键级脱敏无法覆盖，整体不入库。
 var auditBodyOmittedRoutes = map[string]struct{}{
+	"POST /api/v1/admin/accounts/:id/export-session":            {},
 	"PUT /api/v1/admin/account-ops/webhooks/:id":                {},
 	"PUT /api/v1/admin/account-ops/config":                      {},
 	"POST /api/v1/admin/account-ops/token-guard/two-fa-login":   {},

@@ -1124,7 +1124,12 @@ func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireReque
 	if ctx != nil {
 		req.timezoneBinding, _ = ctx.Value(requestTimezoneEgressKey{}).(*requestTimezoneBinding)
 	}
-	req.timezoneMode = req.timezoneBinding.mode(ctx)
+	if b := req.timezoneBinding; b != nil && b.service.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) {
+		req.timezoneMode = "manual"
+		if b.service.settingService.GetOpenAIRequestTimezoneAuto(ctx, false) {
+			req.timezoneMode = "auto"
+		}
+	}
 	if err := ValidateConfiguredAccountProxy(req.Account, req.ProxyURL); err != nil {
 		return nil, err
 	}
@@ -2174,13 +2179,24 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 	if req.timezoneBinding != nil {
 		ctx = context.WithValue(ctx, requestTimezoneEgressKey{}, req.timezoneBinding)
 	}
+	accountIDForCapture := int64(0)
+	if req.Account != nil {
+		accountIDForCapture = req.Account.ID
+	}
+	finishCapture := captureOpenAIWSHandshake(ctx, accountIDForCapture, req.WSURL)
 	conn, status, handshakeHeaders, err := p.clientDialer.Dial(ctx, req.WSURL, headers, req.ProxyURL)
+	captureErr := err
+	if captureErr == nil && conn == nil {
+		captureErr = errors.New("openai ws dialer returned nil connection")
+	}
+	finishCapture(status, handshakeHeaders, captureErr)
 	if err != nil {
 		var handshakeErr *openAIWSHandshakeError
 		var responseBody []byte
 		if errors.As(err, &handshakeErr) && handshakeErr != nil {
 			responseBody = append([]byte(nil), handshakeErr.Body...)
 		}
+		captureOpenAIWSHandshakeBody(ctx, responseBody, handshakeHeaders)
 		return nil, &openAIWSDialError{
 			StatusCode:      status,
 			ResponseHeaders: cloneHeader(handshakeHeaders),
