@@ -1,4 +1,5 @@
 import { homeMessages } from '../../homeOverview'
+import securityRecords from './securityRecords'
 import siwc from './siwc'
 import priorityScheduling from './priorityScheduling'
 import qualityOps from './qualityOps'
@@ -26,6 +27,7 @@ import autoConfig from './autoConfig'
 
 export default {
   homeOverview: homeMessages.en,
+  securityRecords,
   siwc,
   autoConfig,
   priorityScheduling,
