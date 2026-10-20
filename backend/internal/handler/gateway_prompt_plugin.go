@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,8 +17,20 @@ import (
 )
 
 func (h *OpenAIGatewayHandler) GatewayPromptMiddleware() gin.HandlerFunc {
+	if h == nil {
+		return func(c *gin.Context) { c.Next() }
+	}
+	return gatewayPromptMiddleware(h.pluginManager)
+}
+
+type gatewayPromptTransformer interface {
+	HasGatewayPrompt() bool
+	TransformGatewayRequest(context.Context, int64, int64, string, string, []byte) ([]byte, error)
+}
+
+func gatewayPromptMiddleware(manager gatewayPromptTransformer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if h == nil || h.pluginManager == nil || !h.pluginManager.HasGatewayPrompt() || c.Request.Method != http.MethodPost {
+		if manager == nil || !manager.HasGatewayPrompt() || c.Request.Method != http.MethodPost {
 			c.Next()
 			return
 		}
@@ -39,7 +54,7 @@ func (h *OpenAIGatewayHandler) GatewayPromptMiddleware() gin.HandlerFunc {
 		}
 		body, err := pkghttputil.ReadRequestBodyWithPreallocLimit(c.Request, service.GatewayPromptMaxBody)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"error": gin.H{"type": "invalid_request_error", "message": "请求正文读取失败或超过限制"}})
+			abortGatewayPromptError(c, err, true)
 			return
 		}
 		// Malformed JSON still goes through the existing protocol-specific validator.
@@ -48,9 +63,9 @@ func (h *OpenAIGatewayHandler) GatewayPromptMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		out, err := h.pluginManager.TransformGatewayRequest(c.Request.Context(), *key.GroupID, key.ID, protocol, gjson.GetBytes(body, "model").String(), body)
+		out, err := manager.TransformGatewayRequest(c.Request.Context(), *key.GroupID, key.ID, protocol, gjson.GetBytes(body, "model").String(), body)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"type": "api_error", "message": err.Error()}})
+			abortGatewayPromptError(c, err, false)
 			return
 		}
 		c.Request.Body = pkghttputil.NewPrereadBody(out)
@@ -58,6 +73,22 @@ func (h *OpenAIGatewayHandler) GatewayPromptMiddleware() gin.HandlerFunc {
 		c.Request.Header.Del("Content-Length")
 		c.Next()
 	}
+}
+
+// Input errors must never ask clients to retry an unchanged request as a 503.
+func abortGatewayPromptError(c *gin.Context, err error, readingBody bool) {
+	status, kind, code, message := http.StatusServiceUnavailable, "api_error", "prompt_plugin_unavailable", err.Error()
+	var maxErr *http.MaxBytesError
+	switch {
+	case errors.As(err, &maxErr):
+		status, kind, code = http.StatusRequestEntityTooLarge, "invalid_request_error", "request_body_too_large"
+		message = fmt.Sprintf("请求正文超过提示词处理上限（%d 字节）；请压缩会话、减少附件或新建会话后重试，重复发送相同请求不会恢复。", maxErr.Limit)
+	case errors.Is(err, service.ErrGatewayPromptInvalidRequest):
+		status, kind, code, message = http.StatusBadRequest, "invalid_request_error", "invalid_request_body", service.ErrGatewayPromptInvalidRequest.Error()
+	case readingBody:
+		status, kind, code, message = http.StatusBadRequest, "invalid_request_error", "invalid_request_body", "请求正文读取或解压失败；请检查 Content-Encoding 和正文格式后重试。"
+	}
+	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"type": kind, "code": code, "message": message}})
 }
 
 func (h *GatewayHandler) AdminGroupAvailableModels(c *gin.Context) {

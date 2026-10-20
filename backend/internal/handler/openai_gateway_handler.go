@@ -2887,7 +2887,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	if h.pluginManager != nil && apiKey.GroupID != nil {
 		firstMessage, err = h.pluginManager.TransformGatewayRequest(c.Request.Context(), *apiKey.GroupID, apiKey.ID, "responses", reqModel, firstMessage)
 		if err != nil {
-			closeOpenAIClientWS(wsConn, coderws.StatusInternalError, err.Error())
+			closeOpenAIClientWS(wsConn, service.GatewayPromptWSCloseStatus(err), service.GatewayPromptWSCloseReason(err))
 			return
 		}
 	}

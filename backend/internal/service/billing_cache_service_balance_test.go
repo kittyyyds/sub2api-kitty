@@ -23,6 +23,54 @@ type balanceEligibilityCacheStub struct {
 	invalidateCalls          atomic.Int64
 }
 
+type mediaAdmissionBalanceReader struct {
+	view *MediaWalletBalance
+	err  error
+}
+
+func (r *mediaAdmissionBalanceReader) Balance(context.Context, int64) (*MediaWalletBalance, error) {
+	return r.view, r.err
+}
+
+func TestMediaBalanceAuthorityRejectsStaleCacheAndQueuedRefill(t *testing.T) {
+	cache := &balanceEligibilityCacheStub{balance: 100}
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
+	t.Cleanup(svc.Stop)
+	reader := &mediaAdmissionBalanceReader{view: &MediaWalletBalance{Currency: "USD", Denomination: "cny_pegged_site_credit", AvailableUSD: "0.00000000"}}
+	require.NoError(t, svc.RequireMediaWalletBalanceAuthority(reader))
+	// Simulate a stale fill that survived invalidation and committed after a
+	// media hold. It must not restore text admission, even after draining workers.
+	require.True(t, svc.enqueueCacheWrite(cacheWriteTask{kind: cacheWriteSetBalance, userID: 1, balance: 100}))
+	svc.Stop()
+	require.ErrorIs(t, svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, nil, nil, ""), ErrInsufficientBalance)
+	reader.view.AvailableUSD = "0.10000000"
+	require.NoError(t, svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, nil, nil, ""))
+	reader.view.AvailableUSD = "-0.25000000"
+	require.ErrorIs(t, svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, nil, nil, ""), ErrInsufficientBalance)
+}
+
+func TestMediaBalanceAuthorityFailsClosedWithoutCacheFallback(t *testing.T) {
+	cases := []struct {
+		name string
+		view *MediaWalletBalance
+		err  error
+	}{
+		{name: "database unavailable", err: errors.New("database unavailable")},
+		{name: "missing view"},
+		{name: "wrong denomination", view: &MediaWalletBalance{Currency: "USD", AvailableUSD: "100"}},
+		{name: "invalid amount", view: &MediaWalletBalance{Currency: "USD", Denomination: "cny_pegged_site_credit", AvailableUSD: "NaN"}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewBillingCacheService(&balanceEligibilityCacheStub{balance: 100}, nil, nil, nil, nil, nil, &config.Config{}, nil)
+			t.Cleanup(svc.Stop)
+			require.NoError(t, svc.RequireMediaWalletBalanceAuthority(&mediaAdmissionBalanceReader{view: tt.view, err: tt.err}))
+			err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, nil, nil, "")
+			require.ErrorIs(t, err, ErrBillingServiceUnavailable)
+		})
+	}
+}
+
 func (s *balanceEligibilityCacheStub) GetUserBalance(context.Context, int64) (float64, error) {
 	if s.cacheMissAfterInvalidate && s.invalidated.Load() {
 		return 0, errors.New("cache miss")

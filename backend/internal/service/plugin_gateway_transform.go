@@ -18,6 +18,10 @@ import (
 
 const GatewayPromptMaxBody = 32 * 1024 * 1024
 
+// ErrGatewayPromptInvalidRequest marks deterministic client input failures.
+// Temporary plugin/runtime failures deliberately do not wrap this sentinel.
+var ErrGatewayPromptInvalidRequest = errors.New("请求正文必须是有效的 JSON 对象")
+
 var gatewayPromptSlots = make(chan struct{}, 64)
 
 func (m *PluginManager) HasGatewayPrompt() bool {
@@ -65,8 +69,11 @@ func (m *PluginManager) TransformGatewayRequest(ctx context.Context, groupID, ke
 	if route.runtime != nil && route.runtime.promptNoop.Load() {
 		return body, nil
 	}
-	if len(body) > GatewayPromptMaxBody || !gjson.ValidBytes(body) {
-		return nil, errors.New("提示词插件请求正文无效或过大")
+	if len(body) > GatewayPromptMaxBody {
+		return nil, &http.MaxBytesError{Limit: GatewayPromptMaxBody}
+	}
+	if !gjson.ValidBytes(body) || !gjson.ParseBytes(body).IsObject() {
+		return nil, ErrGatewayPromptInvalidRequest
 	}
 	field := ""
 	switch protocol {
@@ -178,7 +185,7 @@ func validateGatewayPromptMutation(before, after []byte, field string) error {
 	}
 	a, err := decode(before)
 	if err != nil {
-		return errors.New("提示词插件请求不是有效对象")
+		return ErrGatewayPromptInvalidRequest
 	}
 	b, err := decode(after)
 	if err != nil {

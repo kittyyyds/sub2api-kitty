@@ -25,6 +25,7 @@ import (
 
 // ProviderSet 提供服务器层的依赖
 var ProviderSet = wire.NewSet(
+	ProvideMediaIntegration,
 	ProvideLifecycle,
 	ProvideRouter,
 	ProvideHTTPServer,
@@ -48,6 +49,7 @@ func ProvideRouter(
 	compositeResolver *service.CompositeRouteResolver,
 	redisClient *redis.Client,
 	lifecycle *Lifecycle,
+	mediaIntegration *MediaIntegration,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -107,7 +109,11 @@ func ProvideRouter(
 	lifecycle.onDrain = append(lifecycle.onDrain, manager.Stop)
 	r.Use(manager.Ingress())
 	r.GET("/internal/serverless/probe", manager.ProbeHandler)
-	return SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, userService, compositeResolver, cfg, redisClient)
+	SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, userService, compositeResolver, cfg, redisClient)
+	if err := mediaIntegration.mount(r, lifecycle, jwtAuth, settingService); err != nil {
+		panic(err)
+	}
+	return r
 }
 
 func configureTrustedProxies(r *gin.Engine, cfg config.ServerConfig) {

@@ -69,8 +69,12 @@ func ReadRequestBodyWithPrealloc(req *http.Request) (result []byte, resultErr er
 }
 
 // ReadRequestBodyWithPreallocLimit applies a caller-specific decoded body cap.
-// It rejects compressed input that exceeds the cap instead of truncating it.
+// It rejects identity, preread and compressed input above the decoded cap.
+// The encoded read is bounded too, with room for compression framing overhead.
 func ReadRequestBodyWithPreallocLimit(req *http.Request, maxDecodedBytes int64) (result []byte, resultErr error) {
+	if maxDecodedBytes <= 0 {
+		maxDecodedBytes = maxDecompressedBodySize
+	}
 	return readRequestBodyWithPrealloc(req, maxDecodedBytes, true)
 }
 
@@ -85,6 +89,9 @@ func readRequestBodyWithPrealloc(req *http.Request, maxDecodedBytes int64, stric
 		return nil, nil
 	}
 	if preread, ok := req.Body.(*PrereadBody); ok {
+		if strict && int64(len(preread.Bytes())) > maxDecodedBytes {
+			return nil, &http.MaxBytesError{Limit: maxDecodedBytes}
+		}
 		return preread.Bytes(), nil
 	}
 
@@ -100,12 +107,24 @@ func readRequestBodyWithPrealloc(req *http.Request, maxDecodedBytes int64, stric
 		}
 	}
 
-	raw, err := readRequestBodyChunks(req.Body, capHint, req.ContentLength)
+	enc := strings.ToLower(strings.TrimSpace(req.Header.Get("Content-Encoding")))
+	var reader io.Reader = req.Body
+	readLimit := maxDecodedBytes
+	if strict {
+		// Compressed data can be slightly larger than its decoded representation.
+		if enc != "" && enc != "identity" {
+			readLimit += maxDecodedBytes/16 + 1024
+		}
+		reader = io.LimitReader(reader, readLimit+1)
+	}
+	raw, err := readRequestBodyChunks(reader, capHint, req.ContentLength)
 	if err != nil {
 		return nil, err
 	}
 
-	enc := strings.ToLower(strings.TrimSpace(req.Header.Get("Content-Encoding")))
+	if strict && int64(len(raw)) > readLimit {
+		return nil, &http.MaxBytesError{Limit: maxDecodedBytes}
+	}
 	if enc == "" || enc == "identity" {
 		return raw, nil
 	}

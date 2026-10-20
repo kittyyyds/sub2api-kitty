@@ -815,7 +815,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			transformed, err := hooks.TransformPayload(trimmed, model)
 			if err != nil {
-				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusInternalError, err.Error(), err)
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(GatewayPromptWSCloseStatus(err), GatewayPromptWSCloseReason(err), err)
 			}
 			trimmed = transformed
 		}

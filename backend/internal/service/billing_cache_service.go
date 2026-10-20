@@ -106,6 +106,7 @@ type subscriptionCacheInvalidationPubSub interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
+	balanceAuthority      atomic.Pointer[mediaBalanceAuthority]
 	cache                 BillingCache
 	userRepo              UserRepository
 	subRepo               UserSubscriptionRepository
@@ -128,6 +129,18 @@ type BillingCacheService struct {
 	cacheWriteDropFullLastLog   int64
 	cacheWriteDropClosedCount   uint64
 	cacheWriteDropClosedLastLog int64
+}
+
+type mediaBalanceAuthority struct{ reader MediaWalletBalanceReader }
+
+// RequireMediaWalletBalanceAuthority is a one-way startup switch. Shared-wallet
+// admission must not read Redis or join a database load started before a hold.
+// Subscription and rate-limit caches retain their existing behavior.
+func (s *BillingCacheService) RequireMediaWalletBalanceAuthority(reader MediaWalletBalanceReader) error {
+	if reader == nil || !s.balanceAuthority.CompareAndSwap(nil, &mediaBalanceAuthority{reader: reader}) {
+		return fmt.Errorf("media wallet balance authority must be configured exactly once")
+	}
+	return nil
 }
 
 // NewBillingCacheService 创建计费缓存服务
@@ -311,6 +324,20 @@ func (s *BillingCacheService) logCacheWriteDrop(task cacheWriteTask, reason stri
 
 // GetUserBalance 获取用户余额（优先从缓存读取）
 func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) (float64, error) {
+	if authority := s.balanceAuthority.Load(); authority != nil {
+		view, err := authority.reader.Balance(ctx, userID)
+		if err != nil {
+			return 0, fmt.Errorf("get authoritative media wallet balance: %w", err)
+		}
+		if view == nil || view.Currency != "USD" || view.Denomination != "cny_pegged_site_credit" {
+			return 0, fmt.Errorf("invalid authoritative media wallet balance")
+		}
+		balance, err := strconv.ParseFloat(view.AvailableUSD, 64)
+		if err != nil || math.IsNaN(balance) || math.IsInf(balance, 0) {
+			return 0, fmt.Errorf("invalid authoritative media wallet balance amount")
+		}
+		return balance, nil
+	}
 	if s.cache == nil {
 		// Redis不可用，直接查询数据库
 		return s.getUserBalanceFromDB(ctx, userID)

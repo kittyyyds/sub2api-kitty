@@ -1083,7 +1083,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 				transformed, err := hooks.TransformPayload(payload, model)
 				if err != nil {
-					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusInternalError, err.Error(), err)
+					return payload, nil, NewOpenAIWSClientCloseError(GatewayPromptWSCloseStatus(err), GatewayPromptWSCloseReason(err), err)
 				}
 				payload = transformed
 			}
