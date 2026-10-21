@@ -173,16 +173,9 @@ func (h *AccountTokenGuardHandler) StartTwoFALogin(c *gin.Context) {
 				}
 			}()
 		}
-		if input.ProxyID != nil {
-			login, prepareErr := h.reauth.TwoFAImportLogin(c.Request.Context(), entry, *input.ProxyID, input.LoginEnvironment, h.prober)
-			if prepareErr != nil {
-				response.BadRequest(c, prepareErr.Error())
-				return
-			}
-			job, err = h.svc.StartTwoFAProxyLogin(c.Request.Context(), entry, login)
-		} else {
-			job, err = h.svc.StartTwoFALoginForOperations(c.Request.Context(), entry)
-		}
+		// Restore the upstream v2.13.3 login provider. The reserved proxy belongs
+		// to the imported account, not to the configured external login service.
+		job, err = h.svc.StartTwoFALoginForOperations(c.Request.Context(), entry)
 	case "", "guard": // Preserve the contract for older clients.
 		if input.ProxyID != nil {
 			response.BadRequest(c, "代理导入必须使用加密凭证运营模式")

@@ -15,6 +15,7 @@ import (
 type OpenAITwoFALoginJob struct {
 	ImportTicket     string         `json:"import_ticket,omitempty"`
 	ProxyID          *int64         `json:"proxy_id"`
+	LoginBackend     string         `json:"login_backend,omitempty"`
 	ID               string         `json:"id"`
 	Status           string         `json:"status"`
 	Credential       map[string]any `json:"credential,omitempty"`
@@ -57,7 +58,9 @@ func (s *AccountTokenGuardService) startTwoFALogin(ctx context.Context, entry Ac
 		return nil, err
 	}
 	var execute func(context.Context) (map[string]any, error)
+	loginBackend := "configured_service"
 	if len(login) > 0 && login[0] != nil {
+		loginBackend = "local_worker"
 		execute = login[0]
 	} else {
 		cfg, err := s.GetConfig(ctx)
@@ -102,7 +105,10 @@ func (s *AccountTokenGuardService) startTwoFALogin(ctx context.Context, entry Ac
 		s.logins = make(map[string]*OpenAITwoFALoginJob)
 	}
 	loginCtx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
-	job := &OpenAITwoFALoginJob{ID: guardRandomID(), Status: "running", Stage: "queued", UpdatedAt: time.Now(), cancel: cancel}
+	job := &OpenAITwoFALoginJob{ID: guardRandomID(), Status: "running", Stage: "queued", LoginBackend: loginBackend, UpdatedAt: time.Now(), cancel: cancel}
+	if loginBackend == "configured_service" {
+		job.Stage = "relogin_service"
+	}
 	if ticket, _ := ctx.Value(accountImportContextKey{}).(*AccountImportTicket); ticket != nil {
 		job.ImportTicket = ticket.ID
 		job.ProxyID = ticket.ProxyID
@@ -190,7 +196,7 @@ func (s *AccountTokenGuardService) startTwoFALogin(ctx context.Context, entry Ac
 		job.browserID = ""
 		job.UpdatedAt = time.Now()
 	}()
-	return &OpenAITwoFALoginJob{ID: job.ID, Status: job.Status, ImportTicket: job.ImportTicket, ProxyID: job.ProxyID}, nil
+	return &OpenAITwoFALoginJob{ID: job.ID, Status: job.Status, ImportTicket: job.ImportTicket, ProxyID: job.ProxyID, LoginBackend: job.LoginBackend}, nil
 }
 
 // safeTwoFALoginError keeps asynchronous login diagnostics useful without
@@ -270,7 +276,7 @@ func (s *AccountTokenGuardService) TwoFALogin(id string) (*OpenAITwoFALoginJob, 
 	if !ok {
 		return nil, false
 	}
-	snapshot := &OpenAITwoFALoginJob{ImportTicket: job.ImportTicket, ProxyID: job.ProxyID, ID: job.ID, Status: job.Status, Stage: job.Stage, ErrorCode: job.ErrorCode, Message: job.Message, HTTPStatus: job.HTTPStatus, Timezone: job.Timezone, BrowserAvailable: job.BrowserAvailable, UpdatedAt: job.UpdatedAt}
+	snapshot := &OpenAITwoFALoginJob{ImportTicket: job.ImportTicket, ProxyID: job.ProxyID, LoginBackend: job.LoginBackend, ID: job.ID, Status: job.Status, Stage: job.Stage, ErrorCode: job.ErrorCode, Message: job.Message, HTTPStatus: job.HTTPStatus, Timezone: job.Timezone, BrowserAvailable: job.BrowserAvailable, UpdatedAt: job.UpdatedAt}
 	if job.Credential != nil {
 		snapshot.Credential = make(map[string]any, len(job.Credential))
 		for key, value := range job.Credential {

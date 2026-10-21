@@ -28,6 +28,7 @@ export function parseTwoFALoginText(raw: string): TokenGuardReloginAccount[] {
 }
 
 export interface TwoFALoginJob {
+ login_backend?: 'configured_service' | 'local_worker'
  import_ticket?: string
  proxy_id?: number | null
   id: string

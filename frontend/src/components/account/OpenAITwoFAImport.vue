@@ -2,7 +2,8 @@
   <div class="space-y-4">
     <CredentialEncryptionSetup @ready="encryptionReady = $event" />
     <p class="input-hint">一行一个账号：邮箱----密码----2FA密钥，也支持 --、Tab 或逗号分隔，最多200行。仅在内存中处理，关闭窗口会停止未完成任务。</p>
-    <p class="input-hint">{{ autoProxy ? '按 IP 规则逐账号自动分配，登录与保存使用同一代理。' : proxyId ? '通过所选代理在后台完成协议登录，无需打开登录窗口。' : '未选代理：沿用已配置的后台登录服务网络。' }}</p>
+    <p class="input-hint">2FA 使用原版后台登录服务，无需打开登录窗口。邮箱、密码及 2FA 密钥会提交给凭证守护中配置的重登服务。</p>
+    <p class="input-hint">{{ autoProxy ? '按 IP 规则为导入后的账号自动分配代理；该代理不用于本次登录。' : proxyId ? '所选代理仅绑定到导入后的账号，不用于本次登录。' : '登录出口由后台重登服务决定，不代表本服务器直连官方。' }}</p>
     <a href="/admin/token-guard" target="_blank" rel="noopener noreferrer" class="text-primary-600">
       {{ t('tokenGuard.twoFA.settings') }}
     </a>
@@ -71,10 +72,10 @@ const stopRequested = ref(false)
 const hasPending = computed(() => rows.value.some(row => row.status !== 'created' && row.status !== 'skipped'))
 let disposed = false
 let batchProxy: number | null | undefined
-const stages: Record<string,string> = {queued:'排队中',protocol_login:'后台协议登录',timezone_probe:'检测代理时区',browser_starting:'启动登录窗口',navigation:'打开官方页面',security_verification:'等待安全验证',email:'账号验证',password:'密码验证',totp:'两步验证',authorization:'授权确认',token_exchange:'交换授权凭证',succeeded:'登录完成',failed:'登录未完成'}
+const stages: Record<string,string> = {queued:'排队中',relogin_service:'等待后台登录服务返回',protocol_login:'后台协议登录',timezone_probe:'检测代理时区',browser_starting:'启动登录窗口',navigation:'打开官方页面',security_verification:'等待安全验证',email:'账号验证',password:'密码验证',totp:'两步验证',authorization:'授权确认',token_exchange:'交换授权凭证',succeeded:'登录完成',failed:'登录未完成'}
 function showProgress(row: Row, job: TwoFALoginJob) {
  row.job = {...job, credential: undefined}
- row.detail = [job.stage ? (stages[job.stage] || '处理中') : '', job.timezone ? `登录时区：${job.timezone}` : '', job.http_status ? `HTTP ${job.http_status}` : '', job.proxy_id ? `本账号代理：#${job.proxy_id}` : '', job.error_code || ''].filter(Boolean).join(' · ')
+ row.detail = [job.login_backend === 'configured_service' ? '原版后台登录服务' : '', job.stage ? (stages[job.stage] || '处理中') : '', job.timezone ? `登录时区：${job.timezone}` : '', job.http_status ? `HTTP ${job.http_status}` : '', job.proxy_id ? `导入后绑定代理：#${job.proxy_id}` : '', job.error_code || ''].filter(Boolean).join(' · ')
 }
 
 async function discardJob(row: Row) {

@@ -114,7 +114,7 @@ it('blocks 2FA login and account creation until encryption initialization succee
   expect(importCredential).toHaveBeenCalledTimes(1)
 })
 
-it('freezes the proxy for retries and never starts an unproxied retry',async()=>{
+it('preserves the post-import proxy selection across retries',async()=>{
  const prepare=vi.fn(),importCredential=vi.fn().mockResolvedValue('created')
  vi.mocked(startTwoFALogin).mockRejectedValueOnce(new Error('proxy unavailable'))
  const wrapper=mount(OpenAITwoFAImport,{props:{proxyId:17,prepare,importCredential}})
@@ -124,6 +124,20 @@ it('freezes the proxy for retries and never starts an unproxied retry',async()=>
  await wrapper.get('button').trigger('click');await flushPromises()
  expect(startTwoFALogin).toHaveBeenLastCalledWith(expect.anything(),17)
  expect(prepare).toHaveBeenCalledOnce()
+})
+
+it('uses the configured service while preserving the assigned proxy and ticket for account creation', async () => {
+ const importer = vi.fn().mockResolvedValue('created')
+ vi.mocked(getTwoFALogin).mockResolvedValue({id:'job-1',status:'succeeded',login_backend:'configured_service',proxy_id:17,import_ticket:'ticket-1',credential:{access_token:'fixture-access'}})
+ const wrapper = mount(OpenAITwoFAImport,{props:{autoProxy:true,importCredential:importer}})
+ await start(wrapper,'a@example.com----fixture-password----FIXTUREMFA')
+ expect(wrapper.text()).toContain('原版后台登录服务')
+ expect(wrapper.text()).toContain('密码及 2FA 密钥会提交给凭证守护中配置的重登服务')
+ expect(wrapper.text()).toContain('导入后绑定代理：#17')
+ expect(wrapper.text()).not.toContain('登录与保存使用同一代理')
+ expect(importer).toHaveBeenCalledWith({access_token:'fixture-access',_import_ticket:'ticket-1',_import_proxy_id:17},'a@example.com',expect.anything())
+ expect(wrapper.text()).not.toContain('fixture-password')
+ expect(wrapper.text()).not.toContain('FIXTUREMFA')
 })
 
 it('explains exhausted idle proxies before login and retries after capacity is added', async () => {
