@@ -777,6 +777,9 @@ func (s *OpenAIOAuthReauthService) ClaimTaskWithEngines(ctx context.Context, wor
 		mode = OpenAIOAuthReauthModeEmailOTPURL
 	}
 	engine := effectiveReauthEngine(mode, stored.Engine, runtimeSettings.Engine)
+	if s.useAccountEgress(ctx, account) {
+		engine = OpenAIOAuthReauthEngineLocal
+	}
 	if record.OAuthProfile == "excel" || record.OAuthProfile == "siwc" {
 		engine = OpenAIOAuthReauthEngineLocal
 		if mode != OpenAIOAuthReauthModePasswordTOTP {
@@ -798,6 +801,9 @@ func (s *OpenAIOAuthReauthService) ClaimTaskWithEngines(ctx context.Context, wor
 	if proxyErr != nil {
 		_ = s.repo.MarkFailed(ctx, record.ID, workerID, "configured re-login proxy source is invalid")
 		return nil, nil
+	}
+	if s.useAccountEgress(ctx, account) {
+		proxySource = OpenAIOAuthReauthProxySourceAccount
 	}
 	proxyID := stored.ProxyID
 	proxyError := "configured re-login proxy is unavailable"

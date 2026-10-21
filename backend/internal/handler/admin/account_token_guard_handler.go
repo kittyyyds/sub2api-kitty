@@ -157,6 +157,22 @@ func (h *AccountTokenGuardHandler) StartTwoFALogin(c *gin.Context) {
 			response.BadRequest(c, "请先在凭证运营中启用凭据加密，再进行 2FA 导入")
 			return
 		}
+		var ticket *service.AccountImportTicket
+		if input.CredentialTarget == "operations" {
+			var prepareErr error
+			ticket, prepareErr = h.svc.PrepareTwoFAImport(c.Request.Context(), entry, input.ProxyID)
+			if prepareErr != nil {
+				response.BadRequest(c, prepareErr.Error())
+				return
+			}
+			input.ProxyID = ticket.ProxyID
+			c.Request = c.Request.WithContext(service.WithAccountImportTicket(c.Request.Context(), ticket))
+			defer func() {
+				if c.Writer.Status() >= 400 {
+					h.svc.CancelImportTicket(ticket.ID)
+				}
+			}()
+		}
 		if input.ProxyID != nil {
 			login, prepareErr := h.reauth.TwoFAImportLogin(c.Request.Context(), entry, *input.ProxyID, input.LoginEnvironment, h.prober)
 			if prepareErr != nil {

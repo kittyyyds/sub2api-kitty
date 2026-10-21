@@ -1835,6 +1835,7 @@ export interface OpenAIResponsesState {
 }
 
 export interface CreateAccountRequest {
+  import_ticket?: string
   name: string
   notes?: string | null
   platform: AccountPlatform
@@ -1996,6 +1997,7 @@ export interface AdminDataImportResult {
 }
 
 export interface CodexSessionImportRequest {
+ import_ticket?: string
   /** Skip matching accounts without replacing their credentials or settings. */
   skip_existing?: boolean
   content?: string

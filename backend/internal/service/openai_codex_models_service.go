@@ -1886,6 +1886,9 @@ func (s *OpenAIGatewayService) handleCodexModelsManifestAccountAuthError(ctx con
 }
 
 func (s *OpenAIGatewayService) fetchCachedOpenAIModels(ctx context.Context, request openAIModelsRequest, fetch func(ctx context.Context, ifNoneMatch string) (*OpenAIModelsResponse, error), ifNoneMatch string) (*OpenAIModelsResponse, error) {
+	if probe, _ := ctx.Value(accountLivenessProbeKey{}).(bool); probe {
+		return fetch(ctx, "")
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -1979,6 +1982,11 @@ func (s *OpenAIGatewayService) fetchOpenAIModelsUpstream(ctx context.Context, re
 		return nil, infraerrors.Newf(http.StatusInternalServerError, "OPENAI_CODEX_MODELS_REQUEST_FAILED", "create codex models request: %v", err)
 	}
 	req.Header = request.headers.Clone()
+	req = req.WithContext(s.withRequestTimezoneEgress(req.Context(), request.credentialAccount))
+	req, err = BindOpenAIRequestTimezone(req, request.proxyURL)
+	if err != nil {
+		return nil, err
+	}
 	if ifNoneMatch = strings.TrimSpace(ifNoneMatch); ifNoneMatch != "" {
 		req.Header.Set("If-None-Match", ifNoneMatch)
 	}

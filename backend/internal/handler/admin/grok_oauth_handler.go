@@ -424,6 +424,20 @@ func (h *GrokOAuthHandler) safeCreateAccountFromSSOToken(ctx context.Context, re
 }
 
 func (h *GrokOAuthHandler) createAccountFromSSOToken(ctx context.Context, req GrokSSOToOAuthRequest, token string, index, total int) grokSSOImportWorkerResult {
+	var ticketID string
+	if coordinator, ok := h.adminService.(service.AccountImportCoordinator); ok {
+		ticket, err := coordinator.PrepareAccountImport(ctx, service.PlatformGrok, "oauth", req.ProxyID, "")
+		if err != nil {
+			return grokSSOImportWorkerResult{item: GrokSSOToOAuthItemResult{Index: index, Error: err.Error()}}
+		}
+		ticketID = ticket.ID
+		req.ProxyID = ticket.ProxyID
+		defer func() {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = coordinator.CancelAccountImport(cleanup, ticketID)
+		}()
+	}
 	tokenInfo, err := h.grokOAuthService.ConvertFromSSO(ctx, token, req.ProxyID)
 	if err != nil {
 		return grokSSOImportWorkerResult{item: GrokSSOToOAuthItemResult{Index: index, Error: grokSSOImportErrorMessage(err)}}
@@ -433,6 +447,7 @@ func (h *GrokOAuthHandler) createAccountFromSSOToken(ctx context.Context, req Gr
 	name := grokSSOImportAccountName(req.Name, tokenInfo, index, total)
 	expiresAt, autoPauseOnExpired := grokSSOImportExpiry(req.ExpiresAt, req.AutoPauseOnExpired, tokenInfo)
 	account, err := h.adminService.CreateAccount(ctx, &service.CreateAccountInput{
+		ImportTicket:       ticketID,
 		Name:               name,
 		Notes:              req.Notes,
 		Platform:           service.PlatformGrok,

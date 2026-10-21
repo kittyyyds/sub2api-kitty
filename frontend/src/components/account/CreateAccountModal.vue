@@ -3183,9 +3183,12 @@
       <div>
         <div class="mb-1 flex items-center gap-2">
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
+          <span class="text-xs" :class="bindingFailed?'text-red-600':'text-primary-600'">状态：{{bindingLoading?'正在读取 IP 规则':bindingFailed?'规则读取失败，请重试':autoProxyAssignment?'自动分配 IP 中':'可手动选择 IP'}}</span>
+          <button v-if="bindingFailed" type="button" class="text-xs underline" @click="loadBindingRules">重试</button>
           <ProxyAdBanner />
         </div>
-        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
+        <p v-if="autoProxyAssignment" class="input-hint">无需手动选择，后台会在每个账号登录前分别预留空闲 IP；没有候选时停止该账号导入。</p>
+        <fieldset v-else :disabled="bindingLoading||bindingFailed"><ProxySelector v-model="form.proxy_id" :proxies="selectableProxies" /></fieldset>
       </div>
 
       <UpstreamRequestIdHeaderField
@@ -3804,7 +3807,7 @@
 
     <!-- Step 2: OAuth Authorization -->
     <div v-else class="space-y-5">
-      <OpenAITwoFAImport v-if="isOpenAITwoFA" :proxy-id="form.proxy_id" :prepare="prepareTwoFABatch" :import-credential="importTwoFACredential" @busy="twoFABusy = $event" @reset="resetTwoFABatch" />
+      <OpenAITwoFAImport v-if="isOpenAITwoFA" :auto-proxy="autoProxyAssignment" :proxy-id="form.proxy_id" :prepare="prepareTwoFABatch" :import-credential="importTwoFACredential" @busy="twoFABusy = $event" @reset="resetTwoFABatch" />
       <OAuthAuthorizationFlow
         v-else
         ref="oauthFlowRef"
@@ -4163,6 +4166,8 @@ import { withAccountTierRouting, type AccountTierPool } from '@/utils/accountTie
 import { DEFAULT_ACCOUNT_COST_MULTIPLIER, isValidAccountCostMultiplier } from '@/utils/accountCost'
 
 import OpenAITwoFAImport from './OpenAITwoFAImport.vue'
+import { getProxyBindingPolicy,getProxyBindingSummaries,matchesProxyBinding,type ProxyBindingPolicy,type ProxyBindingSummary } from '@/api/admin/proxyBinding'
+import { reserveOAuthImport,releaseOAuthImport,type OAuthReservation } from '@/api/admin/proxyBinding'
 import { createTokenGuardV2Account } from '@/api/admin/accountTokenGuardV2'
 import type { TokenGuardReloginAccount } from '@/api/admin/accountTokenGuard'
 import { ref, reactive, computed, watch } from 'vue'
@@ -5655,10 +5660,17 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
   }
 }
 
-const createAccountWithTierRouting = (payload: CreateAccountRequest) => adminAPI.accounts.create({
+const createAccountWithTierRouting = async (payload: CreateAccountRequest) => {
+ await ensureOAuthReservation()
+ const reservation = oauthReservation.value
+ const account=await adminAPI.accounts.create({
   ...payload,
+  ...(reservation ? {import_ticket:reservation.id,proxy_id:reservation.proxy_id} : {}),
   extra: withAccountTierRouting(payload.extra, tierRoutingEnabled.value, tierRoutingPool.value)
-})
+ })
+ oauthReservation.value=null
+ return account
+}
 
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
   submitting.value = true
@@ -5855,6 +5867,7 @@ const resetForm = () => {
 
 const handleClose = () => {
   if (twoFABusy.value) return
+  void clearOAuthReservation()
   antigravityMixedChannelConfirmed.value = false
   clearMixedChannelDialog()
   emit('close')
@@ -6088,6 +6101,7 @@ const handleVertexServiceAccountDrop = async (event: DragEvent) => {
 }
 
 const handleSubmit = async () => {
+  if(bindingLoading.value || bindingFailed.value){appStore.showError('请先成功读取 IP 规则后再添加账号');return}
   if (isOpenAIBPSOAuth.value && !bpsOAuthModels.value.some(model => model.trim())) {
     appStore.showError(t('admin.accounts.oauth.openai.excelModelsRequired'))
     return
@@ -6392,6 +6406,7 @@ const handleSubmit = async () => {
 }
 
 const goBackToBasicInfo = () => {
+  void clearOAuthReservation()
   step.value = 1
   oauth.resetState()
   openaiOAuth.resetState()
@@ -6402,6 +6417,7 @@ const goBackToBasicInfo = () => {
 }
 
 const handleGenerateUrl = async () => {
+  try {await ensureOAuthReservation()} catch(e) {appStore.showError((e as Error).message);return}
   if (form.platform === 'openai') {
     await openaiOAuth.generateAuthUrl(form.proxy_id, undefined, isOpenAIBPSOAuth.value ? 'excel' : 'codex')
   } else if (form.platform === 'gemini') {
@@ -6547,6 +6563,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
   try {
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
+        await ensureOAuthReservation(true)
         const tokenInfo = await grokOAuth.validateRefreshToken(refreshTokens[i], form.proxy_id)
         if (!tokenInfo) {
           failedCount++
@@ -6718,6 +6735,7 @@ const handleGrokAuthorizePassword = async (emailPasswordInput: string) => {
   try {
     for (let i = 0; i < lines.length; i++) {
       try {
+        await ensureOAuthReservation(true)
         const tokenInfo = await grokOAuth.authorizePassword(lines[i], form.proxy_id)
         if (!tokenInfo) {
           failedCount++
@@ -6952,7 +6970,23 @@ const isAgentIdentityImportContent = (content: string) => {
   }
 }
 
+const oauthReservation = ref<OAuthReservation|null>(null)
+async function clearOAuthReservation(){const ticket=oauthReservation.value;oauthReservation.value=null;if(ticket)try{await releaseOAuthImport(ticket.id)}catch{/* server expiry releases abandoned reservations */}}
+async function ensureOAuthReservation(fresh=false){
+ if(!autoProxyAssignment.value || isOpenAITwoFA.value)return
+ if(fresh)await clearOAuthReservation()
+ if(!oauthReservation.value){oauthReservation.value=await reserveOAuthImport(form.platform,form.proxy_id);form.proxy_id=oauthReservation.value.proxy_id}
+}
 // Freeze the first-login route and import settings together, including retries.
+const bindingPolicy = ref<ProxyBindingPolicy|null>(null)
+const bindingRows = ref<ProxyBindingSummary[]>([])
+const bindingLoading = ref(false), bindingFailed = ref(false)
+const bindingInScope = computed(()=>matchesProxyBinding(bindingPolicy.value,form.platform,form.type,isOpenAITwoFA.value?'twofa':'oauth'))
+const autoProxyAssignment = computed(()=>bindingInScope.value && !!bindingPolicy.value?.auto_assign)
+const selectableProxies = computed(()=>!bindingInScope.value?props.proxies:props.proxies.filter(p=>{const s=bindingRows.value.find(s=>s.proxy_id===p.id);return !!s && (s.history<s.limit||s.extra_allowed)&&s.reserved===0}))
+async function loadBindingRules(){bindingLoading.value=true;bindingFailed.value=false;try{const [policy,rows]=await Promise.all([getProxyBindingPolicy(),getProxyBindingSummaries()]);bindingPolicy.value=policy;bindingRows.value=rows}catch{bindingFailed.value=true;bindingPolicy.value=null}finally{bindingLoading.value=false}}
+watch(()=>props.show,show=>{if(show)void loadBindingRules()},{immediate:true})
+watch(autoProxyAssignment,active=>{if(active)form.proxy_id=null})
 type TwoFABatchSettings = Omit<Parameters<typeof adminAPI.accounts.importCodexSession>[0], 'content'>
 let twoFABatchSettings: TwoFABatchSettings | null = null
 let twoFABatchBPS: typeof autoBPS.draft.value | null = null
@@ -6977,7 +7011,7 @@ const importTwoFACredential = async (credential: Record<string, unknown>, email:
   let accountId = twoFACreated.get(email)
   if (!accountId) {
     const result = await adminAPI.accounts.importCodexSession({
-      ...settings, content: JSON.stringify(credential),
+      ...settings, import_ticket: credential._import_ticket as string | undefined, proxy_id: credential._import_proxy_id as number | null, content: JSON.stringify(credential),
       name: settings.name ? `${settings.name} (${email})` : email
     })
     const created = result.items?.find(item => item.action === 'created' && item.account_id)
@@ -6992,7 +7026,7 @@ const importTwoFACredential = async (credential: Record<string, unknown>, email:
   await createTokenGuardV2Account({
     account_id: accountId, login_email: login.email,
     credential_mode: 'password_totp', proxy_source: 'account',
-    engine: settings.proxy_id ? 'local_worker' : undefined,
+    engine: credential._import_proxy_id ? 'local_worker' : undefined,
     password: login.password, totp_secret: login.mfa_secret,
     enabled: true, auto_relogin_enabled: true
   })
@@ -7163,6 +7197,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
   try {
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
+        await ensureOAuthReservation(true)
         const tokenInfo = await oauthClient.validateRefreshToken(
           refreshTokens[i],
           form.proxy_id,
@@ -7285,6 +7320,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
   try {
     for (let i = 0; i < refreshTokens.length; i++) {
       try {
+        await ensureOAuthReservation(true)
         const tokenInfo = await antigravityOAuth.validateRefreshToken(
           refreshTokens[i],
           form.proxy_id
@@ -7607,10 +7643,12 @@ const handleCookieAuth = async (sessionKey: string) => {
 
     for (let i = 0; i < keys.length; i++) {
       try {
+        await ensureOAuthReservation(true)
         const tokenInfo = await adminAPI.accounts.exchangeCode(endpoint, {
           session_id: '',
           code: keys[i],
-          ...proxyConfig
+          ...proxyConfig,
+          ...(oauthReservation.value ? {proxy_id:oauthReservation.value.proxy_id ?? undefined} : {})
         })
 
         // Build extra with quota control settings

@@ -44,7 +44,7 @@ func TestKittyContextUpgradeRuleOverridesSubscriptionExemption(t *testing.T) {
 						quote, err := svc.calculateOpenAIRecordUsageCost(context.Background(), result, key,
 							[]string{"gpt-6.1-sol"}, "gpt-6.1-sol", 1.1, 1.1, 1.1, 1.1,
 							UsageTokens{InputTokens: n - 100000, OutputTokens: 2000, CacheReadTokens: 80000, CacheCreationTokens: 20000},
-							tier, &enabled, openAISubscriptionLongContextExempt(account, result), time.Time{})
+							tier, &enabled, openAIGPT61SolLongContextExempt(account, result), time.Time{})
 						require.NoError(t, err)
 						require.InDelta(t, want*1.1, quote.ActualCost, 1e-10)
 						err = svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{

@@ -13,6 +13,8 @@ import (
 // Login jobs keep token results in bounded, short-lived memory. Successful logins
 // save the supplied password/2FA to the guard without enabling it or creating accounts.
 type OpenAITwoFALoginJob struct {
+	ImportTicket     string         `json:"import_ticket,omitempty"`
+	ProxyID          *int64         `json:"proxy_id"`
 	ID               string         `json:"id"`
 	Status           string         `json:"status"`
 	Credential       map[string]any `json:"credential,omitempty"`
@@ -101,6 +103,10 @@ func (s *AccountTokenGuardService) startTwoFALogin(ctx context.Context, entry Ac
 	}
 	loginCtx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	job := &OpenAITwoFALoginJob{ID: guardRandomID(), Status: "running", Stage: "queued", UpdatedAt: time.Now(), cancel: cancel}
+	if ticket, _ := ctx.Value(accountImportContextKey{}).(*AccountImportTicket); ticket != nil {
+		job.ImportTicket = ticket.ID
+		job.ProxyID = ticket.ProxyID
+	}
 	s.logins[job.ID] = job
 	job.expiry = time.AfterFunc(30*time.Minute, func() { s.DeleteTwoFALogin(job.ID) })
 	go func() {
@@ -133,6 +139,7 @@ func (s *AccountTokenGuardService) startTwoFALogin(ctx context.Context, entry Ac
 			return
 		}
 		if loginErr != nil {
+			s.CancelImportTicket(job.ImportTicket)
 			// Only allowlisted errors cross the admin API boundary.
 			p := reauthruntime.LoginFailure(loginErr)
 			job.Status, job.ErrorCode = "failed", p.Code
@@ -164,6 +171,17 @@ func (s *AccountTokenGuardService) startTwoFALogin(ctx context.Context, entry Ac
 			}
 		}
 		job.Credential = twoFALoginCredential(credential, entry.Email)
+		if job.ImportTicket != "" {
+			coordinator, ok := s.admin.(AccountImportCoordinator)
+			if !ok || coordinator.CompleteAccountImport(loginCtx, job.ImportTicket, job.Credential) != nil {
+				job.Credential = nil
+				job.Status = "failed"
+				job.ErrorCode = "credential_save_failed"
+				job.Message = "导入预留已失效，请重新登录"
+				s.CancelImportTicket(job.ImportTicket)
+				return
+			}
+		}
 		job.Status = "succeeded"
 		job.Stage = "succeeded"
 		job.ErrorCode = ""
@@ -172,7 +190,7 @@ func (s *AccountTokenGuardService) startTwoFALogin(ctx context.Context, entry Ac
 		job.browserID = ""
 		job.UpdatedAt = time.Now()
 	}()
-	return &OpenAITwoFALoginJob{ID: job.ID, Status: job.Status}, nil
+	return &OpenAITwoFALoginJob{ID: job.ID, Status: job.Status, ImportTicket: job.ImportTicket, ProxyID: job.ProxyID}, nil
 }
 
 // safeTwoFALoginError keeps asynchronous login diagnostics useful without
@@ -252,7 +270,7 @@ func (s *AccountTokenGuardService) TwoFALogin(id string) (*OpenAITwoFALoginJob, 
 	if !ok {
 		return nil, false
 	}
-	snapshot := &OpenAITwoFALoginJob{ID: job.ID, Status: job.Status, Stage: job.Stage, ErrorCode: job.ErrorCode, Message: job.Message, HTTPStatus: job.HTTPStatus, Timezone: job.Timezone, BrowserAvailable: job.BrowserAvailable, UpdatedAt: job.UpdatedAt}
+	snapshot := &OpenAITwoFALoginJob{ImportTicket: job.ImportTicket, ProxyID: job.ProxyID, ID: job.ID, Status: job.Status, Stage: job.Stage, ErrorCode: job.ErrorCode, Message: job.Message, HTTPStatus: job.HTTPStatus, Timezone: job.Timezone, BrowserAvailable: job.BrowserAvailable, UpdatedAt: job.UpdatedAt}
 	if job.Credential != nil {
 		snapshot.Credential = make(map[string]any, len(job.Credential))
 		for key, value := range job.Credential {
@@ -266,6 +284,7 @@ func (s *AccountTokenGuardService) DeleteTwoFALogin(id string) {
 	s.loginMu.Lock()
 	defer s.loginMu.Unlock()
 	if job, ok := s.logins[id]; ok {
+		s.CancelImportTicket(job.ImportTicket)
 		job.cancel()
 		job.expiry.Stop()
 		job.Credential = nil

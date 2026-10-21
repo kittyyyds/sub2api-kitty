@@ -28,6 +28,8 @@ export function parseTwoFALoginText(raw: string): TokenGuardReloginAccount[] {
 }
 
 export interface TwoFALoginJob {
+ import_ticket?: string
+ proxy_id?: number | null
   id: string
   status: 'running' | 'waiting_interaction' | 'succeeded' | 'failed'
   stage?: string

@@ -2,7 +2,7 @@
   <div class="space-y-4">
     <CredentialEncryptionSetup @ready="encryptionReady = $event" />
     <p class="input-hint">一行一个账号：邮箱----密码----2FA密钥，也支持 --、Tab 或逗号分隔，最多200行。仅在内存中处理，关闭窗口会停止未完成任务。</p>
-    <p class="input-hint">{{ proxyId ? '通过所选代理在后台完成协议登录，无需打开登录窗口。' : '未选代理：沿用已配置的后台登录服务网络。' }}</p>
+    <p class="input-hint">{{ autoProxy ? '按 IP 规则逐账号自动分配，登录与保存使用同一代理。' : proxyId ? '通过所选代理在后台完成协议登录，无需打开登录窗口。' : '未选代理：沿用已配置的后台登录服务网络。' }}</p>
     <a href="/admin/token-guard" target="_blank" rel="noopener noreferrer" class="text-primary-600">
       {{ t('tokenGuard.twoFA.settings') }}
     </a>
@@ -46,6 +46,7 @@ import type { TokenGuardReloginAccount, TwoFALoginJob, TwoFALoginEnvironment } f
 
 const props = defineProps<{
   proxyId?: number | null
+  autoProxy?: boolean
   loginEnvironment?: TwoFALoginEnvironment
   prepare?: () => Promise<void> | void
   importCredential: (credential: Record<string, unknown>, email: string, login: TokenGuardReloginAccount) => Promise<'created' | 'skipped'>
@@ -72,7 +73,7 @@ let batchProxy: number | null | undefined
 const stages: Record<string,string> = {queued:'排队中',protocol_login:'后台协议登录',timezone_probe:'检测代理时区',browser_starting:'启动登录窗口',navigation:'打开官方页面',security_verification:'等待安全验证',email:'账号验证',password:'密码验证',totp:'两步验证',authorization:'授权确认',token_exchange:'交换授权凭证',succeeded:'登录完成',failed:'登录未完成'}
 function showProgress(row: Row, job: TwoFALoginJob) {
  row.job = {...job, credential: undefined}
- row.detail = [job.stage ? (stages[job.stage] || '处理中') : '', job.timezone ? `登录时区：${job.timezone}` : '', job.http_status ? `HTTP ${job.http_status}` : '', job.error_code || ''].filter(Boolean).join(' · ')
+ row.detail = [job.stage ? (stages[job.stage] || '处理中') : '', job.timezone ? `登录时区：${job.timezone}` : '', job.http_status ? `HTTP ${job.http_status}` : '', job.proxy_id ? `本账号代理：#${job.proxy_id}` : '', job.error_code || ''].filter(Boolean).join(' · ')
 }
 
 async function discardJob(row: Row) {
@@ -132,14 +133,14 @@ async function run() {
             row.jobId = undefined
             throw new Error('login_failed')
           }
-          row.credential = job.credential
-          await discardJob(row)
+          row.credential = { ...job.credential, _import_ticket:job.import_ticket, _import_proxy_id:job.proxy_id }
         }
         if (stopRequested.value || disposed) { row.status = 'pending'; break }
         row.status = 'importing'
         // Keep the input in memory until encrypted credential-operations
         // enrollment succeeds. An import/enrollment retry reuses this login.
         row.status = await props.importCredential(row.credential, row.entry.email, { ...row.entry })
+        await discardJob(row)
         row.credential = undefined
         row.entry.password = ''
         row.entry.mfa_secret = ''
@@ -147,6 +148,7 @@ async function run() {
         const status = (cause as { status?: number; response?: { status?: number } })?.status ??
           (cause as { response?: { status?: number } })?.response?.status
         if (status === 404) row.jobId = undefined
+        row.detail = row.credential ? '账号保存未完成，登录结果已保留，可重试保存。' : '登录未完成，请检查代理可用性及登录任务状态后重试。'
         row.status = row.credential ? 'importFailed' : 'failed'
       }
     }

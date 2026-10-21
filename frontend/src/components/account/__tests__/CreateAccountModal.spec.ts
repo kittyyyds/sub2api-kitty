@@ -1,3 +1,8 @@
+vi.mock('@/api/admin/proxyBinding',async importOriginal=>({
+ ...await importOriginal<typeof import('@/api/admin/proxyBinding')>(),
+ getProxyBindingPolicy:async()=>({enabled:false,only_twofa:true,platforms:['openai'],history_limit:5,auto_assign:false}),
+ getProxyBindingSummaries:async()=>[],reserveOAuthImport:vi.fn(),releaseOAuthImport:vi.fn().mockResolvedValue(undefined)
+}))
 
 vi.mock('@/api/admin/credentialEncryption', () => ({
   getCredentialEncryption: vi.fn().mockResolvedValue({ configured: true, source: 'server_config' }),
@@ -544,7 +549,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     const importer = wrapper.getComponent(OpenAITwoFAImport)
     await importer.props('prepare')?.()
     expect(wrapper.findComponent(OAuthAuthorizationFlowStub).exists()).toBe(false)
-    const credential = { access_token: 'test-access', refresh_token: 'test-refresh', account_id: 'test-workspace' }
+    const credential = { access_token: 'test-access', refresh_token: 'test-refresh', account_id: 'test-workspace', _import_ticket:'fixture-receipt',_import_proxy_id:null }
     const login = { email: 'user@example.com', password: 'test-password', mfa_secret: 'test-secret' }
     await importer.props('prepare')()
     await expect(importer.props('importCredential')(credential, login.email, login)).resolves.toBe('created')

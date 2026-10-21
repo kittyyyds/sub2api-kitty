@@ -274,3 +274,23 @@ func (h *ScheduledTestHandler) IQSummaries(c *gin.Context) {
 	}
 	response.Success(c, rows)
 }
+
+func (h *ScheduledTestHandler) SetIQQuarantineTarget(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "invalid plan id")
+		return
+	}
+	var body struct {
+		GroupID int64 `json:"group_id"`
+	}
+	if err = c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, "请选择隔离目标")
+		return
+	}
+	if err = h.scheduledTestSvc.SetIQQuarantineTarget(c.Request.Context(), id, body.GroupID); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"ok": true})
+}

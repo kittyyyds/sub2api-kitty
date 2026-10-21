@@ -413,6 +413,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		}
 	}
 	if err := accountTestCooldown(ctx, account, resolveAccountTestModel(account, modelID), time.Now()); err != nil {
+		markTestAdmissionWaiting(ctx)
 		var wait *TestAdmissionWaitError
 		if errors.As(err, &wait) {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("%s；请在 %s 后重新测试", wait.Reason, wait.Until.Local().Format("2006-01-02 15:04:05")))
@@ -421,6 +422,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 	release, err := s.acquireTestAccountSlot(ctx, account)
 	if err != nil {
+		markTestAdmissionWaiting(ctx)
 		return s.sendErrorAndEnd(c, err.Error())
 	}
 	defer release()

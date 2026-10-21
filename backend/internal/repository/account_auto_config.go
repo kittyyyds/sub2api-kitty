@@ -55,6 +55,15 @@ func (r *accountRepository) RecordConcurrencyResult(ctx context.Context, event s
 		return err
 	}
 	state := service.AutoConfigConcurrencyState{}
+	// Validation and quarantine own admission. Old in-flight outcomes cannot
+	// advance the new cycle, including after a deployment or credential relogin.
+	var lifecycleBlocked bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_iq_lifecycle WHERE account_id=$1 AND (passed_at IS NULL OR quarantined_at IS NOT NULL OR quarantine_pending OR passed_at>$2))`, event.AccountID, event.StartedAt).Scan(&lifecycleBlocked); err != nil {
+		return err
+	}
+	if lifecycleBlocked {
+		return nil
+	}
 	if err = json.Unmarshal(extra, &state); err != nil {
 		return err
 	}

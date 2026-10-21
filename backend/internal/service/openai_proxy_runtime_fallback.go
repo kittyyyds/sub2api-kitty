@@ -134,6 +134,11 @@ func (s *OpenAIGatewayService) doOpenAIProxyAttempt(req *http.Request, account *
 	if req != nil {
 		req = req.WithContext(s.withRequestTimezoneEgress(req.Context(), account))
 	}
+	var bindErr error
+	req, bindErr = BindOpenAIRequestTimezone(req, target.url)
+	if bindErr != nil {
+		return nil, bindErr
+	}
 	if err := regionalMeterHTTPRequest(req); err != nil {
 		return nil, err
 	}
@@ -177,7 +182,7 @@ func (s *OpenAIGatewayService) doUpstreamWithProxyFallback(ctx context.Context, 
 		primary.proxyID = account.Proxy.ID
 		primary.proxyName = account.Proxy.Name
 	}
-	if isControlledExperiment(ctx) || s.codexTicketPinsEgress(req, account) || account.Proxy == nil || primaryProxyURL == "" ||
+	if s.strictAccountEgress(ctx, account) || isControlledExperiment(ctx) || s.codexTicketPinsEgress(req, account) || account.Proxy == nil || primaryProxyURL == "" ||
 		primaryProxyURL != account.Proxy.URL() ||
 		(account.Proxy.FallbackMode != FallbackModeDirect && account.Proxy.FallbackMode != FallbackModeProxy) {
 		return s.doOpenAIProxyAttempt(req, account, primary)

@@ -6,7 +6,7 @@
           <button v-for="tab in managementTabs" :key="tab.key" type="button"
             class="btn" :class="activeManagementTab === tab.key ? 'btn-primary' : 'btn-secondary'"
             :aria-pressed="activeManagementTab === tab.key" @click="selectManagementTab(tab.key)">
-            {{ t(tab.label) }}
+            {{ tab.key === 'binding' ? '账号 IP 规则' : t(tab.label) }}
           </button>
         </div>
       </template>
@@ -98,7 +98,8 @@
 
       <template #table>
         <div v-if="activeManagementTab !== 'proxies'" class="min-h-0 flex-1 overflow-y-auto p-4">
-          <HarvestProxySettings v-if="activeManagementTab === 'harvest'" />
+          <ProxyBindingSettings v-if="activeManagementTab === 'binding'" />
+          <HarvestProxySettings v-else-if="activeManagementTab === 'harvest'" />
           <MihomoSettings v-else :section="activeManagementTab" @static-proxies-added="loadProxies" />
         </div>
         <div v-show="activeManagementTab === 'proxies'" ref="proxyTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -227,6 +228,16 @@
             >
               {{ t('admin.groups.accountsCount', { count: 0 }) }}
             </span>
+            <p v-if="bindingSummary[row.id]" class="mt-1 text-xs text-gray-500">规则内历史 {{bindingSummary[row.id].history}} / {{bindingSummary[row.id].limit}} · 当前出口占用 {{bindingSummary[row.id].current}}</p>
+            <p v-else-if="bindingSummaryError" class="mt-1 text-xs text-red-600">历史读取失败</p>
+            <template v-if="bindingRulesEnabled && bindingSummary[row.id] && bindingSummary[row.id].history>=bindingSummary[row.id].limit">
+             <p class="text-xs text-amber-600">{{bindingSummary[row.id].extra_allowed?'已额外放行 1 个':'规则内新增已停用'}}</p>
+             <button v-if="!bindingSummary[row.id].extra_allowed" class="text-xs text-primary-600 underline" @click="allowBindingTarget=row.id">再次启用一个名额</button>
+             <div v-if="allowBindingTarget===row.id" class="mt-2 max-w-xs space-y-2 rounded-lg border border-amber-300 p-2 text-xs" role="alert">
+              <p>根据 IP 规则，此 IP 已累计绑定 {{bindingSummary[row.id].history}} 个适用账号。确定额外放行 1 个新账号吗？绑定成功后再次停止新增，已有账号继续使用。</p>
+              <button class="btn btn-primary" @click="confirmAllowBinding">确认放行 1 个</button><button class="btn btn-secondary" @click="allowBindingTarget=null">取消</button>
+             </div>
+            </template>
           </template>
 
           <template #cell-latency="{ row }">
@@ -939,6 +950,8 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ImportDataModal from '@/components/admin/proxy/ImportDataModal.vue'
+import ProxyBindingSettings from '@/components/admin/proxy/ProxyBindingSettings.vue'
+import { getProxyBindingPolicy,getProxyBindingSummaries,allowOneProxyBinding,type ProxyBindingSummary } from '@/api/admin/proxyBinding'
 import ProxyQualityReportDialog from '@/components/admin/proxy/ProxyQualityReportDialog.vue'
 import Select from '@/components/common/Select.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
@@ -960,7 +973,8 @@ const managementTabs = [
   { key: 'subscriptions', label: 'admin.proxies.subscriptions' },
   { key: 'dynamic', label: 'admin.proxies.dynamicProxies' },
   { key: 'nodes', label: 'admin.proxies.nodes' },
-  { key: 'kernel', label: 'admin.proxies.kernelRules' }
+  { key: 'kernel', label: 'admin.proxies.kernelRules' },
+  { key: 'binding', label: '' }
 ] as const
 type ManagementTab = typeof managementTabs[number]['key']
 function tabFromHash(hash?: string): ManagementTab {
@@ -1177,7 +1191,14 @@ const buildProxyQueryFilters = () => ({
   sort_order: sortState.sort_order
 })
 
+const bindingSummary = ref<Record<number,ProxyBindingSummary>>({})
+const bindingSummaryError = ref(false)
+const bindingRulesEnabled=ref(false)
+const allowBindingTarget = ref<number|null>(null)
+async function refreshBindingSummary(){try{const [rows,policy]=await Promise.all([getProxyBindingSummaries(),getProxyBindingPolicy()]);bindingRulesEnabled.value=policy.enabled;bindingSummary.value=Object.fromEntries(rows.map(r=>[r.proxy_id,r]));bindingSummaryError.value=false}catch{bindingSummaryError.value=true}}
+async function confirmAllowBinding(){if(!allowBindingTarget.value)return;try{await allowOneProxyBinding(allowBindingTarget.value);allowBindingTarget.value=null;await refreshBindingSummary()}catch(e){appStore.showError((e as Error).message||'放行失败')}}
 const loadProxies = async () => {
+  void refreshBindingSummary()
   if (abortController) {
     abortController.abort()
   }
@@ -1432,6 +1453,14 @@ const handleUpdateProxy = async () => {
       updateData.password = editForm.password.trim()
     }
 
+    if(editForm.status==='active' && editingProxy.value.status!=='active') {
+      const [policy,rows]=await Promise.all([getProxyBindingPolicy(),getProxyBindingSummaries()])
+      const summary=rows.find(row=>row.proxy_id===editingProxy.value?.id)
+      if(policy.enabled && summary && summary.history>=summary.limit && !summary.extra_allowed) {
+        if(!window.confirm(`根据 IP 设置，此 IP 已绑定过 ${summary.history} 个历史账号（上限 ${summary.limit}）。确定再次启用并仅额外放行 1 个新账号吗？已有账号不受影响。`))return
+        await allowOneProxyBinding(editingProxy.value.id)
+      }
+    }
     await adminAPI.proxies.update(editingProxy.value.id, updateData)
     appStore.showSuccess(t('admin.proxies.proxyUpdated'))
     closeEditModal()

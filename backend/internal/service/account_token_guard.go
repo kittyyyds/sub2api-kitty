@@ -203,6 +203,8 @@ type AccountTokenGuardDiagnostic struct {
 
 // AccountTokenGuardService 负责凭证巡检与修复。
 type AccountTokenGuardService struct {
+	gateway     *OpenAIGatewayService
+	reauth      *OpenAIOAuthReauthService
 	settings    SettingRepository
 	repo        AccountTokenGuardRepository
 	accounts    accountTokenGuardAccounts
@@ -1086,7 +1088,7 @@ func (s *AccountTokenGuardService) reloginAccount(ctx context.Context, cfg Accou
 	if !ok {
 		return "自动重登", errors.New("缺少该账号的重登凭据，请在凭证守护页面补充")
 	}
-	credential, err := s.relogin(ctx, cfg, entry)
+	credential, err := s.reloginUsingAccountEgress(ctx, cfg, account, entry)
 	if err != nil {
 		return "自动重登", err
 	}
@@ -1144,6 +1146,9 @@ func findGuardReloginAccount(cfg AccountTokenGuardConfig, accountName string) (A
 
 // probe 用账号当前的 access_token 调测活接口。
 func (s *AccountTokenGuardService) probe(ctx context.Context, cfg AccountTokenGuardConfig, account *Account) AccountTokenGuardProbeResult {
+	if s.gateway != nil && s.gateway.strictAccountEgress(ctx, account) {
+		return s.probeUsingAccountEgress(ctx, cfg, account)
+	}
 	// A probe provider's own 429, 401 or outage must not prevent recovery
 	// when a business request already established that this token was revoked.
 	if guardAccountHasAuthFailure(account) {

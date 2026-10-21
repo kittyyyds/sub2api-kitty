@@ -118,6 +118,14 @@ func (s *AccountTestService) doOpenAIAccountTestUpstream(
 		return nil, err
 	}
 	gateway := s.openaiGatewayService
+	if gateway != nil {
+		request = request.WithContext(gateway.withRequestTimezoneEgress(request.Context(), account))
+		var err error
+		request, err = BindOpenAIRequestTimezone(request, proxyURL)
+		if err != nil {
+			return nil, err
+		}
+	}
 	model := extractOpenAICodexTicketModel(body)
 	if gateway != nil && !IsAstraSourceAcquisition(request.Context()) && request.URL != nil && request.URL.String() == chatgptCodexAPIURL &&
 		isOpenAICodexTicketAccount(account, model) && gateway.openAICodexTicketEnabledContext(request.Context()) &&

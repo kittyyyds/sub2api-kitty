@@ -48,7 +48,7 @@ func TestRuntimeProxyFallbackPreservesTicketResponsePolicy(t *testing.T) {
 				}}
 				svc := ticketTestService(t, config.OpenAICodexTicketConfig{Enabled: true, Models: []string{"gpt-6-astra"}}, upstream)
 				svc.proxyRepo = &fakeProxyLookup{byID: map[int64]*Proxy{backup.ID: backup}}
-				values := map[string]string{SettingKeyOpenAICodexTicketStrict: "false"}
+				values := map[string]string{SettingKeyOpenAICodexTicketStrict: "false", SettingKeyOpenAIRequestTimezoneEnabled: "false", SettingKeyOpenAIRequestTimezoneAuto: "false"}
 				if strict {
 					values[SettingKeyOpenAICodexTicketStrict] = "true"
 				}

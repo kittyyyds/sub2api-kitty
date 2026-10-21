@@ -22,6 +22,7 @@ import (
 const codexImportClockSkewSeconds int64 = 120
 
 type CodexSessionImportRequest struct {
+	ImportTicket            string         `json:"import_ticket"`
 	Content                 string         `json:"content"`
 	Contents                []string       `json:"contents"`
 	Name                    string         `json:"name"`
@@ -168,6 +169,9 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 	existingAccounts, err := h.listAccountsFiltered(ctx, service.PlatformOpenAI, service.AccountTypeOAuth, "", "", 0, "", "created_at", "desc")
 	if err != nil {
 		return result, err
+	}
+	if req.ImportTicket != "" && (len(entries) != 1 || !req.SkipExisting) {
+		return result, errors.New("2FA 导入必须逐账号保存，已有账号保持原设置")
 	}
 	index := buildCodexAccountIndex(existingAccounts)
 
@@ -343,6 +347,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 		}
 
 		account, createErr := h.adminService.CreateAccount(ctx, &service.CreateAccountInput{
+			ImportTicket:          req.ImportTicket,
 			Name:                  accountName,
 			Notes:                 req.Notes,
 			Platform:              service.PlatformOpenAI,

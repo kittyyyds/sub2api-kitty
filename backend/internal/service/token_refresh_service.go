@@ -1504,6 +1504,9 @@ func (s *TokenRefreshService) ensureOpenAIPrivacy(ctx context.Context, account *
 		}
 	}
 
+	if ValidateConfiguredAccountProxy(account, proxyURL) != nil {
+		return
+	}
 	mode := disableOpenAITraining(ctx, s.privacyClientFactory, token, proxyURL)
 	if mode == "" {
 		return
@@ -1549,6 +1552,9 @@ func (s *TokenRefreshService) ensureAntigravityPrivacy(ctx context.Context, acco
 		}
 	}
 
+	if ValidateConfiguredAccountProxy(account, proxyURL) != nil {
+		return
+	}
 	mode := setAntigravityPrivacy(ctx, token, projectID, proxyURL)
 	if mode == "" {
 		return

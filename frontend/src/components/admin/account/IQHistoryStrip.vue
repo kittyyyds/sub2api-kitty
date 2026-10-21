@@ -18,6 +18,7 @@ const state = computed(() => {
   return remaining > 0 ? `完成后等待 ${Math.ceil(remaining / 1000)} 秒` : '等待 / 排队'
 })
 function resultLabel(result: IQResult): string {
+  if (result.verdict === 'waiting') return '等待空闲，不计次数'
   if (result.verdict === 'error') return '未完成'
   if (result.verdict === 'correct') return '匹配21'
   return result.answer.trim() ? `未匹配 · 答案：${result.answer.trim()}` : '未匹配 · 未返回答案'
@@ -37,7 +38,7 @@ function tooltip(result: IQResult | null): string {
     <p v-if="!error && latest?.verdict === 'error'" class="mt-0.5 line-clamp-2 [overflow-wrap:anywhere] text-[11px] text-red-600 dark:text-red-400" :title="tooltip(latest)" data-testid="iq-error">{{ running ? '上次报错：' : '' }}{{ latest.error || '请求失败，请查看测试详情' }}</p>
     <p v-else-if="!error && running && latest" class="mt-0.5 line-clamp-2 [overflow-wrap:anywhere] text-[10px] text-gray-500" :title="tooltip(latest)">上次：{{ resultLabel(latest) }}</p>
     <div class="mt-1 flex gap-0.5" aria-label="最近20次定时测试，由左到右从旧到新">
-      <span v-for="(r, i) in cells" :key="r?.id ?? `empty-${i}`" class="h-3 min-w-0 flex-1 rounded-sm focus:outline focus:outline-2 focus:outline-blue-500" :class="!r ? 'bg-gray-300 dark:bg-dark-500' : r.verdict === 'correct' ? 'bg-emerald-500' : r.verdict === 'error' ? 'bg-red-500' : 'bg-amber-400'" :title="tooltip(r)" :aria-label="tooltip(r)" :tabindex="r ? 0 : undefined" :data-verdict="r?.verdict ?? 'untested'"></span>
+      <span v-for="(r, i) in cells" :key="r?.id ?? `empty-${i}`" class="h-3 min-w-0 flex-1 rounded-sm focus:outline focus:outline-2 focus:outline-blue-500" :class="!r || r.verdict === 'waiting' ? 'bg-gray-300 dark:bg-dark-500' : r.verdict === 'correct' ? 'bg-emerald-500' : r.verdict === 'error' ? 'bg-red-500' : 'bg-amber-400'" :title="tooltip(r)" :aria-label="tooltip(r)" :tabindex="r ? 0 : undefined" :data-verdict="r?.verdict ?? 'untested'"></span>
     </div>
     <p v-if="error" class="mt-1 text-[10px] text-red-600">记录读取失败，已有记录可能过期</p>
     <p v-else class="mt-1 text-[10px] text-gray-500">{{ state }} · {{ correct }}/{{ results.length }} 匹配 · {{ results.length ? Math.round(correct / results.length * 100) : 0 }}% <span v-if="summary">· 间隔 {{ summary.interval_seconds }}s</span></p>

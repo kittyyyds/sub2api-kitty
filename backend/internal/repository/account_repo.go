@@ -132,7 +132,7 @@ func newAccountRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor, schedul
 func (r *accountRepository) Create(ctx context.Context, account *service.Account) error {
 	client := r.client
 	var tx *dbent.Tx
-	if account != nil && account.InitialQualityPlan != nil {
+	if account != nil && (account.InitialQualityPlan != nil || account.InitialIQBootstrap != nil || account.ImportTicket != "") {
 		var err error
 		tx, err = r.client.Tx(ctx)
 		if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
@@ -162,6 +162,9 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		return service.ErrAccountNilInput
 	}
 
+	if err := lockAccountImport(ctx, client, account); err != nil {
+		return err
+	}
 	builder := client.Account.Create().
 		SetName(account.Name).
 		SetNillableNotes(account.Notes).
@@ -229,6 +232,23 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		}
 	}
 	account.ID = created.ID
+	if err := consumeAccountImport(ctx, client, account); err != nil {
+		return err
+	}
+	if b := account.InitialIQBootstrap; b != nil {
+		p := b.Plan()
+		cfg, err := json.Marshal(b)
+		if err != nil {
+			return err
+		}
+		_, err = client.ExecContext(ctx, `WITH p AS (
+ INSERT INTO scheduled_test_plans(account_id,model_id,cron_expression,enabled,max_results,auto_recover,next_run_at,pelican_config,created_at,updated_at)
+ VALUES($1,$2,$3,true,20,false,$4,$5,NOW(),NOW()) RETURNING id)
+ INSERT INTO account_iq_lifecycle(account_id,plan_id,config) SELECT $1,p.id,$6 FROM p`, created.ID, p.ModelID, p.CronExpression, p.NextRunAt, marshalPelicanConfig(p.PelicanConfig), string(cfg))
+		if err != nil {
+			return err
+		}
+	}
 	account.CreatedAt = created.CreatedAt
 	account.UpdatedAt = created.UpdatedAt
 	return nil

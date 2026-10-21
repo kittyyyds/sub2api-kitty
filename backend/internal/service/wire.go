@@ -1285,9 +1285,12 @@ func ProvideAccountOpsService(settings SettingRepository, repo AccountOpsReposit
 // ProvideAccountTokenGuardService 创建并启动「凭证守护」后台巡检（智能运维子页面）。
 func ProvideAccountTokenGuardService(settings SettingRepository, repo AccountTokenGuardRepository,
 	accounts AccountRepository, admin AdminService, invalidator TokenCacheInvalidator,
+	gateway *OpenAIGatewayService, reauth *OpenAIOAuthReauthService,
 	cfg *config.Config,
 ) *AccountTokenGuardService {
 	svc := NewAccountTokenGuardService(settings, repo, accounts, admin, invalidator)
+	svc.gateway = gateway
+	svc.reauth = reauth
 	startBackgroundService(cfg, svc)
 	return svc
 }

@@ -115,6 +115,7 @@ func nextPlanRun(plan *ScheduledTestPlan, now time.Time) (time.Time, error) {
 			if cfg.Quality != nil || cfg.TestChannel == "bps" {
 				return time.Time{}, fmt.Errorf("定时智商测试仅观察账号，不执行账号处置策略")
 			}
+			cfg.TestChannel = "account"
 			cfg.QuestionKind = "candy"
 			cfg.Prompt = CandyPrompt
 			cfg.ParallelCount = 1

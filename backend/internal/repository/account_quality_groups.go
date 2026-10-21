@@ -37,6 +37,13 @@ func removeQualityGroups(ctx context.Context, tx *sql.Tx, accountID int64, targe
 }
 
 func restoreQualityGroups(ctx context.Context, tx *sql.Tx, accountID int64, state *qualityState) (bool, error) {
+	var held bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_iq_lifecycle WHERE account_id=$1 AND (quarantined_at IS NOT NULL OR quarantine_pending))`, accountID).Scan(&held); err != nil {
+		return false, err
+	}
+	if held {
+		return true, nil
+	}
 	// Validate the entire restore before inserting anything. A manual membership
 	// replacement must never be silently claimed as a successful rule restore.
 	for _, group := range state.Removed {

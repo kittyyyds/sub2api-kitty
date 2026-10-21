@@ -34,7 +34,7 @@ func TestRequestTimezoneAutoSettingsPersistAndInvalidate(t *testing.T) {
 	}
 }
 
-func TestRequestTimezoneAutoSettingsPersistAndInvalidate(t *testing.T) {
+func TestRequestTimezoneAutoOnlySettingsPersistAndInvalidate(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		repo := &settingUpdateRepoStub{}
 		svc := NewSettingService(repo, &config.Config{})

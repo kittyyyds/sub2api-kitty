@@ -546,6 +546,8 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 	accountExtra = prepareCodexFingerprintExtraForCreate(input.Platform, input.Type, accountExtra)
 	account := &Account{
 		InitialQualityPlan: input.InitialQualityPlan,
+		InitialIQBootstrap: input.InitialIQBootstrap,
+		ImportTicket:       input.ImportTicket,
 		Name:               input.Name,
 		Notes:              normalizeAccountNotes(input.Notes),
 		Platform:           input.Platform,
@@ -556,7 +558,7 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 		Concurrency:        normalizeAccountConcurrency(input.Platform, input.Type, input.Concurrency),
 		Priority:           input.Priority,
 		Status:             StatusActive,
-		Schedulable:        true,
+		Schedulable:        input.InitialIQBootstrap == nil,
 	}
 	if input.ProbeEnabled != nil && *input.ProbeEnabled {
 		if !isUpstreamBillingProbeAccount(account) {
@@ -606,6 +608,20 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 }
 
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
+	if input == nil {
+		return nil, ErrAccountNilInput
+	}
+	incomingTicket := input.ImportTicket != ""
+	defer func() {
+		if !incomingTicket && input.ImportTicket != "" {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.CancelAccountImport(cleanup, input.ImportTicket)
+		}
+	}()
+	if prior, err := s.resolveVerifiedImport(ctx, input); err != nil || prior != nil {
+		return prior, err
+	}
 	if err := ValidateAccountCostMultiplierExtra(input.Extra); err != nil {
 		return nil, err
 	}

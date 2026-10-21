@@ -24,8 +24,10 @@ func (r *scheduledTestPlanRepository) FinishIQ(ctx context.Context, p *service.S
 }
 func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int64) ([]service.IQSummary, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT p.account_id,p.id,p.enabled,p.model_id,p.pelican_config,p.running_until,p.next_run_at,
- h.id,h.status,LEFT(h.response_text,256),LEFT(h.error_message,4096),h.finished_at,h.pelican_config
+ h.id,h.status,LEFT(h.response_text,256),LEFT(h.error_message,4096),h.finished_at,h.pelican_config,
+ l.config,l.correct_streak,l.answer29_streak,l.passed_at,l.quarantined_at,l.action_error,l.quarantine_pending
  FROM scheduled_test_plans p JOIN accounts a ON a.id=p.account_id AND a.deleted_at IS NULL
+ LEFT JOIN account_iq_lifecycle l ON l.account_id=p.account_id
  LEFT JOIN LATERAL(SELECT id,status,response_text,error_message,finished_at,pelican_config FROM scheduled_test_results WHERE plan_id=p.id ORDER BY id DESC LIMIT 20) h ON true
  WHERE p.account_id=ANY($1) AND p.pelican_config->>'schedule_mode'='completion_interval'
  ORDER BY p.account_id,h.id DESC`, pq.Array(ids))
@@ -37,11 +39,15 @@ func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int
 	indices := map[int64]int{}
 	for rows.Next() {
 		var s service.IQSummary
-		var cfg, rcfg []byte
+		var cfg, rcfg, lifecycleConfig []byte
+		var correct, answer29 sql.NullInt64
+		var passed, quarantined sql.NullTime
+		var actionError sql.NullString
+		var quarantinePending sql.NullBool
 		var id sql.NullInt64
 		var status, answer, message sql.NullString
 		var finished sql.NullTime
-		if err = rows.Scan(&s.AccountID, &s.PlanID, &s.Enabled, &s.Model, &cfg, &s.RunningUntil, &s.NextRunAt, &id, &status, &answer, &message, &finished, &rcfg); err != nil {
+		if err = rows.Scan(&s.AccountID, &s.PlanID, &s.Enabled, &s.Model, &cfg, &s.RunningUntil, &s.NextRunAt, &id, &status, &answer, &message, &finished, &rcfg, &lifecycleConfig, &correct, &answer29, &passed, &quarantined, &actionError, &quarantinePending); err != nil {
 			return nil, err
 		}
 		index, exists := indices[s.AccountID]
@@ -49,6 +55,18 @@ func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int
 			var config service.PelicanTestConfig
 			if err = json.Unmarshal(cfg, &config); err != nil {
 				return nil, err
+			}
+			if len(lifecycleConfig) > 0 {
+				s.Lifecycle = &service.IQLifecycleState{CorrectStreak: int(correct.Int64), Answer29Streak: int(answer29.Int64), QuarantinePending: quarantinePending.Bool, ActionError: actionError.String}
+				if err = json.Unmarshal(lifecycleConfig, &s.Lifecycle.Config); err != nil {
+					return nil, err
+				}
+				if passed.Valid {
+					s.Lifecycle.PassedAt = &passed.Time
+				}
+				if quarantined.Valid {
+					s.Lifecycle.QuarantinedAt = &quarantined.Time
+				}
 			}
 			s.IntervalSeconds = config.IntervalSeconds
 			s.Reasoning = config.ReasoningEffort
@@ -75,5 +93,9 @@ func (r *scheduledTestPlanRepository) IQSummaries(ctx context.Context, ids []int
 			out[index].Results = append(out[index].Results, result)
 		}
 	}
-	return out, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	return out, nil
 }

@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import AutoConfigView from '../AutoConfigView.vue'
-import { getAutoConfig, saveAutoConfig, type AutoConfig } from '@/api/admin/autoConfig'
+import { getAutoConfig, saveAutoConfig, defaultIQBootstrap, type AutoConfig } from '@/api/admin/autoConfig'
 import { listQualityPlans } from '@/api/admin/accountQuality'
-import { getAll } from '@/api/admin/groups'
+import { getAllIncludingInactive } from '@/api/admin/groups'
 import type { Group } from '@/types'
 import { defaultModelBillingConfig } from '@/utils/modelBilling'
 import { defaultExcelBPSDefaults } from '@/utils/excelBPSDefaults'
@@ -16,14 +16,15 @@ vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<mai
 vi.mock('@/components/admin/operations/AutoConfigHistory.vue', () => ({ default: { props: ['refreshKey'], template: '<section data-testid="history" :data-refresh="refreshKey" />' } }))
 vi.mock('@/components/admin/operations/SmartOpsNav.vue', () => ({ default: { template: '<nav />' } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
-vi.mock('@/api/admin/autoConfig', () => ({ getAutoConfig: vi.fn(), saveAutoConfig: vi.fn() }))
+vi.mock('@/api/client',()=>({apiClient:{get:vi.fn(),put:vi.fn()}}))
+vi.mock('@/api/admin/autoConfig', async importOriginal => ({ ...await importOriginal<typeof import('@/api/admin/autoConfig')>(), getAutoConfig: vi.fn(), saveAutoConfig: vi.fn() }))
 vi.mock('@/api/admin/accountQuality', () => ({ listQualityPlans: vi.fn() }))
-vi.mock('@/api/admin/groups', () => ({ getAll: vi.fn() }))
-const config: AutoConfig = { model_billing: defaultModelBillingConfig(), model_mappings: defaultOAuthModelMappings('openai'), excel_bps: defaultExcelBPSDefaults(), enabled: false, platform: 'openai', priority: 50, load_factor: 1, concurrency: 3, cost_multiplier: 0.07, group_ids: [], upgrade_enabled: false, upgrade_group_ids: [], successes_per_step: 20, upgrade_step: 1, max_concurrency: 100, cooldown_seconds: 60, revision: '' }
+vi.mock('@/api/admin/groups', () => ({ getAllIncludingInactive: vi.fn() }))
+const config: AutoConfig = { iq_bootstrap: defaultIQBootstrap(), model_billing: defaultModelBillingConfig(), model_mappings: defaultOAuthModelMappings('openai'), excel_bps: defaultExcelBPSDefaults(), enabled: false, platform: 'openai', priority: 50, load_factor: 1, concurrency: 3, cost_multiplier: 0.07, group_ids: [], upgrade_enabled: false, upgrade_group_ids: [], successes_per_step: 20, upgrade_step: 1, max_concurrency: 100, cooldown_seconds: 60, revision: '' }
 beforeEach(() => {
  vi.resetAllMocks(); vi.mocked(listQualityPlans).mockResolvedValue([]); state.auth = reactive({ user: { id: 1, role: 'admin' } })
  vi.mocked(getAutoConfig).mockResolvedValue(structuredClone(config)); vi.mocked(saveAutoConfig).mockImplementation(async c => c)
- vi.mocked(getAll).mockResolvedValue([{ id: 5, name: 'OpenAI test', platform: 'openai', status: 'active' }, { id: 6, name: 'Anthropic test', platform: 'anthropic', status: 'active' }] as Group[])
+ vi.mocked(getAllIncludingInactive).mockResolvedValue([{ id: 5, name: 'OpenAI test', platform: 'openai', status: 'active' }, { id: 6, name: 'Anthropic test', platform: 'anthropic', status: 'active' }] as Group[])
 })
 describe('AutoConfigView', () => {
  it('starts with the Luna 10x rule disabled and saves model billing independently', async () => {

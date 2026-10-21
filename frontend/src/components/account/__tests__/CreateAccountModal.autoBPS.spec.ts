@@ -1,3 +1,8 @@
+vi.mock('@/api/admin/proxyBinding',async importOriginal=>({
+ ...await importOriginal<typeof import('@/api/admin/proxyBinding')>(),
+ getProxyBindingPolicy:async()=>({enabled:false,only_twofa:true,platforms:['openai'],history_limit:5,auto_assign:false}),
+ getProxyBindingSummaries:async()=>[],reserveOAuthImport:vi.fn(),releaseOAuthImport:vi.fn().mockResolvedValue(undefined)
+}))
 
 vi.mock('@/api/admin/credentialEncryption', () => ({
   getCredentialEncryption: vi.fn().mockResolvedValue({ configured: true, source: 'server_config' }),

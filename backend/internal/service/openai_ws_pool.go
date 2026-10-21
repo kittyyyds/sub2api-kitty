@@ -1130,6 +1130,9 @@ func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireReque
 			req.timezoneMode = "auto"
 		}
 	}
+	if err := validateBoundTimezoneEgress(ctx, req.timezoneBinding, req.ProxyURL); err != nil {
+		return nil, err
+	}
 	if err := ValidateConfiguredAccountProxy(req.Account, req.ProxyURL); err != nil {
 		return nil, err
 	}
@@ -2159,6 +2162,9 @@ func (p *openAIWSConnPool) UnpinConn(accountID int64, connID string) {
 }
 
 func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequest) (*openAIWSConn, error) {
+	if err := validateBoundTimezoneEgress(ctx, req.timezoneBinding, req.ProxyURL); err != nil {
+		return nil, err
+	}
 	if err := ValidateConfiguredAccountProxy(req.Account, req.ProxyURL); err != nil {
 		return nil, err
 	}

@@ -675,6 +675,12 @@ func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth
 	{
 		proxies.GET("", h.Admin.Proxy.List)
 		proxies.GET("/all", h.Admin.Proxy.GetAll)
+		proxies.POST("/import-reservation", h.Admin.Proxy.ReserveOAuthImport)
+		proxies.DELETE("/import-reservation/:ticket", h.Admin.Proxy.ReleaseOAuthImport)
+		proxies.GET("/binding-policy", h.Admin.Proxy.BindingPolicy)
+		proxies.PUT("/binding-policy", h.Admin.Proxy.SaveBindingPolicy)
+		proxies.GET("/binding-summary", h.Admin.Proxy.BindingSummaries)
+		proxies.POST("/:id/binding-allowance", h.Admin.Proxy.AllowBinding)
 		// 代理导出泄露账号密码原文——要求 step-up 2FA
 		proxies.GET("/data", gin.HandlerFunc(stepUpAuth), h.Admin.Proxy.ExportData)
 		proxies.POST("/data", h.Admin.Proxy.ImportData)
@@ -957,6 +963,7 @@ func registerScheduledTestRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	{
 		plans.POST("", h.Admin.ScheduledTest.Create)
 		plans.PUT("/:id", h.Admin.ScheduledTest.Update)
+		plans.PUT("/:id/iq-quarantine-target", h.Admin.ScheduledTest.SetIQQuarantineTarget)
 		plans.DELETE("/:id", h.Admin.ScheduledTest.Delete)
 		plans.GET("/:id/results", h.Admin.ScheduledTest.ListResults)
 		plans.GET("/:id/results/:resultID", h.Admin.ScheduledTest.GetResult)

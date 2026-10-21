@@ -10,6 +10,15 @@ import (
 
 var ErrAccountTestBusy = errors.New("账号业务并发已满，测试等待空闲容量")
 
+type testAdmissionContextKey struct{}
+type testAdmissionObservation struct{ Waiting bool }
+
+func markTestAdmissionWaiting(ctx context.Context) {
+	if observation, ok := ctx.Value(testAdmissionContextKey{}).(*testAdmissionObservation); ok {
+		observation.Waiting = true
+	}
+}
+
 type TestAdmissionWaitError struct {
 	Until  time.Time
 	Reason string

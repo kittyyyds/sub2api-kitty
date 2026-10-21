@@ -130,6 +130,13 @@ func (r *scheduledTestPlanRepository) ApplyQualityOutcome(ctx context.Context, p
 		return "", err
 	}
 	// Checked under the same account/plan locks as restoration. A 5xx that
+	var iqHeld bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_iq_lifecycle WHERE account_id=$1 AND (passed_at IS NULL OR quarantined_at IS NOT NULL OR quarantine_pending))`, plan.AccountID).Scan(&iqHeld); err != nil {
+		return "", err
+	}
+	if iqHeld {
+		return "action_conflict", nil
+	}
 	// arrives during a probe invalidates that probe even across replicas.
 	if state.Quality5xxEpisode != plan.Quality5xxEpisode {
 		return "stale_run", nil

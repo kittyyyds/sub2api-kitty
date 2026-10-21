@@ -18,6 +18,7 @@ const AutoConfigConcurrencyExtraKey = "auto_config_concurrency"
 
 // Initial account fields, BPS defaults, model billing and concurrency upgrades are independent.
 type OAuthAutoConfig struct {
+	IQBootstrap      IQBootstrap              `json:"iq_bootstrap"`
 	QualityRule      *OAuthInitialQualityRule `json:"quality_rule,omitempty"`
 	ModelMappings    []OAuthModelMappingRule  `json:"model_mappings"`
 	ModelBilling     ModelBillingConfig       `json:"model_billing"`
@@ -40,9 +41,15 @@ type OAuthAutoConfig struct {
 }
 
 func DefaultOAuthAutoConfig() OAuthAutoConfig {
-	return OAuthAutoConfig{ModelMappings: defaultOAuthModelMappings(PlatformOpenAI), ModelBilling: DefaultModelBillingConfig(), ExcelBPS: DefaultExcelBPSDefaults(), Platform: PlatformOpenAI, Priority: 50, LoadFactor: 1, Concurrency: 3, CostMultiplier: 0.07, GroupIDs: []int64{}, UpgradeGroupIDs: []int64{}, SuccessesPerStep: 20, UpgradeStep: 1, MaxConcurrency: 100, CooldownSeconds: 60}
+	return OAuthAutoConfig{IQBootstrap: DefaultIQBootstrap(), ModelMappings: defaultOAuthModelMappings(PlatformOpenAI), ModelBilling: DefaultModelBillingConfig(), ExcelBPS: DefaultExcelBPSDefaults(), Platform: PlatformOpenAI, Priority: 50, LoadFactor: 1, Concurrency: 3, CostMultiplier: 0.07, GroupIDs: []int64{}, UpgradeGroupIDs: []int64{}, SuccessesPerStep: 20, UpgradeStep: 1, MaxConcurrency: 100, CooldownSeconds: 60}
 }
 func ValidateOAuthAutoConfig(c OAuthAutoConfig) error {
+	if err := c.IQBootstrap.Validate(); err != nil {
+		return infraerrors.BadRequest("AUTO_CONFIG_INVALID", err.Error())
+	}
+	if c.IQBootstrap.Enabled && c.Platform != PlatformOpenAI {
+		return infraerrors.BadRequest("AUTO_CONFIG_INVALID", "自动糖果验证目前仅支持 OpenAI 2FA 新账号")
+	}
 	if _, err := c.QualityRule.plan(c.Platform); err != nil {
 		return err
 	}
@@ -131,6 +138,7 @@ func (s *adminServiceImpl) ApplyOAuthAutoConfig(ctx context.Context, input *Crea
 		return ErrAccountNilInput
 	}
 	input.InitialQualityPlan = nil
+	input.InitialIQBootstrap = nil
 	// Imported/user-supplied markers must not fabricate automatic-configuration history.
 	input.Extra = maps.Clone(input.Extra)
 	delete(input.Extra, "auto_config_initial_revision")
@@ -169,6 +177,17 @@ func (s *adminServiceImpl) ApplyOAuthAutoConfig(ctx context.Context, input *Crea
 	lf := c.LoadFactor
 	input.LoadFactor = &lf
 	input.Concurrency = c.Concurrency
+	if c.IQBootstrap.Enabled && input.VerifiedImportSource == "twofa" {
+		if c.IQBootstrap.QuarantineEnabled {
+			g, err := s.groupRepo.GetByID(ctx, c.IQBootstrap.QuarantineGroupID)
+			if err != nil || g == nil || g.Platform != PlatformOpenAI || g.Status != StatusActive {
+				return infraerrors.BadRequest("AUTO_CONFIG_GROUP_INVALID", "糖果隔离目标分组不可用")
+			}
+		}
+		copy := c.IQBootstrap
+		input.InitialIQBootstrap = &copy
+		input.Concurrency = 1
+	}
 	input.GroupIDs = append([]int64(nil), c.GroupIDs...)
 	input.Extra = maps.Clone(input.Extra)
 	if input.Extra == nil {
@@ -185,6 +204,9 @@ func (s *AccountOpsService) GetOAuthAutoConfig(ctx context.Context) (OAuthAutoCo
 func (s *AccountOpsService) SaveOAuthAutoConfig(ctx context.Context, c OAuthAutoConfig) (OAuthAutoConfig, error) {
 	s.autoConfigMu.Lock()
 	defer s.autoConfigMu.Unlock()
+	if c.IQBootstrap.Enabled {
+		c.Concurrency = 1
+	}
 	if c.ModelMappings == nil {
 		c.ModelMappings = []OAuthModelMappingRule{}
 	}
@@ -214,7 +236,16 @@ func (s *AccountOpsService) SaveOAuthAutoConfig(ctx context.Context, c OAuthAuto
 			}
 		}
 	}
+	if c.IQBootstrap.Enabled && c.IQBootstrap.QuarantineEnabled {
+		g, err := s.autoGroups.GetByID(ctx, c.IQBootstrap.QuarantineGroupID)
+		if err != nil || g == nil || g.Platform != PlatformOpenAI || g.Status != StatusActive {
+			return c, infraerrors.BadRequest("AUTO_CONFIG_GROUP_INVALID", "糖果隔离目标分组不可用")
+		}
+	}
 	if c.UpgradeEnabled {
+		if c.IQBootstrap.Enabled && c.MaxConcurrency < c.IQBootstrap.PassedConcurrency {
+			return c, infraerrors.BadRequest("AUTO_CONFIG_INVALID", "最大并发不能小于糖果验证通过后的并发")
+		}
 		for _, id := range c.UpgradeGroupIDs {
 			g, err := s.autoGroups.GetByID(ctx, id)
 			if err != nil {
@@ -226,6 +257,7 @@ func (s *AccountOpsService) SaveOAuthAutoConfig(ctx context.Context, c OAuthAuto
 		}
 	}
 	if c.ExcelBPS.AutoMoveOn403 {
+		// Existing Excel policy remains independent of account bootstrap.
 		validator := &adminServiceImpl{groupRepo: s.autoGroups}
 		if err := validator.validateExcelBPS403GroupSettings(ctx, &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: c.ExcelBPS.extra()}); err != nil {
 			return c, err

@@ -129,6 +129,13 @@ func (r *scheduledTestPlanRepository) Delete(ctx context.Context, id int64) erro
 	} else if err != nil {
 		return err
 	}
+	var lifecycle bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_iq_lifecycle WHERE plan_id=$1)`, id).Scan(&lifecycle); err != nil {
+		return err
+	}
+	if lifecycle {
+		return fmt.Errorf("此计划承载账号准入与隔离状态，请停用测试而非删除计划")
+	}
 	state, err := readQualityState(ctx, tx, id)
 	if err != nil {
 		return err
@@ -160,7 +167,14 @@ func NewScheduledTestResultRepository(db *sql.DB) service.ScheduledTestResultRep
 }
 
 func (r *scheduledTestResultRepository) Create(ctx context.Context, result *service.ScheduledTestResult) (*service.ScheduledTestResult, error) {
-	row := r.db.QueryRowContext(ctx, `
+	if result.PelicanConfig != nil && result.PelicanConfig.ScheduleMode == service.IQCompletionInterval {
+		return r.createIQLifecycleResult(ctx, result)
+	}
+	return insertScheduledTestResult(ctx, r.db, result)
+}
+
+func insertScheduledTestResult(ctx context.Context, q planRowQuerier, result *service.ScheduledTestResult) (*service.ScheduledTestResult, error) {
+	row := q.QueryRowContext(ctx, `
 		INSERT INTO scheduled_test_results (plan_id, status, response_text, error_message, latency_ms, started_at, finished_at, created_at, pelican_config, quality_action, quality_judgment, quality_round_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9, $10, $11)
 		RETURNING id, plan_id, status, response_text, error_message, latency_ms, started_at, finished_at, created_at, pelican_config, quality_action, quality_judgment, quality_round_id

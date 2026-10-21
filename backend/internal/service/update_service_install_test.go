@@ -64,8 +64,8 @@ func TestUpdateServicePendingRestartPrecedesReleaseLookup(t *testing.T) {
 			} else {
 				err = svc.PerformUpdate(context.Background())
 			}
-			require.ErrorIs(t, err, ErrSystemRestartRequired)
-			require.Equal(t, "SYSTEM_RESTART_REQUIRED", infraerrors.Reason(err))
+			require.ErrorIs(t, err, ErrUpdateRestartRequired)
+			require.Equal(t, "UPDATE_RESTART_REQUIRED", infraerrors.Reason(err))
 			require.Zero(t, client.latestCalls, "pending restart must not query the latest release")
 			require.Zero(t, client.recentCalls, "pending restart must not query rollback releases")
 		})
@@ -139,7 +139,7 @@ func runUpdateInstallScenario(t *testing.T, scenario string) {
 		err = update()
 	}
 	require.Error(t, err, "a successful install must require restart before any further mutation")
-	require.Equal(t, "SYSTEM_RESTART_REQUIRED", infraerrors.Reason(err))
+	require.Equal(t, "UPDATE_RESTART_REQUIRED", infraerrors.Reason(err))
 	require.Equal(t, before, updateInstallFileHashes(t, executable), "rejected mutations must preserve the installed binary and backup")
 	require.NoFileExists(t, executable+".backup.backup")
 }

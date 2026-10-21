@@ -491,12 +491,19 @@ func (s *AccountTokenGuardV2Service) probeAccount(ctx context.Context, account *
 	if strings.TrimSpace(account.GetCredential("access_token")) == "" {
 		return AccountTokenGuardV2ProbeAuth, "account has no access token"
 	}
-	_, err := s.prober.FetchOpenAIModelsList(ctx, account)
+	var err error
+	if live, ok := s.prober.(interface {
+		ProbeOpenAIModels(context.Context, *Account) (*OpenAIModelsResponse, error)
+	}); ok {
+		_, err = live.ProbeOpenAIModels(ctx, account)
+	} else {
+		_, err = s.prober.FetchOpenAIModelsList(ctx, account)
+	}
 	if err == nil {
 		return AccountTokenGuardV2ProbeOK, "credential accepted"
 	}
 	var upstreamErr *codexModelsManifestUpstreamError
-	if errors.As(err, &upstreamErr) && (upstreamErr.statusCode == http.StatusUnauthorized || upstreamErr.statusCode == http.StatusForbidden) {
+	if errors.As(err, &upstreamErr) && upstreamErr.statusCode == http.StatusUnauthorized {
 		return AccountTokenGuardV2ProbeAuth, fmt.Sprintf("upstream returned %d", upstreamErr.statusCode)
 	}
 	text := strings.ToLower(err.Error())

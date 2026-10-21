@@ -4,7 +4,19 @@ import type { ModelBillingConfig } from '@/utils/modelBilling'
 import type { ExcelBPSDefaults } from '@/utils/excelBPSDefaults'
 import type { OAuthModelMappingRule } from '@/utils/oauthModelMappings'
 export type OAuthInitialQualityRule = Pick<ScheduledTestPlan, 'model_id' | 'cron_expression' | 'enabled' | 'max_results' | 'pelican_config'>
+export interface IQBootstrap {
+ enabled: boolean
+ model: string
+ reasoning: string
+ interval_seconds: number
+ correct_required: number
+ passed_concurrency: number
+ quarantine_enabled: boolean
+ quarantine_group_id: number
+}
+export function defaultIQBootstrap(): IQBootstrap {return {enabled:false,model:'gpt-6.1-sol',reasoning:'low',interval_seconds:60,correct_required:6,passed_concurrency:2,quarantine_enabled:false,quarantine_group_id:0}}
 export interface AutoConfig {
+ iq_bootstrap?: IQBootstrap
  quality_rule?: OAuthInitialQualityRule | null
  model_billing?: ModelBillingConfig
  model_mappings?: OAuthModelMappingRule[] | null

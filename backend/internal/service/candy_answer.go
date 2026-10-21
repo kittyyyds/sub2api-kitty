@@ -13,6 +13,10 @@ var candyAnswerPattern = regexp.MustCompile(`^(?:(?:最终)?(?:答案|结果)(?:
 var candySplitNumberPattern = regexp.MustCompile(`[0-9０-９][\s\p{Zs}*_]+[0-9０-９]`)
 
 func CandyAnswerCorrect(output string) bool {
+	return CandyAnswerMatches(output, 21)
+}
+
+func CandyAnswerMatches(output string, answer int) bool {
 	if candySplitNumberPattern.MatchString(output) {
 		return false
 	}
@@ -25,5 +29,13 @@ func CandyAnswerCorrect(output string) bool {
 		}
 		return unicode.ToLower(r)
 	}, output)
-	return candyAnswerPattern.MatchString(normalized)
+	if answer == 21 {
+		return candyAnswerPattern.MatchString(normalized)
+	}
+	if answer == 29 {
+		return candyAnswer29Pattern.MatchString(normalized)
+	}
+	return false
 }
+
+var candyAnswer29Pattern = regexp.MustCompile(strings.ReplaceAll(strings.ReplaceAll(candyAnswerPattern.String(), "21", "29"), "二十一", "二十九"))

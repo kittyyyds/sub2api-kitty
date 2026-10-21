@@ -135,7 +135,7 @@ func TestMiniMaxH3TariffsAndBillingSnapshot(t *testing.T) {
 	require.Equal(t, perRequest, NormalizeVideoModelPrices(perRequest))
 	svc := &OpenAIGatewayService{}
 	result := &OpenAIForwardResult{VideoCount: 1, MiniMaxH3BaseCost: &base, VideoDurationSeconds: 5}
-	cost := svc.calculateOpenAIVideoCost(context.Background(), "mapped-name", &APIKey{}, result, 0.1)
+	cost := svc.calculateOpenAIVideoCost(context.Background(), "mapped-name", "mapped-name", &APIKey{}, result, 0.1)
 	require.InDelta(t, 0.008, cost.ActualCost, 1e-9)
 	key := &APIKey{Group: &Group{RateMultiplier: 0.1, VideoRateIndependent: true, VideoRateMultiplier: 100}}
 	estimate, ok := (inflightEstimateDeps{}).estimate(context.Background(), key, InflightEstimateRequest{MiniMaxH3BaseCost: &base})

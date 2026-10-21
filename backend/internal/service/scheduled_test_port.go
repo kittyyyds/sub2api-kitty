@@ -55,6 +55,8 @@ type ScheduledTestPlan struct {
 
 // ScheduledTestResult represents a single test execution result.
 type ScheduledTestResult struct {
+	PlanUpdatedAt   time.Time          `json:"-"`
+	LeaseUntil      *time.Time         `json:"-"`
 	QualityRoundID  string             `json:"quality_round_id,omitempty"`
 	QualityJudgment *QualityJudgment   `json:"quality_judgment,omitempty"`
 	QualityAction   string             `json:"quality_action,omitempty"`

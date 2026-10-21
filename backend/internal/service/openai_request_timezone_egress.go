@@ -110,7 +110,7 @@ func (s *OpenAIGatewayService) withRequestTimezoneEgress(ctx context.Context, ac
 }
 
 func (b *requestTimezoneBinding) enabled(ctx context.Context) bool {
-	return b != nil && b.service.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) &&
+	return b != nil && b.service != nil && b.service.settingService != nil && b.service.settingService.GetOpenAIRequestTimezoneEnabled(ctx, false) &&
 		b.service.settingService.GetOpenAIRequestTimezoneAuto(ctx, false)
 }
 
@@ -192,6 +192,9 @@ func BindOpenAIRequestTimezone(req *http.Request, proxy string) (*http.Request, 
 		return req, nil
 	}
 	b, _ := req.Context().Value(requestTimezoneEgressKey{}).(*requestTimezoneBinding)
+	if err := validateBoundTimezoneEgress(req.Context(), b, proxy); err != nil {
+		return nil, err
+	}
 	if !b.enabled(req.Context()) {
 		return req, nil
 	}

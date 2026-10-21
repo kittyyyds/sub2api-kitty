@@ -36,6 +36,8 @@ const (
 )
 
 func (s *AccountTestService) RunPelicanBackground(ctx context.Context, accountID int64, model string, cfg *PelicanTestConfig) (*ScheduledTestResult, error) {
+	admission := &testAdmissionObservation{}
+	ctx = context.WithValue(ctx, testAdmissionContextKey{}, admission)
 	ctx = context.WithValue(ctx, qualityProbeContextKey{}, true)
 	// 探针题型不下发题目，直接走门票探针。
 	if isOpenAICodexStateProbePlan(cfg) {
@@ -78,6 +80,10 @@ func (s *AccountTestService) RunPelicanBackground(ctx context.Context, accountID
 	status := "success"
 	if message != "" {
 		status = "failed"
+	}
+	if admission.Waiting {
+		status = "skipped"
+		output = ""
 	}
 	finished := time.Now()
 	snapshot := *cfg
@@ -277,6 +283,8 @@ func (s *ScheduledTestRunnerService) runPelicanPlan(ctx context.Context, plan *S
 			snapshot.IQVerdict = IQAnswerVerdict(result.Status, result.ResponseText, result.ErrorMessage)
 			result.PelicanConfig = &snapshot
 		}
+		result.PlanUpdatedAt = plan.UpdatedAt
+		result.LeaseUntil = &until
 		if err := s.scheduledSvc.SaveResult(saveCtx, plan.ID, plan.MaxResults, result); err != nil {
 			logger.LegacyPrintf("service.scheduled_test_runner", "pelican plan=%d save failed: %v", plan.ID, err)
 		}

@@ -30,18 +30,22 @@ type IQResult struct {
 	FinishedAt time.Time `json:"finished_at"`
 }
 type IQSummary struct {
-	AccountID       int64      `json:"account_id"`
-	PlanID          int64      `json:"plan_id"`
-	Enabled         bool       `json:"enabled"`
-	Model           string     `json:"model"`
-	Reasoning       string     `json:"reasoning"`
-	IntervalSeconds int        `json:"interval_seconds"`
-	RunningUntil    *time.Time `json:"running_until"`
-	NextRunAt       *time.Time `json:"next_run_at"`
-	Results         []IQResult `json:"results"`
+	Lifecycle       *IQLifecycleState `json:"lifecycle,omitempty"`
+	AccountID       int64             `json:"account_id"`
+	PlanID          int64             `json:"plan_id"`
+	Enabled         bool              `json:"enabled"`
+	Model           string            `json:"model"`
+	Reasoning       string            `json:"reasoning"`
+	IntervalSeconds int               `json:"interval_seconds"`
+	RunningUntil    *time.Time        `json:"running_until"`
+	NextRunAt       *time.Time        `json:"next_run_at"`
+	Results         []IQResult        `json:"results"`
 }
 
 func IQAnswerVerdict(status, answer string, errorMessage ...string) string {
+	if status == "skipped" {
+		return "waiting"
+	}
 	// A completed answer mismatch is a yellow result, not a transport failure.
 	answerMismatch := len(errorMessage) > 0 && strings.TrimSpace(errorMessage[0]) == "answer_mismatch: expected 21" && strings.TrimSpace(answer) != ""
 	if status != "success" && !answerMismatch {
@@ -137,4 +141,17 @@ func (s *ScheduledTestRunnerService) startIQIntervals() {
 			}
 		}
 	}()
+}
+
+func (s *ScheduledTestService) SetIQQuarantineTarget(ctx context.Context, planID, groupID int64) error {
+	if planID <= 0 || groupID <= 0 {
+		return fmt.Errorf("请选择现有隔离分组")
+	}
+	store, ok := s.planRepo.(interface {
+		SetIQQuarantineTarget(context.Context, int64, int64) error
+	})
+	if !ok {
+		return fmt.Errorf("糖果验证仓储未就绪")
+	}
+	return store.SetIQQuarantineTarget(ctx, planID, groupID)
 }
