@@ -117,12 +117,15 @@ func (r *accountRepository) AllowOneProxyBinding(ctx context.Context, id int64) 
 		return e
 	}
 	var available bool
-	e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM proxies WHERE id=$1 AND status='active' AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at>NOW()))`, id).Scan(&available)
+	e = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM proxies WHERE id=$1 AND status IN ('active','inactive') AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at>NOW()))`, id).Scan(&available)
 	if e != nil {
 		return e
 	}
 	if !available {
 		return errors.New("代理本身不可用，请先检查代理状态")
+	}
+	if _, e = tx.ExecContext(ctx, `UPDATE proxies SET status='active',updated_at=clock_timestamp() WHERE id=$1 AND status='inactive'`, id); e != nil {
+		return e
 	}
 	_, e = tx.ExecContext(ctx, `INSERT INTO proxy_binding_allowance(proxy_key,available,granted_at) VALUES(kitty_proxy_key($1),true,NOW()) ON CONFLICT(proxy_key) DO UPDATE SET available=true,granted_at=CASE WHEN proxy_binding_allowance.available THEN proxy_binding_allowance.granted_at ELSE NOW() END`, id)
 	if e != nil {

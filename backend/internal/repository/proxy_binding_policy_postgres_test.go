@@ -94,7 +94,12 @@ func TestProxyBindingAutomationPostgres(t *testing.T) {
 			require.Zero(t, s.Current)
 		}
 	}
+	_, e = db.ExecContext(ctx, `UPDATE proxies SET status='inactive' WHERE id=$1`, p1)
+	require.NoError(t, e)
 	require.NoError(t, r.AllowOneProxyBinding(ctx, p1))
+	var active string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT status FROM proxies WHERE id=$1`, p1).Scan(&active))
+	require.Equal(t, "active", active)
 	require.NoError(t, r.AllowOneProxyBinding(ctx, p2))
 	_, e = r.BeginAccountImport(ctx, "openai", "twofa", nil, "auto-no-extra-"+suffix)
 	require.Error(t, e, "automatic allocation never consumes the exception")
