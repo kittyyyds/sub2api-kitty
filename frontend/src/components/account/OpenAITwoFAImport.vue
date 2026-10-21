@@ -42,6 +42,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import CredentialEncryptionSetup from './CredentialEncryptionSetup.vue'
 import { useI18n } from 'vue-i18n'
 import { deleteTwoFALogin, getTwoFALogin, parseTwoFALoginText, startTwoFALogin } from '@/api/admin/accountTokenGuard'
+import { twoFAStartFailureMessage } from '@/utils/twoFAImportError'
 import type { TokenGuardReloginAccount, TwoFALoginJob, TwoFALoginEnvironment } from '@/api/admin/accountTokenGuard'
 
 const props = defineProps<{
@@ -114,7 +115,11 @@ async function run() {
         if (!row.credential) {
           row.status = 'login'
           // Keep the job ID on polling failures; retry resumes the same login.
-          if (!row.jobId) row.jobId = (await startTwoFALogin(row.entry, batchProxy)).id
+          if (!row.jobId) {
+            row.job = undefined
+            row.detail = undefined
+            row.jobId = (await startTwoFALogin(row.entry, batchProxy)).id
+          }
           let job = await getTwoFALogin(row.jobId)
           showProgress(row, job)
           while ((job.status === 'running' || job.status === 'waiting_interaction') && !stopRequested.value && !disposed) {
@@ -148,7 +153,13 @@ async function run() {
         const status = (cause as { status?: number; response?: { status?: number } })?.status ??
           (cause as { response?: { status?: number } })?.response?.status
         if (status === 404) row.jobId = undefined
-        row.detail = row.credential ? '账号保存未完成，登录结果已保留，可重试保存。' : '登录未完成，请检查代理可用性及登录任务状态后重试。'
+        if (row.credential) {
+          row.detail = '账号保存未完成，登录结果已保留，可重试保存。'
+        } else if (row.job?.status !== 'failed') {
+          row.detail = twoFAStartFailureMessage(cause) ?? (row.jobId
+            ? '登录任务状态读取失败；点击继续将查询原任务，不会重复登录。'
+            : '登录任务未能启动，请检查代理及登录服务配置后重试。')
+        }
         row.status = row.credential ? 'importFailed' : 'failed'
       }
     }

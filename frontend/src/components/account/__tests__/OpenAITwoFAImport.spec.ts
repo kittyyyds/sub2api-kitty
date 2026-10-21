@@ -126,6 +126,39 @@ it('freezes the proxy for retries and never starts an unproxied retry',async()=>
  expect(prepare).toHaveBeenCalledOnce()
 })
 
+it('explains exhausted idle proxies before login and retries after capacity is added', async () => {
+ const importCredential=vi.fn().mockResolvedValue('created')
+ vi.mocked(startTwoFALogin).mockRejectedValueOnce({status:400,message:'没有可分配的 IP：须出口已验证、当前空闲、历史未满且未被预留；未切换直连'})
+ const wrapper=mount(OpenAITwoFAImport,{props:{autoProxy:true,importCredential}})
+ await start(wrapper,'a@example.com----example-password----EXAMPLEKEY')
+ expect(wrapper.text()).toContain('没有符合条件的空闲代理')
+ expect(wrapper.text()).toContain('未验证密码或 2FA')
+ expect(getTwoFALogin).not.toHaveBeenCalled()
+ expect(importCredential).not.toHaveBeenCalled()
+ expect(wrapper.text()).not.toContain('example-password')
+ await wrapper.get('[data-testid="two-fa-start"]').trigger('click');await flushPromises()
+ expect(importCredential).toHaveBeenCalledOnce()
+ expect(wrapper.text()).not.toContain('没有符合条件的空闲代理')
+})
+
+it('keeps arbitrary server failures and secrets out of preparation diagnostics', async () => {
+ vi.mocked(startTwoFALogin).mockRejectedValueOnce({status:500,message:'password=EXAMPLE-PRIVATE-PASSWORD token=EXAMPLE-PRIVATE-TOKEN'})
+ const wrapper=mount(OpenAITwoFAImport,{props:{importCredential:vi.fn()}})
+ await start(wrapper,'a@example.com----example-password----EXAMPLEKEY')
+ expect(wrapper.text()).toContain('登录任务未能启动')
+ expect(wrapper.text()).not.toContain('EXAMPLE-PRIVATE')
+})
+
+it('preserves the safe terminal login stage and HTTP status', async () => {
+ vi.mocked(getTwoFALogin).mockResolvedValueOnce({id:'job-1',status:'failed',stage:'security_verification',http_status:403,error_code:'security_verification_required',message:'需要人工验证'})
+ const wrapper=mount(OpenAITwoFAImport,{props:{importCredential:vi.fn()}})
+ await start(wrapper,'a@example.com----example-password----EXAMPLEKEY')
+ expect(wrapper.text()).toContain('HTTP 403')
+ expect(wrapper.text()).toContain('等待安全验证')
+ expect(wrapper.text()).toContain('需要人工验证')
+ expect(wrapper.text()).not.toContain('登录任务未能启动')
+})
+
 it('locks before asynchronous preparation and does not start after unmount',async()=>{
  let resolve!:()=>void
  const prepare=vi.fn(()=>new Promise<void>(r=>{resolve=r}))

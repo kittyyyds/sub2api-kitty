@@ -74,11 +74,14 @@ func passwordLoginProcess(ctx context.Context, dir, email, password, totp, proxy
 		return nil, errors.New("verified fixed-proxy login source unavailable")
 	}
 	cmd := passwordLoginCommand(ctx, dir, tmp, email, password, totp, proxy)
+	diagnostic := &passwordLoginDiagnostic{}
+	cmd.Stdout = diagnostic
+	cmd.Stderr = diagnostic
 	if err = cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, &LoginError{Progress: LoginProgress{Status: "failed", Stage: "protocol_login", Code: "protocol_login_failed"}}
+		return nil, diagnostic.failure()
 	}
 	f, err := os.Open(filepath.Join(tmp, "oauth.json"))
 	if err != nil {
