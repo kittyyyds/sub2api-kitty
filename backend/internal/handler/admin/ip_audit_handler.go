@@ -29,7 +29,7 @@ func (h *SettingHandler) ConfigureIPAudit(history *AuditLogHandler, summary func
 func ipAuditAdministrator(c *gin.Context) bool {
 	subject, ok := middleware.GetAuthSubjectFromContext(c)
 	role, _ := middleware.GetUserRoleFromContext(c)
-	if !ok || subject.UserID <= 0 || role != service.RoleAdmin {
+	if !ok || subject.UserID <= 0 || (role != service.RoleAdmin && role != service.RoleSuperAdmin) {
 		response.Forbidden(c, "Administrator access required")
 		return false
 	}

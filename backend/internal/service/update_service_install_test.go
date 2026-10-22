@@ -38,11 +38,11 @@ func (c *updateInstallClient) FetchRecentReleases(ctx context.Context, repo stri
 	return c.updateServiceGitHubClientStub.FetchRecentReleases(ctx, repo, limit)
 }
 
-func (c *updateInstallClient) DownloadFile(_ context.Context, _, dest string, _ int64) error {
+func (c *updateInstallClient) DownloadFile(ctx context.Context, source, dest string, limit int64) error {
 	if c.failDownload {
 		return errors.New("download unavailable")
 	}
-	return os.WriteFile(dest, []byte("downloaded release"), 0600)
+	return c.updateServiceGitHubClientStub.DownloadFile(ctx, source, dest, limit)
 }
 
 func TestUpdateServicePendingRestartPrecedesReleaseLookup(t *testing.T) {
@@ -110,15 +110,12 @@ func runUpdateInstallScenario(t *testing.T, scenario string) {
 	require.NoError(t, err)
 	executable, err = filepath.EvalSymlinks(executable)
 	require.NoError(t, err)
-	client := &updateInstallClient{}
-	svc := NewUpdateService(&updateServiceCacheStub{}, client, "1.0.0", "release")
-	client.release = &GitHubRelease{
-		TagName: "v2.0.0",
-		Assets: []GitHubAsset{{
-			Name:               svc.getArchiveName(),
-			BrowserDownloadURL: "https://github.com/example/releases/" + svc.getArchiveName(),
-		}},
-	}
+	// The installation guard is shared, while Kitty requires its site/schema
+	// compatibility descriptor and checked archive before replacing a binary.
+	svc, fixture, _ := compatibleArchiveFixture(t, makeUpdateArchive(t, "replacement binary"))
+	client := &updateInstallClient{updateServiceGitHubClientStub: *fixture}
+	svc.githubClient = client
+	svc.executablePath = func() (string, error) { return executable, nil }
 	update := func() error { return svc.PerformUpdate(context.Background()) }
 	if scenario == "failed-update-retry" {
 		client.failDownload = true
@@ -127,6 +124,7 @@ func runUpdateInstallScenario(t *testing.T, scenario string) {
 	}
 	if scenario == "rollback-update" || scenario == "rollback-rollback" {
 		require.NoError(t, os.WriteFile(executable+".backup", []byte("previous release"), 0755))
+		require.NoError(t, writeBackupContract(executable+".backup", executable+".backup.compatibility.json", "2.8.15-kitty.1"))
 		require.NoError(t, svc.Rollback())
 	} else {
 		require.NoError(t, update())

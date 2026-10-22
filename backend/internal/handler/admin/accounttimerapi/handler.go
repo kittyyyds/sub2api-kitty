@@ -20,7 +20,7 @@ type Handler struct {
 
 func (h *Handler) access(c *gin.Context) (accounttimer.Repository, int64, int64, bool) {
 	actor, role := h.Identity(c)
-	if actor <= 0 || role != "admin" {
+	if actor <= 0 || (role != "admin" && role != "super_admin") {
 		response.Forbidden(c, "Administrator access required")
 		return nil, 0, 0, false
 	}

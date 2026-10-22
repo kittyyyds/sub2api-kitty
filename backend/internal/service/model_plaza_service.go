@@ -161,7 +161,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		idx := make(map[modelKey]int)
 		modelIdx[g.ID] = idx
 		configuredModels := plazaConfiguredModelNames(g)
-		if s.gatewayService == nil || s.gatewayService.accountRepo == nil {
+		if g.Platform != PlatformVideo && (s.gatewayService == nil || s.gatewayService.accountRepo == nil) {
 			// Preserve standalone catalog callers; an account-aware gateway uses
 			// accountModels below to enforce account-group model restrictions.
 			configuredModels = append(configuredModels, g.ModelAllowlist.Models...)
