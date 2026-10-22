@@ -1,3 +1,4 @@
+import type { OpenAITwoFAAdmissionConfig } from '@/utils/openaiTwoFAAdmission'
 import type { ScheduledTestPlan } from '@/types'
 import { apiClient } from '../client'
 import type { ModelBillingConfig } from '@/utils/modelBilling'
@@ -17,6 +18,7 @@ export interface IQBootstrap {
 export function defaultIQBootstrap(): IQBootstrap {return {enabled:false,model:'gpt-6.1-sol',reasoning:'low',interval_seconds:60,correct_required:6,passed_concurrency:2,quarantine_enabled:false,quarantine_group_id:0}}
 export interface AutoConfig {
  iq_bootstrap?: IQBootstrap
+ openai_two_fa_admission?: OpenAITwoFAAdmissionConfig
  quality_rule?: OAuthInitialQualityRule | null
  model_billing?: ModelBillingConfig
  model_mappings?: OAuthModelMappingRule[] | null

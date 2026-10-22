@@ -23,6 +23,7 @@ const codexImportClockSkewSeconds int64 = 120
 
 type CodexSessionImportRequest struct {
 	ImportTicket            string         `json:"import_ticket"`
+	InitializeOpenAITwoFA   bool           `json:"initialize_openai_two_fa"`
 	Content                 string         `json:"content"`
 	Contents                []string       `json:"contents"`
 	Name                    string         `json:"name"`
@@ -348,6 +349,7 @@ func (h *AccountHandler) importCodexSessions(ctx context.Context, req CodexSessi
 
 		account, createErr := h.adminService.CreateAccount(ctx, &service.CreateAccountInput{
 			ImportTicket:          req.ImportTicket,
+			InitialOpenAITwoFA:    req.InitializeOpenAITwoFA && !item.IsAgentIdentity,
 			Name:                  accountName,
 			Notes:                 req.Notes,
 			Platform:              service.PlatformOpenAI,

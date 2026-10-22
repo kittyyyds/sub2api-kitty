@@ -23,8 +23,9 @@ import (
 )
 
 type Account struct {
-	InitialIQBootstrap *IQBootstrap `json:"-"`
-	ImportTicket       string       `json:"-"`
+	InitialIQBootstrap   *IQBootstrap       `json:"-"`
+	ImportTicket         string             `json:"-"`
+	InitialAdmissionPlan *ScheduledTestPlan `json:"-"`
 	// InitialQualityPlan is internal create-only state, never imported or exported.
 	InitialQualityPlan      *ScheduledTestPlan `json:"-"`
 	ID                      int64

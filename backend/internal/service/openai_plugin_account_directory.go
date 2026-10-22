@@ -112,6 +112,7 @@ func accountReadableSnapshotJSON(account *Account) []byte {
 	clone.InitialQualityPlan = nil
 	clone.InitialIQBootstrap = nil
 	clone.ImportTicket = ""
+	clone.InitialAdmissionPlan = nil
 	clone.Credentials = nil
 	clone.Groups = nil
 	clone.AccountGroups = nil

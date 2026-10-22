@@ -422,6 +422,8 @@ type UpdateGroupInput struct {
 }
 
 type CreateAccountInput struct {
+	InitialOpenAITwoFA   bool               `json:"-"`
+	InitialAdmissionPlan *ScheduledTestPlan `json:"-"`
 	ImportTicket         string
 	VerifiedImportSource string             `json:"-"`
 	InitialIQBootstrap   *IQBootstrap       `json:"-"`

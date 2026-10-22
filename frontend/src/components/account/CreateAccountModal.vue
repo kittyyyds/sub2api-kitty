@@ -7011,7 +7011,7 @@ const importTwoFACredential = async (credential: Record<string, unknown>, email:
   let accountId = twoFACreated.get(email)
   if (!accountId) {
     const result = await adminAPI.accounts.importCodexSession({
-      ...settings, import_ticket: credential._import_ticket as string | undefined, proxy_id: credential._import_proxy_id as number | null, content: JSON.stringify(credential),
+      ...settings, initialize_openai_two_fa: true, import_ticket: credential._import_ticket as string | undefined, proxy_id: credential._import_proxy_id as number | null, content: JSON.stringify(credential),
       name: settings.name ? `${settings.name} (${email})` : email
     })
     const created = result.items?.find(item => item.action === 'created' && item.account_id)

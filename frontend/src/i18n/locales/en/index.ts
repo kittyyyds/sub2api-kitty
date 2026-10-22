@@ -1,4 +1,6 @@
 import { homeMessages } from '../../homeOverview'
+import ipAudit from './ipAudit'
+import connections from './connections'
 import securityRecords from './securityRecords'
 import siwc from './siwc'
 import priorityScheduling from './priorityScheduling'
@@ -27,6 +29,8 @@ import autoConfig from './autoConfig'
 
 export default {
   homeOverview: homeMessages.en,
+  ipAudit,
+  connections,
   securityRecords,
   siwc,
   autoConfig,
