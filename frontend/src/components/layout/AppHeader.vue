@@ -268,6 +268,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import { userDisplayName } from '@/utils/userDisplayName'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
@@ -322,10 +323,7 @@ const userInitials = computed(() => {
   return ''
 })
 
-const displayName = computed(() => {
-  if (!user.value) return ''
-  return user.value.username || user.value.email?.split('@')[0] || ''
-})
+const displayName = computed(() => userDisplayName(user.value))
 
 const nativeFeature = computed(() => (
   route.name === 'CustomPage' ? getNativeFeature(route.params.id) : null

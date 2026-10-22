@@ -10,7 +10,7 @@
         </div>
         <div class="dashboard-home-refresh"><small v-if="updatedAt">{{ t('homeOverview.updated', { time: updatedAt }) }}</small><button type="button" :disabled="refreshing" @click="refreshAll"><Icon name="refresh" size="sm" :class="{ 'animate-spin': refreshing }" />{{ t('homeOverview.refresh') }}</button></div>
       </header>
-      <DashboardWelcomeCard v-if="tab === 'overview'" :account-id="user?.id" :username="user?.username" :recharge-enabled="!!stats && rechargeEnabled" :is-simple="authStore.isSimpleMode" />
+      <DashboardWelcomeCard v-if="tab === 'overview'" :account-id="user?.id" :username="user?.username" :email="user?.email" :recharge-enabled="!!stats && rechargeEnabled" :is-simple="authStore.isSimpleMode" />
       <div v-if="statsError" class="home-error" role="alert">{{ stats ? t('homeOverview.stale') : t('homeOverview.statsError') }}<button type="button" @click="loadStats">{{ t('homeOverview.retry') }}</button></div>
       <div v-if="loading && !stats" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
       <template v-if="stats">

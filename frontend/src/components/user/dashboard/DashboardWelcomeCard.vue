@@ -2,7 +2,7 @@
   <section class="home-welcome-card" data-testid="home-welcome">
     <div class="home-welcome-copy">
       <span class="home-welcome-badge"><Icon name="home" size="xs" />{{ t('homeOverview.overview') }}</span>
-      <h1>{{ t('homeOverview.greeting', { greeting, name: username || 'Kitty' }) }}</h1>
+      <h1>{{ welcomeMessage }}</h1>
       <p data-testid="daily-quote">{{ quote }}</p>
     </div>
     <div class="home-welcome-actions">
@@ -19,14 +19,19 @@ import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import CustomerContactDialog from '@/components/layout/CustomerContactDialog.vue'
 import { dailyQuoteIndex, greetingPeriod, localDay } from '@/utils/dashboardGreeting'
+import { userDisplayName } from '@/utils/userDisplayName'
 
-const props = defineProps<{ accountId?: number; username?: string; rechargeEnabled: boolean; isSimple: boolean }>()
+const props = defineProps<{ accountId?: number; username?: string; email?: string; rechargeEnabled: boolean; isSimple: boolean }>()
 const { t } = useI18n()
 const now = ref(new Date()), quoteIndex = ref(0), contactOpen = ref(false)
 watch(() => [props.accountId, localDay(now.value)], () => {
   quoteIndex.value = dailyQuoteIndex(props.accountId ?? 'guest', now.value)
 }, { immediate: true })
 const greeting = computed(() => ({ lateNight: t('homeOverview.lateNight'), morning: t('homeOverview.morning'), afternoon: t('homeOverview.afternoon'), evening: t('homeOverview.evening') })[greetingPeriod(now.value)])
+const welcomeMessage = computed(() => {
+  const name = userDisplayName(props)
+  return name ? t('homeOverview.greeting', { greeting: greeting.value, name }) : greeting.value
+})
 const quote = computed(() => t(`homeOverview.quotes.${quoteIndex.value}`))
 const tick = () => { now.value = new Date() }
 let timer: ReturnType<typeof setInterval> | undefined
