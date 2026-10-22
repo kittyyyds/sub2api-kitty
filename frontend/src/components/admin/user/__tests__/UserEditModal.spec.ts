@@ -3,11 +3,12 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import UserEditModal from '../UserEditModal.vue'
 
-const { update, updateUserAttributeValues, showSuccess, showError } = vi.hoisted(() => ({
+const { update, updateUserAttributeValues, showSuccess, showError, auth } = vi.hoisted(() => ({
   update: vi.fn(),
   updateUserAttributeValues: vi.fn(),
   showSuccess: vi.fn(),
-  showError: vi.fn()
+  showError: vi.fn(),
+  auth: { isSimpleMode: false, isAdmin: false }
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -17,7 +18,7 @@ vi.mock('@/api/admin', () => ({
   }
 }))
 
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isSuperAdmin: true, user: { id: 1 } }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ ...auth, isSuperAdmin: true, user: { id: 1 } }) }))
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showSuccess, showError })
@@ -51,6 +52,7 @@ const mountModal = (concurrency: number) => mount(UserEditModal, {
       Icon: true,
       UserAttributeForm: true,
       UserCleanupGuard: true,
+      ModerationUserPanel: true,
       TotpStepUpDialog: true
     }
   }
@@ -58,6 +60,8 @@ const mountModal = (concurrency: number) => mount(UserEditModal, {
 
 describe('UserEditModal concurrency', () => {
   beforeEach(() => {
+    auth.isSimpleMode = false
+    auth.isAdmin = false
     update.mockReset()
     updateUserAttributeValues.mockReset()
     showSuccess.mockReset()
@@ -89,5 +93,20 @@ describe('UserEditModal concurrency', () => {
 
     expect(showError).toHaveBeenCalledWith('admin.users.concurrencyNonNegative')
     expect(update).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('UserEditModal content moderation controls', () => {
+  it('exposes the persisted controls for the selected user only to administrators', async () => {
+    auth.isAdmin = true
+    const wrapper = mountModal(1)
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'ModerationUserPanel' }).props('userId')).toBe(7)
+    wrapper.unmount()
+    auth.isAdmin = false
+    const observer = mountModal(1)
+    await flushPromises()
+    expect(observer.findComponent({ name: 'ModerationUserPanel' }).exists()).toBe(false)
   })
 })

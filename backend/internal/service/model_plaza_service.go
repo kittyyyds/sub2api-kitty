@@ -160,7 +160,13 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		pg := byGroup[g.ID]
 		idx := make(map[modelKey]int)
 		modelIdx[g.ID] = idx
-		for _, configuredModel := range plazaConfiguredModelNames(g) {
+		configuredModels := plazaConfiguredModelNames(g)
+		if s.gatewayService == nil || s.gatewayService.accountRepo == nil {
+			// Preserve standalone catalog callers; an account-aware gateway uses
+			// accountModels below to enforce account-group model restrictions.
+			configuredModels = append(configuredModels, g.ModelAllowlist.Models...)
+		}
+		for _, configuredModel := range configuredModels {
 			name := strings.TrimSpace(configuredModel)
 			if name == "" {
 				continue
@@ -449,7 +455,9 @@ func plazaConfiguredModelNames(g *Group) []string {
 			names = append(names, p.Models...)
 		}
 	}
-	names = append(names, g.ModelAllowlist.Models...)
+	// An allowlist limits eligible models; it does not create an upstream
+	// capability or override account-group restrictions. Media prices above
+	// and below still publish explicitly configured media models.
 
 	imageNames := make([]string, 0, len(g.ImageModelPrices))
 	for model, tiers := range g.ImageModelPrices {

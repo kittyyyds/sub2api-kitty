@@ -8,6 +8,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/cyberevidence"
 	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -1134,7 +1135,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewBillingPreviewService,
 	NewModelPlazaService,
-	NewContentModerationService,
+	ProvideContentModerationService,
 	wire.Bind(new(SecurityPolicyModelReviewer), new(*ContentModerationService)),
 	NewSecurityPolicyService,
 	NewTieredRoutingService,
@@ -1333,4 +1334,11 @@ func ProvideBillingService(cfg *config.Config, pricing *PricingService, db *sql.
 	}
 	svc.globalContextRules = rules
 	return svc, nil
+}
+
+// ProvideContentModerationService reuses the existing fixed TOTP AES-GCM key.
+func ProvideContentModerationService(settings SettingRepository, repo ContentModerationRepository, hashes ContentModerationHashCache, groups GroupRepository, users UserRepository, proxies ProxyRepository, invalidator APIKeyAuthCacheInvalidator, email *EmailService, db *sql.DB, cipher SecretEncryptor, cfg *config.Config) *ContentModerationService {
+	s := NewContentModerationService(settings, repo, hashes, groups, users, proxies, invalidator, email)
+	s.cyberEvidence = cyberevidence.New(cyberevidence.NewSQLStore(db), cipher, cfg != nil && cfg.Totp.EncryptionKeyConfigured)
+	return s
 }

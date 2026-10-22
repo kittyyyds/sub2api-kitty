@@ -363,7 +363,7 @@ describe('RegisterView security settings bootstrap', () => {
 
   it('shows the localized email alias rejection message returned by the backend', async () => {
     fetchPublicSettingsMock.mockResolvedValueOnce({
-      ...publicSettings,
+      ...enabledSettings,
       turnstile_enabled: false
     })
     registerMock.mockRejectedValueOnce({

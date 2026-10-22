@@ -39,7 +39,7 @@ func plazaVideoFixture(t *testing.T, mode service.BillingMode, referencePrice fl
 			Video: &service.VideoModelConfig{Spec: spec, ReferencePerSecond: referencePrice, ResolutionPrices: map[string]float64{"720p": .78, "4k": 5.55},
 				Cost: &service.VideoSupplierPrice{Model: "PRIVATE_SUPPLIER", UnitPrice: .68}, Markup: &service.VideoMarkup{OutputPerSecond: .1},
 				AppliedMarkup: service.VideoMarkup{ReferencePerSecond: .1}, AutoPrice: true, PriceSource: "upstream", SyncedAt: "PRIVATE_TIMESTAMP"}}}}
-	svc := service.NewModelPlazaService(plazaVideoChannelRepo{}, plazaVideoGroupRepo{group: *group}, nil, nil, nil)
+	svc := service.NewModelPlazaService(plazaVideoChannelRepo{}, plazaVideoGroupRepo{group: *group}, nil, nil, nil, nil)
 	groups, err := svc.ListGroups(t.Context())
 	require.NoError(t, err)
 	require.Len(t, groups, 1)

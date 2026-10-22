@@ -47,6 +47,7 @@ func TestAutoConfigRepositoryTransaction(t *testing.T) {
 				}
 				m.ExpectQuery("SELECT concurrency.*FOR UPDATE").WithArgs(int64(7), sqlmock.AnyArg(), tc.success).WillReturnRows(rows)
 				if tc.scope {
+					m.ExpectQuery("SELECT EXISTS.*account_iq_lifecycle").WithArgs(int64(7), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 					m.ExpectExec("UPDATE accounts SET concurrency").WithArgs(int64(7), tc.next, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
 					if tc.next != 3 {
 						m.ExpectExec("INSERT INTO scheduler_outbox").WillReturnResult(sqlmock.NewResult(1, 1))
@@ -83,6 +84,7 @@ func TestAutoConfigRepositoryLogsNewRevisionFailure(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT value FROM settings").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(string(raw)))
 	mock.ExpectQuery("SELECT concurrency.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"concurrency", "extra", "name", "platform", "admission"}).AddRow(3, state, "example", "openai", "null"))
+	mock.ExpectQuery("SELECT EXISTS.*account_iq_lifecycle").WithArgs(int64(7), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 	mock.ExpectExec("UPDATE accounts SET concurrency").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO account_auto_config_events").WithArgs(int64(7), "example", "openai", service.AutoConfigEventCooldown, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -124,6 +126,7 @@ func TestAutoConfigRepositoryAdmissionGate(t *testing.T) {
 			mock.ExpectQuery("SELECT value FROM settings").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(string(raw)))
 			mock.ExpectQuery("SELECT concurrency.*FOR UPDATE").WillReturnRows(sqlmock.NewRows([]string{"concurrency", "extra", "name", "platform", "admission"}).AddRow(3, []byte("{}"), "admission-account", "openai", gate))
 			if tc.shouldCount {
+				mock.ExpectQuery("SELECT EXISTS.*account_iq_lifecycle").WithArgs(int64(7), sqlmock.AnyArg()).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 				mock.ExpectExec("UPDATE accounts SET concurrency").WithArgs(int64(7), 3, sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 1))
 				mock.ExpectCommit()
 			} else {

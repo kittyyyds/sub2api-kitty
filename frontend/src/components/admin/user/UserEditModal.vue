@@ -67,6 +67,7 @@
         />
         <p class="input-hint">{{ t('admin.users.form.rpmLimitHint') }}</p>
       </div>
+      <ModerationUserPanel v-if="show && user && authStore.isAdmin" :key="user.id" :user-id="user.id" />
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
       <UserCleanupGuard :user-id="user.id" :role="user.role" :can-mark-system="authStore.isSuperAdmin" />
     </form>
@@ -93,6 +94,7 @@ import UserCleanupGuard from './UserCleanupGuard.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, UserAttributeValuesMap } from '@/types'
+import ModerationUserPanel from '@/components/admin/moderation/ModerationUserPanel.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import UserAttributeForm from '@/components/user/UserAttributeForm.vue'

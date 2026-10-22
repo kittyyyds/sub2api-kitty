@@ -67,7 +67,6 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if apiKey == nil {
 			// 尝试从Authorization header中提取API key (Bearer scheme)
 			authHeader := c.GetHeader("Authorization")
-			var apiKeyString string
 
 			if authHeader != "" {
 				// 验证Bearer scheme

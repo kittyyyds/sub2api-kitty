@@ -310,6 +310,9 @@ func parsePaymentReturnURL(raw string) (*url.URL, error) {
 	if parsed.User != nil {
 		return nil, infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must not contain userinfo")
 	}
+	if !isPlainReturnURLHost(parsed.Hostname()) {
+		return nil, infraerrors.BadRequest("INVALID_RETURN_URL", "return_url host is invalid")
+	}
 	if parsed.Path != paymentResultReturnPath {
 		return nil, infraerrors.BadRequest("INVALID_RETURN_URL", "return_url must target the canonical internal payment result page")
 	}
@@ -512,4 +515,23 @@ func signPaymentResumePayload(payload string, key []byte) string {
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write([]byte(payload))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// isPlainReturnURLHost reports whether host is an IP literal or a hostname
+// made only of letters, digits, '.', '-' and '_'.
+func isPlainReturnURLHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	for _, c := range host {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '-', c == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }

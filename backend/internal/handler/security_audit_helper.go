@@ -75,6 +75,9 @@ func runSecurityAudit(c *gin.Context, reqLog *zap.Logger, coordinator *securitya
 	if c == nil || c.Request == nil {
 		return nil
 	}
+	if legacy != nil {
+		c.Set("content_moderation.user_version", legacy.CaptureModerationUserVersion(c.Request.Context(), subject.UserID))
+	}
 	// 分组安全策略优先于全局审计：本地关键词前置 + 已终止会话入口检查。
 	// 开关关闭时为纯 no-op，不影响既有行为。
 	if decision := checkGroupSecurityPolicy(c, securityPolicy, apiKey, protocol, model, body); decision != nil {

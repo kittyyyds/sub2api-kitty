@@ -170,6 +170,10 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 // PerformUpdate downloads and applies the update
 // Uses atomic file replacement pattern for safe in-place updates
 func (s *UpdateService) PerformUpdate(ctx context.Context) error {
+	if err := s.checkRestartRequired(); err != nil {
+		return err
+	}
+
 	// Mutation requires fresh release metadata; cache fallback is for display.
 	info, err := s.fetchLatestRelease(ctx)
 	if err != nil {
@@ -334,6 +338,10 @@ func (s *UpdateService) ListRollbackVersions(ctx context.Context) ([]RollbackVer
 // The target must be one of the versions returned by ListRollbackVersions;
 // anything else (including the current version) is rejected.
 func (s *UpdateService) RollbackToVersion(ctx context.Context, version string) error {
+	if err := s.checkRestartRequired(); err != nil {
+		return err
+	}
+
 	target := strings.TrimPrefix(strings.TrimSpace(version), "v")
 	if target == "" {
 		return ErrRollbackVersionNotAllowed
@@ -774,4 +782,13 @@ func parseVersion(v string) [3]int {
 		}
 	}
 	return result
+}
+
+func (s *UpdateService) checkRestartRequired() error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
+	if s.restartRequired {
+		return ErrUpdateRestartRequired
+	}
+	return nil
 }
