@@ -14,7 +14,7 @@ import (
 func (h *ChannelHandler) ListContextRules(c *gin.Context) {
 	store := h.billingService.GlobalContextRules()
 	if store == nil {
-		response.Error(c, 503, "上下文定价存储未就绪")
+		response.Error(c, http.StatusGone, "此全局功能已移除，请到智能运维→自动配置设置分组模型计价")
 		return
 	}
 	rules, err := store.List(c.Request.Context())
@@ -37,7 +37,7 @@ func (h *ChannelHandler) SaveContextRule(c *gin.Context) {
 	}
 	store := h.billingService.GlobalContextRules()
 	if store == nil {
-		response.Error(c, 503, "上下文定价存储未就绪")
+		response.Error(c, http.StatusGone, "此全局功能已移除，请到智能运维→自动配置设置分组模型计价")
 		return
 	}
 	saved, err := store.Save(c.Request.Context(), rule)
@@ -60,7 +60,7 @@ func (h *ChannelHandler) DeleteContextRule(c *gin.Context) {
 	}
 	store := h.billingService.GlobalContextRules()
 	if store == nil {
-		response.Error(c, 503, "上下文定价存储未就绪")
+		response.Error(c, http.StatusGone, "此全局功能已移除，请到智能运维→自动配置设置分组模型计价")
 		return
 	}
 	err := store.Delete(c.Request.Context(), id, revision)
@@ -84,7 +84,7 @@ func (h *ChannelHandler) ContextRuleModels(c *gin.Context) {
 	}
 	store := h.billingService.GlobalContextRules()
 	if store == nil {
-		response.Error(c, 503, "上下文存储未就绪")
+		response.Error(c, http.StatusGone, "此全局功能已移除，请到智能运维→自动配置设置分组模型计价")
 		return
 	}
 	names, err := store.ConfiguredModels(c.Request.Context(), platform)

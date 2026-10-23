@@ -1,6 +1,5 @@
 <template>
   <AppLayout>
-    <ContextPricingDialog :show="showContextPricing" @close="showContextPricing = false" />
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -40,7 +39,6 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
-            <button class="btn btn-secondary" @click="showContextPricing = true">上下文定价</button>
             <button @click="openCreateDialog" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.channels.createChannel', 'Create Channel') }}
@@ -631,8 +629,6 @@
 </template>
 
 <script setup lang="ts">
-import ContextPricingDialog from '@/components/admin/ContextPricingDialog.vue'
-const showContextPricing = ref(false)
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

@@ -11,21 +11,7 @@
         <p v-if="draft.runtime_blocked" role="alert" class="rounded-xl bg-amber-50 p-4 text-amber-800">{{ t('autoConfig.blocked') }}</p>
         <fieldset :disabled="saving" class="min-w-0"><BPSDefaultsCard v-model="draft.excel_bps" :groups="groups" /></fieldset>
         <fieldset :disabled="saving" class="min-w-0">
-          <section class="card space-y-5" data-testid="model-billing">
-            <header class="flex flex-wrap items-center justify-between gap-3">
-              <h2 class="text-lg font-semibold">{{ t('autoConfig.modelBilling.title') }}</h2>
-              <label class="flex items-center gap-2 text-sm"><input v-model="draft.model_billing.enabled" data-testid="model-billing-enabled" type="checkbox" role="switch" />{{ t('autoConfig.enable') }}</label>
-            </header>
-            <p class="text-sm leading-6 text-gray-500">{{ t('autoConfig.modelBilling.hint') }}</p>
-            <div v-for="(rule, index) in draft.model_billing.rules" :key="index" class="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
-              <label class="min-w-0"><span class="field-label">{{ t('autoConfig.modelBilling.model') }}</span><input v-model="rule.model" :data-testid="'model-billing-model-' + index" type="text" maxlength="200" placeholder="gpt-6-luna*" required class="input w-full" /></label>
-              <label><span class="field-label">{{ t('autoConfig.modelBilling.multiplier') }}</span><div class="flex items-center gap-2"><input v-model.number="rule.multiplier" :data-testid="'model-billing-multiplier-' + index" type="number" min="1" max="1000" step="any" required class="input min-w-0 w-full" /><span class="text-sm text-gray-500">×</span></div></label>
-              <button type="button" :data-testid="'model-billing-remove-' + index" class="btn btn-secondary" @click="draft.model_billing.rules.splice(index, 1)">{{ t('autoConfig.modelBilling.remove') }}</button>
-            </div>
-            <button type="button" data-testid="model-billing-add" class="btn btn-secondary" :disabled="draft.model_billing.rules.length >= 100" @click="draft.model_billing.rules.push({ model: '', multiplier: 10 })">{{ t('autoConfig.modelBilling.add') }}</button>
-            <p class="text-xs leading-5 text-gray-500">{{ t('autoConfig.modelBilling.matchHint') }}</p>
-            <p class="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{{ t('autoConfig.modelBilling.example') }}</p>
-          </section>
+          <ModelBillingSettings v-model="draft.model_billing" :groups="allGroups" />
         </fieldset>
         <p v-if="draft.iq_bootstrap.enabled" class="text-sm text-gray-500">当前使用导入后自动糖果验证。上游 2FA 准入与其二选一，避免重复测试和重复调整账号。</p>
         <fieldset :disabled="saving || draft.iq_bootstrap.enabled" class="min-w-0"><OpenAITwoFAAdmissionCard v-model="draft.openai_two_fa_admission" :groups="groups" /></fieldset>
@@ -94,7 +80,8 @@ import { getAutoConfig, saveAutoConfig, defaultIQBootstrap, type IQBootstrap, ty
 import { listQualityPlans } from '@/api/admin/accountQuality'
 import type { ScheduledTestPlan } from '@/types'
 import type { Group } from '@/types'
-import { defaultModelBillingConfig, modelBillingConfigError, modelBillingPayload, type ModelBillingConfig } from '@/utils/modelBilling'
+import ModelBillingSettings from '@/components/admin/operations/ModelBillingSettings.vue'
+import { normalizeModelBillingConfig, modelBillingConfigError, modelBillingPayload, type ModelBillingConfig } from '@/utils/modelBilling'
 const { t } = useI18n(), auth = useAuthStore()
 const draft = ref<(AutoConfig & { iq_bootstrap: IQBootstrap; openai_two_fa_admission: OpenAITwoFAAdmissionConfig; excel_bps: ExcelBPSDefaults; model_billing: ModelBillingConfig; model_mappings: OAuthModelMappingRule[] }) | null>(null), groups = ref<Group[]>([])
 const allGroups = ref<Group[]>([])
@@ -125,7 +112,7 @@ const upgradeFields = [{ key: 'successes_per_step', max: 100000 }, { key: 'upgra
 const initialGroups = computed(() => groups.value.filter(g => g.platform === draft.value?.platform))
 async function load() {
  const v = generation; loading.value = true; error.value = ''
- try { const [config, available] = await Promise.all([getAutoConfig(), getAllIncludingInactive()]); if (validGeneration(v)) { draft.value = { ...config, openai_two_fa_admission: config.openai_two_fa_admission ?? defaultOpenAITwoFAAdmissionConfig(), iq_bootstrap: config.iq_bootstrap ?? defaultIQBootstrap(), cost_multiplier: config.cost_multiplier ?? 0.07, model_mappings: config.model_mappings ?? defaultOAuthModelMappings(config.platform), model_billing: config.model_billing ?? defaultModelBillingConfig(), excel_bps: config.excel_bps ?? defaultExcelBPSDefaults() }; selectedQualityRule.value = config.quality_rule ? 'saved' : ''; allGroups.value = available; groups.value = available.filter(g => g.status === 'active') } }
+ try { const [config, available] = await Promise.all([getAutoConfig(), getAllIncludingInactive()]); if (validGeneration(v)) { draft.value = { ...config, openai_two_fa_admission: config.openai_two_fa_admission ?? defaultOpenAITwoFAAdmissionConfig(), iq_bootstrap: config.iq_bootstrap ?? defaultIQBootstrap(), cost_multiplier: config.cost_multiplier ?? 0.07, model_mappings: config.model_mappings ?? defaultOAuthModelMappings(config.platform), model_billing: normalizeModelBillingConfig(config.model_billing), excel_bps: config.excel_bps ?? defaultExcelBPSDefaults() }; selectedQualityRule.value = config.quality_rule ? 'saved' : ''; allGroups.value = available; groups.value = available.filter(g => g.status === 'active') } }
  catch { if (validGeneration(v)) error.value = t('autoConfig.loadFailed') }
  finally { if (validGeneration(v)) loading.value = false }
 }
@@ -146,7 +133,7 @@ async function save() {
  const costMultiplier = c.cost_multiplier ?? 0.07
  if (c.enabled && !c.group_ids.length || c.upgrade_enabled && !c.upgrade_group_ids.length || !Number.isFinite(costMultiplier) || costMultiplier < 0 || costMultiplier > 1000000 || [...initialFields, ...upgradeFields].some(f => !Number.isInteger(c[f.key]) || c[f.key] < ('min' in f ? f.min : 1) || c[f.key] > ('max' in f ? f.max : 10000))) { error.value = t('autoConfig.invalid'); return }
  const v = generation; saving.value = true; error.value = ''; notice.value = ''
- try { const { runtime_blocked: _blocked, ...payload } = c; const result = await saveAutoConfig({ ...payload, cost_multiplier: costMultiplier, model_mappings: oauthModelMappingsPayload(c.model_mappings), model_billing: modelBillingPayload(c.model_billing), excel_bps: excelBPSDefaultsPayload(c.excel_bps) }); if (validGeneration(v)) { draft.value = { ...result, openai_two_fa_admission: result.openai_two_fa_admission ?? defaultOpenAITwoFAAdmissionConfig(), iq_bootstrap: result.iq_bootstrap ?? defaultIQBootstrap(), cost_multiplier: result.cost_multiplier ?? 0.07, model_mappings: result.model_mappings ?? defaultOAuthModelMappings(result.platform), model_billing: result.model_billing ?? defaultModelBillingConfig(), excel_bps: result.excel_bps ?? defaultExcelBPSDefaults() }; selectedQualityRule.value = result.quality_rule ? 'saved' : ''; notice.value = t('autoConfig.saved'); historyRefreshKey.value++ } }
+ try { const { runtime_blocked: _blocked, ...payload } = c; const result = await saveAutoConfig({ ...payload, cost_multiplier: costMultiplier, model_mappings: oauthModelMappingsPayload(c.model_mappings), model_billing: modelBillingPayload(c.model_billing), excel_bps: excelBPSDefaultsPayload(c.excel_bps) }); if (validGeneration(v)) { draft.value = { ...result, openai_two_fa_admission: result.openai_two_fa_admission ?? defaultOpenAITwoFAAdmissionConfig(), iq_bootstrap: result.iq_bootstrap ?? defaultIQBootstrap(), cost_multiplier: result.cost_multiplier ?? 0.07, model_mappings: result.model_mappings ?? defaultOAuthModelMappings(result.platform), model_billing: normalizeModelBillingConfig(result.model_billing), excel_bps: result.excel_bps ?? defaultExcelBPSDefaults() }; selectedQualityRule.value = result.quality_rule ? 'saved' : ''; notice.value = t('autoConfig.saved'); historyRefreshKey.value++ } }
  catch { if (validGeneration(v)) error.value = t('autoConfig.saveFailed') }
  finally { if (validGeneration(v)) saving.value = false }
 }

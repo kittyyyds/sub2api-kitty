@@ -234,6 +234,17 @@ func (s *AccountOpsService) SaveOAuthAutoConfig(ctx context.Context, c OAuthAuto
 	if s.autoGroups == nil {
 		return c, errors.New("group repository unavailable")
 	}
+	if c.ModelBilling.Enabled {
+		for _, r := range c.ModelBilling.Rules {
+			if !r.Enabled {
+				continue
+			}
+			g, e := s.autoGroups.GetByID(ctx, r.GroupID)
+			if e != nil || g == nil || g.Status != StatusActive {
+				return c, infraerrors.BadRequest("MODEL_BILLING_GROUP_INVALID", "select an existing active billing group")
+			}
+		}
+	}
 	if c.Enabled {
 		for _, id := range c.GroupIDs {
 			g, err := s.autoGroups.GetByID(ctx, id)

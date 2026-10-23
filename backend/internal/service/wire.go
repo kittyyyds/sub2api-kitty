@@ -1326,13 +1326,10 @@ func ProvideClaudeResetCreditService(accounts AccountRepository, tokens *ClaudeT
 	return s
 }
 
-func ProvideBillingService(cfg *config.Config, pricing *PricingService, db *sql.DB) (*BillingService, error) {
+func ProvideBillingService(cfg *config.Config, pricing *PricingService, settings *SettingService) (*BillingService, error) {
 	svc := NewBillingService(cfg, pricing)
-	rules := NewGlobalContextRuleStore(db)
-	if err := rules.Prime(context.Background()); err != nil {
-		return nil, err
-	}
-	svc.globalContextRules = rules
+	svc.modelBillingSettings = settings
+	// Retire global context surcharge store; preserve historical database rows.
 	return svc, nil
 }
 

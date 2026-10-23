@@ -1370,7 +1370,7 @@ func (s *GatewayService) calculateTokenCost(
 	}
 
 	cost, err := s.billingService.CalculateTokenCostForRequest(TokenCostRequest{
-		Ctx:             ctx,
+		Ctx:             withModelBillingConfig(ctx, s.settingService),
 		Model:           billingModel,
 		Group:           apiKey.Group,
 		Tokens:          tokens,
@@ -1385,7 +1385,6 @@ func (s *GatewayService) calculateTokenCost(
 		logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
 		return &CostBreakdown{ActualCost: 0}
 	}
-	applyModelBillingMultiplier(cost, s.settingService.modelBillingConfigForUsage(ctx), billingModel)
 	return cost
 }
 

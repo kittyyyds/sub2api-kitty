@@ -563,18 +563,18 @@ func (d inflightEstimateDeps) estimateOne(ctx context.Context, apiKey *APIKey, m
 
 	inputTokens, outputTokens := tokenCounts(cfg, req.BodyBytes, req.MaxTokens)
 	tokenCost := func() float64 {
-		var pricing *ModelPricing
-		if resolved != nil && (resolved.Mode == BillingModeToken || resolved.Mode == "") && d.resolver != nil {
-			pricing = d.resolver.GetIntervalPricing(resolved, inputTokens)
-		}
-		if pricing == nil && d.billing != nil {
-			pricing, _ = d.billing.GetModelPricing(model)
-		}
-		if pricing == nil {
+		if d.billing == nil {
 			return 0
 		}
-		cost := &CostBreakdown{ActualCost: (float64(inputTokens)*pricing.InputPricePerToken + float64(outputTokens)*pricing.OutputPricePerToken) * textRate, BillingMode: string(BillingModeToken)}
-		applyModelBillingMultiplier(cost, d.settings.modelBillingConfigForUsage(ctx), model)
+		in := CostInput{Ctx: withModelBillingConfig(ctx, d.settings), Model: model, Tokens: UsageTokens{InputTokens: inputTokens, OutputTokens: outputTokens}, RateMultiplier: textRate, Resolver: d.resolver, Resolved: resolved}
+		if apiKey != nil {
+			in.GroupID = apiKey.GroupID
+			in.Group = apiKey.Group
+		}
+		cost, err := d.billing.CalculateCostUnified(in)
+		if err != nil || cost == nil {
+			return 0
+		}
 		return cost.ActualCost
 	}
 

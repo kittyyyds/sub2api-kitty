@@ -343,10 +343,11 @@ func isDeepSeekProModel(model string) bool {
 
 // BillingService 计费服务
 type BillingService struct {
-	globalContextRules globalContextRuleReader
-	cfg                *config.Config
-	pricingService     *PricingService
-	fallbackPrices     map[string]*ModelPricing // 硬编码回退价格
+	globalContextRules   globalContextRuleReader
+	modelBillingSettings *SettingService
+	cfg                  *config.Config
+	pricingService       *PricingService
+	fallbackPrices       map[string]*ModelPricing // 硬编码回退价格
 
 	// fallbackWarnSeen 记录已打过 fallback 警告日志的(已小写化)模型名,
 	// 让 "[Billing] Using fallback pricing" 每个模型每进程最多打一条,
@@ -1529,6 +1530,7 @@ func applyChannelTokenPriceOverrides(pricing *ModelPricing, channelPricing *Chan
 
 // CostInput 统一计费输入
 type CostInput struct {
+	overrideContextPricing    bool // Scoped context rule replaces legacy tiers.
 	SkipGlobalContextRules    bool // Upstream/account cost statistics must retain their own pricing policy.
 	Ctx                       context.Context
 	Model                     string
@@ -1551,7 +1553,7 @@ type CostInput struct {
 
 // CalculateCostUnified 统一计费入口，支持三种计费模式。
 // 使用 ModelPricingResolver 解析定价，然后根据 BillingMode 分发计算。
-func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, error) {
+func (s *BillingService) calculateCostUnifiedBase(input CostInput) (*CostBreakdown, error) {
 	if input.Ctx == nil {
 		input.Ctx = context.Background()
 	}
@@ -1569,7 +1571,7 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 		if ruleErr != nil {
 			return nil, ruleErr
 		}
-		if rule != nil {
+		if rule != nil || input.overrideContextPricing {
 			applyLongContextBilling = false
 		}
 		breakdown := s.computeTokenBreakdown(pricing, input.Tokens, input.RateMultiplier, input.ServiceTier, applyLongContextBilling && !input.DisableModelLongContextPricing)
@@ -1630,7 +1632,7 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 	if ruleErr != nil {
 		return nil, ruleErr
 	}
-	if rule != nil {
+	if rule != nil || input.overrideContextPricing {
 		contextTierPricingEnabled = false
 	}
 	pricingContext := totalContext

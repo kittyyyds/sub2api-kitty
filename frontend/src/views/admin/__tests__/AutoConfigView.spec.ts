@@ -4,7 +4,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import AutoConfigView from '../AutoConfigView.vue'
 import { getAutoConfig, saveAutoConfig, defaultIQBootstrap, type AutoConfig } from '@/api/admin/autoConfig'
 import { listQualityPlans } from '@/api/admin/accountQuality'
-import { getAllIncludingInactive } from '@/api/admin/groups'
+import { getAllIncludingInactive, getAvailableModels } from '@/api/admin/groups'
 import type { Group } from '@/types'
 import { defaultModelBillingConfig } from '@/utils/modelBilling'
 import { defaultExcelBPSDefaults } from '@/utils/excelBPSDefaults'
@@ -20,49 +20,40 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/client',()=>({apiClient:{get:vi.fn(),put:vi.fn()}}))
 vi.mock('@/api/admin/autoConfig', async importOriginal => ({ ...await importOriginal<typeof import('@/api/admin/autoConfig')>(), getAutoConfig: vi.fn(), saveAutoConfig: vi.fn() }))
 vi.mock('@/api/admin/accountQuality', () => ({ listQualityPlans: vi.fn() }))
-vi.mock('@/api/admin/groups', () => ({ getAllIncludingInactive: vi.fn() }))
+vi.mock('@/api/admin/groups', () => ({ getAllIncludingInactive: vi.fn(), getAvailableModels: vi.fn() }))
 const config: AutoConfig = { iq_bootstrap: defaultIQBootstrap(), openai_two_fa_admission: defaultOpenAITwoFAAdmissionConfig(), model_billing: defaultModelBillingConfig(), model_mappings: defaultOAuthModelMappings('openai'), excel_bps: defaultExcelBPSDefaults(), enabled: false, platform: 'openai', priority: 50, load_factor: 1, concurrency: 3, cost_multiplier: 0.07, group_ids: [], upgrade_enabled: false, upgrade_group_ids: [], successes_per_step: 20, upgrade_step: 1, max_concurrency: 100, cooldown_seconds: 60, revision: '' }
 beforeEach(() => {
- vi.resetAllMocks(); vi.mocked(listQualityPlans).mockResolvedValue([]); state.auth = reactive({ user: { id: 1, role: 'admin' } })
+ vi.resetAllMocks(); vi.mocked(getAvailableModels).mockResolvedValue(['gpt-test']); vi.mocked(listQualityPlans).mockResolvedValue([]); state.auth = reactive({ user: { id: 1, role: 'admin' } })
  vi.mocked(getAutoConfig).mockResolvedValue(structuredClone(config)); vi.mocked(saveAutoConfig).mockImplementation(async c => c)
  vi.mocked(getAllIncludingInactive).mockResolvedValue([{ id: 5, name: 'OpenAI test', platform: 'openai', status: 'active' }, { id: 6, name: 'Anthropic test', platform: 'anthropic', status: 'active' }] as Group[])
 })
 describe('AutoConfigView', () => {
- it('starts with the Luna 10x rule disabled and saves model billing independently', async () => {
-  const w = mount(AutoConfigView); await flushPromises()
-  expect(w.get<HTMLInputElement>('[data-testid="model-billing-enabled"]').element.checked).toBe(false)
-  expect(w.get<HTMLInputElement>('[data-testid="model-billing-model-0"]').element.value).toBe('gpt-6-luna*')
-  expect(w.get<HTMLInputElement>('[data-testid="model-billing-multiplier-0"]').element.value).toBe('10')
-  await w.get('[data-testid="model-billing-enabled"]').setValue(true)
-  await w.get('[data-testid="model-billing-multiplier-0"]').setValue(2.5)
+ it('starts unconfigured and saves a selected group and 50K rule', async () => {
+  const w=mount(AutoConfigView);await flushPromises()
+  expect(w.find('[data-testid="model-billing-model-0"]').exists()).toBe(false)
   await w.get('[data-testid="model-billing-add"]').trigger('click')
-  expect(w.get<HTMLInputElement>('[data-testid="model-billing-multiplier-1"]').element.value).toBe('10')
-  await w.get('[data-testid="model-billing-model-1"]').setValue(' custom-mini ')
-  await w.get('form').trigger('submit'); await flushPromises()
-  expect(saveAutoConfig).toHaveBeenCalledWith({ ...config, model_billing: { enabled: true, rules: [{ model: 'gpt-6-luna*', multiplier: 2.5 }, { model: 'custom-mini', multiplier: 10 }] } })
+  await w.get('[data-testid="model-billing-group-0"]').setValue(5)
+  await flushPromises();expect(getAvailableModels).toHaveBeenCalledWith(5)
+  await w.get('[data-testid="model-billing-model-0"]').setValue(' gpt-test ')
+  expect(w.get<HTMLInputElement>('[data-testid="model-billing-threshold-0"]').element.value).toBe('50')
+  await w.get('[data-testid="model-billing-enabled"]').setValue(true)
+  await w.get('form').trigger('submit');await flushPromises()
+  expect(saveAutoConfig).toHaveBeenCalledWith({...config,model_billing:{schema_version:2,enabled:true,rules:[{group_id:5,model:'gpt-test',enabled:true,mode:'context',threshold_tokens:50000,multiplier:2}]}})
   w.unmount()
  })
- it.each([0, -1, 1001, ''])('rejects invalid model multipliers (%s)', async multiplier => {
-  const w = mount(AutoConfigView); await flushPromises()
-  await w.get('[data-testid="model-billing-multiplier-0"]').setValue(multiplier)
-  await w.get('form').trigger('submit'); await flushPromises()
-  expect(saveAutoConfig).not.toHaveBeenCalled()
-  expect(w.get('[role="alert"]').text()).toContain('modelBilling.invalid')
-  w.unmount()
+ it.each([0,-1,1001,''])('rejects invalid multipliers (%s)',async multiplier=>{
+  const w=mount(AutoConfigView);await flushPromises();await w.get('[data-testid="model-billing-add"]').trigger('click')
+  await w.get('[data-testid="model-billing-group-0"]').setValue(5);await w.get('[data-testid="model-billing-model-0"]').setValue('gpt-test')
+  await w.get('[data-testid="model-billing-multiplier-0"]').setValue(multiplier);await w.get('form').trigger('submit');await flushPromises()
+  expect(saveAutoConfig).not.toHaveBeenCalled();expect(w.get('[role="alert"]').text()).toContain('modelBilling.invalid');w.unmount()
  })
- it('requires a rule when enabled and rejects duplicate patterns', async () => {
-  const w = mount(AutoConfigView); await flushPromises()
-  await w.get('[data-testid="model-billing-enabled"]').setValue(true)
-  await w.get('[data-testid="model-billing-add"]').trigger('click')
-  await w.get('[data-testid="model-billing-model-1"]').setValue(' GPT-6-LUNA* ')
-  await w.get('form').trigger('submit'); expect(saveAutoConfig).not.toHaveBeenCalled()
-  await w.get('[data-testid="model-billing-remove-1"]').trigger('click')
-  await w.get('[data-testid="model-billing-remove-0"]').trigger('click')
-  await w.get('form').trigger('submit'); expect(saveAutoConfig).not.toHaveBeenCalled()
-  await w.get('[data-testid="model-billing-enabled"]').setValue(false)
-  await w.get('form').trigger('submit'); await flushPromises()
-  expect(saveAutoConfig).toHaveBeenCalledWith({ ...config, model_billing: { enabled: false, rules: [] } })
-  w.unmount()
+ it('supports always mode without threshold and rejects unscoped rules',async()=>{
+  const w=mount(AutoConfigView);await flushPromises();await w.get('[data-testid="model-billing-add"]').trigger('click')
+  await w.get('[data-testid="model-billing-model-0"]').setValue('gpt-test');await w.get('form').trigger('submit');expect(saveAutoConfig).not.toHaveBeenCalled()
+  await w.get('[data-testid="model-billing-group-0"]').setValue(6);await w.get('[data-testid="model-billing-model-0"]').setValue('gpt-test')
+  await w.get('[data-testid="model-billing-mode-0"]').setValue('always');expect(w.find('[data-testid="model-billing-threshold-0"]').exists()).toBe(false)
+  await w.get('[data-testid="model-billing-enabled"]').setValue(true);await w.get('form').trigger('submit');await flushPromises()
+  expect(vi.mocked(saveAutoConfig).mock.calls[0][0].model_billing).toEqual({schema_version:2,enabled:true,rules:[{group_id:6,model:'gpt-test',enabled:true,mode:'always',threshold_tokens:0,multiplier:2}]});w.unmount()
  })
 
  it('edits model mappings inside initial OAuth configuration using its existing switch and platform', async () => {
@@ -112,12 +103,15 @@ describe('AutoConfigView', () => {
   const w = mount(AutoConfigView); await flushPromises()
   await w.get('[data-testid="mapping-to-0"]').setValue('gpt-6-luna')
   await w.get('[data-testid="model-billing-enabled"]').setValue(true)
+  await w.get('[data-testid="model-billing-add"]').trigger('click')
+  await w.get('[data-testid="model-billing-group-0"]').setValue(5)
+  await w.get('[data-testid="model-billing-model-0"]').setValue('gpt-6-luna*')
   await w.get('[data-testid="model-billing-multiplier-0"]').setValue(12.5)
   await w.get('form').trigger('submit'); await flushPromises()
   expect(saveAutoConfig).toHaveBeenLastCalledWith({
     ...config,
     model_mappings: [{ from: 'gpt-5.4', to: 'gpt-6-luna' }],
-    model_billing: { enabled: true, rules: [{ model: 'gpt-6-luna*', multiplier: 12.5 }] }
+    model_billing: { schema_version: 2, enabled: true, rules: [{ group_id:5, enabled:true, mode:'context', threshold_tokens:50000, model: 'gpt-6-luna*', multiplier: 12.5 }] }
   })
   expect(w.get<HTMLInputElement>('[data-testid="mapping-to-0"]').element.value).toBe('gpt-6-luna')
   expect(w.get<HTMLInputElement>('[data-testid="model-billing-multiplier-0"]').element.value).toBe('12.5')

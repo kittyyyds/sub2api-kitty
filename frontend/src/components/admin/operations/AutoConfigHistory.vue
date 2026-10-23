@@ -45,7 +45,7 @@
                   <div class="mt-2 space-y-1 rounded-lg bg-gray-50 p-3 dark:bg-dark-800">
                     <template v-if="event.details.config.model_billing">
                       <p>{{ t('autoConfig.modelBilling.title') }}：{{ t(event.details.config.model_billing.enabled ? 'autoConfig.logs.on' : 'autoConfig.logs.off') }}</p>
-                      <p v-for="rule in event.details.config.model_billing.rules" :key="rule.model" class="break-all">{{ rule.model }} · {{ rule.multiplier }}×</p>
+                      <p v-for="rule in event.details.config.model_billing.rules" :key="(rule.group_id || 0) + rule.model" class="break-all">{{ rule.group_id ? "#" + rule.group_id : "旧全局规则（已退役）" }} · {{ rule.model }} · {{ rule.mode === "context" ? "> " + rule.threshold_tokens + " tokens · " : "" }}{{ rule.multiplier }}×</p>
                     </template>
                     <p v-if="event.details.config.model_mappings?.length">{{ t('autoConfig.mapping.title') }}：</p>
                     <p v-for="rule in event.details.config.model_mappings ?? []" :key="rule.from" class="break-words">{{ rule.from }} → {{ rule.to }}</p>
