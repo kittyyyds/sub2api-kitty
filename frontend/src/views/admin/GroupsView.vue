@@ -1077,49 +1077,12 @@
               />
             </div>
           </div>
-          <div
-            v-if="supportsImageModelPricingPlatform(createForm.platform) && imageModelPriceRows(createForm.image_model_prices, createForm.platform, createForm.model_pricing).length > 0"
-            class="mt-4 border-t border-dashed border-gray-200 pt-4 dark:border-dark-700"
-            :data-testid="`create-${createForm.platform}-image-model-prices`"
-          >
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ t("admin.groups.imagePricing.modelOverridesTitle") }}
-            </p>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t("admin.groups.imagePricing.modelOverridesDescription") }}
-            </p>
-            <div class="mt-3 space-y-3">
-              <div
-                v-for="model in imageModelPriceRows(createForm.image_model_prices, createForm.platform, createForm.model_pricing)"
-                :key="model.key"
-                class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,7rem))] lg:items-end"
-              >
-                <div class="min-w-0 break-all pb-1 font-mono text-xs text-gray-700 dark:text-gray-300">
-                  {{ model.label }}
-                </div>
-                <label
-                  v-for="resolution in grokImagePriceResolutions"
-                  :key="resolution.key"
-                  class="block"
-                >
-                  <span class="mb-1 block text-xs text-gray-500 dark:text-gray-400">
-                    {{ resolution.label }} ({{ t("admin.groups.imagePricing.fixedPriceUnit") }})
-                  </span>
-                  <input
-                    v-model.number="createForm.image_model_prices[model.key][resolution.key]"
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    class="input"
-                    :placeholder="getImageModelPricePlaceholder(model.key, resolution.key)"
-                    :data-testid="`create-${createForm.platform}-image-price-${model.key}-${resolution.key}`"
-                  />
-                </label>
-              </div>
-            </div>
+          <div data-testid="create-image-auto-pricing-notice" class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+            算力图片的模型售价由「上游与自动跟价」统一维护，此处不再手填逐模型最终价。
+            <RouterLink to="/admin/video-upstream?section=image" class="text-primary-600">前往图片自动跟价</RouterLink>
           </div>
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            {{ t(imagePricingI18nKey(createForm.platform, "modeHint")) }}
+            已有图片计价数据继续保留；算力图片以自动跟价管理中的有效售价为准。
           </p>
           <div v-if="!supportsImageModelPricingPlatform(createForm.platform) || imageModelPriceRows(createForm.image_model_prices, createForm.platform, createForm.model_pricing).length > 0" class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
             <div class="mb-1 font-medium">
@@ -2881,49 +2844,12 @@
               />
             </div>
           </div>
-          <div
-            v-if="supportsImageModelPricingPlatform(editForm.platform) && imageModelPriceRows(editForm.image_model_prices, editForm.platform, editForm.model_pricing).length > 0"
-            class="mt-4 border-t border-dashed border-gray-200 pt-4 dark:border-dark-700"
-            :data-testid="`edit-${editForm.platform}-image-model-prices`"
-          >
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ t("admin.groups.imagePricing.modelOverridesTitle") }}
-            </p>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t("admin.groups.imagePricing.modelOverridesDescription") }}
-            </p>
-            <div class="mt-3 space-y-3">
-              <div
-                v-for="model in imageModelPriceRows(editForm.image_model_prices, editForm.platform, editForm.model_pricing)"
-                :key="model.key"
-                class="grid gap-2 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,7rem))] lg:items-end"
-              >
-                <div class="min-w-0 break-all pb-1 font-mono text-xs text-gray-700 dark:text-gray-300">
-                  {{ model.label }}
-                </div>
-                <label
-                  v-for="resolution in grokImagePriceResolutions"
-                  :key="resolution.key"
-                  class="block"
-                >
-                  <span class="mb-1 block text-xs text-gray-500 dark:text-gray-400">
-                    {{ resolution.label }} ({{ t("admin.groups.imagePricing.fixedPriceUnit") }})
-                  </span>
-                  <input
-                    v-model.number="editForm.image_model_prices[model.key][resolution.key]"
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    class="input"
-                    :placeholder="getImageModelPricePlaceholder(model.key, resolution.key)"
-                    :data-testid="`edit-${editForm.platform}-image-price-${model.key}-${resolution.key}`"
-                  />
-                </label>
-              </div>
-            </div>
+          <div data-testid="edit-image-auto-pricing-notice" class="mt-4 text-xs text-gray-500 dark:text-gray-400">
+            算力图片的模型售价由「上游与自动跟价」统一维护，此处不再手填逐模型最终价。
+            <RouterLink to="/admin/video-upstream?section=image" class="text-primary-600">前往图片自动跟价</RouterLink>
           </div>
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            {{ t(imagePricingI18nKey(editForm.platform, "modeHint")) }}
+            已有图片计价数据继续保留；算力图片以自动跟价管理中的有效售价为准。
           </p>
           <div v-if="!supportsImageModelPricingPlatform(editForm.platform) || imageModelPriceRows(editForm.image_model_prices, editForm.platform, editForm.model_pricing).length > 0" class="mt-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">
             <div class="mb-1 font-medium">
@@ -4742,8 +4668,6 @@ import {
 } from "./groupsImagePricing";
 import {
   createImageModelPricesForm,
-  getImageModelPricePlaceholder,
-  grokImagePriceResolutions,
   imageModelPriceRows,
   resolveImageModelCustomerPrice,
   serializeImageModelPrices,
@@ -6752,8 +6676,11 @@ const handleUpdateGroup = async () => {
   submitting.value = true;
   try {
     // 转换 fallback_group_id: null -> 0 (后端使用 0 表示清除)
+    // 图片逐模型售价由上游跟价维护。省略字段保留服务端最新值，
+    // 不要把打开弹窗时的旧价格快照重新提交，也不能用空对象清空。
+    const { image_model_prices: _editImageModelPrices, ...editGroupForm } = editForm;
     const payload = {
-      ...editForm,
+      ...editGroupForm,
       force_openai_fast: normalizeGroupOpenAIFast(
         editForm.platform,
         editForm.force_openai_fast,
@@ -6778,10 +6705,6 @@ const handleUpdateGroup = async () => {
       video_model_prices: serializeVideoModelPrices(
         editForm.video_model_prices,
       ),
-      image_model_prices:
-        supportsImageModelPricingPlatform(editForm.platform)
-          ? serializeImageModelPrices(editForm.image_model_prices)
-          : {},
       fallback_group_id:
         editForm.fallback_group_id === null ? 0 : editForm.fallback_group_id,
       fallback_group_id_on_invalid_request:

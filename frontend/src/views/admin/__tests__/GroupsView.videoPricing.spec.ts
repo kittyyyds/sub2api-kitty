@@ -235,6 +235,21 @@ describe('GroupsView video pricing payloads', () => {
     const wire = JSON.parse(JSON.stringify(payload))
     expect(wire.model_pricing[0]).toMatchObject({ per_request_price: 1, video: { price_source: 'upstream', auto_price: true, reference_per_second: 0, resolution_prices: {} } })
   })
+  it('omits manual image overrides when creating an OpenAI group', async () => {
+    const wrapper = await openCreate()
+    const platform = wrapper.findAll('#create-group-form select').find(select => select.find('option[value="openai"]').exists())!
+    await platform.setValue('openai')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="create-openai-image-model-prices"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid^="create-openai-image-price-"]')).toHaveLength(0)
+    expect(wrapper.get('[data-testid="create-image-auto-pricing-notice"]').text()).toContain('上游与自动跟价')
+    await wrapper.get('#create-group-form').trigger('submit')
+    await flushPromises()
+    expect(mocks.showError).not.toHaveBeenCalled()
+    expect(mocks.create).toHaveBeenCalledOnce()
+    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('image_model_prices')
+  })
+
   it('preserves image adapter and automatic price metadata when editing a group', async () => {
     const image = { provider: 'suanli', upstream_model: 'Image-A', auto_price: true, cost: 0.08, applied_markup: 0.1, applied_prices: { '1K': 0.18, '2K': 0.18, '4K': 0.18 } }
     const pricing = { ...newVideoGroupPricing(), video: undefined, models: ['Image-A'], billing_mode: 'image', per_request_price: 0.18, image }
@@ -245,11 +260,16 @@ describe('GroupsView video pricing payloads', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="image-group-pricing"]').text()).toContain('0.08')
     expect(wrapper.find('[data-testid="edit-openai-image-model-prices"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid^="edit-openai-image-price-"]')).toHaveLength(0)
+    expect(wrapper.get('[data-testid="edit-image-auto-pricing-notice"]').text()).toContain('上游与自动跟价')
     expect(wrapper.get('[data-testid="image-group-pricing"]').text()).toContain('无需在分组重复填写')
     await wrapper.get('#edit-group-form').trigger('submit')
     await flushPromises()
     expect(mocks.showError).not.toHaveBeenCalled()
-    expect(mocks.update).toHaveBeenCalledWith(42, expect.objectContaining({ model_pricing: [expect.objectContaining({ image })], image_model_prices: expect.objectContaining({ 'image-a': image.applied_prices }) }))
+    expect(mocks.update).toHaveBeenCalledWith(42, expect.objectContaining({ model_pricing: [expect.objectContaining({ image })] }))
+    // The form's old image price snapshot must not overwrite a newer sync.
+    expect(mocks.update.mock.calls[0][1]).not.toHaveProperty('image_model_prices')
+    expect(JSON.parse(JSON.stringify(mocks.update.mock.calls[0][1]))).not.toHaveProperty('image_model_prices')
   })
 
 })
