@@ -66,7 +66,7 @@ function inputValue(event: Event): string {
 
     <nav class="chat-tools" aria-label="聊天工具">
       <RouterLink to="/model-plaza?embedded=1">模型价格</RouterLink>
-      <RouterLink to="/apps">图片工作室</RouterLink>
+      <a href="/canvas/canvas" target="_blank" rel="noopener noreferrer">无限画布 · 生图与视频</a>
       <button type="button" title="导出 Markdown" aria-label="导出 Markdown" @click="emit('export:markdown')">
         <Icon name="download" size="sm" />
         <span>MD</span>

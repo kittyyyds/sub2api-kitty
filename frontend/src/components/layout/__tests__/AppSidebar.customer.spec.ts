@@ -73,7 +73,9 @@ vi.mock('vue-i18n', async () => {
     'nav.appCenter': 'Kitty生图',
     'nav.onlineChat': '在线聊天',
     'nav.hotRecommendation': '火爆推荐',
-    'nav.affiliateBadge': '返利'
+    'nav.affiliateBadge': '邀请返现',
+    'nav.limitedOffer': '充值有礼',
+    'nav.canvasMediaBadge': '生图+视频'
   }
   return {
     ...actual,
@@ -167,7 +169,8 @@ describe('AppSidebar customer grouped navigation', () => {
     expect(paths('api')).toEqual(['/keys','/usage','/model-plaza?embedded=1','/monitor','/custom/docs'])
     expect(wrapper.findAll('[data-customer-section]').map(section => section.attributes('data-customer-section'))).toEqual(['overview', 'api', 'media', 'billing', 'other'])
     expect(paths('billing')).toEqual(['/purchase','/orders','/redeem','/affiliate'])
-    expect(paths('media')).toEqual(['/apps','/canvas/canvas?kitty_version=test','/video-tasks'])
+    expect(paths('media')).toEqual(['/canvas/canvas?kitty_version=test','/video-tasks'])
+    expect(wrapper.find('a[href="/apps"]').exists()).toBe(false)
     const canvasLink = wrapper.get('a[href="/canvas/canvas?kitty_version=test"]')
     expect(router.resolve(canvasLink.attributes('href')!).matched[0]?.path).toBe('/:pathMatch(.*)*')
     const push = vi.spyOn(router, 'push')
@@ -186,6 +189,22 @@ describe('AppSidebar customer grouped navigation', () => {
     await contacts[0]!.trigger('click')
     expect(wrapper.findComponent({ name: 'CustomerContactDialog' }).props('initialTab')).toBe('service')
 
+    wrapper.unmount()
+  })
+
+  it('shows the three requested badges only while expanded, without a studio link', async () => {
+    appStore.sidebarCollapsed = false
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }] })
+    await router.push('/dashboard')
+    await router.isReady()
+    const wrapper = mount(AppSidebar, { global: { plugins: [router], stubs: { VersionBadge: true } } })
+    expect(wrapper.get('a[href="/purchase"] .sidebar-promo-badge').text()).toBe('🎁充值有礼')
+    expect(wrapper.get('a[href="/affiliate"] .sidebar-promo-badge').text()).toBe('💸邀请返现')
+    expect(wrapper.get('a[href^="/canvas/canvas"] .sidebar-promo-badge').text()).toBe('🎨生图+视频')
+    expect(wrapper.find('a[href="/apps"]').exists()).toBe(false)
+    appStore.sidebarCollapsed = true
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.sidebar-promo-badge')).toHaveLength(0)
     wrapper.unmount()
   })
 
@@ -209,6 +228,7 @@ describe('AppSidebar customer grouped navigation', () => {
     expect(wrapper.find('a[href="/candy-test"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/admin/model-capability"]').exists()).toBe(false)
 
+    expect(wrapper.find('a[href="/apps"]').exists()).toBe(false)
     const canvasLink = wrapper.get('a[href="/canvas/canvas?kitty_version=test"]')
     expect(router.resolve(canvasLink.attributes('href')!).matched[0]?.path).toBe('/:pathMatch(.*)*')
     const push = vi.spyOn(router, 'push')

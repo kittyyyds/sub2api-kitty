@@ -248,13 +248,12 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/apps',
     name: 'AppCenter',
-    component: () => import('@/features/kitty-studio/KittyStudioView.vue'),
+    component: () => import('@/views/user/CanvasRedirectView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Kitty Studio',
-      titleKey: 'appCenter.title',
-      descriptionKey: 'appCenter.description'
+      title: '无限画布 · 生图与视频',
+      titleKey: 'nav.creativeCanvas'
     }
   },
   {

@@ -33,8 +33,8 @@ describe('media catalog customer UI', () => {
   })
   it('does not advertise public price listings as user authorization', () => {
     const wrapper = mount(MediaPricingCatalog, { props: { response: fixture() } })
-    expect(wrapper.text()).toContain('当前为公开价格')
-    expect(wrapper.text()).toContain('价格目录不代表已获得调用权限'); wrapper.unmount()
+    expect(wrapper.text()).toContain('登录后可查看账号适用价格')
+    expect(wrapper.text()).toContain('可用模型以账号已授权分组为准'); wrapper.unmount()
   })
   it('keeps the last catalog but clearly marks errors as stale', async () => {
     const wrapper = mount(MediaPricingCatalog, { props: { response: fixture(), initialKind: 'video', error: true } })

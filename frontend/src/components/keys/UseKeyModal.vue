@@ -23,7 +23,7 @@
 
       <div v-else-if="platform === 'video'" class="space-y-3" data-testid="video-key-instructions">
         <p class="text-sm text-gray-600 dark:text-gray-300">{{ t('videoModule.keyHint') }}</p>
-        <RouterLink to="/apps" class="btn btn-primary" @click="emit('close')">{{ t('videoModule.openStudio') }}</RouterLink>
+        <a href="/canvas/canvas" target="_blank" rel="noopener noreferrer" class="btn btn-primary" @click="emit('close')">无限画布 · 生图与视频</a>
         <p class="text-xs text-gray-500">POST /v1/videos/generations · GET /v1/videos/{id} · GET /v1/videos/{id}/content</p>
       </div>
       <!-- Platform-specific content -->

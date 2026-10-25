@@ -97,14 +97,14 @@ describe('AppSidebar regular-user grouped navigation contract', () => {
     expect(componentSource).not.toContain('data-user-nav-group')
   })
 
-  it('keeps legacy feature definitions without promotion badges in the customer menu', () => {
-    expect(componentSource).not.toContain(':data-sidebar-promo="item.badge.tone"')
-    expect(componentSource).toContain("label: t('nav.hotRecommendation')")
+  it('shows requested promo badges and retires the standalone studio entry', () => {
+    expect(componentSource).toContain(':data-sidebar-promo="item.badge.tone"')
+    expect(componentSource).toContain("label: t('nav.canvasMediaBadge')")
     expect(componentSource).toContain("label: t('nav.limitedOffer')")
     expect(componentSource).toContain("tone: 'deal'")
     expect(componentSource).toContain("label: t('nav.affiliateBadge')")
     expect(componentSource).toContain("tone: 'rebate'")
-    expect(componentSource).toContain("path: '/apps'")
+    expect(componentSource).not.toContain("path: '/apps'")
     expect(componentSource).toContain("path: '/chat'")
     expect(componentSource).not.toContain("buildNativeFeatureNavItem('image-generator')")
   })

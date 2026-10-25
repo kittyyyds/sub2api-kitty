@@ -4,15 +4,12 @@
     <MediaPricingCatalog :response="data" :loading="loading" :error="loadFailed" :catalog-policy="suanliMediaCatalog" :received-at="receivedAt" :personal="authStore.isAuthenticated" :initial-kind="initialKind" :initial-query="initialQuery" :initial-group-id="initialGroupId" :initial-detail="initialDetail" @refresh="loadData" />
   </div>
   <AppLayout v-else-if="isEmbedded">
-    <div class="catalog-view-switch" role="group" aria-label="价格目录视图">
-      <button :aria-pressed="view === 'all'" @click="view = 'all'">全部模型价格</button>
-      <button :aria-pressed="view === 'media'" @click="view = 'media'">图片 / 视频 · 模型与价格</button>
-    </div>
+    <CatalogViewSwitch v-model="view" />
     <MediaPricingCatalog v-if="view === 'media'" :response="data" :loading="loading" :error="loadFailed"
       :catalog-policy="suanliMediaCatalog" :received-at="receivedAt" :personal="authStore.isAuthenticated" :initial-kind="initialKind" :initial-query="initialQuery" :initial-group-id="initialGroupId" :initial-detail="initialDetail" @refresh="loadData" />
     <ModelPlazaContent
       v-else
-      :response="data"
+      :response="generalData"
       :loading="loading"
       :error="loadFailed"
       embedded
@@ -24,15 +21,12 @@
   <div v-else class="kitty-media-page relative z-10 min-h-screen">
     <PlazaNavBar />
     <main class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div class="catalog-view-switch" role="group" aria-label="价格目录视图">
-        <button :aria-pressed="view === 'all'" @click="view = 'all'">全部模型价格</button>
-        <button :aria-pressed="view === 'media'" @click="view = 'media'">图片 / 视频 · 模型与价格</button>
-      </div>
+      <CatalogViewSwitch v-model="view" />
       <MediaPricingCatalog v-if="view === 'media'" :response="data" :loading="loading" :error="loadFailed"
         :catalog-policy="suanliMediaCatalog" :received-at="receivedAt" :personal="authStore.isAuthenticated" :initial-kind="initialKind" :initial-query="initialQuery" :initial-group-id="initialGroupId" :initial-detail="initialDetail" @refresh="loadData" />
       <ModelPlazaContent
         v-else
-        :response="data"
+        :response="generalData"
         :loading="loading"
         :error="loadFailed"
         @retry="loadData"
@@ -46,6 +40,8 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
+import CatalogViewSwitch from '@/components/modelPlaza/CatalogViewSwitch.vue'
+import { generalPricingResponse } from '@/components/modelPlaza/generalPricing'
 import ModelPlazaContent from '@/components/modelPlaza/ModelPlazaContent.vue'
 import MediaPricingCatalog from '@/components/modelPlaza/MediaPricingCatalog.vue'
 import { suanliMediaCatalog } from '@/components/modelPlaza/mediaCatalogPolicy'
@@ -70,6 +66,7 @@ const isCompact = computed(() => route.query.compact === '1' && route.query.medi
 const isEmbedded = computed(() => route.query.embedded === '1' && authStore.isAuthenticated)
 
 const data = ref<ModelPlazaResponse | null>(null)
+const generalData = computed(() => generalPricingResponse(data.value))
 const loading = ref(true)
 const loadFailed = ref(false)
 const receivedAt = ref('')
@@ -108,7 +105,4 @@ onBeforeUnmount(() => { requestId++; controller?.abort(); clearInterval(timer); 
 <style scoped>
 .kitty-media-page, .kitty-media-compact { background: var(--kc-bg); color: var(--kc-ink); font-family: var(--kc-font); }
 .kitty-media-compact { min-height: 100vh; padding: 20px; }
-.catalog-view-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 22px; }
-.catalog-view-switch button { border-radius: 8px; padding: 9px 14px; font-size: 12px; color: var(--kc-muted,#65665f); }
-.catalog-view-switch button[aria-pressed='true'] { background: var(--kc-accent-soft,#fef8f4); color: var(--kc-accent-strong,#9c3f00); font-weight: 600; }
 </style>

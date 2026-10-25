@@ -99,7 +99,7 @@
             >
               <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
               <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-              <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+              <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone"><span aria-hidden="true">{{ item.badge.emoji }}</span>{{ item.badge.label }}</span></span>
               <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
             </router-link>
           </template>
@@ -127,7 +127,7 @@
           >
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone"><span aria-hidden="true">{{ item.badge.emoji }}</span>{{ item.badge.label }}</span></span>
             <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
           </router-link>
         </div>
@@ -151,7 +151,7 @@
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined" @click="handleMenuItemClick(item.path)">
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">{{ item.label }}</span>
+            <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone"><span aria-hidden="true">{{ item.badge.emoji }}</span>{{ item.badge.label }}</span></span>
             <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
           </router-link>
           <template v-if="section.id === 'other'">
@@ -855,17 +855,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/chat', label: t('nav.onlineChat'), icon: ChatIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
-    {
-      path: '/apps',
-      label: t('nav.appCenter'),
-      icon: BatchImageIcon,
-      badge: {
-        label: t('nav.hotRecommendation'),
-        emoji: '🔥',
-        tone: 'hot'
-      }
-    },
-    { path: '/creative-canvas', label: '无限画布', icon: FolderIcon },
+    { path: '/creative-canvas', label: t('nav.creativeCanvas'), icon: FolderIcon, badge: { label: t('nav.canvasMediaBadge'), emoji: '🎨', tone: 'hot' } },
     { path: '/video-tasks', label: '视频任务', icon: OrderIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
@@ -930,7 +920,7 @@ const customerNavSections = computed(() => {
   const definitions = [
     { id: 'overview', label: '', icon: DashboardIcon, paths: ['/dashboard'] },
     { id: 'api', label: 'API', icon: KeyIcon, paths: ['/keys','/usage','/model-plaza?embedded=1','/monitor','/custom/docs'] },
-    { id: 'media', label: t('nav.mediaSection'), icon: FolderIcon, paths: ['/apps','/creative-canvas','/video-tasks'] },
+    { id: 'media', label: t('nav.mediaSection'), icon: FolderIcon, paths: ['/creative-canvas','/video-tasks'] },
     { id: 'billing', label: t('nav.billing'), icon: CreditCardIcon, paths: ['/purchase','/orders','/redeem','/affiliate'] },
     { id: 'other', label: t('nav.otherSection'), icon: UserIcon, paths: ['/profile','/support-tickets','/pelican-showcase', ...customMenuItemsForUser.value.map(item => `/custom/${item.id}`)] },
   ]
@@ -1305,37 +1295,10 @@ onBeforeUnmount(() => {
 }
 
 .sidebar-promo-badge {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.125rem;
-  min-height: 1.125rem;
-  padding: 0 0.25rem;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  font-size: 0.5625rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.sidebar-promo-badge-hot {
-  color: var(--customer-copper, #c66a18);
-  background: var(--customer-copper-soft, rgba(198, 106, 24, 0.14));
-  box-shadow: 0 0 12px rgba(255, 173, 104, 0.18);
-}
-
-.sidebar-promo-badge-deal {
-  color: #d83a5b;
-  background: rgba(216, 58, 91, 0.16);
-  box-shadow: 0 0 12px rgba(255, 89, 123, 0.28);
-  font-size: 0.625rem;
-}
-
-.sidebar-promo-badge-rebate {
-  color: #087f5b;
-  background: rgba(8, 127, 91, 0.14);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.22);
-  font-size: 0.625rem;
+  display: inline-flex; flex: 0 0 auto; align-items: center; gap: 3px; min-height: 21px;
+  padding: 2px 5px; border: 1px solid var(--kc-accent-strong,#a54608); border-radius: 5px;
+  font-size: 10px; font-weight: 600; line-height: 1.2; white-space: nowrap;
+  color: var(--kc-accent-strong,#a54608); background: var(--kc-accent-soft,#fff5ed);
 }
 
 .sidebar-link {

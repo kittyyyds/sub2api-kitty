@@ -95,8 +95,8 @@ defineExpose({ showDetails })
       <span class="result-count">找到 <strong>{{ visible.length }}</strong> 个模型条目</span>
       <span class="received-time">价目获取 {{ receivedLabel }} · 北京时间</span>
     </div>
-    <div class="price-notice"><span aria-hidden="true">ⓘ</span><p><strong>这里展示站内售价，不是上游成本。</strong>{{ personal ? '已登录：目录按接口返回的分组及适用倍率展示。' : '当前为公开价格；登录后的授权和个人价格以账号实际配置为准。' }} 价格目录不代表已获得调用权限，提交前请确认报价。</p></div>
-    <div v-if="catalogPolicy" class="source-notice"><strong>按指定价表选型</strong><span>仅展示价表列出且本站目录精确匹配的模型。说明以 {{ catalogPolicy.capturedOn }} 核对的价表为依据；金额仍取本站加价后售价，不重复加价。</span></div>
+    <div class="price-notice"><span aria-hidden="true">ⓘ</span><p><strong>先选模型，再确认费用。</strong>{{ personal ? '价格按所选分组及账号当前配置展示。' : '登录后可查看账号适用价格。' }} 实际费用以所选规格和结算账单为准；可用模型以账号已授权分组为准。</p></div>
+    <div v-if="catalogPolicy" class="source-notice"><strong>模型与规格说明</strong><span>仅展示已收录模型，说明更新于 {{ catalogPolicy.capturedOn }}。点击「价格与说明」可查看详细规格、计费方式与费用试算。</span></div>
     <div v-if="error" role="alert" class="error-notice">刷新失败，当前不是最新核验结果。{{ response ? '保留上一次价目供参考，请刷新后再使用。' : '请重试。' }}</div>
     <div v-if="loading && !response" class="empty-state" role="status">正在读取模型和价格…</div>
     <div v-else-if="!visible.length" class="empty-state"><strong>没有找到匹配的模型</strong><p>试试完整模型名称，或切换分组、图片／视频分类。</p><button type="button" @click="query = ''; groupId = ''; billingUnit = ''">清除筛选</button></div>
@@ -107,7 +107,7 @@ defineExpose({ showDetails })
         <p class="model-description">{{ entry.model.description || (entry.document ? '价表未提供补充说明；保留原始模型名，具体售价见价格表。' : '暂无详细说明；请查看已公布的规格与计费信息，不按名称猜测功能。') }}</p>
         <div class="capability-tags"><span v-for="tag in entry.tags.slice(0, 3)" :key="tag">{{ tag }}</span><span v-if="!entry.tags.length">{{ entry.kind === 'image' ? '图片模型' : '视频模型' }}</span><span v-if="entry.document">价表已收录</span><span v-else-if="entry.model.capabilities?.generic">规格以上游支持为准</span></div>
         <p v-if="entry.catalogWarnings?.length" class="card-warning">{{ entry.catalogWarnings[0] }}</p>
-        <div class="card-price"><span>{{ entry.variableTimePrice ? '标准时段售价' : '站内售价' }} · USD</span><strong>{{ mediaPriceSummary(entry) }}</strong><small v-if="entry.document?.conditionalReferencePricing">含参考素材的条件报价需另行核对</small><small v-else-if="entry.referencePrice !== null">参考视频另计 {{ mediaMoney(entry.referencePrice) }}/秒</small><small v-else-if="entry.hasReferenceVideo">参考视频费用待确认</small><small v-else>{{ entry.tiers.filter(t => !t.period).length > 1 ? '可展开查看分规格价格' : '按所选模型计费单位计算' }}</small></div>
+        <div class="card-price"><span>{{ entry.variableTimePrice ? '标准时段价格' : '使用价格' }} · USD</span><strong>{{ mediaPriceSummary(entry) }}</strong><small v-if="entry.document?.conditionalReferencePricing">含参考素材的条件报价需另行核对</small><small v-else-if="entry.referencePrice !== null">参考视频另计 {{ mediaMoney(entry.referencePrice) }}/秒</small><small v-else-if="entry.hasReferenceVideo">参考视频费用待确认</small><small v-else>{{ entry.tiers.filter(t => !t.period).length > 1 ? '可展开查看分规格价格' : '按所选模型计费单位计算' }}</small></div>
         <div class="card-actions"><button type="button" :aria-label="`复制模型名称 ${entry.id}`" @click="copyId(entry.id)">复制名称</button><button type="button" class="details-button" @click="showDetails(entry)">价格与说明 <span aria-hidden="true">↗</span></button></div>
       </article>
     </div>
