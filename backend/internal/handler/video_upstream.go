@@ -98,7 +98,12 @@ func (h *OpenAIGatewayHandler) unifiedVideoLookup(c *gin.Context, key *service.A
 			h.errorResponse(c, 409, "video_not_ready", "视频尚未交付，请继续查询原任务")
 			return true
 		}
-		c.Redirect(http.StatusSeeOther, url)
+		if err := h.gatewayService.StreamUnifiedVideoContent(c, url); err != nil {
+			if !service.IsResponseCommitted(c) {
+				h.errorResponse(c, http.StatusBadGateway, "video_content_unavailable", err.Error())
+			}
+			c.Abort()
+		}
 		return true
 	}
 	c.Data(http.StatusOK, "application/json", body)

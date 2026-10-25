@@ -2,11 +2,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { get } = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('@/api/client', () => ({ apiClient: { get } }))
-import { downloadVideoTask, listVideoTasks, refreshVideoTask, type VideoTaskSummary } from '../videoTasks'
+import { downloadVideoTask, fetchVideoTaskContent, listVideoTasks, refreshVideoTask, type VideoTaskSummary } from '../videoTasks'
 
 const task = { task_id: 'task/with space', api_key_id: 17 } as VideoTaskSummary
 describe('video task account binding and download', () => {
   beforeEach(() => get.mockReset())
+  it('reads prepaid content through the same-origin owner endpoint, never the supplier URL', async () => {
+    localStorage.setItem('auth_token', 'fixture-token')
+    const request = vi.fn().mockResolvedValue(new Response('video', { headers: { 'content-type': 'video/mp4' } }))
+    vi.stubGlobal('fetch', request)
+    try {
+      const signal = new AbortController().signal
+      await fetchVideoTaskContent({ ...task, price_snapshot: { prepaid_task_id: 'local-task' } } as VideoTaskSummary, { Range: 'bytes=5-', 'If-Range': '"v1"', Cookie: 'never-forward' }, signal)
+      expect(request).toHaveBeenCalledTimes(1)
+      expect(request).toHaveBeenCalledWith('/canvas-api/v1/videos/task%2Fwith%20space/content', {
+        headers: { Range: 'bytes=5-', 'If-Range': '"v1"', Authorization: 'Bearer fixture-token', 'X-Canvas-Key-ID': '17' },
+        signal, cache: 'no-store', redirect: 'error',
+      })
+    } finally { vi.unstubAllGlobals(); localStorage.removeItem('auth_token') }
+  })
   it('uses authenticated owner listing and a separate admin route', async () => {
     get.mockResolvedValue({ data: { items: [], has_more: false } })
     await listVideoTasks(false, { page: 1, page_size: 20 })

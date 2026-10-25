@@ -118,20 +118,10 @@ export async function downloadVideoTask(task: VideoTaskSummary, signal: AbortSig
 export async function fetchVideoTaskContent(task: VideoTaskSummary, rangeHeaders: Record<string, string>, signal: AbortSignal): Promise<Response> {
   const token = localStorage.getItem('auth_token')
   if (!token) throw new Error('请先登录，再下载已有视频任务。')
-  if (task.price_snapshot?.prepaid_task_id) {
-    const status = await fetch(`/canvas-api/v1/videos/${encodeURIComponent(task.task_id)}`, { headers: { Authorization: `Bearer ${token}`, 'X-Canvas-Key-ID': String(task.api_key_id) },signal,cache:'no-store' })
-    const data = await status.json()
-    if (!status.ok) throw new Error(data.error?.message || '读取视频交付状态失败')
-    if (data.delivery_status === 'expired') throw new Error('上游视频已过期')
-    if (data.delivery_mode !== 'upstream_direct' || data.status !== 'completed' || typeof data.url !== 'string') throw new Error('上游暂未提供下载链接，请稍后查询')
-    const url = new URL(data.url)
-    if(url.protocol !== 'https:' || url.username || url.password) throw new Error('上游下载链接无效')
-    const headers: Record<string,string> = {}
-    for(const [k,v] of Object.entries(rangeHeaders)) if(/^(range|if-range)$/i.test(k)) headers[k]=v
-    return fetch(url.href,{headers,signal,cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer'})
-  }
+  const headers: Record<string, string> = {}
+  for (const [key, value] of Object.entries(rangeHeaders)) if (/^(range|if-range)$/i.test(key)) headers[key] = value
   return fetch(`/canvas-api/v1/videos/${encodeURIComponent(task.task_id)}/content`, {
-    headers: { ...rangeHeaders, Authorization: `Bearer ${token}`, 'X-Canvas-Key-ID': String(task.api_key_id) },
-    signal, cache: 'no-store',
+    headers: { ...headers, Authorization: `Bearer ${token}`, 'X-Canvas-Key-ID': String(task.api_key_id) },
+    signal, cache: 'no-store', redirect: 'error',
   })
 }
