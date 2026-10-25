@@ -112,6 +112,11 @@ func (r *mediaWalletRepository) lock(ctx context.Context, key service.MediaWalle
 }
 
 func (r *mediaWalletRepository) Reserve(ctx context.Context, cmd service.MediaWalletReserve) (*service.MediaWalletOrder, bool, error) {
+	return r.reserveAtomic(ctx, cmd, nil)
+}
+
+// A supplied transaction commits local service delivery with the existing wallet.
+func (r *mediaWalletRepository) reserveAtomic(ctx context.Context, cmd service.MediaWalletReserve, provided *sql.Tx) (*service.MediaWalletOrder, bool, error) {
 	amount, err := mediaWalletAmount(cmd.AmountUSD)
 	if err != nil {
 		return nil, false, err
@@ -161,11 +166,14 @@ func (r *mediaWalletRepository) Reserve(ctx context.Context, cmd service.MediaWa
 		return nil, false, err
 	}
 	fingerprint := fmt.Sprintf("%x", sha256.Sum256(raw))
-	tx, err := r.lock(ctx, cmd.Key, true)
-	if err != nil {
-		return nil, false, err
+	tx := provided
+	if tx == nil {
+		tx, err = r.lock(ctx, cmd.Key, true)
+		if err != nil {
+			return nil, false, err
+		}
+		defer tx.Rollback()
 	}
-	defer tx.Rollback()
 	var stored string
 	err = tx.QueryRowContext(ctx, `INSERT INTO kitty_media_wallet_orders(order_id,user_id,fingerprint,hold_amount,quote,price_contract)
 	 VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb) ON CONFLICT(order_id) DO NOTHING RETURNING order_id`,
@@ -208,8 +216,10 @@ func (r *mediaWalletRepository) Reserve(ctx context.Context, cmd service.MediaWa
 	if err != nil {
 		return nil, false, err
 	}
-	if err = tx.Commit(); err != nil {
-		return nil, false, err
+	if provided == nil {
+		if err = tx.Commit(); err != nil {
+			return nil, false, err
+		}
 	}
 	return o, true, nil
 }
@@ -285,6 +295,10 @@ func (r *mediaWalletRepository) Release(ctx context.Context, key service.MediaWa
 }
 
 func (r *mediaWalletRepository) finish(ctx context.Context, key service.MediaWalletKey, actualRaw, evidence, state string) (*service.MediaWalletOrder, error) {
+	return r.finishAtomic(ctx, key, actualRaw, evidence, state, nil)
+}
+
+func (r *mediaWalletRepository) finishAtomic(ctx context.Context, key service.MediaWalletKey, actualRaw, evidence, state string, provided *sql.Tx) (*service.MediaWalletOrder, error) {
 	actual, err := mediaWalletAmount(actualRaw)
 	if err != nil {
 		return nil, err
@@ -292,11 +306,14 @@ func (r *mediaWalletRepository) finish(ctx context.Context, key service.MediaWal
 	if !validMediaHash(evidence) {
 		return nil, errors.New("media settlement evidence hash is required")
 	}
-	tx, err := r.lock(ctx, key, false)
-	if err != nil {
-		return nil, err
+	tx := provided
+	if tx == nil {
+		tx, err = r.lock(ctx, key, false)
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
 	}
-	defer tx.Rollback()
 	o, err := scanMediaWallet(tx.QueryRowContext(ctx, `SELECT `+mediaWalletColumns+` FROM kitty_media_wallet_orders WHERE order_id=$1 AND user_id=$2 FOR UPDATE`, key.OrderID, key.UserID))
 	if err != nil {
 		return nil, err
@@ -358,8 +375,10 @@ func (r *mediaWalletRepository) finish(ctx context.Context, key service.MediaWal
 	if err != nil {
 		return nil, err
 	}
-	if err = tx.Commit(); err != nil {
-		return nil, err
+	if provided == nil {
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
 	}
 	return o, nil
 }

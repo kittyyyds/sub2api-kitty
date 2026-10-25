@@ -85,6 +85,7 @@ func providePluginHostInfo(buildInfo handler.BuildInfo) service.PluginHostInfo {
 }
 
 func provideCleanup(
+	retainedMedia *service.RetainedMediaService,
 	cfg *config.Config,
 	requestCaptures *requestcapture.Manager,
 	entClient *ent.Client,
@@ -172,6 +173,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"RetainedMedia", func() error {
+				if retainedMedia != nil {
+					retainedMedia.Stop()
+				}
+				return nil
+			}},
 			{"BPSWarmPool", func() error {
 				if openAIGateway != nil {
 					openAIGateway.StopBPS403Recovery()

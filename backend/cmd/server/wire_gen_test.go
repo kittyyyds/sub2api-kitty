@@ -51,7 +51,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	schedulerSnapshotSvc := service.NewSchedulerSnapshotService(nil, nil, nil, nil, cfg)
 	opsSystemLogSinkSvc := service.NewOpsSystemLogSink(nil)
 
-	cleanup := provideCleanup(
+	cleanup := provideCleanup(nil,
 		nil, // default/full runtime configuration
 		nil, // request capture manager
 		nil, // entClient

@@ -24,6 +24,15 @@ func RegisterUserRoutes(
 	authenticated.Use(panelRateLimiter.Global())
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
 	authenticated.Use(gin.HandlerFunc(auditLog))
+	if h.RetainedMedia != nil {
+		storage := authenticated.Group("/media-storage")
+		storage.GET("/config", h.RetainedMedia.Config)
+		storage.GET("/assets", h.RetainedMedia.List)
+		storage.POST("/assets", h.RetainedMedia.Upload)
+		storage.GET("/assets/:id/content", h.RetainedMedia.Content)
+		storage.POST("/assets/:id/extend", h.RetainedMedia.Extend)
+		storage.GET("/orders", h.RetainedMedia.Orders)
+	}
 	authenticated.GET("/video-tasks", h.OpenAIGateway.ListMyVideoTasks)
 	authenticated.GET("/video-tasks/stats", h.OpenAIGateway.MyVideoTaskStats)
 	{

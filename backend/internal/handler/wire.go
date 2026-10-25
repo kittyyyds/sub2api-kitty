@@ -219,6 +219,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
+	retainedMediaHandler *RetainedMediaHandler,
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
 	apiKeyHandler *APIKeyHandler,
@@ -250,6 +251,7 @@ func ProvideHandlers(
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
 	return &Handlers{
+		RetainedMedia:     retainedMediaHandler,
 		Auth:              authHandler,
 		User:              userHandler,
 		APIKey:            apiKeyHandler,
@@ -281,6 +283,7 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	NewRetainedMediaHandler,
 	admin.NewUserCleanupHandler,
 	// Top-level handlers
 	NewAuthHandler,
