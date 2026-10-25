@@ -1,7 +1,17 @@
 <template>
   <!-- 后台内嵌形态:?embedded=1 且已登录,套完整后台布局 -->
-  <AppLayout v-if="isEmbedded">
+  <div v-if="isCompact" class="kitty-media-compact">
+    <MediaPricingCatalog :response="data" :loading="loading" :error="loadFailed" :catalog-policy="suanliMediaCatalog" :received-at="receivedAt" :personal="authStore.isAuthenticated" :initial-kind="initialKind" :initial-query="initialQuery" :initial-group-id="initialGroupId" :initial-detail="initialDetail" @refresh="loadData" />
+  </div>
+  <AppLayout v-else-if="isEmbedded">
+    <div class="catalog-view-switch" role="group" aria-label="价格目录视图">
+      <button :aria-pressed="view === 'all'" @click="view = 'all'">全部模型价格</button>
+      <button :aria-pressed="view === 'media'" @click="view = 'media'">图片 / 视频 · 模型与价格</button>
+    </div>
+    <MediaPricingCatalog v-if="view === 'media'" :response="data" :loading="loading" :error="loadFailed"
+      :catalog-policy="suanliMediaCatalog" :received-at="receivedAt" :personal="authStore.isAuthenticated" :initial-kind="initialKind" :initial-query="initialQuery" :initial-group-id="initialGroupId" :initial-detail="initialDetail" @refresh="loadData" />
     <ModelPlazaContent
+      v-else
       :response="data"
       :loading="loading"
       :error="loadFailed"
@@ -11,10 +21,17 @@
   </AppLayout>
 
   <!-- 独立形态:自带导航条(logo/站名 + 登录/回后台) -->
-  <div v-else class="relative z-10 min-h-screen bg-gray-50 dark:bg-dark-950">
+  <div v-else class="kitty-media-page relative z-10 min-h-screen">
     <PlazaNavBar />
     <main class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div class="catalog-view-switch" role="group" aria-label="价格目录视图">
+        <button :aria-pressed="view === 'all'" @click="view = 'all'">全部模型价格</button>
+        <button :aria-pressed="view === 'media'" @click="view = 'media'">图片 / 视频 · 模型与价格</button>
+      </div>
+      <MediaPricingCatalog v-if="view === 'media'" :response="data" :loading="loading" :error="loadFailed"
+        :catalog-policy="suanliMediaCatalog" :received-at="receivedAt" :personal="authStore.isAuthenticated" :initial-kind="initialKind" :initial-query="initialQuery" :initial-group-id="initialGroupId" :initial-detail="initialDetail" @refresh="loadData" />
       <ModelPlazaContent
+        v-else
         :response="data"
         :loading="loading"
         :error="loadFailed"
@@ -25,18 +42,29 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import ModelPlazaContent from '@/components/modelPlaza/ModelPlazaContent.vue'
+import MediaPricingCatalog from '@/components/modelPlaza/MediaPricingCatalog.vue'
+import { suanliMediaCatalog } from '@/components/modelPlaza/mediaCatalogPolicy'
 import { getModelPlaza, type ModelPlazaResponse } from '@/api/modelPlaza'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import '@/styles/console-theme.css'
+import { useConsoleTheme } from '@/composables/useConsoleTheme'
+useConsoleTheme()
 
 const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const view = ref<'all' | 'media'>(route.query.media === '1' ? 'media' : 'all')
+const initialKind = computed(() => route.query.type === 'video' ? 'video' : 'image')
+const initialQuery = computed(() => typeof route.query.q === 'string' ? route.query.q : '')
+const initialGroupId = computed(() => { const value = Number(route.query.group); return Number.isSafeInteger(value) && value > 0 ? value : undefined })
+const initialDetail = computed(() => typeof route.query.detail === 'string' ? route.query.detail : '')
+const isCompact = computed(() => route.query.compact === '1' && route.query.media === '1')
 
 // embedded=1 但未登录(如转发的链接)自动降级为独立形态。
 const isEmbedded = computed(() => route.query.embedded === '1' && authStore.isAuthenticated)
@@ -44,22 +72,43 @@ const isEmbedded = computed(() => route.query.embedded === '1' && authStore.isAu
 const data = ref<ModelPlazaResponse | null>(null)
 const loading = ref(true)
 const loadFailed = ref(false)
+const receivedAt = ref('')
+let controller: AbortController | undefined
+let timer: ReturnType<typeof setInterval> | undefined
+let requestId = 0
 
 async function loadData(): Promise<void> {
+  const id = ++requestId
+  controller?.abort()
+  controller = new AbortController()
   loading.value = true
   loadFailed.value = false
   try {
-    data.value = await getModelPlaza()
+    const next = await getModelPlaza({ signal: controller.signal })
+    if (id === requestId) { data.value = next; receivedAt.value = new Date().toISOString() }
   } catch {
-    loadFailed.value = true
+    if (id === requestId) loadFailed.value = true
   } finally {
-    loading.value = false
+    if (id === requestId) loading.value = false
   }
 }
+function refreshVisible() { if (!document.hidden && !loading.value) void loadData() }
+watch(() => authStore.user?.id, () => { data.value = null; receivedAt.value = ''; void loadData() })
 
 onMounted(() => {
   // 独立形态导航条需要站点名/Logo;有 __APP_CONFIG__ 注入时同步命中缓存。
   void appStore.fetchPublicSettings()
   void loadData()
+  timer = setInterval(refreshVisible, 60000)
+  document.addEventListener('visibilitychange', refreshVisible)
 })
+onBeforeUnmount(() => { requestId++; controller?.abort(); clearInterval(timer); document.removeEventListener('visibilitychange', refreshVisible) })
 </script>
+
+<style scoped>
+.kitty-media-page, .kitty-media-compact { background: var(--kc-bg); color: var(--kc-ink); font-family: var(--kc-font); }
+.kitty-media-compact { min-height: 100vh; padding: 20px; }
+.catalog-view-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 22px; }
+.catalog-view-switch button { border-radius: 8px; padding: 9px 14px; font-size: 12px; color: var(--kc-muted,#65665f); }
+.catalog-view-switch button[aria-pressed='true'] { background: var(--kc-accent-soft,#fef8f4); color: var(--kc-accent-strong,#9c3f00); font-weight: 600; }
+</style>
