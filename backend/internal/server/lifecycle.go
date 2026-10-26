@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -41,7 +42,7 @@ func newLifecycleWithTimeout(timeout time.Duration, checks ...func(context.Conte
 	return &Lifecycle{idle: make(chan struct{}), checks: checks, probeTimeout: timeout}
 }
 
-func ProvideLifecycle(cfg *config.Config, db *sql.DB, cache *redis.Client) *Lifecycle {
+func ProvideLifecycle(cfg *config.Config, db *sql.DB, cache *redis.Client, scheduler *service.SchedulerSnapshotService) *Lifecycle {
 	timeout := time.Second
 	if cfg != nil && cfg.Server.ReadinessTimeoutSeconds > 0 {
 		timeout = time.Duration(cfg.Server.ReadinessTimeoutSeconds) * time.Second
@@ -54,6 +55,14 @@ func ProvideLifecycle(cfg *config.Config, db *sql.DB, cache *redis.Client) *Life
 			return err
 		}
 		return cache.Ping(ctx).Err()
+	}, func(ctx context.Context) error {
+		if cfg == nil || !cfg.Runtime.SchedulerReadiness.Enabled {
+			return nil
+		}
+		if scheduler == nil {
+			return service.ErrSchedulerCacheNotReady
+		}
+		return scheduler.CheckReadiness(ctx)
 	})
 }
 

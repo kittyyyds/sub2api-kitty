@@ -73,14 +73,16 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userGroupRateRepository := repository.NewUserGroupRateRepository(db)
 	userPlatformQuotaRepository := repository.NewUserPlatformQuotaRepository(client)
 	serviceUserPlatformQuotaRepository := repository.NewUserPlatformQuotaServiceAdapter(userPlatformQuotaRepository)
-	billingCacheService := service.ProvideBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, userRPMCache, userGroupRateRepository, configConfig, serviceUserPlatformQuotaRepository)
+	schedulerCache := repository.ProvideSchedulerCache(redisClient, configConfig)
+	accountRepository := repository.NewAccountRepository(client, db, schedulerCache)
+	notificationEmailService := service.NewNotificationEmailService(settingRepository, emailService)
+	balanceNotifyService := service.ProvideBalanceNotifyService(emailService, settingRepository, accountRepository, notificationEmailService)
+	billingCacheService := service.ProvideBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, userRPMCache, userGroupRateRepository, configConfig, serviceUserPlatformQuotaRepository, balanceNotifyService)
 	apiKeyCache := repository.NewAPIKeyCache(redisClient)
 	concurrencyCache, err := repository.ProvideConcurrencyCache(redisClient, configConfig, db)
 	if err != nil {
 		return nil, err
 	}
-	schedulerCache := repository.ProvideSchedulerCache(redisClient, configConfig)
-	accountRepository := repository.NewAccountRepository(client, db, schedulerCache)
 	concurrencyService := service.ProvideConcurrencyService(concurrencyCache, accountRepository, configConfig)
 	regionalAuthAuthority := repository.NewRegionalAuthAuthority(db)
 	apiKeyService, err := service.ProvideAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, apiKeyCache, configConfig, billingCacheService, concurrencyService, regionalAuthAuthority)
@@ -165,8 +167,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	modelPricingResolver := service.NewModelPricingResolver(channelService, billingService)
 	compositeModelRouteRepository := repository.NewCompositeModelRouteRepository(client)
 	compositeRouteResolver := service.NewCompositeRouteResolver(compositeModelRouteRepository)
-	notificationEmailService := service.NewNotificationEmailService(settingRepository, emailService)
-	balanceNotifyService := service.ProvideBalanceNotifyService(emailService, settingRepository, accountRepository, notificationEmailService)
 	gatewayService := service.NewGatewayService(accountRepository, groupRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, identityService, httpUpstream, deferredService, claudeTokenProvider, sessionLimitCache, rpmCache, digestSessionStore, settingService, tlsFingerprintProfileService, channelService, modelPricingResolver, compositeRouteResolver, balanceNotifyService, serviceUserPlatformQuotaRepository)
 	proxyExitInfoProber := repository.NewProxyExitInfoProber(configConfig)
 	openAIOAuthClient := repository.NewOpenAIOAuthClient()
@@ -183,35 +183,37 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	safetyPromptStore := service.NewSafetyPromptStore()
 	openAIGatewayDependencies := service.OpenAIGatewayDependencies{
-		TimezoneProber:   proxyExitInfoProber,
-		Accounts:         accountRepository,
-		Proxies:          proxyRepository,
-		ProxyProber:      proxyExitInfoProber,
-		UsageLogs:        usageLogRepository,
-		UsageBilling:     usageBillingRepository,
-		Users:            userRepository,
-		Subscriptions:    userSubscriptionRepository,
-		GroupRates:       userGroupRateRepository,
-		Cache:            gatewayCache,
-		Config:           configConfig,
-		Scheduler:        schedulerSnapshotService,
-		Concurrency:      concurrencyService,
-		Billing:          billingService,
-		RateLimit:        rateLimitService,
-		BillingCache:     billingCacheService,
-		Upstream:         httpUpstream,
-		Deferred:         deferredService,
-		OpenAITokens:     openAITokenProvider,
-		GrokTokens:       grokTokenProvider,
-		Pricing:          modelPricingResolver,
-		Channels:         channelService,
-		BalanceNotify:    balanceNotifyService,
-		Settings:         settingService,
-		Quotas:           serviceUserPlatformQuotaRepository,
-		RPMCache:         rpmCache,
-		Harvest:          codexHarvestService,
-		RegionalMetering: regionalMetering,
+		TimezoneProber:    proxyExitInfoProber,
+		Accounts:          accountRepository,
+		Proxies:           proxyRepository,
+		ProxyProber:       proxyExitInfoProber,
+		UsageLogs:         usageLogRepository,
+		UsageBilling:      usageBillingRepository,
+		Users:             userRepository,
+		Subscriptions:     userSubscriptionRepository,
+		GroupRates:        userGroupRateRepository,
+		Cache:             gatewayCache,
+		Config:            configConfig,
+		Scheduler:         schedulerSnapshotService,
+		Concurrency:       concurrencyService,
+		Billing:           billingService,
+		RateLimit:         rateLimitService,
+		BillingCache:      billingCacheService,
+		Upstream:          httpUpstream,
+		Deferred:          deferredService,
+		OpenAITokens:      openAITokenProvider,
+		GrokTokens:        grokTokenProvider,
+		Pricing:           modelPricingResolver,
+		Channels:          channelService,
+		BalanceNotify:     balanceNotifyService,
+		Settings:          settingService,
+		Quotas:            serviceUserPlatformQuotaRepository,
+		RPMCache:          rpmCache,
+		Harvest:           codexHarvestService,
+		RegionalMetering:  regionalMetering,
+		SafetyPromptStore: safetyPromptStore,
 	}
 	openAIGatewayService := service.ProvideOpenAIGatewayService(openAIGatewayDependencies)
 	geminiOAuthClient := repository.NewGeminiOAuthClient(configConfig)
@@ -362,7 +364,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	contentModerationRepository := repository.NewContentModerationRepository(db)
 	contentModerationHashCache := repository.NewContentModerationHashCache(redisClient)
 	contentModerationService := service.ProvideContentModerationService(settingRepository, contentModerationRepository, contentModerationHashCache, groupRepository, userRepository, proxyRepository, apiKeyAuthCacheInvalidator, emailService, db, secretEncryptor, configConfig)
-	contentModerationHandler := admin.NewContentModerationHandler(contentModerationService)
+	contentModerationHandler := admin.NewContentModerationHandlerWithSafetyPrompt(contentModerationService, safetyPromptStore, settingService)
 	securityPolicyRepository := repository.NewSecurityPolicyRepository(client, db)
 	securityPolicySessionStore := repository.NewSecurityPolicySessionStore(redisClient)
 	securityPolicyService := service.NewSecurityPolicyService(contentModerationService, securityPolicyRepository, securityPolicySessionStore, contentModerationRepository, settingRepository, groupRepository, emailService)
@@ -383,7 +385,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	affiliateHandler := admin.NewAffiliateHandler(affiliateService, adminService)
 	complianceHandler := admin.NewComplianceHandler(settingService)
 	auditLogRepository := repository.NewAuditLogRepository(db)
-	auditLogService := service.ProvideAuditLogService(auditLogRepository, settingService)
+	auditLogService := service.ProvideAuditLogService(auditLogRepository, settingService, configConfig)
 	auditLogHandler := admin.NewAuditLogHandler(auditLogService, totpService)
 	upstreamBillingProbeService := service.ProvideUpstreamBillingProbeService(accountRepository, accountTestService, settingService, leaderLockCache, db, configConfig, newAPIAuthorizationRepository, secretEncryptor)
 	openCodeGoUsageService := service.ProvideOpenCodeGoUsageService(accountRepository, httpUpstream, settingService, leaderLockCache, db, configConfig)
@@ -448,7 +450,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	apiKeyAuthMiddleware := middleware.ProvideAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig, tieredRoutingService)
 	auditLogMiddleware := middleware.NewAuditLogMiddleware(auditLogService)
 	stepUpAuthMiddleware := middleware.NewStepUpAuthMiddleware(totpService, userService, settingService)
-	lifecycle := server.ProvideLifecycle(configConfig, db, redisClient)
+	lifecycle := server.ProvideLifecycle(configConfig, db, redisClient, schedulerSnapshotService)
 	mediaIntegration, err := server.ProvideMediaIntegration(configConfig, db, redisClient, authService, billingCacheService, apiKeyService)
 	if err != nil {
 		return nil, err

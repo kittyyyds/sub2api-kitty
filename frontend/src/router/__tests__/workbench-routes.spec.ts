@@ -27,7 +27,7 @@ describe('AI workbench routes', () => {
 
     expect(studio?.path).toBe('/apps')
     expect(studio?.meta.requiresAuth).toBe(true)
-    expect(studio?.meta.titleKey).toBe('appCenter.title')
+    expect(studio?.meta.titleKey).toBe('nav.creativeCanvas')
     expect(chat?.path).toBe('/chat')
     expect(chat?.meta.requiresAuth).toBe(true)
     expect(chat?.meta.titleKey).toBe('nav.onlineChat')

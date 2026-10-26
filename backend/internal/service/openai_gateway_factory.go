@@ -36,6 +36,8 @@ type OpenAIGatewayDependencies struct {
 	RPMCache         RPMCache
 	Harvest          *CodexHarvestService
 	RegionalMetering *RegionalMetering
+
+	SafetyPromptStore *SafetyPromptStore
 }
 
 func ProvideOpenAIGatewayService(d OpenAIGatewayDependencies) *OpenAIGatewayService {
@@ -52,5 +54,9 @@ func ProvideOpenAIGatewayService(d OpenAIGatewayDependencies) *OpenAIGatewayServ
 			s.requestTimezoneProber = d.ProxyProber
 		},
 		WithRegionalMetering(d.RegionalMetering),
-		func(s *OpenAIGatewayService) { s.codexHarvest = d.Harvest; s.requestTimezoneProber = d.TimezoneProber })
+		func(s *OpenAIGatewayService) {
+			s.codexHarvest = d.Harvest
+			s.requestTimezoneProber = d.TimezoneProber
+			s.safetyPromptStore = d.SafetyPromptStore
+		})
 }

@@ -349,7 +349,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewChannelHandler,
 	admin.NewChannelMonitorHandler,
 	admin.NewChannelMonitorRequestTemplateHandler,
-	admin.NewContentModerationHandler,
+	admin.NewContentModerationHandlerWithSafetyPrompt,
 	admin.NewSecurityPolicyHandler,
 	admin.NewTieredRoutingHandler,
 	admin.NewBillingExportHandler,

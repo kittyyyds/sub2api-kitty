@@ -33,3 +33,4 @@ deploy/kitty-updater/ticket-schema-sql/*.sql text eol=lf
 backend/migrations/241_add_typesafe_platform.sql -text
 backend/migrations/263_kitty_typesafe_video_platforms.sql -text
 backend/migrations/264_retire_kitty_manual_prism.sql -text
+backend/migrations/298_kitty_retained_media.sql -text

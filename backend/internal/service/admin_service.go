@@ -257,7 +257,9 @@ type CreateGroupInput struct {
 	ModelPricing               []ChannelModelPricing
 	I18n                       GroupI18n // 名称与描述的界面语言译文
 	// 图片生成计费配置（仅 antigravity 平台使用）
-	AllowImageGeneration         bool
+	AllowImageGeneration bool
+	// Explicit API choice wins over platform defaults, including false.
+	AllowImageGenerationExplicit *bool
 	AllowBatchImageGeneration    bool
 	ImageRateIndependent         bool
 	ImageRateMultiplier          *float64

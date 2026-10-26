@@ -30,6 +30,7 @@ function render(component: Component) {
     global: {
       plugins: [i18n],
       stubs: {
+        RouterLink: { template: '<a><slot /></a>' },
         BaseDialog: { props: ['show', 'title'], template: '<section v-if="show" role="dialog"><h2>{{ title }}</h2><slot /><slot name="footer" /></section>' },
         Icon: true,
         Toggle: { props: ['modelValue'], template: '<input type="checkbox" :checked="modelValue" />' },

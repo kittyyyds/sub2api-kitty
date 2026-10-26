@@ -2854,6 +2854,7 @@ export interface QualityBPSPolicy {
   hold_on_usage: boolean
 }
 export interface QualityPolicy {
+  trigger_on_upstream_5xx?: boolean
   admission?: import('@/utils/openaiTwoFAAdmission').OpenAITwoFAAdmissionConfig
   judge?: QualityJudgeConfig
   expected_answer: string
@@ -2865,10 +2866,29 @@ export interface QualityPolicy {
   bps?: QualityBPSPolicy
 }
 
+export interface QualityRestoreDiagnostic {
+  reason: string
+  disposition: 'manual_required' | 'external_membership_present'
+  scope: string
+  ownership_retained: boolean
+  groups?: { group_id: number; group_exists: boolean; membership_present: boolean }[]
+  models?: string[]
+  changed_fields?: string[]
+  account_status?: string
+  schedulable?: boolean
+  account_version?: string
+  owned_account_version?: string
+  expected_concurrency?: number
+  current_concurrency?: number
+}
+
 export interface PelicanTestConfig {
   schedule_mode?: 'completion_interval'
   interval_seconds?: number
   iq_verdict?: 'correct' | 'other' | 'error'
+  // Optional display name, persisted with the rule's editable configuration.
+  rule_name?: string
+  quality_restore_diagnostic?: QualityRestoreDiagnostic
   quality_model_outcomes?: Record<string, 'passed' | 'failed' | 'inconclusive' | 'skipped'>
   quality_model_actions?: Record<string, string>
   trigger_source?: string
@@ -2928,6 +2948,8 @@ export interface CreateScheduledTestPlanRequest {
 }
 
 export interface UpdateScheduledTestPlanRequest {
+  // Configuration reuse must not implicitly restore or discard target ownership.
+  preserve_quality_state?: boolean
   pelican_config?: PelicanTestConfig
   model_id?: string
   cron_expression?: string

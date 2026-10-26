@@ -997,6 +997,7 @@ const adminNavItems = computed((): NavItem[] => {
       children: [
         { path: '/admin/risk-control', label: t('nav.contentModeration'), icon: ShieldIcon },
         { path: '/admin/prompt-audit', label: t('nav.promptAudit'), icon: ShieldIcon },
+        { path: '/admin/safety-prompt-audit', label: t('admin.safetyPromptAudit.nav'), icon: ShieldIcon },
         { path: '/admin/ip-audit', label: t('ipAudit.title'), icon: ShieldIcon },
         { path: '/admin/security-policy', label: t('nav.securityPolicy'), icon: ShieldIcon },
       ],
