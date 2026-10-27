@@ -36,7 +36,7 @@
           <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-gray-50 text-gray-500 dark:bg-dark-700"><tr><th class="p-3">模型</th><th class="p-3">任务</th><th class="p-3">成功 / 失败</th><th class="p-3">进行中 / 待核验</th><th class="p-3">成功率</th><th class="p-3">成功秒数</th><th class="p-3">实扣</th><th class="p-3">平均完成耗时</th></tr></thead><tbody class="divide-y divide-gray-100 dark:divide-dark-600"><tr v-for="model in stats.models" :key="model.model"><td class="max-w-64 break-words p-3">{{ model.model || '未记录模型' }}</td><td class="p-3">{{ model.total }}</td><td class="p-3">{{ model.succeeded }} / {{ model.failed }}</td><td class="p-3">{{ model.in_progress }} / {{ model.needs_review }}</td><td class="p-3">{{ percent(model.success_rate) }}</td><td class="p-3">{{ model.successful_seconds }} 秒</td><td class="p-3">{{ money(model.actual_cost) }}</td><td class="p-3">{{ duration(model.average_completion_seconds) }}</td></tr><tr v-if="!stats.models.length"><td colspan="8" class="p-6 text-center text-gray-500">当前筛选无视频任务</td></tr></tbody></table></div>
         </details>
       </section>
-      <p class="text-xs leading-relaxed text-gray-500">{{ fileDownloadSupported ? '“保存到文件”可边下载边写入磁盘；本页暂停后可继续同一任务，续传取决于上游的分段与版本校验支持。' : '当前浏览器不支持流式写入文件，普通下载会先缓存完整视频再保存。' }} 普通下载仍可使用；重试只读取已有结果，不会重新生成或再次收取生成费用。</p>
+      <p class="text-xs leading-relaxed text-gray-500">本页下载使用每个任务对应的上游视频链接，视频文件不经本站服务器中转。先获取链接，再点击打开；若浏览器直接播放，请使用播放器菜单下载或另存为。链接可能过期，重新获取不会重新生成视频。</p>
       <div class="card overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead class="bg-gray-50 text-gray-500 dark:bg-dark-700"><tr>
@@ -61,9 +61,9 @@
               <td class="whitespace-nowrap p-4 text-xs text-gray-500">{{ date(task.created_at) }}</td>
               <td class="p-4"><div v-if="canOperate(task)" class="flex min-w-32 flex-col gap-2">
                 <button v-if="task.task_id && task.status !== 'failed'" class="btn btn-secondary text-xs" :disabled="refreshing === task.id" @click="refreshTask(task)">{{ refreshing === task.id ? '查询中…' : '查询上游状态' }}</button>
-                <button v-if="task.task_id && (task.status === 'done' || task.status === 'needs_review')" class="btn btn-primary text-xs" :disabled="!!downloading" @click="download(task)">下载视频</button>
-                <button v-if="fileDownloadSupported && task.task_id && (task.status === 'done' || task.status === 'needs_review')" class="btn btn-secondary text-xs" :disabled="!!downloading" @click="saveToFile(task)">保存到文件 / 继续</button>
-                <button v-if="downloading === task.id" class="text-xs text-red-500" @click="downloadController?.abort()">取消下载 {{ downloadProgress }}</button>
+                <button v-if="task.task_id && (task.status === 'done' || task.status === 'needs_review')" class="btn btn-primary text-xs" :disabled="!!downloading" @click="download(task)">{{ downloading === task.id ? '获取链接中…' : '获取上游下载链接' }}</button>
+                <a v-if="downloadLinks[task.id]" :href="downloadLinks[task.id]" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="btn btn-secondary text-xs">打开对应视频下载链接 ↗</a>
+                <button v-if="downloading === task.id" class="text-xs text-red-500" @click="downloadController?.abort()">取消获取链接</button>
               </div><span v-else class="text-xs text-gray-400">由任务所属用户下载</span></td>
             </tr>
             <tr v-if="!tasks.length"><td colspan="6" class="p-12 text-center text-gray-500">{{ loading ? '正在读取视频任务…' : '暂无符合条件的视频任务' }}</td></tr>
@@ -82,9 +82,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { getCreativeCanvasUrl } from '@/utils/creativeCanvas'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { downloadVideoTask, fetchVideoTaskContent, getVideoTaskStats, listVideoTasks, refreshVideoTask, type VideoTaskFilters, type VideoTaskStats, type VideoTaskSummary } from '@/api/videoTasks'
+import { getVideoTaskDownloadURL, getVideoTaskStats, listVideoTasks, refreshVideoTask, type VideoTaskFilters, type VideoTaskStats, type VideoTaskSummary } from '@/api/videoTasks'
 
-import { downloadVideoToFile, pickVideoDownloadFile, supportsVideoFileDownload, type VideoFileDownloadSession } from '@/utils/videoDownload'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -101,12 +100,11 @@ function localDate(value: Date) { return `${value.getFullYear()}-${String(value.
 const today = new Date(), firstDay = new Date(today)
 firstDay.setDate(firstDay.getDate() - 29)
 const startDate = ref(localDate(firstDay)), endDate = ref(localDate(today))
-const refreshing = ref(''), downloading = ref(''), downloadProgress = ref('')
+const refreshing = ref(''), downloading = ref('')
+const downloadLinks = ref<Record<string, string>>({})
 let listController: AbortController | undefined
 let downloadController: AbortController | undefined
 let generation = 0
-const fileDownloadSupported = supportsVideoFileDownload()
-const fileDownloads = new Map<string, VideoFileDownloadSession>()
 const money = (value: number) => `$${Number(value).toLocaleString('en-US', { maximumFractionDigits: 8 })}`
 const date = (value: string) => new Date(value).toLocaleString()
 const percent = (value: number | null) => value === null ? '—' : `${value.toFixed(1)}%`
@@ -182,48 +180,24 @@ async function refreshTask(task: VideoTaskSummary) {
   finally { refreshing.value = '' }
 }
 async function download(task: VideoTaskSummary) {
-  downloadController = new AbortController(); downloading.value = task.id; error.value = ''; notice.value = ''; downloadProgress.value = ''
-  try {
-    const blob = await downloadVideoTask(task, downloadController.signal, (loaded, total) => {
-      downloadProgress.value = total ? `${Math.round(loaded / total * 100)}%` : `${(loaded / 1024 / 1024).toFixed(1)} MB`
-    })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a'); link.href = url; link.download = `kitty-video-${task.task_id.replace(/[^a-zA-Z0-9_-]/g, '_')}.mp4`
-    document.body.appendChild(link); link.click(); link.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 60000)
-    notice.value = '完整视频已交给浏览器下载，请查看下载列表。'
-  } catch (err) { if (!downloadController.signal.aborted) error.value = message(err); else notice.value = '已取消下载，生成任务不受影响。' }
-  finally { downloading.value = '' }
-}
-async function saveToFile(task: VideoTaskSummary) {
-  if (!canOperate(task) || downloading.value) return
-  const identity = `${task.user_id}:${task.api_key_id}:${task.task_id}`
+  if (!canOperate(task) || downloading.value || !task.task_id) return
+  const owner = auth.user?.id
   const controller = new AbortController()
-  downloadController = controller; downloading.value = task.id; error.value = ''; notice.value = ''; downloadProgress.value = ''
+  downloadController = controller; downloading.value = task.id; error.value = ''; notice.value = ''
+  delete downloadLinks.value[task.id]
   try {
-    let session = fileDownloads.get(identity)
-    if (!session || session.complete) {
-      session = await pickVideoDownloadFile(identity, `kitty-video-${task.task_id.replace(/[^a-zA-Z0-9_-]/g, '_')}.mp4`)
-      fileDownloads.set(identity, session)
-    }
-    const result = await downloadVideoToFile({ identity, session, signal: controller.signal,
-      request: (headers, signal) => {
-        if (!canOperate(task)) throw new Error('登录身份已变化，下载已停止。')
-        return fetchVideoTaskContent(task, headers, signal)
-      },
-      onProgress: (state) => {
-        if (!canOperate(task)) { controller.abort(); return }
-        downloadProgress.value = `${state.resumed ? '续传 ' : state.restarted ? '从头下载 ' : ''}${(state.received / 1048576).toFixed(1)} MB${state.total ? ` / ${(state.total / 1048576).toFixed(1)} MB` : ''}`
-      },
-    })
-    notice.value = `完整视频已保存为 ${result.fileName}，没有重新生成或再次扣生成费用。`
+    const url = await getVideoTaskDownloadURL(task, controller.signal)
+    if (controller.signal.aborted || auth.user?.id !== owner || !canOperate(task)) return
+    downloadLinks.value[task.id] = url
+    notice.value = '已取得该任务的上游链接，请点击该行“打开对应视频下载链接”。视频文件由上游直接提供，不经过本站中转；链接请勿分享给他人。'
   } catch (err) {
-    if (controller.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) notice.value = '下载已暂停，可在本页继续同一任务；生成任务不受影响。'
-    else error.value = message(err)
-  } finally { downloading.value = '' }
+    if (auth.user?.id !== owner) return
+    if (!controller.signal.aborted) error.value = message(err)
+    else notice.value = '已取消获取链接，生成任务不受影响。'
+  } finally { if (downloadController === controller) downloading.value = '' }
 }
-watch(() => auth.user?.id, () => { downloadController?.abort(); fileDownloads.clear() })
+watch(() => auth.user?.id, () => { downloadController?.abort(); downloadLinks.value = {}; notice.value = ''; error.value = '' })
 watch(admin, () => { tasks.value = []; page.value = 1; void load() })
 onMounted(load)
-onBeforeUnmount(() => { generation++; listController?.abort(); downloadController?.abort(); fileDownloads.clear() })
+onBeforeUnmount(() => { generation++; listController?.abort(); downloadController?.abort(); downloadLinks.value = {} })
 </script>

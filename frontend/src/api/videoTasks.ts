@@ -1,4 +1,16 @@
 import { apiClient } from './client'
+import { validateVideoTaskDownloadURL } from '@/utils/videoTaskLink'
+
+/** Read this exact task's delivery metadata; never fetch or proxy the video file. */
+export async function getVideoTaskDownloadURL(task: VideoTaskSummary, signal?: AbortSignal): Promise<string> {
+  const { data } = await apiClient.get<Record<string, unknown>>('/canvas-api/v1/videos/' + encodeURIComponent(task.task_id), {
+    baseURL: '/', headers: { 'X-Canvas-Key-ID': String(task.api_key_id) }, timeout: 90000, signal,
+  })
+  if (data.delivery_status === 'expired' || data.status === 'expired') throw new Error('上游视频文件已过期，请使用已保存的副本或云素材。')
+  if (data.status !== 'completed' && data.status !== 'done') throw new Error('视频尚未交付，请先查询原任务状态。')
+  const video = data.video as { url?: unknown } | undefined
+  return validateVideoTaskDownloadURL(data.url ?? video?.url)
+}
 
 export interface VideoTaskSummary {
 	 billing_state?: string
