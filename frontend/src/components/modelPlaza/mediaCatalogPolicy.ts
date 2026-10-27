@@ -7,6 +7,12 @@ export interface MediaCatalogModel {
   categoryId?: string
   sourceRows: number[]
   description: string
+  /** Editorial source labels; never live health or authorization signals. */
+  sourceBadges?: string[]
+  sourceAdvantages?: string
+  sourceDescription?: string
+  sourceRecommendation?: string
+  annotationRows?: number[]
   billingUnits: string[]
   pricingNotes: string[]
   warnings: string[]
@@ -22,7 +28,7 @@ export interface MediaCatalogPolicy {
   sourceUrl: string
   title: string
   capturedOn: string
-  categories?: { id: string; label: string }[]
+  categories?: { id: string; label: string; description?: string }[]
   models: MediaCatalogModel[]
 }
 // A dated editorial whitelist, not a live upstream scanner or a pricing authority.
