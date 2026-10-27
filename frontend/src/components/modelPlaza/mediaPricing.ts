@@ -84,7 +84,7 @@ export function mediaPriceSummary(entry: MediaPriceEntry): string {
   return `${mediaMoney(Math.min(...values))}/${entry.unit}${new Set(values).size > 1 ? ' 起' : ''}`
 }
 export function mediaMatches(entry: MediaPriceEntry, search: string): boolean {
-  const text = [entry.id, entry.group.name, entry.model.description ?? '', ...entry.tags].join(' ').toLocaleLowerCase()
+  const text = [entry.id, entry.group.name, entry.model.description ?? '', entry.document?.categoryId ?? '', ...entry.tags].join(' ').toLocaleLowerCase()
   return search.trim().toLocaleLowerCase().split(/\s+/).every(part => text.includes(part))
 }
 export function estimateMediaPrice(entry: MediaPriceEntry, tierKey: string, quantity: number, seconds: number, referenceSeconds: number) {

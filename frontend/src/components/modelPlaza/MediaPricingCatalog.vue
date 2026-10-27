@@ -13,6 +13,8 @@ const kind = ref<MediaKind>(props.initialKind ?? 'image')
 const query = ref(props.initialQuery ?? '')
 const groupId = ref(props.initialGroupId ? String(props.initialGroupId) : '')
 const billingUnit = ref('')
+const categoryId = ref('')
+const displayMode = ref<'table' | 'cards'>(props.catalogPolicy?.categories?.length ? 'table' : 'cards')
 const selectedKey = ref('')
 const dialog = ref<HTMLDialogElement | null>(null)
 const tierKey = ref('')
@@ -24,8 +26,24 @@ let noticeTimer: ReturnType<typeof setTimeout> | undefined
 const entries = computed(() => mediaEntries(props.response, props.catalogPolicy))
 const kinds = computed(() => entries.value.filter(e => e.kind === kind.value))
 const groups = computed(() => [...new Map(kinds.value.map(e => [e.group.id, e.group])).values()])
-const visible = computed(() => kinds.value.filter(e => (!groupId.value || String(e.group.id) === groupId.value)
+const filtered = computed(() => kinds.value.filter(e => (!groupId.value || String(e.group.id) === groupId.value)
   && (!billingUnit.value || e.unit === billingUnit.value) && mediaMatches(e, query.value)))
+const categories = computed(() => {
+  const labels = props.catalogPolicy?.categories ?? []
+  const counts = new Map<string, number>()
+  for (const entry of filtered.value) {
+    const id = entry.document?.categoryId ?? 'other'
+    counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  return [...labels, ...(counts.has('other') ? [{ id: 'other', label: '其他型号' }] : [])]
+    .filter(category => counts.has(category.id)).map(category => ({ ...category, count: counts.get(category.id)! }))
+})
+const visible = computed(() => filtered.value.filter(entry => !categoryId.value || (entry.document?.categoryId ?? 'other') === categoryId.value))
+const sections = computed(() => categories.value.map(category => ({ ...category,
+  entries: visible.value.filter(entry => (entry.document?.categoryId ?? 'other') === category.id)
+    .sort((a, b) => (a.document?.sourceRows[0] ?? 0) - (b.document?.sourceRows[0] ?? 0)),
+})).filter(section => section.entries.length))
+watch(categories, value => { if (categoryId.value && !value.some(c => c.id === categoryId.value)) categoryId.value = '' })
 const selected = computed(() => entries.value.find(e => e.key === selectedKey.value))
 const durationOptions = computed(() => selected.value?.document ? selected.value.document.secondOptions : selected.value?.model.capabilities?.second_options)
 const durationRange = computed(() => selected.value?.document ? selected.value.document.seconds : selected.value?.model.capabilities?.seconds)
@@ -35,7 +53,7 @@ const receivedLabel = computed(() => {
   const date = new Date(props.receivedAt ?? '')
   return Number.isNaN(date.getTime()) ? '尚未获取' : date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
 })
-watch(kind, () => { groupId.value = ''; billingUnit.value = '' })
+watch(kind, () => { groupId.value = ''; billingUnit.value = ''; categoryId.value = '' })
 watch(() => props.initialKind, value => { if (value) kind.value = value })
 watch(() => props.initialQuery, value => { query.value = value ?? '' })
 watch(() => props.initialGroupId, value => { groupId.value = value ? String(value) : '' })
@@ -95,11 +113,38 @@ defineExpose({ showDetails })
       <span class="result-count">找到 <strong>{{ visible.length }}</strong> 个模型条目</span>
       <span class="received-time">价目获取 {{ receivedLabel }} · 北京时间</span>
     </div>
+    <div v-if="categories.length" class="category-tools">
+      <nav class="category-tabs" aria-label="模型系列分类">
+        <button type="button" :aria-pressed="!categoryId" @click="categoryId = ''">全部系列 <small>{{ filtered.length }}</small></button>
+        <button v-for="category in categories" :key="category.id" type="button" :aria-pressed="categoryId === category.id" @click="categoryId = category.id">{{ category.label }} <small>{{ category.count }}</small></button>
+      </nav>
+      <div v-if="kind === 'video'" class="view-toggle" role="group" aria-label="价格展示方式"><button type="button" :aria-pressed="displayMode === 'table'" @click="displayMode = 'table'">分类表格</button><button type="button" :aria-pressed="displayMode === 'cards'" @click="displayMode = 'cards'">模型卡片</button></div>
+    </div>
     <div class="price-notice"><span aria-hidden="true">ⓘ</span><p><strong>先选模型，再确认费用。</strong>{{ personal ? '价格按所选分组及账号当前配置展示。' : '登录后可查看账号适用价格。' }} 实际费用以所选规格和结算账单为准；可用模型以账号已授权分组为准。</p></div>
     <div v-if="catalogPolicy" class="source-notice"><strong>模型与规格说明</strong><span>仅展示已收录模型，说明更新于 {{ catalogPolicy.capturedOn }}。点击「价格与说明」可查看详细规格、计费方式与费用试算。</span></div>
     <div v-if="error" role="alert" class="error-notice">刷新失败，当前不是最新核验结果。{{ response ? '保留上一次价目供参考，请刷新后再使用。' : '请重试。' }}</div>
     <div v-if="loading && !response" class="empty-state" role="status">正在读取模型和价格…</div>
-    <div v-else-if="!visible.length" class="empty-state"><strong>没有找到匹配的模型</strong><p>试试完整模型名称，或切换分组、图片／视频分类。</p><button type="button" @click="query = ''; groupId = ''; billingUnit = ''">清除筛选</button></div>
+    <div v-else-if="!visible.length" class="empty-state"><strong>没有找到匹配的模型</strong><p>试试完整模型名称，或切换分组、图片／视频分类。</p><button type="button" @click="query = ''; groupId = ''; billingUnit = ''; categoryId = ''">清除筛选</button></div>
+    <div v-else-if="kind === 'video' && displayMode === 'table' && sections.length" class="series-tables">
+      <section v-for="section in sections" :key="section.id" class="series-section" data-testid="media-series-section">
+        <header class="series-heading"><h2>{{ section.label }}</h2><span>{{ section.entries.length }} 个型号 · USD</span></header>
+        <div class="series-table-scroll" role="region" :aria-label="section.label + '价格表'" tabindex="0">
+          <table class="series-table"><thead><tr><th scope="col">模型名称 / 分组</th><th scope="col">规格与说明</th><th scope="col">价格 / 计费单位</th><th scope="col">操作</th></tr></thead><tbody>
+            <tr v-for="entry in section.entries" :key="entry.key" data-testid="media-model-row">
+              <td class="series-model"><strong>{{ entry.id }}</strong><small>{{ entry.group.name }}</small></td>
+              <td class="series-description"><p>{{ entry.model.description || '具体支持规格请查看价格与说明。' }}</p><p v-if="entry.catalogWarnings?.length" class="card-warning">{{ entry.catalogWarnings[0] }}</p></td>
+              <td class="series-prices">
+                <template v-if="entry.status === 'priced' && !entry.pricingConflict && !entry.catalogWarnings?.length">
+                  <div v-for="tier in entry.tiers.filter(t => !t.period)" :key="tier.key"><span>{{ tier.name }}</span><strong>{{ mediaMoney(tier.price) }}<small v-if="tier.price !== null"> / {{ entry.unit }}</small></strong></div>
+                  <small v-if="entry.variableTimePrice">标准时段价；分时规则见详情</small><small v-if="entry.document?.conditionalReferencePricing">含参考素材时需核对条件报价</small><small v-else-if="entry.referencePrice !== null">参考视频 {{ mediaMoney(entry.referencePrice) }} / 秒</small>
+                </template><strong v-else>{{ mediaPriceSummary(entry) }}</strong>
+              </td>
+              <td><div class="table-actions"><button type="button" :aria-label="`复制模型名称 ${entry.id}`" @click="copyId(entry.id)">复制名称</button><button type="button" class="details-button" @click="showDetails(entry)">价格与说明 ↗</button></div></td>
+            </tr>
+          </tbody></table>
+        </div>
+      </section>
+    </div>
     <div v-else class="model-grid">
       <article v-for="entry in visible" :key="entry.key" class="model-card" data-testid="media-model-card">
         <div class="model-card-top"><span class="model-symbol" :class="entry.kind" aria-hidden="true">{{ entry.kind === 'image' ? '▧' : '▷' }}</span><span class="group-chip" :title="entry.group.name">{{ entry.group.name }}</span><span class="status-dot" :class="entry.status" :title="entry.status === 'priced' ? '价格已公布，不代表调用授权' : '暂不可用或缺少有效价格'" /></div>
@@ -152,6 +197,7 @@ defineExpose({ showDetails })
 </template>
 
 <style scoped>
+.category-tools{display:flex;align-items:flex-start;gap:16px;margin:16px 0 20px}.category-tabs{display:flex;flex:1;gap:7px;flex-wrap:wrap}.category-tabs button,.view-toggle button{border:1px solid var(--mc-line);border-radius:8px;padding:7px 11px;color:var(--mc-muted);background:var(--mc-bg);font-size:11px}.category-tabs button[aria-pressed=true],.view-toggle button[aria-pressed=true]{color:var(--mc-accent);background:var(--mc-tint);border-color:var(--mc-accent);font-weight:600}.category-tabs small{margin-left:5px;opacity:.7}.view-toggle{display:flex;gap:5px;flex-shrink:0}.series-tables{display:flex;flex-direction:column;gap:24px}.series-section{border:1px solid var(--mc-line);border-radius:12px;overflow:hidden;background:var(--mc-bg)}.series-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 18px;background:var(--mc-tint);border-bottom:1px solid var(--mc-line)}.series-heading h2{margin:0;color:var(--mc-accent);font-size:16px}.series-heading span{font-size:11px;color:var(--mc-muted)}.series-table-scroll{overflow:auto}.series-table{width:100%;min-width:780px;border-collapse:collapse;text-align:left;font-size:12px;table-layout:fixed}.series-table th{padding:11px 16px;background:var(--mc-soft);color:var(--mc-muted);font-weight:500}.series-table th:nth-child(1){width:30%}.series-table th:nth-child(2){width:32%}.series-table th:nth-child(3){width:23%}.series-table th:nth-child(4){width:15%}.series-table td{padding:17px 16px;border-top:1px solid var(--mc-line);vertical-align:top;overflow-wrap:anywhere}.series-table tbody tr:hover{background:var(--mc-soft)}.series-model strong{display:block;font-size:13px;line-height:1.65}.series-model>small{display:block;margin-top:7px;color:var(--mc-muted);font-size:10px}.series-description p{margin:0 0 6px;line-height:1.8;color:var(--mc-muted)}.series-prices>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 8px;margin-bottom:6px}.series-prices span{color:var(--mc-muted);font-size:11px}.series-prices strong{color:var(--mc-accent);font-variant-numeric:tabular-nums;font-size:14px}.series-prices strong small{font-weight:400;font-size:11px}.series-prices>small{display:block;color:var(--mc-muted);font-size:10px;margin-top:7px}.table-actions{display:flex;align-items:flex-start;gap:8px;flex-direction:column}.table-actions>button:first-child{color:var(--mc-accent);font-size:11px}.table-actions .details-button{white-space:nowrap}.series-table-scroll:focus-visible{outline:2px solid var(--mc-accent);outline-offset:-2px}@media(max-width:800px){.category-tools{flex-direction:column}.category-tabs{max-height:155px;overflow-y:auto}.series-heading{padding:12px}.series-heading h2{font-size:14px}}
 .source-notice{display:flex;flex-wrap:wrap;gap:5px 12px;padding:0 2px 18px;font-size:11px;color:var(--mc-muted)}.source-notice strong{color:var(--mc-ink)}.document-rules{background:var(--mc-soft);padding:12px 14px;border-radius:9px;font-size:12px;margin:0 0 18px}.document-rules p{margin:4px 0}.document-rules small{display:block;font-size:10px;color:var(--mc-muted);margin-top:8px}.card-warning{font-size:10px;color:#a2602a;line-height:1.7;margin:0 0 12px}
 
 .media-catalog{--mc-bg:var(--kc-panel,#fff);--mc-soft:var(--kc-panel-muted,#f8f5ef);--mc-line:var(--kc-line,#e6e2da);--mc-ink:var(--kc-ink,#1c1c19);--mc-muted:var(--kc-muted,#65665f);--mc-accent:var(--kc-accent-strong,#9c3f00);--mc-tint:var(--kc-accent-soft,#fef8f4);color:var(--mc-ink);font-size:14px;line-height:1.6} .media-catalog.is-dark{--mc-bg:var(--kc-panel,#202b3b);--mc-soft:var(--kc-panel-muted,#182334);--mc-line:var(--kc-line,#344052);--mc-ink:var(--kc-ink,#f7faf8);--mc-muted:var(--kc-muted,#bec9c4);--mc-accent:var(--kc-accent-strong,#ffd0bf);--mc-tint:var(--kc-accent-soft,#3e1600)}

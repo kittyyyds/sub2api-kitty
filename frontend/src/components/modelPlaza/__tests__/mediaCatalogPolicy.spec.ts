@@ -14,11 +14,11 @@ function policy(overrides: Partial<MediaCatalogModel> = {}): MediaCatalogPolicy 
 }
 
 describe('document scoped media presentation', () => {
-  it('uses 185 exact case-sensitive IDs, merging the one duplicate row without choosing a cheaper price', () => {
-    expect(suanliMediaCatalog.models).toHaveLength(185)
-    expect(new Set(suanliMediaCatalog.models.map(m => m.id)).size).toBe(185)
-    const duplicate = suanliMediaCatalog.models.find(m => m.sourceRows.includes(199))!
-    expect(duplicate.sourceRows).toEqual([199, 209])
+  it('uses 193 verified IDs, merging duplicate rows without choosing a cheaper price', () => {
+    expect(suanliMediaCatalog.models).toHaveLength(193)
+    expect(new Set(suanliMediaCatalog.models.map(m => m.id)).size).toBe(193)
+    const duplicate = suanliMediaCatalog.models.find(m => m.sourceRows.includes(209))!
+    expect(duplicate.sourceRows).toEqual([209, 219])
     expect(duplicate.warnings.length).toBeGreaterThan(0)
   })
   it('does not ship upstream cost amounts in the public editorial policy', () => {

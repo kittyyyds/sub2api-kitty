@@ -4,6 +4,7 @@ import type { MediaKind, MediaPriceEntry } from './mediaPricing'
 export interface MediaCatalogModel {
   id: string
   kind: MediaKind
+  categoryId?: string
   sourceRows: number[]
   description: string
   billingUnits: string[]
@@ -21,6 +22,7 @@ export interface MediaCatalogPolicy {
   sourceUrl: string
   title: string
   capturedOn: string
+  categories?: { id: string; label: string }[]
   models: MediaCatalogModel[]
 }
 // A dated editorial whitelist, not a live upstream scanner or a pricing authority.
