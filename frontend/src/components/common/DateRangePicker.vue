@@ -50,8 +50,8 @@
             <label class="date-picker-label">{{ t('dates.startDate') }}</label>
             <input
               type="date"
-              v-model="localStartDate"
-              :max="localEndDate || tomorrow()"
+              v-model="startDateInput"
+              :max="endDateInput || tomorrow()"
               class="date-picker-input"
               @change="onDateChange"
             />
@@ -63,8 +63,8 @@
             <label class="date-picker-label">{{ t('dates.endDate') }}</label>
             <input
               type="date"
-              v-model="localEndDate"
-              :min="localStartDate"
+              v-model="endDateInput"
+              :min="startDateInput"
               :max="tomorrow()"
               class="date-picker-input"
               @change="onDateChange"
@@ -97,6 +97,8 @@ interface DatePreset {
 interface Props {
   startDate: string
   endDate: string
+  // Opt in where the consumer accepts RFC3339 instants as well as calendar dates.
+  rolling24Hours?: boolean
 }
 
 interface Emits {
@@ -135,6 +137,16 @@ const formatDateToString = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
+const calendarDate = (value: string) => value.includes('T') ? formatDateToString(new Date(value)) : value
+const startDateInput = computed({
+  get: () => calendarDate(localStartDate.value),
+  set: (value: string) => { localStartDate.value = value }
+})
+const endDateInput = computed({
+  get: () => calendarDate(localEndDate.value),
+  set: (value: string) => { localEndDate.value = value }
+})
+
 const presets: DatePreset[] = [
   {
     labelKey: 'dates.today',
@@ -161,8 +173,8 @@ const presets: DatePreset[] = [
       const end = new Date()
       const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
       return {
-        start: formatDateToString(start),
-        end: formatDateToString(end)
+        start: props.rolling24Hours ? start.toISOString() : formatDateToString(start),
+        end: props.rolling24Hours ? end.toISOString() : formatDateToString(end)
       }
     }
   },
@@ -237,7 +249,7 @@ const displayValue = computed(() => {
 })
 
 const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr + 'T00:00:00')
+  const date = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00')
   const dateLocale = locale.value === 'zh' ? 'zh-CN' : 'en-US'
   return date.toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })
 }
@@ -253,10 +265,18 @@ const selectPreset = (preset: DatePreset) => {
   activePreset.value = preset.value
 }
 
-const onDateChange = () => {
+const detectPreset = () => {
+  // Recognize an applied snapshot without requiring it to equal the current clock.
+  // Date-only pairs must never be mistaken for a rolling window.
+  if (props.rolling24Hours && localStartDate.value.includes('T') && localEndDate.value.includes('T') &&
+      Date.parse(localEndDate.value) - Date.parse(localStartDate.value) === 86_400_000) {
+    activePreset.value = 'last24Hours'
+    return
+  }
   // Check if current dates match any preset
   activePreset.value = null
   for (const preset of presets) {
+    if (props.rolling24Hours && preset.value === 'last24Hours') continue
     const range = preset.getRange()
     if (range.start === localStartDate.value && range.end === localEndDate.value) {
       activePreset.value = preset.value
@@ -284,12 +304,22 @@ const updateDropdownAlignment = () => {
   }
 }
 
+const onDateChange = () => {
+  // Editing either date switches the entire range back to calendar-day semantics.
+  localStartDate.value = calendarDate(localStartDate.value)
+  localEndDate.value = calendarDate(localEndDate.value)
+  detectPreset()
+}
+
 const toggle = () => {
   if (!isOpen.value) updateDropdownAlignment()
   isOpen.value = !isOpen.value
 }
 
 const apply = () => {
+  if (props.rolling24Hours && activePreset.value === 'last24Hours') {
+    selectPreset(presets.find(preset => preset.value === 'last24Hours')!)
+  }
   emit('update:startDate', localStartDate.value)
   emit('update:endDate', localEndDate.value)
   emit('change', {
@@ -317,32 +347,23 @@ watch(isOpen, (open) => {
   if (open) return
   localStartDate.value = props.startDate
   localEndDate.value = props.endDate
-  onDateChange()
+  detectAppliedRange()
 }, { flush: 'post' })
 
 // Sync local state with props
-watch(
-  () => props.startDate,
-  (val) => {
-    localStartDate.value = val
-    onDateChange()
-  }
-)
+const detectAppliedRange = () => {
+  localStartDate.value = props.startDate
+  localEndDate.value = props.endDate
+  detectPreset()
+}
+watch(() => [props.startDate, props.endDate], detectAppliedRange)
 
-watch(
-  () => props.endDate,
-  (val) => {
-    localEndDate.value = val
-    onDateChange()
-  }
-)
+detectPreset()
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleEscape)
   window.addEventListener('resize', updateDropdownAlignment)
-  // Initialize active preset detection
-  onDateChange()
 })
 
 onUnmounted(() => {

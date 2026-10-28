@@ -214,6 +214,8 @@ func TestCalculateTokenCostForRequest_NoResolverFallsBackToCatalog(t *testing.T)
 	require.NoError(t, err)
 	want, err := bs.CalculateCost("gpt-5.4", tokens, 1)
 	require.NoError(t, err)
+	// Request billing stamps an identity multiplier to prevent double application.
+	want.modelBillingMultiplier = 1
 	require.Equal(t, want, got)
 }
 

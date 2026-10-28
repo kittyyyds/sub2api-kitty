@@ -112,6 +112,7 @@ type UsageRecordWorkerPool struct {
 	autoScaleCooldown     time.Duration
 	lastScaleNanos        atomic.Int64
 	autoScaleCancel       context.CancelFunc
+	billingRecovery       *usageBillingRecoveryWorker
 	lifecycleWg           sync.WaitGroup
 	stopOnce              sync.Once
 }
@@ -227,6 +228,7 @@ func (p *UsageRecordWorkerPool) Stop() {
 		if p.autoScaleCancel != nil {
 			p.autoScaleCancel()
 		}
+		p.billingRecovery.Stop()
 		p.lifecycleWg.Wait()
 		p.pool.StopAndWait()
 	})

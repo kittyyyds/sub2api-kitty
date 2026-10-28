@@ -583,6 +583,6 @@ func (s *ContentModerationService) ReviewTextForSecurityPolicy(ctx context.Conte
 	if err != nil {
 		return false, "", err
 	}
-	flagged, category, _ := evaluateModerationScores(result.CategoryScores, cfg.Thresholds)
+	flagged, category, _, _ := evaluateModerationScores(result.CategoryScores, cfg)
 	return flagged, category, nil
 }

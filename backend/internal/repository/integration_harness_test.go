@@ -45,6 +45,9 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("KITTY_ISOLATED_BILLING_AUDIT") == "1" {
+		os.Exit(kittyIsolatedBillingAuditMain(m))
+	}
 	ctx := context.Background()
 
 	if err := timezone.Init("UTC"); err != nil {

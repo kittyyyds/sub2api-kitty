@@ -194,6 +194,8 @@ export interface SendVerifyCodeResponse {
 export interface CustomMenuItem {
   id: string
   label: string
+  label_zh?: string
+  label_en?: string
   icon_svg: string
   url: string
   page_slug?: string
@@ -2455,6 +2457,8 @@ export interface ApiKeyUsageTrendPoint {
 // ==================== Admin User Management ====================
 
 export interface UpdateUserRequest {
+  /** Optional operation reason recorded by the admin audit middleware, not user notes. */
+  reason?: string
   email?: string
   password?: string
   username?: string
@@ -2821,11 +2825,15 @@ export interface TotpLogin2FARequest {
 // ==================== Scheduled Test Types ====================
 
 export interface QualityJudgeConfig {
+  kind?: 'llm' | 'jev'
   group_id: number
   model_id: string
   prompt: string
 }
 export interface QualityJudgment {
+  kind?: 'llm' | 'jev'
+  rules_version?: string
+  latency_ms?: number
   verdict: 'correct' | 'incorrect' | 'unknown'
   reason: string
   account_id?: number

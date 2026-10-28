@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
@@ -223,11 +224,12 @@ func (s *UserPlatformQuotaUsageFlusher) flushOneBatch(parentCtx context.Context)
 }
 
 // flush 执行一次完整的 flush，循环消费至脏集空或达到 maxBatchesPerTick。
-func (s *UserPlatformQuotaUsageFlusher) flush() {
+func (s *UserPlatformQuotaUsageFlusher) flush() { s.flushWithContext(context.Background()) }
+
+func (s *UserPlatformQuotaUsageFlusher) flushWithContext(parentCtx context.Context) {
 	if s == nil || s.coordinated {
 		return
 	}
-	parentCtx := context.Background()
 	for b := 0; b < flusherMaxBatchesPerTick; b++ {
 		if !s.flushOneBatch(parentCtx) {
 			return
@@ -246,7 +248,12 @@ func (s *UserPlatformQuotaUsageFlusher) tick() {
 	if s == nil || s.stopped.Load() {
 		return
 	}
-	s.flush()
+	ctx, done, allowed := managedinstance.Begin(context.Background())
+	if !allowed {
+		return
+	}
+	defer done()
+	s.flushWithContext(ctx)
 }
 
 // Start 注册定时 tick。flusher_enabled=false 时直接返回，不注册定时器。

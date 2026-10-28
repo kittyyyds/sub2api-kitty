@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/websearch"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/setup"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
@@ -120,6 +122,16 @@ func ProvideRouter(
 	})
 	lifecycle.onDrain = append(lifecycle.onDrain, manager.Stop)
 	r.Use(manager.Ingress())
+	if handlers.Admin != nil && handlers.Admin.Usage != nil {
+		stop, err := handlers.Admin.Usage.ConfigureTrafficDelivery(func() string {
+			return filepath.Join(setup.GetDataDir(), "user-traffic-pending")
+		})
+		if err != nil {
+			log.Printf("Traffic statistics disabled: %v", err)
+		} else {
+			lifecycle.onDrain = append(lifecycle.onDrain, stop)
+		}
+	}
 	r.GET("/internal/serverless/probe", manager.ProbeHandler)
 	SetupRouter(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, userService, compositeResolver, cfg, redisClient)
 	if err := mediaIntegration.mount(r, lifecycle, jwtAuth, settingService); err != nil {

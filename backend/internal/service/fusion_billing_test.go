@@ -14,7 +14,7 @@ import (
 
 func TestFusionReservationIncludesTokenSurchargeButNotSearchOrFinalMedia(t *testing.T) {
 	svc := newInflightEstimateGateway(t, nil)
-	svc.settingService = modelBillingSettings(t, ModelBillingConfig{Enabled: true, Rules: []ModelBillingRule{{Model: "gpt-6-luna*", Multiplier: 10}, {Model: "banana*", Multiplier: 100}}})
+	svc.settingService = modelBillingSettings(t, ModelBillingConfig{SchemaVersion: 2, Enabled: true, Rules: []ModelBillingRule{{Model: "gpt-6-luna*", Multiplier: 10, GroupID: 71, Enabled: true, Mode: ModelBillingAlways}, {Model: "banana*", Multiplier: 100, GroupID: 71, Enabled: true, Mode: ModelBillingAlways}}})
 	group := &Group{ID: 71, Platform: PlatformOpenAI, RateMultiplier: 2}
 	key := &APIKey{User: &User{ID: 1}, Group: group, GroupID: &group.ID}
 	req := InflightEstimateRequest{Model: "gpt-6-luna", BodyBytes: 4000, MaxTokens: 500, SearchCalls: 2}
