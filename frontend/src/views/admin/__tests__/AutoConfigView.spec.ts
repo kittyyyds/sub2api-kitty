@@ -241,20 +241,39 @@ describe('new 2FA admission configuration', () => {
  })
 })
 
-describe('Kitty unified admission entry', () => {
- it('migrates only the saved template, keeps pricing unchanged, and removes the duplicate card', async () => {
+describe('Kitty native standalone admission entry', () => {
+ it('keeps only the native standalone card and preserves legacy template compatibility', async () => {
   const legacy={...structuredClone(config),enabled:true,group_ids:[5],iq_bootstrap:{...defaultIQBootstrap(),enabled:true,quarantine_enabled:true,quarantine_group_id:5}}
   vi.mocked(getAutoConfig).mockResolvedValue(legacy)
   const w=mount(AutoConfigView);await flushPromises()
-  expect(w.find('[data-testid="two-fa-admission"]').exists()).toBe(false)
-  expect(w.findAll('[data-testid="iq-bootstrap-settings"]')).toHaveLength(1)
-  expect(w.get('[data-testid="iq-bootstrap-settings"]').element.closest('section')).toBe(w.get('[data-testid="initial-enabled"]').element.closest('section'))
+  expect(w.findAll('[data-testid="two-fa-admission"]')).toHaveLength(1)
+  expect(w.find('[data-testid="iq-bootstrap-settings"]').exists()).toBe(false)
+  expect(w.get('[data-testid="two-fa-admission"]').element.parentElement?.parentElement).toBe(w.get('form').element)
+  expect(w.get('[data-testid="two-fa-admission"]').element.closest('section')).not.toBe(w.get('[data-testid="initial-enabled"]').element.closest('section'))
   expect(saveAutoConfig).not.toHaveBeenCalled()
   expect(w.get<HTMLSelectElement>('[data-testid="admission-group"]').element.value).toBe('5')
-  await w.get('[data-testid="admission-isolation-count"]').setValue(8)
+  await w.get('[data-testid="admission-isolation_count"]').setValue(8)
   await w.get('form').trigger('submit');await flushPromises()
   expect(saveAutoConfig).toHaveBeenCalledWith({...legacy,iq_bootstrap:{...legacy.iq_bootstrap,enabled:false},openai_two_fa_admission:{...defaultOpenAITwoFAAdmissionConfig(),enabled:true,isolation_group_id:5,isolation_count:8}})
   expect(legacy.iq_bootstrap.enabled).toBe(true)
+  w.unmount()
+ })
+ it('preserves the configured new-engine rules when only the initial OAuth platform changes', async () => {
+  const admission={...defaultOpenAITwoFAAdmissionConfig(),enabled:true,model_id:'gpt-6.1-sol',reasoning_effort:'low',wait_seconds:60,pass_count:6,passed_concurrency:2,isolation_count:6,isolation_group_id:5}
+  const saved={...structuredClone(config),openai_two_fa_admission:admission,revision:'keep-existing-upgrade-revision'}
+  vi.mocked(getAutoConfig).mockResolvedValue(saved)
+  const w=mount(AutoConfigView);await flushPromises()
+  expect(saveAutoConfig).not.toHaveBeenCalled()
+  expect(w.get<HTMLInputElement>('[data-testid="admission-pass_count"]').element.value).toBe('6')
+  expect(w.get<HTMLInputElement>('[data-testid="admission-passed_concurrency"]').element.value).toBe('2')
+  expect(w.get<HTMLInputElement>('[data-testid="admission-isolation_count"]').element.value).toBe('6')
+  expect(w.get<HTMLSelectElement>('[data-testid="admission-group"]').element.value).toBe('5')
+  await w.get('[data-testid="platform"]').setValue('anthropic')
+  expect(w.findAll('[data-testid="two-fa-admission"]')).toHaveLength(1)
+  expect(w.get<HTMLInputElement>('[data-testid="admission-enabled"]').element.checked).toBe(true)
+  await w.get('form').trigger('submit');await flushPromises()
+  expect(saveAutoConfig).toHaveBeenCalledWith({...saved,platform:'anthropic',quality_rule:null,model_mappings:[]})
+  expect(saved.openai_two_fa_admission).toEqual(admission)
   w.unmount()
  })
 })

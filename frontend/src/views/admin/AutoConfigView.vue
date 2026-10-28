@@ -13,6 +13,10 @@
         <fieldset :disabled="saving" class="min-w-0">
           <ModelBillingSettings v-model="draft.model_billing" :groups="allGroups" />
         </fieldset>
+        <fieldset :disabled="saving" class="min-w-0 space-y-3">
+          <p v-if="legacyAdmissionPending" class="text-xs leading-5 text-amber-700">已带入原糖果验证设置。保存后新账号使用新版规则，已有账号的测试进度不会迁移或重置。</p>
+          <OpenAITwoFAAdmissionCard v-model="draft.openai_two_fa_admission" :groups="allGroups" />
+        </fieldset>
         <fieldset :disabled="saving" class="grid min-w-0 gap-5 xl:grid-cols-2">
           <section class="card space-y-5">
             <header class="flex items-center justify-between gap-3"><h2 class="text-lg font-semibold">{{ t('autoConfig.initial') }}</h2><label class="flex items-center gap-2 text-sm"><input v-model="draft.enabled" data-testid="initial-enabled" type="checkbox" role="switch" />{{ t('autoConfig.enable') }}</label></header>
@@ -21,8 +25,6 @@
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><label v-for="field in initialFields" :key="field.key"><span class="field-label">{{ t('autoConfig.' + field.key) }}</span><input v-model.number="draft[field.key]" :data-testid="field.key" type="number" :min="field.min" max="10000" step="1" required class="input w-full" /></label><label><span class="field-label">{{ t('autoConfig.cost_multiplier') }}</span><input v-model.number="draft.cost_multiplier" data-testid="cost_multiplier" type="number" min="0" max="1000000" step="0.001" required class="input w-full" /></label></div>
             <p class="text-xs leading-5 text-gray-500">{{ t('autoConfig.loadHint') }}</p>
             <fieldset><legend class="field-label">{{ t('autoConfig.groups') }}</legend><div class="group-list"><label v-for="g in initialGroups" :key="g.id" class="group-option"><input v-model="draft.group_ids" :value="g.id" type="checkbox" :data-testid="'initial-group-' + g.id" /><span>{{ g.name }} <small class="text-gray-400">#{{ g.id }}</small></span></label><p v-if="!initialGroups.length" class="text-sm text-gray-500">{{ t('autoConfig.noGroups') }}</p></div></fieldset>
-            <p v-if="legacyAdmissionPending" class="text-xs leading-5 text-amber-700">已带入原糖果验证设置。保存后新账号使用新版规则，已有账号的测试进度不会迁移或重置。</p>
-            <IQBootstrapSettings v-model="draft.openai_two_fa_admission" :groups="allGroups" />
             <fieldset class="space-y-3" data-testid="initial-quality-rule">
               <legend class="field-label">{{ t('autoConfig.quality.title') }}</legend>
               <p class="text-xs leading-5 text-gray-500">{{ t('autoConfig.quality.hint') }}</p>
@@ -68,7 +70,7 @@ import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import SmartOpsNav from '@/components/admin/operations/SmartOpsNav.vue'
 import BPSDefaultsCard from '@/components/admin/operations/BPSDefaultsCard.vue'
-import IQBootstrapSettings from '@/components/admin/operations/IQBootstrapSettings.vue'
+import OpenAITwoFAAdmissionCard from '@/components/admin/operations/OpenAITwoFAAdmissionCard.vue'
 import { unifiedIQAdmission } from '@/utils/unifiedIQAdmission'
 import { openaiTwoFAAdmissionError, type OpenAITwoFAAdmissionConfig } from '@/utils/openaiTwoFAAdmission'
 import { defaultOAuthModelMappings, oauthModelMappingsError, oauthModelMappingsPayload, type OAuthModelMappingRule } from '@/utils/oauthModelMappings'
