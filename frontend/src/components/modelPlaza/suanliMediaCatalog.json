@@ -901,7 +901,7 @@
       "sourceRows": [
         52
       ],
-      "description": "720P\n满血全参原生过真人",
+      "description": "720P 720P 满血903 不卡脸 支持9图3音频\n满血全参原生过真人",
       "billingUnits": [
         "条"
       ],
@@ -921,7 +921,7 @@
       "sourceBadges": [
         "今日特惠"
       ],
-      "sourceAdvantages": "720P",
+      "sourceAdvantages": "720P 720P 满血903 不卡脸 支持9图3音频",
       "sourceDescription": "满血全参原生过真人",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
@@ -931,7 +931,7 @@
       "sourceRows": [
         53
       ],
-      "description": "720P 15秒\n满血全参原生过真人",
+      "description": "720P 15秒 720P 满血903 不卡脸 支持9图3音频\n满血全参原生过真人",
       "billingUnits": [
         "条"
       ],
@@ -951,7 +951,7 @@
       "sourceBadges": [
         "今日特惠"
       ],
-      "sourceAdvantages": "720P 15秒",
+      "sourceAdvantages": "720P 15秒 720P 满血903 不卡脸 支持9图3音频",
       "sourceDescription": "满血全参原生过真人",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
@@ -1153,7 +1153,7 @@
       "sourceRows": [
         60
       ],
-      "description": "720P 满血900 不卡脸",
+      "description": "720P 满血903 不卡脸 支持9图3音频",
       "billingUnits": [
         "秒"
       ],
@@ -1173,7 +1173,7 @@
         "推荐",
         "福利"
       ],
-      "sourceAdvantages": "720P 满血900 不卡脸",
+      "sourceAdvantages": "720P 满血903 不卡脸 支持9图3音频",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
@@ -1183,7 +1183,7 @@
       "sourceRows": [
         61
       ],
-      "description": "720P 满血900 不卡脸",
+      "description": "720P 满血903  不卡脸 支持9图3音频",
       "billingUnits": [
         "条"
       ],
@@ -1203,7 +1203,7 @@
         "推荐",
         "福利"
       ],
-      "sourceAdvantages": "720P 满血900 不卡脸",
+      "sourceAdvantages": "720P 满血903  不卡脸 支持9图3音频",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
@@ -1213,7 +1213,7 @@
       "sourceRows": [
         62
       ],
-      "description": "720P 满血900 不卡脸",
+      "description": "720P 满血903 不卡脸 支持9图3音频",
       "billingUnits": [
         "条"
       ],
@@ -1233,35 +1233,15 @@
         "推荐",
         "福利"
       ],
-      "sourceAdvantages": "720P 满血900 不卡脸",
+      "sourceAdvantages": "720P 满血903 不卡脸 支持9图3音频",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
-    },
-    {
-      "id": "SVIP系列/高质量/wan3-1080P",
-      "kind": "video",
-      "sourceRows": [
-        63
-      ],
-      "description": "1080P 10-5-5不卡脸",
-      "billingUnits": [
-        "秒"
-      ],
-      "pricingNotes": [
-        "按生成视频时长及所选规格计费。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "referenceVideoMentioned": false,
-      "durationVariesByResolution": false,
-      "categoryId": "svip"
     },
     {
       "id": "006系列/wan3.0(满血标准版)",
       "kind": "video",
       "sourceRows": [
-        70
+        69
       ],
       "description": "720P 满血10-5-5不卡脸 5-30秒可选",
       "billingUnits": [
@@ -1295,7 +1275,7 @@
       "id": "008系列/sd2.5(30-10-10/5-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        79
+        78
       ],
       "description": "",
       "billingUnits": [
@@ -1324,7 +1304,7 @@
       "id": "008系列/sd2.0(原生过真人933/4-15秒/720P)",
       "kind": "video",
       "sourceRows": [
-        80
+        79
       ],
       "description": "",
       "billingUnits": [
@@ -1353,7 +1333,7 @@
       "id": "008系列/wan3.0(10图5音/5-30秒/480P)",
       "kind": "video",
       "sourceRows": [
-        81
+        80
       ],
       "description": "",
       "billingUnits": [
@@ -1382,7 +1362,7 @@
       "id": "008系列/sd2.0(mini933/720P)",
       "kind": "video",
       "sourceRows": [
-        82
+        81
       ],
       "description": "只支持5/10/15固定时间",
       "billingUnits": [
@@ -1411,7 +1391,7 @@
       "id": "008系列/wan3.0(10图5音/5/10/15/30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        83
+        82
       ],
       "description": "不卡真人 5/10/15/30秒固定秒数 10图5音频 720P",
       "billingUnits": [
@@ -1452,7 +1432,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        84
+        83
       ],
       "description": "5-15秒",
       "billingUnits": [
@@ -1485,7 +1465,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        85
+        84
       ],
       "description": "5-15秒",
       "billingUnits": [
@@ -1512,7 +1492,7 @@
       "id": "经典系列/grok-imagine-video-1.5-preview-GO",
       "kind": "video",
       "sourceRows": [
-        93
+        92
       ],
       "description": "单张首帧图片参考（图生视频）5-15秒 不卡脸",
       "billingUnits": [
@@ -1545,7 +1525,7 @@
       "id": "经典系列/MiniMax-H3-GO",
       "kind": "video",
       "sourceRows": [
-        94
+        93
       ],
       "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏） 5-15秒可选 原生过人脸",
       "billingUnits": [
@@ -1584,7 +1564,7 @@
       "id": "高质量sd2.5/(全参30-10-10原生过真人速度快720P)",
       "kind": "video",
       "sourceRows": [
-        105
+        104
       ],
       "description": "满血全参sd2.5 30-10-10 原生过真人 速度极快 720P 4-30秒可选择\n出视频速度非常快 不是dola",
       "billingUnits": [
@@ -1619,7 +1599,7 @@
       "id": "高质量sd2.0/(全参933原生过真人速度快720P)",
       "kind": "video",
       "sourceRows": [
-        106
+        105
       ],
       "description": "满血全参sd2.0 9-3-3 原生过真人 速度极快 720P 4-15秒可选择\n出视频速度非常快 不是dola",
       "billingUnits": [
@@ -1654,7 +1634,7 @@
       "id": "高质量sd2.5/(30图10音原生过真人720P)",
       "kind": "video",
       "sourceRows": [
-        107
+        106
       ],
       "description": "sd2.5 30图-10音频 原生过真人 速度极快 720P 4-30秒可选择 过脸传face参数\n出视频速度非常快 不是dola",
       "billingUnits": [
@@ -1689,7 +1669,7 @@
       "id": "高质量sd2.5/(原生过人脸30-10-10/720P)",
       "kind": "video",
       "sourceRows": [
-        108
+        107
       ],
       "description": "5-30秒 成功率非常高 如果一直失败，就去掉音频参考",
       "billingUnits": [
@@ -1723,7 +1703,7 @@
       "id": "高质量sd2.5/(原生过人脸30-10-10/720P按秒)",
       "kind": "video",
       "sourceRows": [
-        109
+        108
       ],
       "description": "5-30秒",
       "billingUnits": [
@@ -1757,7 +1737,7 @@
       "id": "高质量sd2.5/(30图10音原生过真人/720P)",
       "kind": "video",
       "sourceRows": [
-        110
+        109
       ],
       "description": "",
       "billingUnits": [
@@ -1784,7 +1764,7 @@
       "id": "高质量sd2.0(满血全参/720P)",
       "kind": "video",
       "sourceRows": [
-        112
+        111
       ],
       "description": "满血全参30-10-10，速度快，原生过人脸 5秒/10秒/15秒可选，不是dola\n出视频速度非常快 不是dola",
       "billingUnits": [
@@ -1819,7 +1799,7 @@
       "id": "高质量sd2.5(满血全参/720P/按秒)",
       "kind": "video",
       "sourceRows": [
-        113
+        112
       ],
       "description": "满血全参30-10-10，速度快，原生过人脸，4-30秒可选，不是dola,尺寸参数用这个参数ratio\n出视频速度非常快 不是dola",
       "billingUnits": [
@@ -1855,7 +1835,7 @@
       "id": "高质量sd2.5(满血全参/720P/按次)",
       "kind": "video",
       "sourceRows": [
-        114
+        113
       ],
       "description": "满血全参30-10-10，速度快，原生过人脸，固定30秒！，不是dola，容易缺号，凌晨跑很舒服\n出视频速度非常快 不是dola",
       "billingUnits": [
@@ -1887,7 +1867,7 @@
       "id": "高质量sd2.5(满血30-10-10/5-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        115
+        114
       ],
       "description": "满血全参30-10-10，速度快，原生过人脸，5-30秒！，不是dola，容易缺号，凌晨跑很舒服",
       "billingUnits": [
@@ -1920,7 +1900,7 @@
       "id": "高质量sd2.5(满血卡真人30-10-10/5-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        116
+        115
       ],
       "description": "",
       "billingUnits": [
@@ -1953,7 +1933,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        118
+        117
       ],
       "description": "5-15秒；须参考图≤9/音频≤3；不支持视频与纯文生；默认 size 848x480",
       "billingUnits": [
@@ -1986,7 +1966,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        119
+        118
       ],
       "description": "5-15秒；须参考图≤9/音频≤3；不支持视频与纯文生；默认 size 1376x768",
       "billingUnits": [
@@ -2019,7 +1999,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        121
+        120
       ],
       "description": "满血30-10-10 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）",
       "billingUnits": [
@@ -2057,7 +2037,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        123
+        122
       ],
       "description": "满血全参速度快30-10-10 720P",
       "billingUnits": [
@@ -2071,7 +2051,6 @@
       ],
       "sourceBadges": [
         "限时",
-        "无敌",
         "高质量速度极快"
       ],
       "sourceAdvantages": "满血全参速度快30-10-10 720P",
@@ -2082,7 +2061,7 @@
       "id": "专享sd2.0(fast933/4-15秒/720p)",
       "kind": "video",
       "sourceRows": [
-        132
+        131
       ],
       "description": "支持 720p;时长 4-15 秒;宽高比 16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9;最多 9 张参考图、3 个参考音频(mp3) ，支持过脸处理 需要传face参数,（默认关闭，需要时传 face 参数）\n性价比高，不崩脸",
       "billingUnits": [
@@ -2118,7 +2097,7 @@
       "id": "专享sd2.0(mini933不卡脸/4-15秒/480p)",
       "kind": "video",
       "sourceRows": [
-        133
+        132
       ],
       "description": "仅支持480p;时长 4-15 秒;宽高比 21:9 / 16:9 / 4:3 / 1:1 / 3:4 / 9:16 / 自适应;最多 9 张参考图、3 个参考视频、3 个参考音频(mp3,单段≥2秒)",
       "billingUnits": [
@@ -2151,7 +2130,7 @@
       "id": "专享sd2.5(满血30-10-10/4-30秒/720p)",
       "kind": "video",
       "sourceRows": [
-        134
+        133
       ],
       "description": "满血全参30-10-10，4-30秒可选，720P",
       "billingUnits": [
@@ -2174,7 +2153,7 @@
         133
       ],
       "sourceBadges": [
-        "不可用"
+        "专享特价"
       ],
       "sourceAdvantages": "满血全参30-10-10，4-30秒可选，720P",
       "sourceDescription": "",
@@ -2184,7 +2163,7 @@
       "id": "专享sd2.5(满血30-10-10/4-30秒/1080p)",
       "kind": "video",
       "sourceRows": [
-        135
+        134
       ],
       "description": "满血全参30-10-10，4-30秒可选，1080P",
       "billingUnits": [
@@ -2207,7 +2186,7 @@
         134
       ],
       "sourceBadges": [
-        "不可用"
+        "特惠"
       ],
       "sourceAdvantages": "满血全参30-10-10，4-30秒可选，1080P",
       "sourceDescription": "",
@@ -2217,7 +2196,7 @@
       "id": "优质特价minimax-h3-768(903)",
       "kind": "video",
       "sourceRows": [
-        151
+        150
       ],
       "description": "",
       "billingUnits": [
@@ -2246,7 +2225,7 @@
       "id": "优质特价/sd2.5(稳定满血版全参720p原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        154
+        153
       ],
       "description": "",
       "billingUnits": [
@@ -2275,7 +2254,7 @@
       "id": "优质特价/sd2.5(稳定满血版02全参720p原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        155
+        154
       ],
       "description": "",
       "billingUnits": [
@@ -2304,7 +2283,7 @@
       "id": "优质特价/sd2.5(稳定满血版480P全参原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        156
+        155
       ],
       "description": "",
       "billingUnits": [
@@ -2333,7 +2312,7 @@
       "id": "优质特价/sd2.5(稳定满血版720P全参原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        157
+        156
       ],
       "description": "",
       "billingUnits": [
@@ -2362,7 +2341,7 @@
       "id": "优质特价/sd2.5(稳定02满血版720P全参原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        158
+        157
       ],
       "description": "",
       "billingUnits": [
@@ -2391,7 +2370,7 @@
       "id": "优质特价/sd2.5(稳定02满血版1080p全参原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        159
+        158
       ],
       "description": "",
       "billingUnits": [
@@ -2420,7 +2399,7 @@
       "id": "优质特价/sd2.5(稳定03满血版480p全参原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        160
+        159
       ],
       "description": "",
       "billingUnits": [
@@ -2449,7 +2428,7 @@
       "id": "优质特价/sd2.5(稳定03满血版720p全参原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        161
+        160
       ],
       "description": "",
       "billingUnits": [
@@ -2478,7 +2457,7 @@
       "id": "优质特价/sd2.0(稳定03满血版720p全参原生不卡脸5/10/15秒)",
       "kind": "video",
       "sourceRows": [
-        162
+        161
       ],
       "description": "",
       "billingUnits": [
@@ -2507,7 +2486,7 @@
       "id": "优质特价/sd2.0(稳定03满血版720p全参原生不卡脸4-15秒)",
       "kind": "video",
       "sourceRows": [
-        163
+        162
       ],
       "description": "",
       "billingUnits": [
@@ -2536,7 +2515,7 @@
       "id": "优质特价/sd2.5(稳定满血版全参480p原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        164
+        163
       ],
       "description": "",
       "billingUnits": [
@@ -2565,7 +2544,7 @@
       "id": "优质特价/sd2.5(稳定满血版02全参480p原生不卡脸5-30秒)",
       "kind": "video",
       "sourceRows": [
-        165
+        164
       ],
       "description": "",
       "billingUnits": [
@@ -2594,7 +2573,7 @@
       "id": "推荐稳定sd2.0vip720p(933不卡脸不排队满血)",
       "kind": "video",
       "sourceRows": [
-        166
+        165
       ],
       "description": "",
       "billingUnits": [
@@ -2623,7 +2602,7 @@
       "id": "官转稳定-sd2.5-480p(30-10-10/4-30秒卡真人无限并发速度极快)",
       "kind": "video",
       "sourceRows": [
-        167
+        166
       ],
       "description": "",
       "billingUnits": [
@@ -2652,7 +2631,7 @@
       "id": "官转稳定-sd2.5-720p(30-10-10/4-30秒卡真人无限并发速度极快)",
       "kind": "video",
       "sourceRows": [
-        168
+        167
       ],
       "description": "",
       "billingUnits": [
@@ -2681,7 +2660,7 @@
       "id": "官转稳定-sd2.5-1080p(30-10-10/4-30秒卡真人无限并发速度极快)",
       "kind": "video",
       "sourceRows": [
-        169
+        168
       ],
       "description": "",
       "billingUnits": [
@@ -2710,7 +2689,7 @@
       "id": "sd2.5-720p(30-10-10不卡脸/4-30秒无限并发)",
       "kind": "video",
       "sourceRows": [
-        170
+        169
       ],
       "description": "",
       "billingUnits": [
@@ -2739,7 +2718,7 @@
       "id": "SD2.5-720p(30-10-10不卡脸/4-30秒)",
       "kind": "video",
       "sourceRows": [
-        171
+        170
       ],
       "description": "",
       "billingUnits": [
@@ -2768,7 +2747,7 @@
       "id": "SD2.5-1080p(30-10-10不卡脸/4-30秒)",
       "kind": "video",
       "sourceRows": [
-        172
+        171
       ],
       "description": "",
       "billingUnits": [
@@ -2797,7 +2776,7 @@
       "id": "优惠sd2.5(30图卡真人30秒/720p)",
       "kind": "video",
       "sourceRows": [
-        173
+        172
       ],
       "description": "",
       "billingUnits": [
@@ -2826,7 +2805,7 @@
       "id": "特价稳定-sd2.5(30图30秒720P)",
       "kind": "video",
       "sourceRows": [
-        174
+        173
       ],
       "description": "",
       "billingUnits": [
@@ -2856,7 +2835,7 @@
       "id": "画质增强480P增强至720P/1080P",
       "kind": "video",
       "sourceRows": [
-        175
+        174
       ],
       "description": "",
       "billingUnits": [
@@ -2885,7 +2864,7 @@
       "id": "画质增强720P增强至1080P",
       "kind": "video",
       "sourceRows": [
-        176
+        175
       ],
       "description": "",
       "billingUnits": [
@@ -2911,43 +2890,49 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "特价sd2.5(9图/4-30秒)0000",
+      "id": "特价sd2.5(30-10-10/4-30秒)",
       "kind": "video",
+      "categoryId": "value",
+      "billingUnits": [
+        "条"
+      ],
       "pricingNotes": [
         "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
       ],
       "warnings": [],
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
-      "sourceRows": [
-        180
-      ],
-      "description": "",
-      "billingUnits": [
-        "条"
-      ],
-      "categoryId": "value",
-      "referenceVideoMentioned": false,
       "seconds": {
         "min": 4,
         "max": 30
       },
+      "referenceVideoMentioned": false,
       "durationVariesByResolution": false,
+      "pricedResolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "sourceRows": [
+        179
+      ],
       "annotationRows": [
         179
       ],
       "sourceBadges": [
-        "无法使用"
+        "限时",
+        "新增"
       ],
-      "sourceAdvantages": "",
-      "sourceDescription": "",
-      "sourceRecommendation": ""
+      "sourceAdvantages": "480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）",
+      "sourceDescription": "可用",
+      "sourceRecommendation": "",
+      "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）\n可用"
     },
     {
       "id": "005系列/sd2.0(原生过真人9-3-3)",
       "kind": "video",
       "sourceRows": [
-        187
+        185
       ],
       "description": "9图3视频3音频，原生过真人 720P",
       "billingUnits": [
@@ -2963,7 +2948,7 @@
       "durationVariesByResolution": false,
       "categoryId": "005",
       "annotationRows": [
-        186
+        185
       ],
       "sourceBadges": [
         "新增"
@@ -2976,7 +2961,7 @@
       "id": "005系列/sd2.5(原生过真人30-10-10)",
       "kind": "video",
       "sourceRows": [
-        188
+        186
       ],
       "description": "30图10视频10音频，原生过真人 5-30秒 480P （价格见本页价格栏） 720P （价格见本页价格栏）",
       "billingUnits": [
@@ -3000,7 +2985,7 @@
       ],
       "categoryId": "005",
       "annotationRows": [
-        187
+        186
       ],
       "sourceBadges": [
         "新增"
@@ -3013,7 +2998,7 @@
       "id": "005系列/sd2.0(原生过真人933/5-15秒)",
       "kind": "video",
       "sourceRows": [
-        189
+        187
       ],
       "description": "原生过真人，速度快，933，408P （价格见本页价格栏） 720P （价格见本页价格栏） 5-15秒",
       "billingUnits": [
@@ -3039,7 +3024,7 @@
       ],
       "categoryId": "005",
       "annotationRows": [
-        188
+        187
       ],
       "sourceBadges": [
         "新增"
@@ -3052,7 +3037,7 @@
       "id": "005系列/sd2.5(30-10-10/原生过真人)",
       "kind": "video",
       "sourceRows": [
-        190
+        188
       ],
       "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）",
       "billingUnits": [
@@ -3073,7 +3058,7 @@
       ],
       "categoryId": "005",
       "annotationRows": [
-        189
+        188
       ],
       "sourceBadges": [
         "新增"
@@ -3086,7 +3071,36 @@
       "id": "005系列/sd2.5(30-10-10/5-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        191
+        189
+      ],
+      "description": "",
+      "billingUnits": [
+        "条"
+      ],
+      "pricingNotes": [
+        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "referenceVideoMentioned": false,
+      "durationVariesByResolution": false,
+      "categoryId": "005",
+      "annotationRows": [
+        189
+      ],
+      "sourceBadges": [
+        "可用"
+      ],
+      "sourceAdvantages": "",
+      "sourceDescription": "",
+      "sourceRecommendation": ""
+    },
+    {
+      "id": "005系列/sd2.5(30-10-10原生过真人/5-30秒/720P)",
+      "kind": "video",
+      "sourceRows": [
+        190
       ],
       "description": "",
       "billingUnits": [
@@ -3112,10 +3126,10 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "005系列/sd2.5(30-10-10原生过真人/5-30秒/720P)",
+      "id": "005系列/sd2.5(全参/5-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        192
+        191
       ],
       "description": "",
       "billingUnits": [
@@ -3141,17 +3155,17 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "005系列/sd2.5(全参/5-30秒/720P)",
+      "id": "005系列/minimax-h3/768P",
       "kind": "video",
       "sourceRows": [
-        193
+        192
       ],
       "description": "",
       "billingUnits": [
-        "条"
+        "秒"
       ],
       "pricingNotes": [
-        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+        "按生成视频时长及所选规格计费。"
       ],
       "warnings": [],
       "conditionalReferencePricing": false,
@@ -3170,39 +3184,10 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "005系列/minimax-h3/768P",
-      "kind": "video",
-      "sourceRows": [
-        194
-      ],
-      "description": "",
-      "billingUnits": [
-        "秒"
-      ],
-      "pricingNotes": [
-        "按生成视频时长及所选规格计费。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "referenceVideoMentioned": false,
-      "durationVariesByResolution": false,
-      "categoryId": "005",
-      "annotationRows": [
-        193
-      ],
-      "sourceBadges": [
-        "可用"
-      ],
-      "sourceAdvantages": "",
-      "sourceDescription": "",
-      "sourceRecommendation": ""
-    },
-    {
       "id": "007系列/sd2.5(满血全参/4-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        203
+        201
       ],
       "description": "30-10-10满血 720P 4-30秒可选",
       "billingUnits": [
@@ -3222,7 +3207,7 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        202
+        201
       ],
       "sourceBadges": [
         "可用"
@@ -3235,7 +3220,7 @@
       "id": "007系列/sd2.0(原生过真人933/5-15秒/720P按秒)",
       "kind": "video",
       "sourceRows": [
-        204
+        202
       ],
       "description": "满血9图3视频3音频 5-15秒 720P原生过真人 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏） 4K （价格见本页价格栏）",
       "billingUnits": [
@@ -3261,7 +3246,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        203
+        202
       ],
       "sourceBadges": [
         "特价"
@@ -3274,7 +3259,7 @@
       "id": "007系列/sd2.0(原生过真人933/5-15秒/720P)",
       "kind": "video",
       "sourceRows": [
-        205
+        203
       ],
       "description": "满血9图3视频3音频 5-15秒 720P原生过真人",
       "billingUnits": [
@@ -3294,7 +3279,7 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        204
+        203
       ],
       "sourceBadges": [
         "特价"
@@ -3307,7 +3292,7 @@
       "id": "007系列/sd2.5(原生过真人/30-10-10/720P)",
       "kind": "video",
       "sourceRows": [
-        206
+        204
       ],
       "description": "sd2.5 30-10-10 480P 4-15 秒 原生过真人",
       "billingUnits": [
@@ -3329,7 +3314,7 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        205
+        204
       ],
       "sourceBadges": [
         "新增"
@@ -3342,7 +3327,45 @@
       "id": "007系列/wan3-video(文生图生视频/10-5-5/2-30秒)",
       "kind": "video",
       "sourceRows": [
-        207
+        205
+      ],
+      "description": "10图5音频5视频 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）  支持2-30秒文生图生视频，如果有参考视频，参考视频+输出视频最高30s，计费规则为参考视频+输出视频计费",
+      "billingUnits": [
+        "秒"
+      ],
+      "pricingNotes": [
+        "按生成视频时长及所选规格计费。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "charged",
+      "seconds": {
+        "min": 2,
+        "max": 30
+      },
+      "referenceVideoMentioned": true,
+      "durationVariesByResolution": false,
+      "pricedResolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "categoryId": "007",
+      "annotationRows": [
+        205
+      ],
+      "sourceBadges": [
+        "新增"
+      ],
+      "sourceAdvantages": "10图5音频5视频 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）  支持2-30秒文生图生视频，如果有参考视频，参考视频+输出视频最高30s，计费规则为参考视频+输出视频计费",
+      "sourceDescription": "",
+      "sourceRecommendation": ""
+    },
+    {
+      "id": "007系列/wan3-prime(文生图生视频/10-5-5/2-30秒)",
+      "kind": "video",
+      "sourceRows": [
+        206
       ],
       "description": "10图5音频5视频 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）  支持2-30秒文生图生视频，如果有参考视频，参考视频+输出视频最高30s，计费规则为参考视频+输出视频计费",
       "billingUnits": [
@@ -3377,49 +3400,11 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "007系列/wan3-prime(文生图生视频/10-5-5/2-30秒)",
-      "kind": "video",
-      "sourceRows": [
-        208
-      ],
-      "description": "10图5音频5视频 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）  支持2-30秒文生图生视频，如果有参考视频，参考视频+输出视频最高30s，计费规则为参考视频+输出视频计费",
-      "billingUnits": [
-        "秒"
-      ],
-      "pricingNotes": [
-        "按生成视频时长及所选规格计费。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "charged",
-      "seconds": {
-        "min": 2,
-        "max": 30
-      },
-      "referenceVideoMentioned": true,
-      "durationVariesByResolution": false,
-      "pricedResolutions": [
-        "480p",
-        "720p",
-        "1080p"
-      ],
-      "categoryId": "007",
-      "annotationRows": [
-        207
-      ],
-      "sourceBadges": [
-        "新增"
-      ],
-      "sourceAdvantages": "10图5音频5视频 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）  支持2-30秒文生图生视频，如果有参考视频，参考视频+输出视频最高30s，计费规则为参考视频+输出视频计费",
-      "sourceDescription": "",
-      "sourceRecommendation": ""
-    },
-    {
       "id": "007系列/sd2.5(30图10音/4-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        209,
-        219
+        207,
+        217
       ],
       "description": "30图10音频 720P 4-30秒",
       "billingUnits": [
@@ -3441,8 +3426,8 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        208,
-        218
+        207,
+        217
       ],
       "sourceBadges": [
         "新增",
@@ -3456,7 +3441,7 @@
       "id": "007系列/MinimaxH3特价版",
       "kind": "video",
       "sourceRows": [
-        210
+        208
       ],
       "description": "文生视频 / 图生视频，支持首帧图、尾帧图与多图参考",
       "billingUnits": [
@@ -3472,7 +3457,7 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        209
+        208
       ],
       "sourceBadges": [
         "已下架"
@@ -3485,7 +3470,7 @@
       "id": "007系列/wan3-video-2(文生图生视频/10-5-5/2-30秒)",
       "kind": "video",
       "sourceRows": [
-        211
+        209
       ],
       "description": "10图5音频5视频 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）  支持2-30秒文生图生视频",
       "billingUnits": [
@@ -3510,7 +3495,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        210
+        209
       ],
       "sourceBadges": [
         "特价"
@@ -3523,7 +3508,7 @@
       "id": "007系列/wan3-prime-2(文生图生视频/10-5-5/2-30秒)",
       "kind": "video",
       "sourceRows": [
-        212
+        210
       ],
       "description": "10图5音频5视频 480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）  支持2-30秒文生图生视频，如果有参考视频，参考视频+输出视频最高30s，计费规则为参考视频+输出视频计费",
       "billingUnits": [
@@ -3548,7 +3533,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        211
+        210
       ],
       "sourceBadges": [
         "特价"
@@ -3561,7 +3546,7 @@
       "id": "007系列/sd2.0-2(原生过真人933/5-15秒/720P)",
       "kind": "video",
       "sourceRows": [
-        213
+        211
       ],
       "description": "满血原生过真人",
       "billingUnits": [
@@ -3577,7 +3562,7 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        212
+        211
       ],
       "sourceBadges": [
         "特价"
@@ -3590,7 +3575,7 @@
       "id": "007系列/sd2.0(原生过真人933/5-15秒)",
       "kind": "video",
       "sourceRows": [
-        214
+        212
       ],
       "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏） 满血原生过真人",
       "billingUnits": [
@@ -3610,7 +3595,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        213
+        212
       ],
       "sourceBadges": [
         "特价"
@@ -3623,7 +3608,7 @@
       "id": "007系列/sd2.5(30图10音/480P)",
       "kind": "video",
       "sourceRows": [
-        215
+        213
       ],
       "description": "",
       "billingUnits": [
@@ -3639,7 +3624,7 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        214
+        213
       ],
       "sourceBadges": [
         "特价"
@@ -3652,7 +3637,7 @@
       "id": "007系列/sd2.5(30-10-10/480P/720P)",
       "kind": "video",
       "sourceRows": [
-        216
+        214
       ],
       "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏）",
       "billingUnits": [
@@ -3674,7 +3659,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        215
+        214
       ],
       "sourceBadges": [
         "特价"
@@ -3687,7 +3672,7 @@
       "id": "007系列/sd2.5(30图10音/480P/720P)",
       "kind": "video",
       "sourceRows": [
-        217
+        215
       ],
       "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏）",
       "billingUnits": [
@@ -3707,7 +3692,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        216
+        215
       ],
       "sourceBadges": [
         "可用"
@@ -3720,7 +3705,7 @@
       "id": "007系列/sd2.5(满血全参/720P)",
       "kind": "video",
       "sourceRows": [
-        218
+        216
       ],
       "description": "30-10-10满血全参 720P",
       "billingUnits": [
@@ -3736,7 +3721,7 @@
       "durationVariesByResolution": false,
       "categoryId": "007",
       "annotationRows": [
-        217
+        216
       ],
       "sourceBadges": [
         "特价"
@@ -3749,7 +3734,7 @@
       "id": "007系列/sd2.5(满血全参按分辨率/4-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        220
+        218
       ],
       "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏）",
       "billingUnits": [
@@ -3770,7 +3755,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        219
+        218
       ],
       "sourceBadges": [
         "兜底",
@@ -3784,7 +3769,7 @@
       "id": "007系列/sd2.5(满血全参按分辨率秒/480P/720P/1080P)",
       "kind": "video",
       "sourceRows": [
-        221
+        219
       ],
       "description": "480P （价格见本页价格栏） 720P （价格见本页价格栏） 1080P （价格见本页价格栏） 视频参考计费看模型广场定价",
       "billingUnits": [
@@ -3805,7 +3790,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        220
+        219
       ],
       "sourceBadges": [
         "兜底",
@@ -3819,7 +3804,7 @@
       "id": "007系列/sd2.5(满血全参02按分辨率秒/720P/1080P)",
       "kind": "video",
       "sourceRows": [
-        222
+        220
       ],
       "description": "720P （价格见本页价格栏） 1080P （价格见本页价格栏）",
       "billingUnits": [
@@ -3839,7 +3824,7 @@
       ],
       "categoryId": "007",
       "annotationRows": [
-        221
+        220
       ],
       "sourceBadges": [
         "兜底",
@@ -3859,7 +3844,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        223
+        221
       ],
       "description": "",
       "billingUnits": [
@@ -3873,7 +3858,7 @@
       },
       "durationVariesByResolution": false,
       "annotationRows": [
-        222
+        221
       ],
       "sourceBadges": [
         "可用"
@@ -3886,9 +3871,42 @@
       "id": "全能sd2.0(官转专线原生过脸fast-933-720p)",
       "kind": "video",
       "sourceRows": [
-        235
+        233
       ],
       "description": "9图/3视频/3音频 720P 满血官转线路 原生过人脸 fast 720P 官转 4-15秒",
+      "billingUnits": [
+        "条"
+      ],
+      "pricingNotes": [
+        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "seconds": {
+        "min": 4,
+        "max": 15
+      },
+      "referenceVideoMentioned": true,
+      "durationVariesByResolution": false,
+      "categoryId": "allround",
+      "annotationRows": [
+        233
+      ],
+      "sourceBadges": [
+        "更稳定"
+      ],
+      "sourceAdvantages": "9图/3视频/3音频 720P 满血官转线路 原生过人脸 fast 720P 官转 4-15秒",
+      "sourceDescription": "",
+      "sourceRecommendation": "🌟🌟🌟🌟"
+    },
+    {
+      "id": "全能sd2.0(官转专线满血原生过脸-933-720p)",
+      "kind": "video",
+      "sourceRows": [
+        234
+      ],
+      "description": "9图/3视频/3音频 720P 满血官转线路 原生过人脸 4-15秒",
       "billingUnits": [
         "条"
       ],
@@ -3911,39 +3929,6 @@
       "sourceBadges": [
         "更稳定"
       ],
-      "sourceAdvantages": "9图/3视频/3音频 720P 满血官转线路 原生过人脸 fast 720P 官转 4-15秒",
-      "sourceDescription": "",
-      "sourceRecommendation": "🌟🌟🌟🌟"
-    },
-    {
-      "id": "全能sd2.0(官转专线满血原生过脸-933-720p)",
-      "kind": "video",
-      "sourceRows": [
-        236
-      ],
-      "description": "9图/3视频/3音频 720P 满血官转线路 原生过人脸 4-15秒",
-      "billingUnits": [
-        "条"
-      ],
-      "pricingNotes": [
-        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "seconds": {
-        "min": 4,
-        "max": 15
-      },
-      "referenceVideoMentioned": true,
-      "durationVariesByResolution": false,
-      "categoryId": "allround",
-      "annotationRows": [
-        235
-      ],
-      "sourceBadges": [
-        "更稳定"
-      ],
       "sourceAdvantages": "9图/3视频/3音频 720P 满血官转线路 原生过人脸 4-15秒",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟"
@@ -3952,7 +3937,7 @@
       "id": "全能sd2.0(满血原生过脸-933-480p)",
       "kind": "video",
       "sourceRows": [
-        237
+        235
       ],
       "description": "9图/3视频/3音频 480P 满血 原生过人脸 4-15秒\n画幅 3:4 不支持, 可选 16:9 / 9:16 / 1:1",
       "billingUnits": [
@@ -3973,7 +3958,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        236
+        235
       ],
       "sourceBadges": [
         "质量高"
@@ -3986,9 +3971,42 @@
       "id": "全能sd2.0(满血原生过脸-933-720p)",
       "kind": "video",
       "sourceRows": [
-        238
+        236
       ],
       "description": "9图/3视频/3音频 720P 满血 原生过人脸 满血720P 4-15秒",
+      "billingUnits": [
+        "条"
+      ],
+      "pricingNotes": [
+        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "seconds": {
+        "min": 4,
+        "max": 15
+      },
+      "referenceVideoMentioned": true,
+      "durationVariesByResolution": false,
+      "categoryId": "allround",
+      "annotationRows": [
+        236
+      ],
+      "sourceBadges": [
+        "更稳定"
+      ],
+      "sourceAdvantages": "9图/3视频/3音频 720P 满血 原生过人脸 满血720P 4-15秒",
+      "sourceDescription": "",
+      "sourceRecommendation": "🌟🌟🌟🌟"
+    },
+    {
+      "id": "全能sd2.0(原生过脸mini-930-480p)",
+      "kind": "video",
+      "sourceRows": [
+        237
+      ],
+      "description": "9图/3视频/0音频 480P 原生过人脸 mini 4-15秒",
       "billingUnits": [
         "条"
       ],
@@ -4011,39 +4029,6 @@
       "sourceBadges": [
         "更稳定"
       ],
-      "sourceAdvantages": "9图/3视频/3音频 720P 满血 原生过人脸 满血720P 4-15秒",
-      "sourceDescription": "",
-      "sourceRecommendation": "🌟🌟🌟🌟"
-    },
-    {
-      "id": "全能sd2.0(原生过脸mini-930-480p)",
-      "kind": "video",
-      "sourceRows": [
-        239
-      ],
-      "description": "9图/3视频/0音频 480P 原生过人脸 mini 4-15秒",
-      "billingUnits": [
-        "条"
-      ],
-      "pricingNotes": [
-        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "seconds": {
-        "min": 4,
-        "max": 15
-      },
-      "referenceVideoMentioned": true,
-      "durationVariesByResolution": false,
-      "categoryId": "allround",
-      "annotationRows": [
-        238
-      ],
-      "sourceBadges": [
-        "更稳定"
-      ],
       "sourceAdvantages": "9图/3视频/0音频 480P 原生过人脸 mini 4-15秒",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟"
@@ -4052,7 +4037,7 @@
       "id": "全能sd2.0(满血内置过脸-900-720p)",
       "kind": "video",
       "sourceRows": [
-        240
+        238
       ],
       "description": "9图/0视频/0音频 720P 满血内置过人脸 15秒",
       "billingUnits": [
@@ -4068,7 +4053,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        239
+        238
       ],
       "sourceBadges": [
         "质量高"
@@ -4081,7 +4066,7 @@
       "id": "MINIMAX-H3-2K(原生过脸9-3-3)",
       "kind": "video",
       "sourceRows": [
-        241
+        239
       ],
       "description": "9图/3视频/3音频 2K 原生过人脸 2K 5-15秒",
       "billingUnits": [
@@ -4101,7 +4086,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        240
+        239
       ],
       "sourceBadges": [
         "更稳定"
@@ -4114,7 +4099,7 @@
       "id": "MINIMAX-H3-769p(原生过脸9-3-3)",
       "kind": "video",
       "sourceRows": [
-        242
+        240
       ],
       "description": "9图/3视频/3音频 768P 原生过人脸 满血 720P 官转 5-15秒",
       "billingUnits": [
@@ -4136,7 +4121,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        241
+        240
       ],
       "sourceBadges": [
         "更稳定"
@@ -4149,9 +4134,42 @@
       "id": "Wan3-720p(满血原生过脸4-30秒10-5-5/720P)",
       "kind": "video",
       "sourceRows": [
-        243
+        241
       ],
       "description": "10图/5视频/5音频 720P 满血 原生过人脸 4-30秒",
+      "billingUnits": [
+        "秒"
+      ],
+      "pricingNotes": [
+        "按生成视频时长及所选规格计费。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "seconds": {
+        "min": 4,
+        "max": 30
+      },
+      "referenceVideoMentioned": true,
+      "durationVariesByResolution": false,
+      "categoryId": "allround",
+      "annotationRows": [
+        241
+      ],
+      "sourceBadges": [
+        "更稳定"
+      ],
+      "sourceAdvantages": "10图/5视频/5音频 720P 满血 原生过人脸 4-30秒",
+      "sourceDescription": "",
+      "sourceRecommendation": "🌟🌟🌟🌟"
+    },
+    {
+      "id": "全能sd2.5(满血原生过脸30-10-10/480P)",
+      "kind": "video",
+      "sourceRows": [
+        242
+      ],
+      "description": "30图/10视频/10音频 480P 满血原生过人脸 4-30秒",
       "billingUnits": [
         "秒"
       ],
@@ -4174,39 +4192,6 @@
       "sourceBadges": [
         "更稳定"
       ],
-      "sourceAdvantages": "10图/5视频/5音频 720P 满血 原生过人脸 4-30秒",
-      "sourceDescription": "",
-      "sourceRecommendation": "🌟🌟🌟🌟"
-    },
-    {
-      "id": "全能sd2.5(满血原生过脸30-10-10/480P)",
-      "kind": "video",
-      "sourceRows": [
-        244
-      ],
-      "description": "30图/10视频/10音频 480P 满血原生过人脸 4-30秒",
-      "billingUnits": [
-        "秒"
-      ],
-      "pricingNotes": [
-        "按生成视频时长及所选规格计费。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "seconds": {
-        "min": 4,
-        "max": 30
-      },
-      "referenceVideoMentioned": true,
-      "durationVariesByResolution": false,
-      "categoryId": "allround",
-      "annotationRows": [
-        243
-      ],
-      "sourceBadges": [
-        "更稳定"
-      ],
       "sourceAdvantages": "30图/10视频/10音频 480P 满血原生过人脸 4-30秒",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟"
@@ -4215,7 +4200,7 @@
       "id": "全能sd2.5(原生过脸30-10-10超分720P)",
       "kind": "video",
       "sourceRows": [
-        245
+        243
       ],
       "description": "30图/10视频/10音频超分72P 满血原生过人脸 4-30秒",
       "billingUnits": [
@@ -4237,7 +4222,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        244
+        243
       ],
       "sourceBadges": [
         "更稳定"
@@ -4250,7 +4235,7 @@
       "id": "官转长期稳定全能sd2.5(只卡真人30-10-10/480P)",
       "kind": "video",
       "sourceRows": [
-        246
+        244
       ],
       "description": "30图/10视频/10音频 480P 官转长期稳定 只卡真人 4-30秒",
       "billingUnits": [
@@ -4270,7 +4255,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        245
+        244
       ],
       "sourceBadges": [
         "更稳定"
@@ -4283,7 +4268,7 @@
       "id": "官转长期稳定全能sd2.5(只卡真人30-10-10/720P)",
       "kind": "video",
       "sourceRows": [
-        247
+        245
       ],
       "description": "30图/10视频/10音频 480P 官转长期稳定 只卡真人 4-30秒",
       "billingUnits": [
@@ -4305,7 +4290,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        246
+        245
       ],
       "sourceBadges": [
         "更稳定"
@@ -4318,7 +4303,7 @@
       "id": "Wan3.0-1080p(满血原生过脸4-30秒10-5-5/720p)",
       "kind": "video",
       "sourceRows": [
-        248
+        246
       ],
       "description": "",
       "billingUnits": [
@@ -4334,7 +4319,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        247
+        246
       ],
       "sourceBadges": [
         "新增:稳定"
@@ -4347,7 +4332,7 @@
       "id": "全能sd2.5(原生过脸30-10-10/480p)",
       "kind": "video",
       "sourceRows": [
-        249
+        247
       ],
       "description": "30图/10视频/10音频 480P 原生过脸 4-30秒",
       "billingUnits": [
@@ -4367,7 +4352,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        248
+        247
       ],
       "sourceBadges": [
         "新增:稳定"
@@ -4380,7 +4365,40 @@
       "id": "全能sd2.5(原生过脸30-10-10/720p)",
       "kind": "video",
       "sourceRows": [
-        250
+        248
+      ],
+      "description": "30图/10视频/10音频 720P 原生过脸 720P 4-30秒",
+      "billingUnits": [
+        "秒"
+      ],
+      "pricingNotes": [
+        "按生成视频时长及所选规格计费。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "seconds": {
+        "min": 4,
+        "max": 30
+      },
+      "referenceVideoMentioned": true,
+      "durationVariesByResolution": false,
+      "categoryId": "allround",
+      "annotationRows": [
+        248
+      ],
+      "sourceBadges": [
+        "质量高"
+      ],
+      "sourceAdvantages": "30图/10视频/10音频 720P 原生过脸 720P 4-30秒",
+      "sourceDescription": "",
+      "sourceRecommendation": "🌟🌟🌟🌟"
+    },
+    {
+      "id": "全能sd2.5(全参原生过脸30-10-10/720p)",
+      "kind": "video",
+      "sourceRows": [
+        249
       ],
       "description": "30图/10视频/10音频 720P 原生过脸 720P 4-30秒",
       "billingUnits": [
@@ -4403,39 +4421,6 @@
         249
       ],
       "sourceBadges": [
-        "质量高"
-      ],
-      "sourceAdvantages": "30图/10视频/10音频 720P 原生过脸 720P 4-30秒",
-      "sourceDescription": "",
-      "sourceRecommendation": "🌟🌟🌟🌟"
-    },
-    {
-      "id": "全能sd2.5(全参原生过脸30-10-10/720p)",
-      "kind": "video",
-      "sourceRows": [
-        251
-      ],
-      "description": "30图/10视频/10音频 720P 原生过脸 720P 4-30秒",
-      "billingUnits": [
-        "秒"
-      ],
-      "pricingNotes": [
-        "按生成视频时长及所选规格计费。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "seconds": {
-        "min": 4,
-        "max": 30
-      },
-      "referenceVideoMentioned": true,
-      "durationVariesByResolution": false,
-      "categoryId": "allround",
-      "annotationRows": [
-        250
-      ],
-      "sourceBadges": [
         "新增:稳定"
       ],
       "sourceAdvantages": "30图/10视频/10音频 720P 原生过脸 720P 4-30秒",
@@ -4446,7 +4431,7 @@
       "id": "全能sd2.0(mini原生过脸933/720p)",
       "kind": "video",
       "sourceRows": [
-        252
+        250
       ],
       "description": "minisd2.0原生过人脸933 720P 4-15秒",
       "billingUnits": [
@@ -4466,7 +4451,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        251
+        250
       ],
       "sourceBadges": [
         "新增:稳定"
@@ -4479,7 +4464,7 @@
       "id": "全能sd2.5(mini480P)",
       "kind": "video",
       "sourceRows": [
-        253
+        251
       ],
       "description": "480P mini",
       "billingUnits": [
@@ -4495,7 +4480,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        252
+        251
       ],
       "sourceBadges": [
         "新增:稳定"
@@ -4508,7 +4493,7 @@
       "id": "全能sd2.5(原生过脸900/720P)",
       "kind": "video",
       "sourceRows": [
-        254
+        252
       ],
       "description": "原生过人脸9图0音频0视频 720P 4-30秒",
       "billingUnits": [
@@ -4528,7 +4513,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        253
+        252
       ],
       "sourceBadges": [
         "新增:稳定"
@@ -4541,7 +4526,7 @@
       "id": "全能sd2.5(原生过脸30-10-10/480P)",
       "kind": "video",
       "sourceRows": [
-        255
+        253
       ],
       "description": "原生过人脸30图10视频10音频0视频 480P 4-30秒",
       "billingUnits": [
@@ -4563,7 +4548,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        254
+        253
       ],
       "sourceBadges": [
         "质量高"
@@ -4576,7 +4561,7 @@
       "id": "全能sd2.5(原生过脸30-10-10/720P)",
       "kind": "video",
       "sourceRows": [
-        256
+        254
       ],
       "description": "原生过人脸30图10视频10音频0视频 720P 4-30秒",
       "billingUnits": [
@@ -4598,7 +4583,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        255
+        254
       ],
       "sourceBadges": [
         "质量高"
@@ -4611,7 +4596,7 @@
       "id": "全能sd2.0(9图3音内置过人脸720P)",
       "kind": "video",
       "sourceRows": [
-        257
+        255
       ],
       "description": "",
       "billingUnits": [
@@ -4627,7 +4612,7 @@
       "durationVariesByResolution": false,
       "categoryId": "allround",
       "annotationRows": [
-        256
+        255
       ],
       "sourceBadges": [
         "新增"
@@ -4640,7 +4625,7 @@
       "id": "002系列/sd2.0(9图3音频不卡脸720P)",
       "kind": "video",
       "sourceRows": [
-        263
+        261
       ],
       "description": "9图3音频/不卡脸/4到15秒",
       "billingUnits": [
@@ -4660,7 +4645,7 @@
       "durationVariesByResolution": false,
       "categoryId": "002",
       "annotationRows": [
-        262
+        261
       ],
       "sourceBadges": [
         "稳定"
@@ -4673,7 +4658,36 @@
       "id": "002系列/sd2.0(9图不卡脸5/10/15秒720P)",
       "kind": "video",
       "sourceRows": [
-        264
+        262
+      ],
+      "description": "",
+      "billingUnits": [
+        "条"
+      ],
+      "pricingNotes": [
+        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "referenceVideoMentioned": false,
+      "durationVariesByResolution": false,
+      "categoryId": "002",
+      "annotationRows": [
+        262
+      ],
+      "sourceBadges": [
+        "特价"
+      ],
+      "sourceAdvantages": "",
+      "sourceDescription": "",
+      "sourceRecommendation": ""
+    },
+    {
+      "id": "002系列/sd2.0(933满血不卡脸5/10/15秒720P)",
+      "kind": "video",
+      "sourceRows": [
+        263
       ],
       "description": "",
       "billingUnits": [
@@ -4699,17 +4713,17 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "002系列/sd2.0(933满血不卡脸5/10/15秒720P)",
+      "id": "002系列/sd2.0(933满血不卡脸1080P)",
       "kind": "video",
       "sourceRows": [
-        265
+        264
       ],
       "description": "",
       "billingUnits": [
-        "条"
+        "秒"
       ],
       "pricingNotes": [
-        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+        "按生成视频时长及所选规格计费。"
       ],
       "warnings": [],
       "conditionalReferencePricing": false,
@@ -4728,17 +4742,17 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "002系列/sd2.0(933满血不卡脸1080P)",
+      "id": "002系列/sd2.0(9图不卡脸原生过人脸5/10/15秒720P)",
       "kind": "video",
       "sourceRows": [
-        266
+        265
       ],
       "description": "",
       "billingUnits": [
-        "秒"
+        "条"
       ],
       "pricingNotes": [
-        "按生成视频时长及所选规格计费。"
+        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
       ],
       "warnings": [],
       "conditionalReferencePricing": false,
@@ -4757,39 +4771,39 @@
       "sourceRecommendation": ""
     },
     {
-      "id": "002系列/sd2.0(9图不卡脸原生过人脸5/10/15秒720P)",
-      "kind": "video",
+      "id": "gpt-image-2",
+      "kind": "image",
       "sourceRows": [
-        267
+        284
       ],
       "description": "",
       "billingUnits": [
-        "条"
+        "张"
       ],
       "pricingNotes": [
-        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+        "按生成图片张数及所选规格计费。"
       ],
       "warnings": [],
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "referenceVideoMentioned": false,
       "durationVariesByResolution": false,
-      "categoryId": "002",
+      "categoryId": "image",
       "annotationRows": [
-        266
+        284
       ],
       "sourceBadges": [
-        "特价"
+        "长期稳定"
       ],
       "sourceAdvantages": "",
       "sourceDescription": "",
-      "sourceRecommendation": ""
+      "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2",
+      "id": "gpt-image-2-4K",
       "kind": "image",
       "sourceRows": [
-        286
+        285
       ],
       "description": "",
       "billingUnits": [
@@ -4815,10 +4829,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-4K",
+      "id": "gpt-image-2-体验",
       "kind": "image",
       "sourceRows": [
-        287
+        286
       ],
       "description": "",
       "billingUnits": [
@@ -4844,10 +4858,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-体验",
+      "id": "gpt-image-2-官渠",
       "kind": "image",
       "sourceRows": [
-        288
+        287
       ],
       "description": "",
       "billingUnits": [
@@ -4873,10 +4887,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-官渠",
+      "id": "gpt-image-2-兜底",
       "kind": "image",
       "sourceRows": [
-        289
+        288
       ],
       "description": "",
       "billingUnits": [
@@ -4902,10 +4916,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-兜底",
+      "id": "gpt-image-2-1K-优惠",
       "kind": "image",
       "sourceRows": [
-        290
+        289
       ],
       "description": "",
       "billingUnits": [
@@ -4931,10 +4945,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-1K-优惠",
+      "id": "gpt-image-2-1k-兜底",
       "kind": "image",
       "sourceRows": [
-        291
+        290
       ],
       "description": "",
       "billingUnits": [
@@ -4960,10 +4974,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-1k-兜底",
+      "id": "gpt-image-2-2k-兜底",
       "kind": "image",
       "sourceRows": [
-        292
+        291
       ],
       "description": "",
       "billingUnits": [
@@ -4989,10 +5003,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-2k-兜底",
+      "id": "gpt-image-2-4k-兜底",
       "kind": "image",
       "sourceRows": [
-        293
+        292
       ],
       "description": "",
       "billingUnits": [
@@ -5018,10 +5032,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-4k-兜底",
+      "id": "gpt-image-2-2/4K-优惠",
       "kind": "image",
       "sourceRows": [
-        294
+        293
       ],
       "description": "",
       "billingUnits": [
@@ -5047,10 +5061,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-2/4K-优惠",
+      "id": "gpt-image-2-4K-高清4K",
       "kind": "image",
       "sourceRows": [
-        295
+        294
       ],
       "description": "",
       "billingUnits": [
@@ -5076,10 +5090,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-4K-高清4K",
+      "id": "gpt-image-2-Stable Plus",
       "kind": "image",
       "sourceRows": [
-        296
+        295
       ],
       "description": "",
       "billingUnits": [
@@ -5105,12 +5119,12 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-Stable Plus",
+      "id": "gpt-image-2(原生高质量支持真4K)",
       "kind": "image",
       "sourceRows": [
-        297
+        296
       ],
-      "description": "",
+      "description": "原生真4K",
       "billingUnits": [
         "张"
       ],
@@ -5129,17 +5143,17 @@
       "sourceBadges": [
         "长期稳定"
       ],
-      "sourceAdvantages": "",
+      "sourceAdvantages": "原生真4K",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2(原生高质量支持真4K)",
+      "id": "gpt-image-2-stable-High quality",
       "kind": "image",
       "sourceRows": [
-        298
+        297
       ],
-      "description": "原生真4K",
+      "description": "",
       "billingUnits": [
         "张"
       ],
@@ -5158,15 +5172,15 @@
       "sourceBadges": [
         "长期稳定"
       ],
-      "sourceAdvantages": "原生真4K",
+      "sourceAdvantages": "",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2-stable-High quality",
+      "id": "gpt-image-2.5-体验",
       "kind": "image",
       "sourceRows": [
-        299
+        298
       ],
       "description": "",
       "billingUnits": [
@@ -5192,10 +5206,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-体验",
+      "id": "gpt-image-2.5-flare-体验",
       "kind": "image",
       "sourceRows": [
-        300
+        299
       ],
       "description": "",
       "billingUnits": [
@@ -5221,10 +5235,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-flare-体验",
+      "id": "gpt-image-2.5-flare-官渠",
       "kind": "image",
       "sourceRows": [
-        301
+        300
       ],
       "description": "",
       "billingUnits": [
@@ -5250,10 +5264,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-flare-官渠",
+      "id": "gpt-image-2.5-flare-备用",
       "kind": "image",
       "sourceRows": [
-        302
+        301
       ],
       "description": "",
       "billingUnits": [
@@ -5279,10 +5293,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-flare-备用",
+      "id": "gpt-image-2.5-flare-兜底",
       "kind": "image",
       "sourceRows": [
-        303
+        302
       ],
       "description": "",
       "billingUnits": [
@@ -5308,10 +5322,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-flare-兜底",
+      "id": "gpt-image-2.5-sunburst-官渠",
       "kind": "image",
       "sourceRows": [
-        304
+        303
       ],
       "description": "",
       "billingUnits": [
@@ -5337,10 +5351,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-sunburst-官渠",
+      "id": "gpt-image-2.5-sunburst-备用",
       "kind": "image",
       "sourceRows": [
-        305
+        304
       ],
       "description": "",
       "billingUnits": [
@@ -5366,10 +5380,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-sunburst-备用",
+      "id": "gpt-image-2.5-sunburst-稳定",
       "kind": "image",
       "sourceRows": [
-        306
+        305
       ],
       "description": "",
       "billingUnits": [
@@ -5395,10 +5409,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-sunburst-稳定",
+      "id": "gpt-image-2.5-sunburst-Stable Plus",
       "kind": "image",
       "sourceRows": [
-        307
+        306
       ],
       "description": "",
       "billingUnits": [
@@ -5424,10 +5438,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "gpt-image-2.5-sunburst-Stable Plus",
+      "id": "Banana-2-香蕉2",
       "kind": "image",
       "sourceRows": [
-        308
+        307
       ],
       "description": "",
       "billingUnits": [
@@ -5453,10 +5467,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "Banana-2-香蕉2",
+      "id": "Banana-pro-香蕉pro",
       "kind": "image",
       "sourceRows": [
-        309
+        308
       ],
       "description": "",
       "billingUnits": [
@@ -5482,10 +5496,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "Banana-pro-香蕉pro",
+      "id": "nano-banana-2-稳定出图",
       "kind": "image",
       "sourceRows": [
-        310
+        309
       ],
       "description": "",
       "billingUnits": [
@@ -5511,10 +5525,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "nano-banana-2-稳定出图",
+      "id": "nano-banana-pro-稳定出图",
       "kind": "image",
       "sourceRows": [
-        311
+        310
       ],
       "description": "",
       "billingUnits": [
@@ -5540,12 +5554,12 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "nano-banana-pro-稳定出图",
+      "id": "nano-banana-2(原生高质量支持真4K)",
       "kind": "image",
       "sourceRows": [
-        312
+        311
       ],
-      "description": "",
+      "description": "原生真4K",
       "billingUnits": [
         "张"
       ],
@@ -5562,17 +5576,17 @@
         311
       ],
       "sourceBadges": [
-        "长期稳定"
+        "维护"
       ],
-      "sourceAdvantages": "",
+      "sourceAdvantages": "原生真4K",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "nano-banana-2(原生高质量支持真4K)",
+      "id": "nano-banana-pro(原生高质量支持真4K)",
       "kind": "image",
       "sourceRows": [
-        313
+        312
       ],
       "description": "原生真4K",
       "billingUnits": [
@@ -5598,12 +5612,12 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "nano-banana-pro(原生高质量支持真4K)",
+      "id": "grok-imagine-image-2.0-出图",
       "kind": "image",
       "sourceRows": [
-        314
+        313
       ],
-      "description": "原生真4K",
+      "description": "",
       "billingUnits": [
         "张"
       ],
@@ -5620,17 +5634,17 @@
         313
       ],
       "sourceBadges": [
-        "维护"
+        "长期稳定"
       ],
-      "sourceAdvantages": "原生真4K",
+      "sourceAdvantages": "",
       "sourceDescription": "",
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "grok-imagine-image-2.0-出图",
+      "id": "grok-imagine-image-体验",
       "kind": "image",
       "sourceRows": [
-        315
+        314
       ],
       "description": "",
       "billingUnits": [
@@ -5656,39 +5670,10 @@
       "sourceRecommendation": "🌟🌟🌟🌟🌟"
     },
     {
-      "id": "grok-imagine-image-体验",
-      "kind": "image",
-      "sourceRows": [
-        316
-      ],
-      "description": "",
-      "billingUnits": [
-        "张"
-      ],
-      "pricingNotes": [
-        "按生成图片张数及所选规格计费。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "referenceVideoMentioned": false,
-      "durationVariesByResolution": false,
-      "categoryId": "image",
-      "annotationRows": [
-        315
-      ],
-      "sourceBadges": [
-        "长期稳定"
-      ],
-      "sourceAdvantages": "",
-      "sourceDescription": "",
-      "sourceRecommendation": "🌟🌟🌟🌟🌟"
-    },
-    {
       "id": "004系列/sd2.0(fast933/5-15秒720P)",
       "kind": "video",
       "sourceRows": [
-        352
+        350
       ],
       "description": "fast720P  · 时长5-15秒任意 · 9图3音3视频 · 不卡人脸 仅支持9:16",
       "billingUnits": [
@@ -5708,7 +5693,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        351
+        350
       ],
       "sourceBadges": [
         "特价"
@@ -5721,7 +5706,7 @@
       "id": "004系列/grok(文生首尾帧图2-7图参考)",
       "kind": "video",
       "sourceRows": [
-        353
+        351
       ],
       "description": "固定（价格见本页价格栏）；支持文生视频、单图首帧、首尾帧和2-7张多参考图，最多7张公网图片；6秒起；支持480p/720p和16:9、9:16、1:1；不支持视频或音频参考。",
       "billingUnits": [
@@ -5737,7 +5722,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        352
+        351
       ],
       "sourceBadges": [
         "特价"
@@ -5750,7 +5735,7 @@
       "id": "004系列/sd2.5-Pro(全参过人脸720P)",
       "kind": "video",
       "sourceRows": [
-        354
+        352
       ],
       "description": "Seedance 2.5 720p · 4-30秒 · 参考图30/视频10/音频10 · 不卡脸",
       "billingUnits": [
@@ -5770,7 +5755,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        353
+        352
       ],
       "sourceBadges": [
         "特价"
@@ -5783,7 +5768,7 @@
       "id": "004系列/sd2.5(30-0-10/4-30秒/720P)",
       "kind": "video",
       "sourceRows": [
-        355
+        353
       ],
       "description": "卡脸 30参考图-0视频参考-10音频参考 卡脸4-30秒 720P 传参数可过人脸 支持过人脸（默认关闭，需要时传 face 参数）",
       "billingUnits": [
@@ -5803,7 +5788,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        354
+        353
       ],
       "sourceBadges": [
         "特价"
@@ -5816,7 +5801,7 @@
       "id": "004系列/sd2.0(官渠903原生过真人速度快720P)",
       "kind": "video",
       "sourceRows": [
-        356
+        354
       ],
       "description": "Seedance · 官渠 · 720p · 4-15秒 · 参考9图/3音频（不支持参考视频）· 原生过真人 · 速度快，平均生成4-10分钟",
       "billingUnits": [
@@ -5836,7 +5821,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        355
+        354
       ],
       "sourceBadges": [
         "特价"
@@ -5849,7 +5834,7 @@
       "id": "004系列/sd2.5(全参过人脸720P)",
       "kind": "video",
       "sourceRows": [
-        357
+        355
       ],
       "description": "Seedance 2.5 · 720P — 参考素材：参考图最多 30 张；参考视频最多 10 个；参考音频最多 10 个。时长 4-30 秒任意整数；固定 720p。",
       "billingUnits": [
@@ -5869,7 +5854,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        356
+        355
       ],
       "sourceBadges": [
         "特价"
@@ -5882,7 +5867,7 @@
       "id": "004系列/minimax-h3(933/4-15秒/768p)",
       "kind": "video",
       "sourceRows": [
-        358
+        356
       ],
       "description": "9参考图3视频3音频 768p 4-15秒可选",
       "billingUnits": [
@@ -5902,7 +5887,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        357
+        356
       ],
       "sourceBadges": [
         "特价"
@@ -5915,7 +5900,7 @@
       "id": "004系列/wan3.0-video",
       "kind": "video",
       "sourceRows": [
-        359
+        357
       ],
       "description": "Wan3.0 video   480p 5–20秒 / 720p 5–10秒 · 参考图≤10 · 参考音频≤5 · 不支持参考视频 · 画幅 16:9、9:16、4:3、3:4、1:1",
       "billingUnits": [
@@ -5935,7 +5920,7 @@
       "durationVariesByResolution": true,
       "categoryId": "004",
       "annotationRows": [
-        358
+        357
       ],
       "sourceBadges": [
         "特价"
@@ -5948,7 +5933,7 @@
       "id": "004系列/sd2.5(优质/30-10-10音/5-15秒/720P)",
       "kind": "video",
       "sourceRows": [
-        360
+        358
       ],
       "description": "30参考图10音 5-15秒 480P",
       "billingUnits": [
@@ -5970,7 +5955,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        359
+        358
       ],
       "sourceBadges": [
         "特价"
@@ -5983,9 +5968,42 @@
       "id": "004系列/sd2.0(mini933/5-15秒720P)",
       "kind": "video",
       "sourceRows": [
-        361
+        359
       ],
       "description": "mini720P  · 时长5-15秒任意 · 9图3音3视频 · 不卡人脸 仅支持9:16",
+      "billingUnits": [
+        "条"
+      ],
+      "pricingNotes": [
+        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "seconds": {
+        "min": 5,
+        "max": 15
+      },
+      "referenceVideoMentioned": true,
+      "durationVariesByResolution": false,
+      "categoryId": "004",
+      "annotationRows": [
+        359
+      ],
+      "sourceBadges": [
+        "特价"
+      ],
+      "sourceAdvantages": "mini720P  · 时长5-15秒任意 · 9图3音3视频 · 不卡人脸 仅支持9:16",
+      "sourceDescription": "",
+      "sourceRecommendation": ""
+    },
+    {
+      "id": "004系列/sd2.0(933/5-15秒720P)",
+      "kind": "video",
+      "sourceRows": [
+        360
+      ],
+      "description": "2.0 720P  · 时长5-15秒任意 · 9图3音3视频 · 不卡人脸 仅支持9:16",
       "billingUnits": [
         "条"
       ],
@@ -6008,39 +6026,6 @@
       "sourceBadges": [
         "特价"
       ],
-      "sourceAdvantages": "mini720P  · 时长5-15秒任意 · 9图3音3视频 · 不卡人脸 仅支持9:16",
-      "sourceDescription": "",
-      "sourceRecommendation": ""
-    },
-    {
-      "id": "004系列/sd2.0(933/5-15秒720P)",
-      "kind": "video",
-      "sourceRows": [
-        362
-      ],
-      "description": "2.0 720P  · 时长5-15秒任意 · 9图3音3视频 · 不卡人脸 仅支持9:16",
-      "billingUnits": [
-        "条"
-      ],
-      "pricingNotes": [
-        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "seconds": {
-        "min": 5,
-        "max": 15
-      },
-      "referenceVideoMentioned": true,
-      "durationVariesByResolution": false,
-      "categoryId": "004",
-      "annotationRows": [
-        361
-      ],
-      "sourceBadges": [
-        "特价"
-      ],
       "sourceAdvantages": "2.0 720P  · 时长5-15秒任意 · 9图3音3视频 · 不卡人脸 仅支持9:16",
       "sourceDescription": "",
       "sourceRecommendation": ""
@@ -6049,7 +6034,7 @@
       "id": "004系列/sd2.0(mini9图15秒720P)",
       "kind": "video",
       "sourceRows": [
-        363
+        361
       ],
       "description": "",
       "billingUnits": [
@@ -6065,7 +6050,7 @@
       "durationVariesByResolution": false,
       "categoryId": "004",
       "annotationRows": [
-        362
+        361
       ],
       "sourceBadges": [
         "特价"
@@ -6078,7 +6063,36 @@
       "id": "004系列/sd2.0(fast9图15秒720P)",
       "kind": "video",
       "sourceRows": [
-        364
+        362
+      ],
+      "description": "",
+      "billingUnits": [
+        "条"
+      ],
+      "pricingNotes": [
+        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
+      ],
+      "warnings": [],
+      "conditionalReferencePricing": false,
+      "referenceRule": "unspecified",
+      "referenceVideoMentioned": false,
+      "durationVariesByResolution": false,
+      "categoryId": "004",
+      "annotationRows": [
+        362
+      ],
+      "sourceBadges": [
+        "特价"
+      ],
+      "sourceAdvantages": "",
+      "sourceDescription": "",
+      "sourceRecommendation": ""
+    },
+    {
+      "id": "004系列/sd2.5(9图/5/10/15/30秒720P)",
+      "kind": "video",
+      "sourceRows": [
+        363
       ],
       "description": "",
       "billingUnits": [
@@ -6095,35 +6109,6 @@
       "categoryId": "004",
       "annotationRows": [
         363
-      ],
-      "sourceBadges": [
-        "特价"
-      ],
-      "sourceAdvantages": "",
-      "sourceDescription": "",
-      "sourceRecommendation": ""
-    },
-    {
-      "id": "004系列/sd2.5(9图/5/10/15/30秒720P)",
-      "kind": "video",
-      "sourceRows": [
-        365
-      ],
-      "description": "",
-      "billingUnits": [
-        "条"
-      ],
-      "pricingNotes": [
-        "按生成视频条数计费；不同分辨率和时长以对应档位为准。"
-      ],
-      "warnings": [],
-      "conditionalReferencePricing": false,
-      "referenceRule": "unspecified",
-      "referenceVideoMentioned": false,
-      "durationVariesByResolution": false,
-      "categoryId": "004",
-      "annotationRows": [
-        364
       ],
       "sourceBadges": [
         "特价"
@@ -6142,7 +6127,7 @@
       "conditionalReferencePricing": false,
       "referenceRule": "unspecified",
       "sourceRows": [
-        366
+        364
       ],
       "description": "2.0 480P · 时长5/10/15秒 · 9图3音3视频 · 不卡人脸 仅支持9:16",
       "billingUnits": [
@@ -6158,7 +6143,7 @@
       ],
       "durationVariesByResolution": false,
       "annotationRows": [
-        365
+        364
       ],
       "sourceBadges": [
         "特价"

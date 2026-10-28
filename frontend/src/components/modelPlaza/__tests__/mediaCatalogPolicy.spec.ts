@@ -14,12 +14,33 @@ function policy(overrides: Partial<MediaCatalogModel> = {}): MediaCatalogPolicy 
 }
 
 describe('document scoped media presentation', () => {
-  it('uses 193 verified IDs, merging duplicate rows without choosing a cheaper price', () => {
-    expect(suanliMediaCatalog.models).toHaveLength(193)
-    expect(new Set(suanliMediaCatalog.models.map(m => m.id)).size).toBe(193)
-    const duplicate = suanliMediaCatalog.models.find(m => m.sourceRows.includes(209))!
-    expect(duplicate.sourceRows).toEqual([209, 219])
+  it('uses 192 current verified IDs, merging duplicate rows without choosing a cheaper price', () => {
+    expect(suanliMediaCatalog.models).toHaveLength(192)
+    expect(new Set(suanliMediaCatalog.models.map(m => m.id)).size).toBe(192)
+    const duplicate = suanliMediaCatalog.models.find(m => m.id === '007系列/sd2.5(30图10音/4-30秒/720P)')!
+    expect(duplicate.sourceRows).toEqual([207, 217])
     expect(duplicate.warnings.length).toBeGreaterThan(0)
+  })
+  it('refreshes the documented list without resurrecting removed models', () => {
+    expect(suanliMediaCatalog.models.find(m => m.id === '特价sd2.5(30-10-10/4-30秒)')).toMatchObject({
+      categoryId: 'value', sourceRows: [179], sourceBadges: ['限时', '新增'],
+      pricedResolutions: ['480p', '720p', '1080p'], billingUnits: ['条'], seconds: { min: 4, max: 30 },
+    })
+    expect(suanliMediaCatalog.models.some(m => m.id === 'SVIP系列/高质量/wan3-1080P')).toBe(false)
+    expect(suanliMediaCatalog.models.some(m => m.id === '特价sd2.5(9图/4-30秒)0000')).toBe(false)
+    expect(suanliMediaCatalog.models.filter(m => m.kind === 'image')).toHaveLength(34)
+  })
+  it('uses current availability annotations and reference descriptions', () => {
+    const model = (id: string) => suanliMediaCatalog.models.find(m => m.id === id)!
+    expect(model('专享sd2.5(满血30-10-10/4-30秒/720p)').sourceBadges).toContain('专享特价')
+    expect(model('专享sd2.5(满血30-10-10/4-30秒/1080p)').sourceBadges).toContain('特惠')
+    expect(model('高质量快速sd2.5(满血30-10-10/720P)').sourceBadges).not.toContain('无敌')
+    expect(model('SVIP系列/高质量/SD2.0mini').description).toContain('满血903')
+    expect(model('SVIP系列/高质量/SD2.0mini').description).toContain('支持9图3音频')
+  })
+  it('does not fabricate a site price for a newly documented model', () => {
+    const data = fixture()
+    expect(mediaEntries(data, suanliMediaCatalog).some(e => e.id === '特价sd2.5(30-10-10/4-30秒)')).toBe(false)
   })
   it('does not ship upstream cost amounts in the public editorial policy', () => {
     expect(JSON.stringify(suanliMediaCatalog)).not.toMatch(/\d+(?:\.\d+)?\s*(?:元)?\s*[/]\s*(?:秒|条|张图?|次)/)

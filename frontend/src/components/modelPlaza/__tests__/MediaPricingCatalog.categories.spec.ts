@@ -49,7 +49,7 @@ describe('categorized customer video tables', () => {
     expect(ids.size).toBe(15)
     expect(suanliMediaCatalog.models.every(m => ids.has(m.categoryId!))).toBe(true)
     expect(suanliMediaCatalog.models.filter(m => m.kind === 'image')).toHaveLength(34)
-    expect(suanliMediaCatalog.models.filter(m => m.kind === 'video')).toHaveLength(159)
+    expect(suanliMediaCatalog.models.filter(m => m.kind === 'video')).toHaveLength(158)
     expect(suanliMediaCatalog.models.find(m => m.id === '官转特价sd2.0-480p')?.billingUnits).toEqual(['条'])
     expect(suanliMediaCatalog.models.some(m => m.id === '全能sd2.5(30图10音内置过人脸720P)')).toBe(false)
   })
