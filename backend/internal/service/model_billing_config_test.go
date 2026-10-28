@@ -296,8 +296,8 @@ func TestGroupBillingSaveRequiresExistingGroup(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, cfg.ModelBilling, loaded.ModelBilling)
 }
-func TestGroupBillingProviderRetiresGlobalContextStore(t *testing.T) {
-	s, err := ProvideBillingService(&config.Config{}, nil, modelBillingSettings(t, DefaultModelBillingConfig()))
-	require.NoError(t, err)
-	require.Nil(t, s.GlobalContextRules())
+func TestGroupBillingProviderRequiresContextRuleDatabase(t *testing.T) {
+	s, err := ProvideBillingService(&config.Config{}, nil, modelBillingSettings(t, DefaultModelBillingConfig()), nil)
+	require.Error(t, err)
+	require.Nil(t, s)
 }

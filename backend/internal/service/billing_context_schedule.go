@@ -105,9 +105,15 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 
 	ctx = withModelBillingConfig(ctx, s.modelBillingSettings)
 	scoped := s.modelBillingSettings.modelBillingConfigForUsage(ctx).match(modelBillingGroupID(CostInput{Group: in.Group}), in.Model)
-	rule, ruleErr := s.globalContextRuleForCost(CostInput{Ctx: ctx, Model: in.Model, overrideContextPricing: scoped != nil})
-	if ruleErr != nil {
-		return nil, ruleErr
+	var rule *GlobalContextRule
+	// A nil group is the independent catalog/reference quote, not a customer
+	// policy. Pin a nil global snapshot below so probes cannot apply one later.
+	if in.Group != nil {
+		var ruleErr error
+		rule, ruleErr = s.globalContextRuleForCost(CostInput{Ctx: ctx, Model: in.Model, overrideContextPricing: scoped != nil})
+		if ruleErr != nil {
+			return nil, ruleErr
+		}
 	}
 	ctx = context.WithValue(ctx, globalContextSnapshotKey{}, globalContextSnapshot{model: in.Model, rule: rule})
 	req := TokenCostRequest{

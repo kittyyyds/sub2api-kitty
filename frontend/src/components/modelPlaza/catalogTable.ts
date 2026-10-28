@@ -4,6 +4,8 @@ import { buildCatalogSections, catalogKind, groupModelRate, normalizeModelId, ty
 
 export interface PriceTableRow {
   key: string
+  modelKey: string
+  contextBand: 'standard' | 'extended' | null
   model: PlazaModel
   modelId: string
   kind: ReturnType<typeof catalogKind>
@@ -33,7 +35,7 @@ export function priceTableRows(group: ModelPlazaGroup, product: string): PriceTa
       const finalTiers = new Set((kind === 'image' ? model.final_image_price_tiers : model.final_video_price_tiers)?.map(tier => tier.trim().toLowerCase()) ?? [])
       const periods = group.platform === 'video' || model.platform === 'video' ? [] : model.time_pricing?.periods ?? []
       return card?.metrics.flatMap(metric => {
-        const standard = { key: `${modelKey}:${metric.key}`, model, modelId, kind, tier: metric.tier, period: '', metrics: [metric] }
+        const standard = { key: `${modelKey}:${metric.key}`, modelKey, contextBand: null, model, modelId, kind, tier: metric.tier, period: '', metrics: [metric] }
         return [standard, ...periods.map((period, index) => {
           const baseRate = groupModelRate(group, kind)
           const timeRate = Math.round(baseRate * period.multiplier * 1000) / 1000
@@ -46,7 +48,9 @@ export function priceTableRows(group: ModelPlazaGroup, product: string): PriceTa
     const intervals = pricing?.intervals?.length
       ? [...pricing.intervals].sort((a, b) => a.min_tokens - b.min_tokens).map(interval => resolveIntervalPrices(interval, pricing))
       : [null]
-    const activeIntervals = group.long_context_pricing_enabled === false ? intervals.slice(0, 1) : intervals
+    // The backend has already resolved group/global rules and the legacy switch.
+    // Do not hide an effective global tier merely because that switch is off.
+    const activeIntervals = intervals
     const periods = [null, ...(model.time_pricing?.periods ?? [])]
     return activeIntervals.flatMap((interval, index) => periods.map((period, periodIndex) => {
       const official = interval && model.official_pricing?.intervals?.find(candidate =>
@@ -64,8 +68,22 @@ export function priceTableRows(group: ModelPlazaGroup, product: string): PriceTa
           saving: current != null && reference != null && reference > 0 && current < reference ? Math.round((1 - current / reference) * 1000) / 10 : null } satisfies CatalogMetric
       })
       const tier = interval ? interval.tier_label || (interval.max_tokens == null ? `>${interval.min_tokens.toLocaleString()} tokens` : `≤${interval.max_tokens.toLocaleString()} tokens`) : ''
-      return { key: `${modelKey}:${index}:${periodIndex}`, model, modelId, kind, tier,
+      return { key: `${modelKey}:${index}:${periodIndex}`, modelKey,
+        contextBand: interval ? (interval.min_tokens > 0 ? 'extended' : 'standard') : null,
+        model, modelId, kind, tier,
         period: period ? `${period.start_time}–${period.end_time} · ${model.time_pricing?.timezone} · ×${period.multiplier}${model.time_pricing?.weekdays_only ? ' (Mon–Fri)' : ''}` : '', metrics }
     }))
   })
+}
+
+/** Merge token model identities, not prices; media rows retain their own specs. */
+export function groupPriceTableRows(rows: PriceTableRow[]): { key: string; rows: PriceTableRow[] }[] {
+  const groups: { key: string; rows: PriceTableRow[] }[] = []
+  for (const row of rows) {
+    const key = row.kind === 'token' ? row.modelKey : row.key
+    const previous = groups[groups.length - 1]
+    if (previous?.key === key) previous.rows.push(row)
+    else groups.push({ key, rows: [row] })
+  }
+  return groups
 }

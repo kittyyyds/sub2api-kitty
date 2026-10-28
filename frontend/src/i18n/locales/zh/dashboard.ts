@@ -844,7 +844,7 @@ export default {
       referenceDuration: '参考视频总时长上限',
       combinedDuration: '参考与生成视频总时长上限',
     },
-    reference: {"products": "模型产品", "title": "价格列表", "subtitle": "选择分组后，查看当前分组模型价格。", "mode": "价格类型", "groupPrice": "分组价格", "groupIntro": "分组介绍", "rule": "以 USD 余额计价 · 文本基础价 × 分组／专属倍率；媒体按独立倍率或最终价计费。", "input": "输入价格", "output": "输出价格", "cacheWrite": "缓存创建", "cacheRead": "缓存读取", "cacheWrite1h": "缓存创建 1h", "note": "价格单位为 USD 余额。下表列出已配置的上下文阶梯与分时时段；未标时段为标准价。实际扣费以请求对应密钥分组及账单为准。", "noOfficial": "暂无官方参考价", "marginal": "仅超出阈值的部分按阶梯计费"},
+    reference: {"contextTier": "上下文档位", "standardContext": "普通上下文", "extendedContext": "长上下文", "noContextTier": "不分上下文档位", "contextNotice": "同一模型合并展示，下列为不同上下文档位的单价，不是重复收费。请按当前分组和请求上下文查看对应价格。", "products": "模型产品", "title": "价格列表", "subtitle": "选择分组后，查看当前分组模型价格。", "mode": "价格类型", "groupPrice": "分组价格", "groupIntro": "分组介绍", "rule": "以 USD 余额计价 · 文本基础价 × 分组／专属倍率；媒体按独立倍率或最终价计费。", "input": "输入价格", "output": "输出价格", "cacheWrite": "缓存创建", "cacheRead": "缓存读取", "cacheWrite1h": "缓存创建 1h", "note": "价格单位为 USD 余额。下表列出已配置的上下文阶梯与分时时段；未标时段为标准价。实际扣费以请求对应密钥分组及账单为准。", "noOfficial": "暂无官方参考价", "marginal": "仅超出阈值的部分按阶梯计费"},
     title: '模型价格',
     description: '按平台与分组查看模型折后价格，官方参考价与预计扣费一目了然',
     billingRule: '文本模型按倍率计费，图片与视频按对应独立倍率计费',

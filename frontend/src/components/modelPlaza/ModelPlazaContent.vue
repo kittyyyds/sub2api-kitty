@@ -12,7 +12,7 @@ import { useAuthStore } from '@/stores/auth'
 import { platformLabel } from '@/utils/platformColors'
 import { formatScaled } from '@/utils/pricing'
 import { groupTextRate, visibleCatalogGroups } from './modelCatalog'
-import { priceTableRows, productFor, type PriceTableRow } from './catalogTable'
+import { priceTableRows, groupPriceTableRows, productFor, type PriceTableRow } from './catalogTable'
 import PlazaVideoModelDetails from './PlazaVideoModelDetails.vue'
 
 const props = defineProps<{ response: ModelPlazaResponse | null; loading: boolean; error?: boolean; embedded?: boolean }>()
@@ -35,6 +35,8 @@ const productGroups = computed(() => groups.value.filter(group =>
   || group.models.some(model => productFor(model) === selectedProduct.value)))
 const selectedGroup = computed(() => productGroups.value.find(group => group.id === selectedGroupId.value))
 const rows = computed(() => selectedGroup.value ? priceTableRows(selectedGroup.value, selectedProduct.value) : [])
+const rowGroups = computed(() => groupPriceTableRows(rows.value))
+const hasContextTiers = computed(() => rows.value.some(row => row.kind === 'token' && (row.tier || row.period)))
 const isVideoGroup = computed(() => selectedGroup.value?.platform === 'video')
 const tokenTable = computed(() => rows.value.some(row => row.kind === 'token'))
 const columns = computed(() => [
@@ -108,18 +110,27 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
         <div v-else-if="error" class="state-panel"><p>{{ t('modelPlaza.loadFailed') }}</p><button type="button" class="retry-button" @click="emit('retry')">{{ t('common.refresh') }}</button></div>
         <div v-else-if="rows.length === 0" class="state-panel" role="status">{{ t(isVideoGroup ? 'modelPlaza.video.noConfiguredPrices' : 'modelPlaza.empty') }}</div>
         <template v-else>
+          <p v-if="hasContextTiers" class="context-pricing-notice"><span>{{ t('modelPlaza.reference.contextNotice') }}</span></p>
           <div class="pricing-table-scroll" tabindex="0" :aria-label="t('modelPlaza.reference.title')">
             <table class="reference-pricing-table">
-              <thead><tr><th scope="col">{{ t('modelPlaza.catalog.modelId') }}</th><template v-if="tokenTable"><th v-for="column in columns" :key="column.key" scope="col">{{ column.label }}</th><th scope="col">{{ t('modelPlaza.table.savingsColumn') }}</th></template><template v-else><th scope="col">{{ t('modelPlaza.table.tier') }}</th><th scope="col">{{ t('modelPlaza.catalog.currentPrice') }}</th></template></tr></thead>
-              <tbody>
-                <tr v-for="row in rows" :key="row.key" :data-billing-kind="row.kind">
-                  <th scope="row" class="model-id-cell"><div><code>{{ row.modelId }}</code><button type="button" class="copy-id-button" :aria-label="`${t('modelPlaza.catalog.copyModelId')}: ${row.modelId}`" @click="copyModelId(row.modelId)"><Icon name="copy" size="xs" /></button></div>
+              <thead><tr><th scope="col">{{ t('modelPlaza.catalog.modelId') }}</th><th v-if="hasContextTiers" scope="col">{{ t('modelPlaza.reference.contextTier') }}</th><template v-if="tokenTable"><th v-for="column in columns" :key="column.key" scope="col">{{ column.label }}</th><th scope="col">{{ t('modelPlaza.table.savingsColumn') }}</th></template><template v-else><th scope="col">{{ t('modelPlaza.table.tier') }}</th><th scope="col">{{ t('modelPlaza.catalog.currentPrice') }}</th></template></tr></thead>
+              <tbody v-for="rowGroup in rowGroups" :key="rowGroup.key" class="model-price-group">
+                <tr v-for="(row, rowIndex) in rowGroup.rows" :key="row.key" :data-billing-kind="row.kind" :class="{ 'context-extended-row': row.contextBand === 'extended' }">
+                  <th v-if="rowIndex === 0" :rowspan="rowGroup.rows.length" :scope="rowGroup.rows.length > 1 ? 'rowgroup' : 'row'" class="model-id-cell"><div><code>{{ row.modelId }}</code><button type="button" class="copy-id-button" :aria-label="`${t('modelPlaza.catalog.copyModelId')}: ${row.modelId}`" @click="copyModelId(row.modelId)"><Icon name="copy" size="xs" /></button></div>
                     <small class="model-platform">{{ platformLabel(row.model.platform || selectedGroup?.platform || '') }}</small>
                     <PlazaVideoModelDetails v-if="row.model.platform === 'video'" :description="row.model.description" :capabilities="row.model.capabilities" />
-                    <small v-if="tokenTable && row.tier">{{ row.tier }}</small><small v-if="row.period" class="period-label">{{ row.period }}</small>
+                    <small v-if="row.kind !== 'token' && row.period" class="period-label">{{ row.period }}</small>
                     <small v-if="row.model.long_context_basis === 'marginal'">{{ t('modelPlaza.reference.marginal') }}</small>
                     <small v-if="row.model.pricing?.reasoning_effort_multipliers && Object.keys(row.model.pricing.reasoning_effort_multipliers).length" class="effort-note"><template v-for="(rate, effort) in row.model.pricing.reasoning_effort_multipliers" :key="effort">{{ effort }} ×{{ rate }} · </template></small>
                   </th>
+                  <td v-if="hasContextTiers" class="context-tier-cell">
+                    <template v-if="row.kind === 'token'">
+                      <span class="context-tier-badge" :class="{ 'is-extended': row.contextBand === 'extended' }">{{ t(row.contextBand === 'extended' ? 'modelPlaza.reference.extendedContext' : row.contextBand === 'standard' ? 'modelPlaza.reference.standardContext' : 'modelPlaza.reference.noContextTier') }}</span>
+                      <strong v-if="row.tier" class="context-tier-range">{{ row.tier }}</strong>
+                      <small v-if="row.period" class="context-period">{{ row.period }}</small>
+                    </template>
+                    <span v-else class="empty-price">—</span>
+                  </td>
                   <template v-if="row.kind === 'token'"><td v-for="column in columns" :key="column.key">
                     <div class="price-primary"><strong>{{ price(row, column.key) }}</strong><small v-if="price(row, column.key) !== '-'"> / {{ unit(row) }}</small></div>
                     <div v-if="priceMode === 'group' && metric(row, column.key)?.official != null" class="price-reference" :class="{ discounted: (metric(row, column.key)?.saving ?? 0) > 0 }">{{ t('modelPlaza.catalog.officialPrice') }} {{ price(row, column.key, true) }}</div>
@@ -186,7 +197,16 @@ function copyModelId(modelId: string) { void copyToClipboard(modelId, t('modelPl
 .reference-pricing-table { width: 100%; min-width: 890px; border-collapse: collapse; font-size: 13px; text-align: left; }
 .reference-pricing-table th,.reference-pricing-table td { padding: 17px 16px; border-bottom: 1px solid var(--catalog-border); vertical-align: middle; }
 .reference-pricing-table thead th { background: var(--catalog-muted-surface); font-weight: 500; color: var(--catalog-muted); padding-block: 14px; white-space: nowrap; }
-.reference-pricing-table tr:last-child > * { border-bottom: 0; }
+.reference-pricing-table tbody:last-child tr:last-child > *, .reference-pricing-table tbody:last-child .model-id-cell { border-bottom: 0; }
+.model-price-group + .model-price-group { border-top: 2px solid var(--catalog-border); }
+.model-price-group .model-id-cell { vertical-align: top; background: var(--catalog-surface); }
+.context-pricing-notice { padding: 11px 14px; margin-bottom: 12px; border: 1px solid var(--catalog-border); border-radius: 7px; color: var(--catalog-accent); background: var(--catalog-tint); font-size: 13px; line-height: 1.6; }
+.context-tier-cell { min-width: 145px; }
+.context-tier-badge { display: inline-block; border: 1px solid var(--catalog-border); border-radius: 6px; padding: 3px 8px; background: var(--catalog-muted-surface); color: var(--catalog-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.context-tier-badge.is-extended { color: var(--catalog-accent); background: var(--catalog-tint); border-color: var(--catalog-accent); }
+.context-tier-range { display: block; margin-top: 6px; color: var(--catalog-text); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.context-period { display: block; max-width: 190px; margin-top: 6px; color: var(--catalog-muted); font-size: 11px; line-height: 1.5; }
+.context-extended-row { background: color-mix(in srgb, var(--catalog-tint) 28%, var(--catalog-surface)); }
 .reference-pricing-table tbody tr:hover { background: var(--catalog-muted-surface); }
 .model-id-cell { font-weight: 500; min-width: 220px; max-width: 320px; }
 .model-id-cell > div { display: flex; align-items: center; gap: 10px; }

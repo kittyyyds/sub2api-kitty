@@ -131,7 +131,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	if err != nil {
 		return nil, err
 	}
-	billingService, err := service.ProvideBillingService(configConfig, pricingService, settingService)
+	billingService, err := service.ProvideBillingService(configConfig, pricingService, settingService, db)
 	if err != nil {
 		return nil, err
 	}

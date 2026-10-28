@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ModelPlazaGroup, ModelPlazaResponse, PlazaModel } from '@/api/modelPlaza'
 import ModelPlazaContent from '../ModelPlazaContent.vue'
-import { priceTableRows } from '../catalogTable'
+import { priceTableRows, groupPriceTableRows } from '../catalogTable'
 
 const { copyToClipboard } = vi.hoisted(() => ({
   copyToClipboard: vi.fn().mockResolvedValue(true)
@@ -104,6 +104,43 @@ function mountContent(response: ModelPlazaResponse) {
 
 describe('ModelPlazaContent model catalog', () => {
   beforeEach(() => copyToClipboard.mockClear())
+
+  it('shows the 500K context tiers under one model identity without changing prices', async () => {
+    const model = tokenModel('gpt-6.1-sol')
+    model.pricing!.intervals = [
+      { min_tokens: 0, max_tokens: 500000, tier_label: '≤500K', input_price: 2e-6, output_price: 10e-6, cache_write_price: null, cache_read_price: 0.1e-6, per_request_price: null },
+      { min_tokens: 500000, max_tokens: null, tier_label: '>500K', input_price: 4e-6, output_price: 20e-6, cache_write_price: null, cache_read_price: 0.2e-6, per_request_price: null }
+    ]
+    const first = { ...group(44, 'Global fallback', 0.18, [model]), long_context_pricing_enabled: false }
+    const wrapper = mountContent({ description: '', groups: [first, group(2, 'Single tier', 0.3, [tokenModel('gpt-other')])] })
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2)
+    expect(wrapper.findAll('.model-id-cell code').map(el => el.text())).toEqual(['gpt-6.1-sol'])
+    expect(wrapper.get('.model-id-cell').attributes('rowspan')).toBe('2')
+    expect(wrapper.get('.model-id-cell').attributes('scope')).toBe('rowgroup')
+    expect(wrapper.findAll('.context-tier-range').map(el => el.text())).toEqual(['≤500K', '>500K'])
+    expect(wrapper.findAll('.context-tier-badge').map(el => el.text())).toEqual(['modelPlaza.reference.standardContext', 'modelPlaza.reference.extendedContext'])
+    expect(wrapper.findAll('tbody tr').map(row => row.get('.price-primary strong').text())).toEqual(['$0.36', '$0.72'])
+    expect(wrapper.text()).not.toContain('272K')
+    expect(wrapper.findAll('.copy-id-button')).toHaveLength(1)
+    await wrapper.get('.copy-id-button').trigger('click')
+    expect(copyToClipboard).toHaveBeenCalledWith('gpt-6.1-sol', 'modelPlaza.catalog.copySuccess')
+    await wrapper.findAll('.pricing-group-card')[1].trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1)
+    expect(wrapper.get('.model-id-cell').attributes('rowspan')).toBe('1')
+    expect(wrapper.find('.context-tier-cell').exists()).toBe(false)
+  })
+
+  it('keeps time periods attached to their own prices inside the shared model block', () => {
+    const model = tokenModel('timed-model')
+    model.time_pricing = { timezone: 'Asia/Shanghai', weekdays_only: true, periods: [{ start_time: '00:00', end_time: '08:00', multiplier: 0.5 }] }
+    const wrapper = mountContent({ description: '', groups: [group(2, 'Timed', 0.2, [model])] })
+    expect(wrapper.findAll('.model-id-cell')).toHaveLength(1)
+    expect(wrapper.get('.model-id-cell').attributes('rowspan')).toBe('2')
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows[0].find('.context-period').exists()).toBe(false)
+    expect(rows[1].get('.context-period').text()).toContain('00:00–08:00')
+    expect(rows.map(row => row.get('.price-primary strong').text())).toEqual(['$0.20', '$0.10'])
+  })
 
   it('starts with the first real group and renders its price table', () => {
     const wrapper = mountContent({
@@ -236,6 +273,17 @@ describe('ModelPlazaContent model catalog', () => {
 })
 
 describe('Kitty price table financial rules', () => {
+  it('groups only token identities and leaves media specification rows intact', () => {
+    const model = tokenModel('gpt')
+    model.time_pricing = { timezone: 'UTC', periods: [{ start_time: '00:00', end_time: '01:00', multiplier: 2 }] }
+    const rows = priceTableRows(group(1, 'Text', 0.2, [model, tokenModel('other')]), 'openai')
+    expect(groupPriceTableRows(rows).map(block => block.rows.length)).toEqual([2, 1])
+    expect(groupPriceTableRows(rows).flatMap(block => block.rows)).toEqual(rows)
+    const image = unitModel('image', 'openai', 'image', 0.1)
+    image.time_pricing = model.time_pricing
+    const mediaRows = priceTableRows(group(1, 'Images', 0.2, [image]), 'image')
+    expect(groupPriceTableRows(mediaRows).map(block => block.rows.length)).toEqual([1, 1])
+  })
   it.each(['image', 'video'] as const)('uses stable group/platform/kind identities for same-name %s rows', (kind) => {
     const first = unitModel('shared-model', 'openai', kind, 0.1)
     const second = unitModel('shared-model', 'gemini', kind, 0.25)
