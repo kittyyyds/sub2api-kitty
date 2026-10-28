@@ -163,7 +163,9 @@ func (s *BillingService) CalculateCostUnified(in CostInput) (*CostBreakdown, err
 		r = cfg.match(gid, in.Model)
 	}
 	original := in
-	in.overrideContextPricing = r != nil && r.Mode == ModelBillingContext
+	// A matching group/model policy owns the surcharge, including always mode.
+	// Never stack a global rule or a catalog ladder on top of that policy.
+	in.overrideContextPricing = r != nil
 	cost, err := s.calculateCostUnifiedBase(in)
 	if err != nil || cost == nil {
 		return cost, err

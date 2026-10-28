@@ -105,7 +105,7 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 
 	ctx = withModelBillingConfig(ctx, s.modelBillingSettings)
 	scoped := s.modelBillingSettings.modelBillingConfigForUsage(ctx).match(modelBillingGroupID(CostInput{Group: in.Group}), in.Model)
-	rule, ruleErr := s.globalContextRule(ctx, in.Model)
+	rule, ruleErr := s.globalContextRuleForCost(CostInput{Ctx: ctx, Model: in.Model, overrideContextPricing: scoped != nil})
 	if ruleErr != nil {
 		return nil, ruleErr
 	}
@@ -128,8 +128,11 @@ func (s *BillingService) ResolveContextPricingSchedule(ctx context.Context, reso
 	if rule != nil {
 		plan = contextBreakpointPlan{bounds: []int{rule.ThresholdTokens}, thresholdBound: rule.ThresholdTokens, threshold: rule.ThresholdTokens}
 	}
-	if scoped != nil && scoped.Mode == ModelBillingContext {
-		plan = contextBreakpointPlan{bounds: []int{scoped.ThresholdTokens}, thresholdBound: scoped.ThresholdTokens, threshold: scoped.ThresholdTokens}
+	if scoped != nil {
+		plan = contextBreakpointPlan{}
+		if scoped.Mode == ModelBillingContext {
+			plan = contextBreakpointPlan{bounds: []int{scoped.ThresholdTokens}, thresholdBound: scoped.ThresholdTokens, threshold: scoped.ThresholdTokens}
+		}
 	}
 	segments := buildContextSegments(plan.bounds)
 

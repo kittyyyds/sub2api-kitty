@@ -230,11 +230,31 @@ describe('new 2FA admission configuration', () => {
   const legacy = { ...config }; delete legacy.openai_two_fa_admission
   vi.mocked(getAutoConfig).mockResolvedValue(legacy)
   const w = mount(AutoConfigView); await flushPromises()
+  await w.get('[data-testid="admission-enabled"]').setValue(true)
   expect(w.get<HTMLInputElement>('[data-testid="admission-model"]').element.value).toBe('gpt-6.1-sol')
   expect(w.get<HTMLInputElement>('[data-testid="admission-pass_count"]').element.value).toBe('6')
   expect(w.get<HTMLInputElement>('[data-testid="admission-wait_seconds"]').element.value).toBe('60')
+  await w.get('[data-testid="admission-enabled"]').setValue(false)
   await w.get('form').trigger('submit'); await flushPromises()
   expect(saveAutoConfig).toHaveBeenCalledWith(expect.objectContaining({ enabled: false, upgrade_enabled: false, openai_two_fa_admission: defaultOpenAITwoFAAdmissionConfig() }))
+  w.unmount()
+ })
+})
+
+describe('Kitty unified admission entry', () => {
+ it('migrates only the saved template, keeps pricing unchanged, and removes the duplicate card', async () => {
+  const legacy={...structuredClone(config),enabled:true,group_ids:[5],iq_bootstrap:{...defaultIQBootstrap(),enabled:true,quarantine_enabled:true,quarantine_group_id:5}}
+  vi.mocked(getAutoConfig).mockResolvedValue(legacy)
+  const w=mount(AutoConfigView);await flushPromises()
+  expect(w.find('[data-testid="two-fa-admission"]').exists()).toBe(false)
+  expect(w.findAll('[data-testid="iq-bootstrap-settings"]')).toHaveLength(1)
+  expect(w.get('[data-testid="iq-bootstrap-settings"]').element.closest('section')).toBe(w.get('[data-testid="initial-enabled"]').element.closest('section'))
+  expect(saveAutoConfig).not.toHaveBeenCalled()
+  expect(w.get<HTMLSelectElement>('[data-testid="admission-group"]').element.value).toBe('5')
+  await w.get('[data-testid="admission-isolation-count"]').setValue(8)
+  await w.get('form').trigger('submit');await flushPromises()
+  expect(saveAutoConfig).toHaveBeenCalledWith({...legacy,iq_bootstrap:{...legacy.iq_bootstrap,enabled:false},openai_two_fa_admission:{...defaultOpenAITwoFAAdmissionConfig(),enabled:true,isolation_group_id:5,isolation_count:8}})
+  expect(legacy.iq_bootstrap.enabled).toBe(true)
   w.unmount()
  })
 })

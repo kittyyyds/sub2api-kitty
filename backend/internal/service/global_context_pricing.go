@@ -263,7 +263,7 @@ func applyGlobalContextRule(bd *CostBreakdown, r *GlobalContextRule, t UsageToke
 }
 
 func (s *BillingService) globalContextRuleForCost(input CostInput) (*GlobalContextRule, error) {
-	if input.SkipGlobalContextRules {
+	if input.SkipGlobalContextRules || input.overrideContextPricing {
 		return nil, nil
 	}
 	return s.globalContextRule(input.Ctx, input.Model)
