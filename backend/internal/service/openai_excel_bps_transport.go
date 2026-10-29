@@ -220,7 +220,9 @@ func (s *OpenAIGatewayService) doExcelBPSRequestTo(ctx context.Context, c *gin.C
 			return resp, lease, proxy, nil
 		}
 		// Even an unusual response+error result makes replay unsafe.
-		retry := !isControlledExperiment(ctx) && managed && attempt == 1 && resp == nil && evidence.unsent() && ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+		// Plugin sockets do not expose HTTP write evidence to this process. Never
+		// infer an unsent request or replay through another exit after plugin failure.
+		retry := excelBPSPluginFromContext(ctx) == nil && !isControlledExperiment(ctx) && managed && attempt == 1 && resp == nil && evidence.unsent() && ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}

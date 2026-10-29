@@ -207,8 +207,8 @@ func newExcelBPSRequestTo(ctx context.Context, targetURL, accept string, body []
 	return req, nil
 }
 
-// BPS deliberately bypasses Codex ticket/cookie injection and OAuth plugins:
-// only the selected account's bearer and ChatGPT account ID belong on this host.
+// BPS bypasses Codex ticket/cookie injection. An explicitly scoped BPS transport
+// plugin may carry the prepared wire, while the host retains admission and billing.
 func (s *OpenAIGatewayService) forwardExcelBPS(ctx context.Context, c *gin.Context, account *Account, body []byte, start time.Time) (forwardResult *OpenAIForwardResult, forwardErr error) {
 	var compactUsage OpenAIUsage
 	var compactID string
@@ -249,6 +249,15 @@ func (s *OpenAIGatewayService) forwardExcelBPS(ctx context.Context, c *gin.Conte
 	}
 	originalModel := gjson.GetBytes(body, "model").String()
 	model := account.GetMappedModel(originalModel)
+	pluginRoute, pluginRouteErr := s.pluginManager.resolveExcelBPSPlugin(ctx, account, model)
+	if pluginRouteErr != nil {
+		return fail(503, "basispoints_plugin_unavailable", pluginRouteErr.Error())
+	}
+	if pluginRoute != nil {
+		ctx = context.WithValue(ctx, excelBPSPluginContextKey{}, pluginRoute)
+		model = pluginRoute.targetModel
+		c.Header("X-Codex2API-BPS-Transport", "plugin")
+	}
 	stream := gjson.GetBytes(body, "stream").Bool()
 	clientCanceled := func() (*OpenAIForwardResult, error) {
 		StopOpenAICompactSSEKeepaliveCommitted(c)

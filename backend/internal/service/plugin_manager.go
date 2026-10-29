@@ -991,6 +991,13 @@ func (m *PluginManager) RoundTripOpenAIOAuth(ctx context.Context, request *http.
 	if route == nil {
 		return nil, false, nil
 	}
+	return m.roundTripOpenAIOAuthRoute(ctx, request, proxyURL, account, route)
+}
+
+func (m *PluginManager) roundTripOpenAIOAuthRoute(ctx context.Context, request *http.Request, proxyURL string, account *Account, route *pluginRoute) (*http.Response, bool, error) {
+	if route == nil || m.route.Load() != route {
+		return nil, true, errors.New("OpenAI OAuth 插件绑定已变化；未回退原生通道")
+	}
 	diagnosticRoute := transportdiag.RouteFromContext(ctx)
 	diagnosticRoute.Mode, diagnosticRoute.Upstream = "plugin", "plugin"
 	if request != nil && request.URL != nil {

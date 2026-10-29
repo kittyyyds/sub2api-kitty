@@ -229,6 +229,11 @@ func (s *OpenAIGatewayService) observePriorityAttempt(req *http.Request, account
 // Used by HTTP adapters whose physical sends bypass the native proxy pipeline.
 func (s *OpenAIGatewayService) doPriorityObservedHTTP(req *http.Request, proxy string, account *Account) (*http.Response, error) {
 	observe := s.observePriorityAttempt(req, account)
+	if route := excelBPSPluginFromContext(req.Context()); route != nil && req.URL != nil && req.URL.Scheme == "https" && req.URL.Host == "bps.openai.com" && req.URL.Path == "/basispoints/api/responses" {
+		resp, err := route.roundTrip(req, proxy, account)
+		observe(resp, err)
+		return resp, err
+	}
 	resp, err := s.httpUpstream.Do(req, proxy, account.ID, account.Concurrency)
 	observe(resp, err)
 	return resp, err
