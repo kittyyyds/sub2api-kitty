@@ -56,7 +56,7 @@ func (s *RetainedMediaService) Stop() {
 }
 func (s *RetainedMediaService) Enabled() bool { return s.dir != "" }
 func (s *RetainedMediaService) Config() map[string]any {
-	return map[string]any{"enabled": s.Enabled(), "free_hours": 24, "image_day_usd": "0.01", "video_day_usd": "0.10", "max_days": 365, "max_file_bytes": RetainedMediaMaxBytes, "cleanup_enabled": s.cleanup, "server_time": time.Now().UTC()}
+	return map[string]any{"enabled": s.Enabled(), "free_hours": 24, "image_free_hours": 4, "video_free_hours": 24, "image_day_usd": "0.01", "video_day_usd": "0.10", "max_days": 365, "max_file_bytes": RetainedMediaMaxBytes, "cleanup_enabled": s.cleanup, "server_time": time.Now().UTC()}
 }
 func (s *RetainedMediaService) path(id string) (string, error) {
 	u, e := uuid.Parse(id)

@@ -33,8 +33,12 @@ func (r *retainedMediaRepository) BySource(ctx context.Context, user int64, sour
 	return scanRetained(r.db.QueryRowContext(ctx, `SELECT `+retainedColumns+` FROM kitty_retained_media WHERE source_key=$1 AND user_id=$2`, source, user))
 }
 func (r *retainedMediaRepository) Create(ctx context.Context, a *service.RetainedMedia) (*service.RetainedMedia, error) {
-	stored, e := scanRetained(r.db.QueryRowContext(ctx, `INSERT INTO kitty_retained_media(id,user_id,source_key,sha256,kind,name,mime_type,bytes)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(user_id,source_key) DO NOTHING RETURNING `+retainedColumns, a.ID, a.UserID, a.SourceKey, a.SHA256, a.Kind, a.Name, a.MimeType, a.Bytes))
+	freeHours := 24
+	if a.Kind == "image" {
+		freeHours = 4
+	}
+	stored, e := scanRetained(r.db.QueryRowContext(ctx, `INSERT INTO kitty_retained_media(id,user_id,source_key,sha256,kind,name,mime_type,bytes,expires_at)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,statement_timestamp()+($9*INTERVAL '1 hour')) ON CONFLICT(user_id,source_key) DO NOTHING RETURNING `+retainedColumns, a.ID, a.UserID, a.SourceKey, a.SHA256, a.Kind, a.Name, a.MimeType, a.Bytes, freeHours))
 	if errors.Is(e, sql.ErrNoRows) {
 		stored, e = r.BySource(ctx, a.UserID, a.SourceKey)
 	}
