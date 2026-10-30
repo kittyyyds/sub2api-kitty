@@ -14,29 +14,57 @@ function policy(overrides: Partial<MediaCatalogModel> = {}): MediaCatalogPolicy 
 }
 
 describe('document scoped media presentation', () => {
-  it('uses 192 current verified IDs, merging duplicate rows without choosing a cheaper price', () => {
-    expect(suanliMediaCatalog.models).toHaveLength(192)
-    expect(new Set(suanliMediaCatalog.models.map(m => m.id)).size).toBe(192)
-    const duplicate = suanliMediaCatalog.models.find(m => m.id === '007系列/sd2.5(30图10音/4-30秒/720P)')!
-    expect(duplicate.sourceRows).toEqual([207, 217])
-    expect(duplicate.warnings.length).toBeGreaterThan(0)
+  it('uses 213 configured IDs and preserves duplicate source evidence without choosing a cheaper price', () => {
+    expect(suanliMediaCatalog.models).toHaveLength(213)
+    expect(new Set(suanliMediaCatalog.models.map(m => m.id)).size).toBe(213)
+    const duplicate = suanliMediaCatalog.models.find(m => m.id === '002系列/sd2.0(933满血不卡脸1080P)')!
+    expect(duplicate.sourceRows).toEqual([290, 300])
+    expect(duplicate.sourceUnitConflict).toBe(true)
+    const resolved = suanliMediaCatalog.models.find(m => m.id === '007系列/sd2.5(30图10音/4-30秒/720P)')!
+    expect(resolved.sourceRows).toEqual([240])
+    expect(resolved.warnings).toEqual([])
   })
   it('refreshes the documented list without resurrecting removed models', () => {
     expect(suanliMediaCatalog.models.find(m => m.id === '特价sd2.5(30-10-10/4-30秒)')).toMatchObject({
-      categoryId: 'value', sourceRows: [179], sourceBadges: ['限时', '新增'],
+      categoryId: 'discount', sourceRows: [200], sourceBadges: ['限时', '新增'],
       pricedResolutions: ['480p', '720p', '1080p'], billingUnits: ['条'], seconds: { min: 4, max: 30 },
     })
     expect(suanliMediaCatalog.models.some(m => m.id === 'SVIP系列/高质量/wan3-1080P')).toBe(false)
     expect(suanliMediaCatalog.models.some(m => m.id === '特价sd2.5(9图/4-30秒)0000')).toBe(false)
-    expect(suanliMediaCatalog.models.filter(m => m.kind === 'image')).toHaveLength(34)
+    expect(suanliMediaCatalog.models.filter(m => m.kind === 'image')).toHaveLength(50)
+    for (const id of ['官转特价sd2.0-480p', '全能sd2.0(满血原生过脸-933-720p)', '002系列/sd2.0(9图3音频不卡脸720P)', '画质增强720P增强至1080P']) {
+      expect(suanliMediaCatalog.models.some(m => m.id === id)).toBe(false)
+    }
   })
   it('uses current availability annotations and reference descriptions', () => {
     const model = (id: string) => suanliMediaCatalog.models.find(m => m.id === id)!
-    expect(model('专享sd2.5(满血30-10-10/4-30秒/720p)').sourceBadges).toContain('专享特价')
-    expect(model('专享sd2.5(满血30-10-10/4-30秒/1080p)').sourceBadges).toContain('特惠')
+    expect(model('专享sd2.5(满血30-10-10/4-30秒/720p)')).toBeUndefined()
+    expect(model('专享sd2.5(满血30-10-10/4-30秒/1080p)')).toBeUndefined()
     expect(model('高质量快速sd2.5(满血30-10-10/720P)').sourceBadges).not.toContain('无敌')
     expect(model('SVIP系列/高质量/SD2.0mini').description).toContain('满血903')
     expect(model('SVIP系列/高质量/SD2.0mini').description).toContain('支持9图3音频')
+    expect(model('SVIP系列/高质量/SD2.0mini').seconds).toEqual({ min: 10, max: 15 })
+  })
+  it('labels the 37 retained source-absent models neutrally and never invents a live entry', () => {
+    const retained = suanliMediaCatalog.models.filter(m => m.categoryId === 'configured')
+    expect(retained).toHaveLength(37)
+    expect(retained.every(m => m.sourceRows.length === 0 && !m.sourceBadges?.length)).toBe(true)
+    const data = fixture()
+    data.groups[0].models[0].name = '官转特价sd2.0-720p'
+    const entries = mediaEntries(data, suanliMediaCatalog)
+    expect(entries).toHaveLength(1)
+    expect(entries[0].document?.categoryId).toBe('configured')
+    expect(entries[0].tiers[0].price).toBe(0.3)
+    expect(entries.some(e => e.id === 'nano-banana-pro')).toBe(false)
+  })
+  it('keeps an independent specification conflict blocking a reviewed unit conflict', () => {
+    const data = fixture()
+    data.groups[0].models[0].name = '004系列/sd2.5(优质/30-10-10音/5-15秒/720P)'
+    data.groups[0].models[0].pricing!.billing_mode = 'per_request'
+    const entry = mediaEntries(data, suanliMediaCatalog)[0]
+    expect(entry.catalogPriceVerified).toBe(false)
+    expect(entry.tiers.every(t => t.price === null)).toBe(true)
+    expect(entry.catalogWarnings?.some(w => w.includes('480P'))).toBe(true)
   })
   it('does not fabricate a site price for a newly documented model', () => {
     const data = fixture()

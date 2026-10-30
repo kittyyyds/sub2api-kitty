@@ -80,11 +80,13 @@ describe('image tables and source annotations', () => {
     const [before] = mediaEntries(imageFixture(), policy()), [after] = mediaEntries(imageFixture(), policy(document))
     expect(after.status).toBe(before.status); expect(after.tiers).toEqual(before.tiers); w.unmount()
   })
-  it('has source labels for all 34 documented image models, including maintenance warnings', () => {
+  it('keeps observed source annotations and neutral retained images while excluding maintenance models', () => {
     const images = suanliMediaCatalog.models.filter(m => m.kind === 'image')
-    expect(images).toHaveLength(34)
-    expect(images.every(m => m.annotationRows?.length)).toBe(true)
-    expect(images.find(m => m.id === 'nano-banana-pro(原生高质量支持真4K)')?.sourceBadges).toContain('维护')
+    expect(images).toHaveLength(50)
+    expect(images.filter(m => m.annotationRows?.length)).toHaveLength(27)
+    expect(images.filter(m => m.categoryId === 'configured')).toHaveLength(23)
+    expect(images.find(m => m.id === 'nano-banana-pro(原生高质量支持真4K)')).toBeUndefined()
+    expect(images.flatMap(m => m.sourceBadges ?? []).some(b => /不可用|下架|维护/.test(b))).toBe(false)
   })
   it('copies the observed quality-series recommendations and timing warnings exactly', () => {
     const fast = suanliMediaCatalog.models.find(m => m.id === '高质量sd2.5/(全参30-10-10原生过真人速度快720P)')!
