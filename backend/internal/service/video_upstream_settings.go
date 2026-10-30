@@ -154,9 +154,11 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 			Mode  string   `json:"billing_mode"`
 			Price *float64 `json:"model_price"`
 			Video *struct {
-				Output     *float64           `json:"output_per_second"`
-				Reference  *float64           `json:"ref_video_per_second"`
-				Resolution map[string]float64 `json:"resolution_per_second"`
+				Output               *float64           `json:"output_per_second"`
+				PerRequest           *float64           `json:"per_request"`
+				Reference            *float64           `json:"ref_video_per_second"`
+				Resolution           map[string]float64 `json:"resolution_per_second"`
+				ResolutionPerRequest map[string]float64 `json:"resolution_per_request"`
 			} `json:"video_pricing"`
 		} `json:"data"`
 	}
@@ -195,19 +197,45 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 		case "per_second":
 			p.BillingMode = BillingModeVideo
 		case "video_multi":
-			p.BillingMode = BillingModeVideo
-			if row.Video == nil || row.Video.Output == nil {
+			if row.Video == nil {
 				p.UnavailableReason = "多维视频价格不完整"
 				break
 			}
-			p.UnitPrice = *row.Video.Output
-			if row.Video.Reference != nil {
-				p.ReferencePerSecond = *row.Video.Reference
-				p.ReferencePriceKnown = true
+			resolutionPrices := row.Video.Resolution
+			if row.Video.PerRequest != nil || row.Video.ResolutionPerRequest != nil {
+				// The supplier sends output_per_second: 0 as a placeholder for
+				// per-request tiers. Do not turn a per-video charge into a free second.
+				if len(row.Video.Resolution) > 0 || row.Video.Output != nil && *row.Video.Output != 0 || row.Video.Reference != nil && *row.Video.Reference != 0 {
+					p.UnavailableReason = "按条与按秒价格冲突，需要核实计费规则"
+					break
+				}
+				p.BillingMode = BillingModePerRequest
+				if row.Video.PerRequest == nil && len(row.Video.ResolutionPerRequest) == 0 {
+					p.UnavailableReason = "多维视频价格不完整"
+					break
+				}
+				if row.Video.PerRequest != nil {
+					p.UnitPrice = *row.Video.PerRequest
+				}
+				resolutionPrices = row.Video.ResolutionPerRequest
+			} else {
+				p.BillingMode = BillingModeVideo
+				if row.Video.Output == nil {
+					p.UnavailableReason = "多维视频价格不完整"
+					break
+				}
+				p.UnitPrice = *row.Video.Output
+				if row.Video.Reference != nil {
+					p.ReferencePerSecond = *row.Video.Reference
+					p.ReferencePriceKnown = true
+				}
 			}
-			p.ResolutionPrices = make(map[string]float64, len(row.Video.Resolution))
-			for raw, price := range row.Video.Resolution {
+			p.ResolutionPrices = make(map[string]float64, len(resolutionPrices))
+			for raw, price := range resolutionPrices {
 				resolution := strings.ToLower(strings.TrimSpace(raw))
+				if resolution == "" {
+					return nil, "", errors.New("上游分辨率价格缺少分辨率")
+				}
 				if _, duplicate := p.ResolutionPrices[resolution]; duplicate {
 					return nil, "", errors.New("上游分辨率价格重复")
 				}
@@ -315,7 +343,7 @@ func repriceVideoEntry(entry ChannelModelPricing, cost VideoSupplierPrice, cfg V
 		if !exists && !initial {
 			return entry, errors.New("新增分辨率档位，需要核实后重新导入")
 		}
-		v.ResolutionPrices[resolution] = choose(oldPrice, v.AppliedMarkup.OutputPerSecond, price, markup.OutputPerSecond)
+		v.ResolutionPrices[resolution] = choose(oldPrice, oldAdd, price, add)
 	}
 	if !initial && len(entry.Video.ResolutionPrices) != len(v.ResolutionPrices) {
 		return entry, errors.New("分辨率档位变化，保留原价格")
