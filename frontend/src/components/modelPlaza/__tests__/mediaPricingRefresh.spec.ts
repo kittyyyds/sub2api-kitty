@@ -82,4 +82,12 @@ describe('effective prices with refreshed source annotations', () => {
     expect(w.get('.tier-table').text()).toContain('$0.3')
     w.unmount()
   })
+
+  it('displays canonical 2k/4k selling tiers and uses the same quoted duration', () => {
+    const data = fixture(), model = data.groups[0].models[0]
+    model.pricing!.resolution_prices = { '720p': 0.35, '1080p': 0.45, '2k': 0.6, '4k': 1.1 }
+    const entry = mediaEntries(data, policy({ pricedResolutions: ['720p', '1080p', '2k', '4k'] }))[0]
+    expect(entry.tiers.map(t => t.price)).toEqual([0.35, 0.45, 0.6, 1.1])
+    expect(estimateMediaPrice(entry, entry.tiers[3].key, 1, 10, 0)?.total).toBe(11)
+  })
 })

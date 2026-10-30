@@ -48,3 +48,23 @@ func TestCanvasVideoQuoteFinalPriceAndDuration(t *testing.T) {
 	_, err = canvasVideoQuote(group, "unpriced", 5, 1)
 	require.Error(t, err)
 }
+
+func TestCanvasVideoQuoteCanonicalHighResolutionTiers(t *testing.T) {
+	unit := .35
+	model := "SVIP系列/官方直连-高质量/SD2.0"
+	group := &service.Group{Platform: service.PlatformVideo, RateMultiplier: 20,
+		ModelPricing: []service.ChannelModelPricing{{Models: []string{model}, BillingMode: service.BillingModeVideo, PerRequestPrice: &unit,
+			Video: &service.VideoModelConfig{
+				ResolutionPrices: map[string]float64{"720p": .35, "1080p": .45, "2k": .6, "4k": 1.1},
+				Spec:             service.UnifiedVideoSpec{Supported: true, MinSeconds: 4, MaxSeconds: 30, Resolutions: []string{"720p", "1080p", "2k", "4k"}, Ratios: []string{"16:9"}},
+			}}}}
+	for resolution, price := range map[string]float64{"2k": .6, "4k": 1.1} {
+		quote, err := quoteVideoInput(context.Background(), &service.APIKey{Group: group}, videoQuoteInput{
+			UnifiedVideoInput: service.UnifiedVideoInput{Model: model, Seconds: 10, Resolution: resolution, AspectRatio: "16:9"},
+		})
+		require.NoError(t, err)
+		require.InDelta(t, price*10, quote.EstimatedCost, 1e-8)
+		require.Equal(t, price, quote.UnitPrice)
+		require.True(t, quote.FinalUnitPrice)
+	}
+}

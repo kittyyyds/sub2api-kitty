@@ -233,6 +233,15 @@ func parseVideoSupplierCatalog(body []byte) (map[string]VideoSupplierPrice, stri
 			p.ResolutionPrices = make(map[string]float64, len(resolutionPrices))
 			for raw, price := range resolutionPrices {
 				resolution := strings.ToLower(strings.TrimSpace(raw))
+				// Unified requests and canvas controls use these canonical names.
+				// Normalize supplier aliases before pricing so high-resolution quotes
+				// and locked charges select the same tier as the submitted request.
+				switch resolution {
+				case "1440p":
+					resolution = "2k"
+				case "2160p":
+					resolution = "4k"
+				}
 				if resolution == "" {
 					return nil, "", errors.New("上游分辨率价格缺少分辨率")
 				}

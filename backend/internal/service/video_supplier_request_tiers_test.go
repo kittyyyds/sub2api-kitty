@@ -57,9 +57,11 @@ func TestVideoSupplierPerRequestRejectsMixedUnitsAndInvalidTiers(t *testing.T) {
 		})
 	}
 	for name, tiers := range map[string]map[string]float64{
-		"negative":  {"720p": -1},
-		"empty":     {" ": 1},
-		"duplicate": {"720p": 1, " 720P ": 2},
+		"negative":           {"720p": -1},
+		"empty":              {" ": 1},
+		"duplicate":          {"720p": 1, " 720P ": 2},
+		"duplicate-2k-alias": {"1440p": 1, "2K": 2},
+		"duplicate-4k-alias": {"2160p": 1, "4K": 2},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := parseRequestTierFixture(t, map[string]any{"output_per_second": 0, "resolution_per_request": tiers})
@@ -68,6 +70,38 @@ func TestVideoSupplierPerRequestRejectsMixedUnitsAndInvalidTiers(t *testing.T) {
 	}
 	_, err := parseRequestTierFixture(t, map[string]any{"output_per_second": 0, "per_request": -1})
 	require.Error(t, err)
+}
+
+func TestVideoSupplierResolutionAliasesUseCanonicalTiers(t *testing.T) {
+	for _, perRequest := range []bool{false, true} {
+		video := map[string]any{"output_per_second": .25, "resolution_per_second": map[string]float64{"720p": .25, "1440P": .5, " 2160p ": 1}}
+		mode := BillingModeVideo
+		if perRequest {
+			video = map[string]any{"output_per_second": 0, "per_request": .25, "resolution_per_request": video["resolution_per_second"]}
+			mode = BillingModePerRequest
+		}
+		catalog, err := parseRequestTierFixture(t, video)
+		require.NoError(t, err)
+		cost := catalog["request-tier-fixture"]
+		require.Equal(t, mode, cost.BillingMode)
+		require.Equal(t, map[string]float64{"720p": .25, "2k": .5, "4k": 1}, cost.ResolutionPrices)
+		cfg := DefaultVideoRuntimeSettings()
+		cfg.Markup = VideoMarkup{OutputPerSecond: .1, PerRequest: .5}
+		entry, err := repriceVideoEntry(ChannelModelPricing{Models: []string{cost.Model}, Video: &VideoModelConfig{AutoPrice: true, Spec: *cost.Spec}}, cost, cfg, "initial", true)
+		require.NoError(t, err)
+		want := 1.1
+		if perRequest {
+			want = 1.5
+		}
+		require.InDelta(t, want, entry.Video.ResolutionPrices["4k"], 1e-8)
+		snapshot := &VideoPriceSnapshot{Model: cost.Model, BillingMode: mode, UnitPrice: entry.Video.ResolutionPrices["4k"], DurationSeconds: 10, FinalUnitPrice: true, RateMultiplier: 20}
+		charged, err := calculateVideoPriceSnapshotCost(snapshot, 1)
+		require.NoError(t, err)
+		if !perRequest {
+			want *= 10
+		}
+		require.InDelta(t, want, charged.ActualCost, 1e-8)
+	}
 }
 
 func TestVideoPerRequestTiersFollowRequestMarkupAndLockedCharge(t *testing.T) {
