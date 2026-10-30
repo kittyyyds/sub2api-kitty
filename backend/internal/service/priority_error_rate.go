@@ -228,7 +228,27 @@ func (s *OpenAIGatewayService) observePriorityAttempt(req *http.Request, account
 
 // Used by HTTP adapters whose physical sends bypass the native proxy pipeline.
 func (s *OpenAIGatewayService) doPriorityObservedHTTP(req *http.Request, proxy string, account *Account) (*http.Response, error) {
+	if s.excelOAuthReauth != nil {
+		if err := s.excelOAuthReauth.validateAuthConnectionPolicy(req.Context(), account); err != nil {
+			return nil, err
+		}
+	}
+	if account != nil && account.AuthConnectionID != "" {
+		if s.excelOAuthReauth == nil {
+			return nil, errors.New("authorization connection service unavailable")
+		}
+		if err := s.excelOAuthReauth.ValidateAuthConnectionSend(req.Context(), account); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.priorityLatencyBeforeSend(req.Context(), account); err != nil {
+		return nil, err
+	}
 	observe := s.observePriorityAttempt(req, account)
+	if err := s.fenceAuthConnectionEgress(req.Context(), req, account); err != nil {
+		return nil, err
+	}
 	if route := excelBPSPluginFromContext(req.Context()); route != nil && req.URL != nil && req.URL.Scheme == "https" && req.URL.Host == "bps.openai.com" && req.URL.Path == "/basispoints/api/responses" {
 		resp, err := route.roundTrip(req, proxy, account)
 		observe(resp, err)

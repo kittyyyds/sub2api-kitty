@@ -1098,6 +1098,7 @@ export default {
         fixedPriceUnit: '$/image',
         allowImageGeneration: 'Allow image generation for this group',
         allowBatchImageGeneration: 'Allow batch image generation for this group',
+        perImageBilling: 'Bill image endpoints per image (explicit token pricing takes priority)',
         independentMultiplier: 'Use independent image multiplier',
         imageMultiplier: 'Image multiplier',
         batchDiscountMultiplier: 'Batch image discount',

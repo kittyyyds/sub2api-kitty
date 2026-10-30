@@ -29,7 +29,17 @@ func EvaluatePluginCompatibility(manifest PluginManifest, host PluginHostInfo) P
 		result.Message = "插件协议版本与当前 Sub2API 不兼容"
 		return result
 	}
-	if (host.Version == "2.9.9-kitty.3" || host.Version == "2.9.9-kitty.4" || host.Version == "2.9.9-kitty.5" || host.Version == "2.9.9-kitty.6") && isPinnedGatewayPrompt(manifest) {
+	if (host.Version == "2.9.9-kitty.3" || host.Version == "2.9.9-kitty.4" || host.Version == "2.9.9-kitty.5" || host.Version == "2.9.9-kitty.6" || host.Version == "2.18.1-kitty.1") && isPinnedGatewayPrompt(manifest) {
+		result.Compatible = true
+		result.Tested = true
+		result.Status = "compatible"
+		result.Message = "当前 Kitty 版本已适配并验证此固定签名发布包"
+		return result
+	}
+	// Keep the already installed signed BPS package intact. Only this exact
+	// manifest and this reviewed host release are attested; installation and
+	// managed startup still validate the signature, binary hash and bindings.
+	if host.Version == "2.18.1-kitty.1" && isPinnedKittyBPSPrepared(manifest) {
 		result.Compatible = true
 		result.Tested = true
 		result.Status = "compatible"

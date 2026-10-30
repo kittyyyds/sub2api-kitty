@@ -55,6 +55,7 @@ type Group struct {
 	// ImageModelPrices is optional per-model per-image pricing.
 	// Shape: model ID -> 1K/2K/4K -> final USD/image.
 	ImageModelPrices             map[string]map[string]float64
+	ImageCountBilling            bool
 	BatchImageDiscountMultiplier float64
 	BatchImageHoldMultiplier     float64
 	VideoRateIndependent         bool

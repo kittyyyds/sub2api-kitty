@@ -1095,6 +1095,7 @@ export default {
         fixedPriceUnit: '$/张',
         allowImageGeneration: '允许当前分组生图',
         allowBatchImageGeneration: '允许当前分组批量生图',
+        perImageBilling: '图片端点按张计费（显式 Token 定价优先）',
         independentMultiplier: '生图倍率独立',
         imageMultiplier: '生图独立倍率',
         batchDiscountMultiplier: '批量生图折扣倍率',

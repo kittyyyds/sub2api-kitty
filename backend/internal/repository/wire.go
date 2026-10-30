@@ -110,6 +110,7 @@ var ProviderSet = wire.NewSet(
 	NewSecurityPolicySessionStore,
 	NewCodexHarvestNodeRepository,
 	NewCodexHarvestFlowRepository,
+	NewScopedAdminKeyRepository,
 	NewOpsRepository,
 	NewAuditLogRepository,
 	NewPasskeyRepository,

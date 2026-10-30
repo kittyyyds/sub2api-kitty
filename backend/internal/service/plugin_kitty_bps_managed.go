@@ -44,3 +44,16 @@ func isReviewedKittyBPSManaged(row *PluginInstallation) bool {
 	}
 	return true
 }
+
+func isPinnedKittyBPSPrepared(manifest PluginManifest) bool {
+	var pinned PluginManifest
+	if json.Unmarshal([]byte(kittyBPSPreparedManifest), &pinned) != nil {
+		return false
+	}
+	actual, err := json.Marshal(manifest)
+	if err != nil {
+		return false
+	}
+	expected, err := json.Marshal(pinned)
+	return err == nil && bytes.Equal(actual, expected)
+}

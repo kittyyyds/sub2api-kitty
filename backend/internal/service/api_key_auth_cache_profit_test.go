@@ -95,3 +95,32 @@ func TestAPIKeyAuthSnapshotOldVersionEvicted(t *testing.T) {
 	require.False(t, used, "版本不匹配的缓存条目必须淘汰并回源重建")
 	require.Nil(t, materialized)
 }
+
+// Kitty and upstream independently used snapshot v31 for different projections.
+// The merged cache must retain both image policies and invalidate either v31.
+func TestAPIKeyAuthSnapshotMergedImagePoliciesRoundtrip(t *testing.T) {
+	svc := &APIKeyService{}
+	apiKey := profitAuthTestAPIKey()
+	apiKey.Group.ImageCountBilling = true
+	snapshot := svc.snapshotFromAPIKey(context.Background(), apiKey)
+	require.NotNil(t, snapshot)
+	require.Greater(t, snapshot.Version, 31)
+
+	payload, err := json.Marshal(&APIKeyAuthCacheEntry{Snapshot: snapshot})
+	require.NoError(t, err)
+	var restored APIKeyAuthCacheEntry
+	require.NoError(t, json.Unmarshal(payload, &restored))
+
+	materialized, used, err := svc.applyAuthCacheEntry(apiKey.Key, &restored)
+	require.NoError(t, err)
+	require.True(t, used)
+	require.NotNil(t, materialized.Group)
+	require.True(t, materialized.Group.ImageCountBilling)
+	require.Equal(t, apiKey.Group.ImageModelPrices, materialized.Group.ImageModelPrices)
+
+	restored.Snapshot.Version = 31
+	materialized, used, err = svc.applyAuthCacheEntry(apiKey.Key, &restored)
+	require.NoError(t, err)
+	require.False(t, used, "either incompatible v31 projection must be rebuilt")
+	require.Nil(t, materialized)
+}
