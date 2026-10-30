@@ -20,6 +20,7 @@ export interface MediaPriceEntry {
   status: 'priced' | 'pending' | 'unsupported'
   document?: MediaCatalogModel
   catalogWarnings?: string[]
+  catalogPriceVerified?: boolean
   estimateBlocked?: boolean
 }
 const valid = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0
@@ -75,7 +76,7 @@ export function mediaEntries(data: ModelPlazaResponse | null, policy?: MediaCata
   return policy ? applyMediaCatalogPolicy(entries, policy) : entries
 }
 export function mediaPriceSummary(entry: MediaPriceEntry): string {
-  if (entry.catalogWarnings?.length) return '价格／规格待核对'
+  if (entry.catalogWarnings?.length && !entry.catalogPriceVerified) return '价格／规格待核对'
   if (entry.pricingConflict) return '价格冲突 · 待确认'
   if (entry.status === 'unsupported') return '暂不支持调用'
   const standard = entry.tiers.filter(t => !t.period && valid(t.price))

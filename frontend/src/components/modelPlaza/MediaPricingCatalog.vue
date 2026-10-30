@@ -136,7 +136,7 @@ defineExpose({ showDetails })
               <td class="series-model"><strong>{{ entry.id }}</strong><small>{{ entry.group.name }}</small></td>
               <td class="series-description"><template v-if="entry.document?.sourceAdvantages || entry.document?.sourceDescription"><p v-if="entry.document.sourceAdvantages" data-testid="source-advantages"><b>优势</b>{{ entry.document.sourceAdvantages }}</p><p v-if="entry.document.sourceDescription && entry.document.sourceDescription !== entry.document.sourceAdvantages" data-testid="source-description"><b>说明</b>{{ entry.document.sourceDescription }}</p></template><p v-else>{{ entry.model.description || '具体支持规格请查看价格与说明。' }}</p><p v-if="entry.catalogWarnings?.length" class="card-warning">{{ entry.catalogWarnings[0] }}</p></td>
               <td class="series-prices">
-                <template v-if="entry.status === 'priced' && !entry.pricingConflict && !entry.catalogWarnings?.length">
+                <template v-if="entry.status === 'priced' && !entry.pricingConflict && (!entry.catalogWarnings?.length || entry.catalogPriceVerified)">
                   <div v-for="tier in entry.tiers.filter(t => !t.period)" :key="tier.key"><span>{{ tier.name }}</span><strong>{{ mediaMoney(tier.price) }}<small v-if="tier.price !== null"> / {{ entry.unit }}</small></strong></div>
                   <small v-if="entry.variableTimePrice">标准时段价；分时规则见详情</small><small v-if="entry.document?.conditionalReferencePricing">含参考素材时需核对条件报价</small><small v-else-if="entry.referencePrice !== null">参考视频 {{ mediaMoney(entry.referencePrice) }} / 秒</small>
                 </template><strong v-else>{{ mediaPriceSummary(entry) }}</strong>
@@ -153,7 +153,7 @@ defineExpose({ showDetails })
         <h2 :title="entry.id">{{ entry.id }}</h2>
         <MediaSourceBadges :document="entry.document" />
         <p class="model-description">{{ entry.model.description || (entry.document ? '价表未提供补充说明；保留原始模型名，具体售价见价格表。' : '暂无详细说明；请查看已公布的规格与计费信息，不按名称猜测功能。') }}</p>
-        <div class="capability-tags"><span v-for="tag in entry.tags.slice(0, 3)" :key="tag">{{ tag }}</span><span v-if="!entry.tags.length">{{ entry.kind === 'image' ? '图片模型' : '视频模型' }}</span><span v-if="entry.document">价表已收录</span><span v-else-if="entry.model.capabilities?.generic">规格以上游支持为准</span></div>
+        <div class="capability-tags"><span v-for="tag in entry.tags.slice(0, 3)" :key="tag">{{ tag }}</span><span v-if="!entry.tags.length">{{ entry.kind === 'image' ? '图片模型' : '视频模型' }}</span><span v-if="entry.document?.sourceRows.length">价表已收录</span><span v-else-if="entry.document">本站已接入</span><span v-else-if="entry.model.capabilities?.generic">规格以上游支持为准</span></div>
         <p v-if="entry.catalogWarnings?.length" class="card-warning">{{ entry.catalogWarnings[0] }}</p>
         <div class="card-price"><span>{{ entry.variableTimePrice ? '标准时段价格' : '使用价格' }} · USD</span><strong>{{ mediaPriceSummary(entry) }}</strong><small v-if="entry.document?.conditionalReferencePricing">含参考素材的条件报价需另行核对</small><small v-else-if="entry.referencePrice !== null">参考视频另计 {{ mediaMoney(entry.referencePrice) }}/秒</small><small v-else-if="entry.hasReferenceVideo">参考视频费用待确认</small><small v-else>{{ entry.tiers.filter(t => !t.period).length > 1 ? '可展开查看分规格价格' : '按所选模型计费单位计算' }}</small></div>
         <div class="card-actions"><button type="button" :aria-label="`复制模型名称 ${entry.id}`" @click="copyId(entry.id)">复制名称</button><button type="button" class="details-button" @click="showDetails(entry)">价格与说明 <span aria-hidden="true">↗</span></button></div>
@@ -168,7 +168,7 @@ defineExpose({ showDetails })
         <MediaSourceBadges :document="selected.document" />
         <div v-if="selected.document?.sourceAdvantages || selected.document?.sourceDescription" class="detail-description"><p v-if="selected.document.sourceAdvantages"><strong>优势：</strong>{{ selected.document.sourceAdvantages }}</p><p v-if="selected.document.sourceDescription && selected.document.sourceDescription !== selected.document.sourceAdvantages"><strong>说明：</strong>{{ selected.document.sourceDescription }}</p></div>
         <p v-else class="detail-description"><strong v-if="selected.document">价表说明：</strong>{{ selected.model.description || (selected.document ? '价表未提供补充说明；不根据模型名称推断能力。' : '暂无经过核对的详细介绍。支持能力以接口返回和生成页面实际可选参数为准。') }}</p>
-        <div v-if="selected.document" class="document-rules"><p v-for="note in selected.document.pricingNotes" :key="note">{{ note }}</p><small>来源：{{ catalogPolicy?.title }} · {{ catalogPolicy?.capturedOn }} · 第 {{ (selected.document.annotationRows ?? selected.document.sourceRows).join('、') }} 行；原文能力描述并非本站实测承诺。</small></div>
+        <div v-if="selected.document" class="document-rules"><p v-for="note in selected.document.pricingNotes" :key="note">{{ note }}</p><small v-if="selected.document.sourceRows.length">来源：{{ catalogPolicy?.title }} · {{ catalogPolicy?.capturedOn }} · 第 {{ (selected.document.annotationRows ?? selected.document.sourceRows).join('、') }} 行；原文能力描述并非本站实测承诺。</small><small v-else>本站已接入型号，价格按当前分组更新；具体支持规格以生成页面实际可选参数为准。</small></div>
         <p v-for="warning in selected.catalogWarnings" :key="warning" class="error-notice" role="alert">{{ warning }}</p>
         <p v-if="selected.pricingConflict" role="alert" class="error-notice">同一分组的该模型返回了不一致的价格，已停止试算；请联系管理员核实，不会自动选择最低价。</p>
         <div v-if="!selected.document" class="spec-facts">

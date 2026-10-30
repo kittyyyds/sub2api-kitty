@@ -16,6 +16,8 @@ export interface MediaCatalogModel {
   billingUnits: string[]
   pricingNotes: string[]
   warnings: string[]
+  /** The source table has conflicting units; the effective backend price remains authoritative. */
+  sourceUnitConflict?: boolean
   conditionalReferencePricing: boolean
   referenceRule: 'free' | 'charged' | 'unspecified'
   seconds?: { min: number; max: number }
@@ -42,7 +44,7 @@ export function applyMediaCatalogPolicy(entries: MediaPriceEntry[], policy: Medi
     if (!documented) return []
     const warnings = [...documented.warnings]
     if (documented.kind !== entry.kind) warnings.push('价表分类与本站接口分类不一致，需核对。')
-    if (documented.billingUnits.length && !documented.billingUnits.includes(entry.unit)) {
+    if (!documented.sourceUnitConflict && documented.billingUnits.length && !documented.billingUnits.includes(entry.unit)) {
       warnings.push('价表与本站的计费单位不一致，暂不展示确定报价。')
     }
     if (documented.referenceRule === 'free' && entry.referencePrice !== null && entry.referencePrice > 0) {
@@ -57,13 +59,19 @@ export function applyMediaCatalogPolicy(entries: MediaPriceEntry[], policy: Medi
     const hasReferenceVideo = entry.hasReferenceVideo && documented.referenceVideoMentioned === true
     const tiers = entry.tiers.filter(tier => tier.price !== null
       && (!documented.pricedResolutions?.length || documented.pricedResolutions.includes(tier.name.toLowerCase())))
+    // A reviewed source-unit discrepancy must not hide a verified final selling
+    // price. It still blocks estimation; backend conflicts and other warnings do not qualify.
+    const catalogPriceVerified = documented.sourceUnitConflict === true && warnings.length === 0
+      && entry.status === 'priced' && !entry.pricingConflict && entry.model.pricing?.final_unit_price === true
+      && tiers.length > 0
+    if (documented.sourceUnitConflict) warnings.push('来源价表的计费单位存在冲突，当前显示本站分组的实际售价与单位；费用试算暂停。')
     return [{ ...entry, tags, hasReferenceVideo, tiers,
       status: entry.status === 'priced' && !tiers.length ? 'pending' as const : entry.status,
       referencePrice: hasReferenceVideo && !documented.conditionalReferencePricing ? entry.referencePrice : null,
       model: { ...entry.model, description: documented.description },
-      document: documented, catalogWarnings: [...new Set(warnings)],
+      document: documented, catalogWarnings: [...new Set(warnings)], catalogPriceVerified,
       estimateBlocked: documented.conditionalReferencePricing || documented.durationVariesByResolution === true || warnings.length > 0,
-      ...(warnings.length ? { status: 'pending' as const, referencePrice: null, tiers: tiers.map(tier => ({ ...tier, price: null })) } : {}),
+      ...(warnings.length && !catalogPriceVerified ? { status: 'pending' as const, referencePrice: null, tiers: tiers.map(tier => ({ ...tier, price: null })) } : {}),
     }]
   })
 }
