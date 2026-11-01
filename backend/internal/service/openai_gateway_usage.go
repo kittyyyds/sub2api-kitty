@@ -367,7 +367,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		billingType = BillingTypeSubscription
 	}
 
-	// Create usage log
+	// Preserve protocol-specific legacy timers and the TPS denominator.
+	// QueueTiming supplies separately sampled server/forward observations.
+	queueWaitMs := 0
+	if result.QueueWait > 0 {
+		queueWaitMs = int(min(result.QueueWait, maxOpenAIQueueWait).Milliseconds())
+	}
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier, _ := account.EffectiveBillingRateMultiplierAt(time.Now())
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
@@ -465,6 +470,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 		usageLog.VideoDurationSeconds = &videoDurationSeconds
 	}
+	// Kitty: the site bears header-timeout retry costs. Charge only the final
+	// observed request at its normal price; unknown failed usage is not billed.
+
 	if cost != nil {
 		usageLog.InputCost = cost.InputCost
 		usageLog.ImageInputCost = cost.ImageInputCost
@@ -495,6 +503,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.OpenAIWSMode = result.OpenAIWSMode
 	usageLog.DurationMs = &durationMs
 	usageLog.FirstTokenMs = result.FirstTokenMs
+	usageLog.QueueTiming = result.QueueTiming
+	if result.QueueWaitMeasured {
+		usageLog.QueueWaitMs = &queueWaitMs
+	}
 	usageLog.CreatedAt = time.Now()
 	// 设置渠道信息
 	usageLog.ChannelID = optionalInt64Ptr(input.ChannelID)

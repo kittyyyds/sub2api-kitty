@@ -1,4 +1,5 @@
 import { homeMessages } from '../../homeOverview'
+import accountTestTiming from './accountTestTiming'
 import openaiAuth from './openaiAuth'
 import upstreamEntities from './upstreamEntities'
 import profitOps from './profitOps'
@@ -31,11 +32,13 @@ import native from './native'
 import videoModule from './videoModule'
 
 import requestTiming from './requestTiming'
+import latencyObservability from './latencyObservability'
 
 import autoConfig from './autoConfig'
 
 export default {
   homeOverview: homeMessages.zh,
+  accountTestTiming,
   openaiAuth,
   upstreamEntities,
   traffic,
@@ -56,6 +59,7 @@ export default {
   modelTrace,
   tokenGuardV2,
   requestTiming,
+  latencyObservability,
   adminAccessKeys,
   ...landing,
   ...common,

@@ -1638,6 +1638,82 @@ func TestOpenAIGatewayServiceRecordUsage_UsesRequestedModelAndUpstreamModelMetad
 	require.Equal(t, 1, userRepo.deductCalls)
 }
 
+func TestOpenAIQueueWaitUsesIngressStart(t *testing.T) {
+	requestStart := time.Now().Add(-3 * time.Second)
+	ctx := context.WithValue(context.Background(), ctxkey.RequestStartTime, requestStart)
+
+	wait, measured := openAIQueueWait(ctx, time.Now())
+	require.True(t, measured)
+	require.GreaterOrEqual(t, wait, 2900*time.Millisecond)
+	require.LessOrEqual(t, wait, 3100*time.Millisecond)
+
+	zero, zeroMeasured := openAIQueueWait(ctx, requestStart)
+	require.True(t, zeroMeasured)
+	require.Zero(t, zero)
+
+	_, missingMeasured := openAIQueueWait(context.Background(), time.Now())
+	require.False(t, missingMeasured)
+	_, futureMeasured := openAIQueueWait(ctx, requestStart.Add(-time.Second))
+	require.False(t, futureMeasured)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_PersistsQueueWaitSeparately(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+	firstToken := 120
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:         "queue_wait_ttft",
+			Model:             "gpt-5.1",
+			Usage:             OpenAIUsage{InputTokens: 20, OutputTokens: 10},
+			Duration:          2 * time.Second,
+			FirstTokenMs:      &firstToken,
+			QueueWait:         5 * time.Second,
+			QueueWaitMeasured: true,
+		},
+		APIKey:  &APIKey{ID: 10, GroupID: i64p(11), Group: &Group{ID: 11, RateMultiplier: 1.2}},
+		User:    &User{ID: 20},
+		Account: &Account{ID: 30},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.FirstTokenMs)
+	require.Equal(t, 120, *usageRepo.lastLog.FirstTokenMs)
+	require.NotNil(t, usageRepo.lastLog.DurationMs)
+	require.Equal(t, 2000, *usageRepo.lastLog.DurationMs)
+	require.NotNil(t, usageRepo.lastLog.QueueWaitMs)
+	require.Equal(t, 5000, *usageRepo.lastLog.QueueWaitMs)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_QueueWaitKeepsMissingFirstToken(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{}, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:         "queue_wait_non_stream",
+			Model:             "gpt-5.1",
+			Usage:             OpenAIUsage{InputTokens: 20, OutputTokens: 10},
+			Duration:          2 * time.Second,
+			QueueWait:         5 * time.Second,
+			QueueWaitMeasured: true,
+		},
+		APIKey:  &APIKey{ID: 10, GroupID: i64p(11), Group: &Group{ID: 11, RateMultiplier: 1.2}},
+		User:    &User{ID: 20},
+		Account: &Account{ID: 30},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Nil(t, usageRepo.lastLog.FirstTokenMs)
+	require.NotNil(t, usageRepo.lastLog.DurationMs)
+	require.Equal(t, 2000, *usageRepo.lastLog.DurationMs)
+	require.NotNil(t, usageRepo.lastLog.QueueWaitMs)
+	require.Equal(t, 5000, *usageRepo.lastLog.QueueWaitMs)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_PersistsRequestedReasoningEffort(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -3547,4 +3623,40 @@ func TestOpenAIGatewayServiceRecordUsage_ServiceTierNeverRaisedByUpstreamRespons
 	baseCost, calcErr := svc.billingService.CalculateCost("gpt-5.4", UsageTokens{InputTokens: 100, OutputTokens: 50}, 1.0)
 	require.NoError(t, calcErr)
 	require.InDelta(t, baseCost.TotalCost, usageRepo.lastLog.TotalCost, 1e-10)
+}
+
+// Retry costs are borne by the site. Exercise both the recorded price and the
+// amount actually passed to the customer balance deduction path.
+func TestOpenAIGatewayServiceRecordUsage_HeaderTimeoutRetriesDoNotSurcharge(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, &openAIRecordUsageSubRepoStub{}, nil)
+	newInput := func(retries int) *OpenAIRecordUsageInput {
+		return &OpenAIRecordUsageInput{
+			Result: &OpenAIForwardResult{
+				RequestID: "header_timeout_site_cost",
+				Model:     "gpt-5.1", Usage: OpenAIUsage{InputTokens: 1000, OutputTokens: 500},
+				Duration: 2 * time.Second, HeaderTimeoutRetries: retries,
+			},
+			APIKey: &APIKey{ID: 10, GroupID: i64p(11), Group: &Group{ID: 11, RateMultiplier: 1.2}},
+			User:   &User{ID: 20}, Account: &Account{ID: 30},
+		}
+	}
+	require.NoError(t, svc.RecordUsage(context.Background(), newInput(0)))
+	require.NotNil(t, usageRepo.lastLog)
+	baseActual, baseTotal := usageRepo.lastLog.ActualCost, usageRepo.lastLog.TotalCost
+	require.Greater(t, baseActual, 0.0)
+	require.Equal(t, 1, userRepo.deductCalls)
+	require.InDelta(t, baseActual, userRepo.lastAmount, 1e-9)
+	for _, retries := range []int{1, 2, 5} {
+		previousCalls := userRepo.deductCalls
+		require.NoError(t, svc.RecordUsage(context.Background(), newInput(retries)))
+		require.NotNil(t, usageRepo.lastLog)
+		require.InDelta(t, baseActual, usageRepo.lastLog.ActualCost, 1e-9, "retries=%d", retries)
+		require.InDelta(t, baseTotal, usageRepo.lastLog.TotalCost, 1e-9, "unknown failed usage must not inflate statistics")
+		require.Equal(t, previousCalls+1, userRepo.deductCalls, "one final request has one customer debit")
+		require.InDelta(t, baseActual, userRepo.lastAmount, 1e-9, "customer debit must not include retries")
+		require.Equal(t, 1000, usageRepo.lastLog.InputTokens)
+		require.Equal(t, 500, usageRepo.lastLog.OutputTokens)
+	}
 }

@@ -1221,6 +1221,19 @@ export default {
         saved: '流超时设置保存成功',
         saveFailed: '保存流超时设置失败'
       },
+      openaiResponseHeaderTimeout: {
+        title: 'OpenAI 响应头超时',
+        description:
+          '限制 OpenAI/Codex HTTP 上传完成后的响应头等待。符合条件的超时请求会切换账号重试；客户仅按最终成功请求的正常价格扣费，重试成本由站点承担。已收到响应头的正文流、原生上游 WebSocket 使用各自时限。',
+        enabled: '启用响应头超时',
+        enabledHint: '关闭后不设 OpenAI 专用响应头超时（等价于 0）',
+        seconds: '超时时间（秒）',
+        secondsHint:
+          '范围 1–600 秒，默认 20 秒。慢非流式响应及 SSE 响应头可能在首 token 前超时；已收到响应头的正文流、原生上游 WebSocket 使用各自时限。',
+        saved: 'OpenAI 响应头超时设置保存成功',
+        saveFailed: '保存 OpenAI 响应头超时设置失败',
+        loadFailed: '无法加载已保存的超时设置，请重新加载后编辑。'
+      },
       rectifier: {
         title: '请求整流器',
         description: '当上游返回特定错误时，自动修正请求参数并重试，提高请求成功率',

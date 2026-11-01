@@ -89,6 +89,7 @@ CREATE TABLE usage_logs (
  model_mapping_chain TEXT, billing_tier TEXT, billing_mode TEXT,
  account_stats_cost NUMERIC(20,10), upstream_request_id TEXT, session_id TEXT,
  usage_audit JSONB, native_compaction_v2 BOOLEAN, created_at TIMESTAMPTZ NOT NULL,
+ queue_wait_ms INTEGER, queue_timing JSONB,
  UNIQUE (request_id, api_key_id));`
 
 func videoPostgresCommand() (*service.UsageBillingCommand, *service.UsageLog) {

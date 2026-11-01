@@ -27,17 +27,17 @@ func TestProfitOperationsRoutesRequireExistingAdministratorAuthentication(t *tes
 	}
 }
 
-func TestProfitOperationsRoutesDenyScopedObserverManagement(t *testing.T) {
+func TestProfitOperationsScopeContextDoesNotBypassAdminAuthentication(t *testing.T) {
 	router := gin.New()
 	group := router.Group("/api/v1/admin")
 	group.Use(func(c *gin.Context) {
 		c.Request = c.Request.WithContext(service.WithObserverScope(c.Request.Context(), []int64{11}))
 	})
-	group.Use((&admin.AccountHandler{}).AuthorizeObserver)
+	group.Use(gin.HandlerFunc(middleware.NewAdminAuthMiddleware(nil, nil, nil, nil)))
 	registerChannelRoutes(group, &handler.Handlers{Admin: &handler.AdminHandlers{Channel: admin.NewChannelHandler(nil, nil, nil)}})
 	for _, tc := range []struct{ method, path string }{{"GET", "/profit-operations/snapshot"}, {"GET", "/upstream-channels"}, {"POST", "/upstream-channels"}, {"GET", "/upstream-channels/1"}, {"PUT", "/upstream-channels/1"}, {"DELETE", "/upstream-channels/1"}, {"GET", "/upstream-channels/1/members"}, {"GET", "/upstream-channel-bindings"}, {"PUT", "/upstream-channel-bindings"}} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(tc.method, "/api/v1/admin"+tc.path, nil))
-		require.Equal(t, 403, w.Code)
+		require.Equal(t, 401, w.Code)
 	}
 }

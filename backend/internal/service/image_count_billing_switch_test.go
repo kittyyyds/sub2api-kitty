@@ -48,7 +48,7 @@ func TestCalculateRecordUsageCost_ImageCountBillingGroupTokenPricing(t *testing.
 	cost := svc.calculateRecordUsageCost(context.Background(), &ForwardResult{
 		Model: model, ImageCount: 2, ImageSize: "1K", ImageEndpoint: true,
 		Usage: ClaudeUsage{InputTokens: 1000, OutputTokens: 1000},
-	}, apiKey, model, 1, 1, time.Time{})
+	}, apiKey, model, model, 1, 1, time.Time{})
 
 	require.NotNil(t, cost)
 	require.InDelta(t, 0.018, cost.TotalCost, 1e-12, "显式分组 token 价不得被按张开关覆盖")
@@ -75,7 +75,7 @@ func TestCalculateRecordUsageCost_ImageCountBillingChannelTokenPricing(t *testin
 	cost := svc.calculateRecordUsageCost(context.Background(), &ForwardResult{
 		Model: model, ImageCount: 2, ImageSize: "1K", ImageEndpoint: true,
 		Usage: ClaudeUsage{InputTokens: 1_000_000, OutputTokens: 10_000},
-	}, apiKey, model, 1, 1, time.Time{})
+	}, apiKey, model, model, 1, 1, time.Time{})
 
 	require.NotNil(t, cost)
 	expected, err := resolver.billingService.CalculateCostUnified(CostInput{
@@ -109,7 +109,7 @@ func TestCalculateRecordUsageCost_ImageCountBillingIgnoresMixedRequests(t *testi
 	cost := svc.calculateRecordUsageCost(context.Background(), &ForwardResult{
 		Model: model, ImageCount: 1, ImageSize: "1K", ImageEndpoint: false,
 		Usage: ClaudeUsage{InputTokens: 1_000_000, OutputTokens: 10_000},
-	}, apiKey, model, 1, 1, time.Time{})
+	}, apiKey, model, model, 1, 1, time.Time{})
 
 	require.NotNil(t, cost)
 	require.Equal(t, string(BillingModeToken), cost.BillingMode)
@@ -134,7 +134,7 @@ func TestCalculateOpenAIRecordUsageCost_ImageCountBillingIgnoresMixedRequests(t 
 
 	cost, err := svc.calculateOpenAIRecordUsageCost(context.Background(), &OpenAIForwardResult{
 		Model: model, ImageCount: 1, ImageSize: "1K", ImageEndpoint: false,
-	}, apiKey, []string{model}, 1, 1, 1, 1,
+	}, apiKey, []string{model}, model, 1, 1, 1, 1,
 		UsageTokens{InputTokens: 1_000_000, OutputTokens: 10_000},
 		"", nil, false, time.Time{})
 
@@ -223,7 +223,7 @@ func TestCalculateRecordUsageCost_ChannelPerRequestContextTierUsesTokens(t *test
 		cost := svc.calculateRecordUsageCost(context.Background(), &ForwardResult{
 			Model: model, ImageCount: 2, ImageSize: "1K", ImageEndpoint: true,
 			Usage: ClaudeUsage{InputTokens: 5000, OutputTokens: 100},
-		}, apiKey, model, 1, 1, time.Time{})
+		}, apiKey, model, model, 1, 1, time.Time{})
 
 		require.NotNil(t, cost)
 		require.InDelta(t, 0.6, cost.TotalCost, 1e-12, "switch=%v: 应按上下文档 0.3 × 2 张结算", switchOn)
@@ -235,7 +235,7 @@ func TestImageCountBillingUsesFallbackWithoutOperatorTokenCard(t *testing.T) {
 	group := &Group{ID: groupID, Platform: PlatformOpenAI, AllowImageGeneration: true, ImageCountBilling: true, ImagePrice1K: f64p(0.4)}
 	key := &APIKey{GroupID: &groupID, Group: group}
 	svc := &GatewayService{billingService: NewBillingService(nil, nil)}
-	cost := svc.calculateRecordUsageCost(context.Background(), &ForwardResult{Model: "gpt-image-2", ImageCount: 3, ImageSize: "1K", ImageEndpoint: true}, key, "gpt-image-2", 1, 1, time.Time{})
+	cost := svc.calculateRecordUsageCost(context.Background(), &ForwardResult{Model: "gpt-image-2", ImageCount: 3, ImageSize: "1K", ImageEndpoint: true}, key, "gpt-image-2", "gpt-image-2", 1, 1, time.Time{})
 	require.InDelta(t, 1.2, cost.TotalCost, 1e-12)
 	require.Equal(t, string(BillingModeImage), cost.BillingMode)
 }
@@ -261,13 +261,13 @@ func TestImageCountBillingPreservesExplicitTokenCardsAcrossGateways(t *testing.T
 			cost := claude.calculateRecordUsageCost(context.Background(), &ForwardResult{
 				Model: model, ImageCount: 3, ImageSize: "1K", ImageEndpoint: imageEndpoint,
 				Usage: ClaudeUsage{InputTokens: 100, OutputTokens: 10},
-			}, key, model, 1, 1, time.Time{})
+			}, key, model, model, 1, 1, time.Time{})
 			require.Equal(t, string(BillingModeToken), cost.BillingMode)
 			require.InDelta(t, want, cost.TotalCost, 1e-12)
 			openai := &OpenAIGatewayService{billingService: resolver.billingService, resolver: resolver}
 			cost, err := openai.calculateOpenAIRecordUsageCost(context.Background(), &OpenAIForwardResult{
 				Model: model, ImageCount: 3, ImageSize: "1K", ImageEndpoint: imageEndpoint,
-			}, key, []string{model}, 1, 1, 1, 1,
+			}, key, []string{model}, model, 1, 1, 1, 1,
 				UsageTokens{InputTokens: 100, OutputTokens: 10}, "", nil, false, time.Time{})
 			require.NoError(t, err)
 			require.Equal(t, string(BillingModeToken), cost.BillingMode)
