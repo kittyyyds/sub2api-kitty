@@ -35,6 +35,7 @@ func ReportLoginProgress(ctx context.Context, p LoginProgress) {
 }
 
 var loginCodes = map[string]string{
+	"bps_interaction_required":                "官方要求额外验证或确认，自动授权已停止，请使用 BPS 手动授权入口完成。",
 	"protocol_login_failed":                   "后台登录进程未完成，尚未确定具体原因；这不代表密码或 2FA 密钥错误，请联系管理员核查。",
 	"protocol_security_verification_required": "所选代理访问官方登录页面时遇到安全验证，后台登录已停止；这不代表密码或 2FA 错误。请通过官方登录流程完成验证后再试，避免连续重试。",
 	"protocol_password_rejected":              "官方密码验证未通过，请核对密码后再试。",

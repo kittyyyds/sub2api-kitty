@@ -18,6 +18,7 @@
             @create="showCreate = true"
           >
             <template #after>
+              <button class="btn btn-secondary" data-testid="open-bps-batch-import" @click="showBPSImport = true">{{ t('openaiAuth.batchImport.entry') }}</button>
               <a href="/admin/upstream-channels" class="btn btn-secondary" data-testid="manage-upstream-channels">{{ t('upstreamEntities.manage') }}</a>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
@@ -469,6 +470,7 @@
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
     <NewAPIUpstreamConfigDialog v-if="authStore.isAdmin" :show="newAPIConfigAccount !== null" :account="newAPIConfigAccount" @close="newAPIConfigAccount = null" @saved="reload" />
+    <BPSBatchImportModal :show="showBPSImport" :proxies="proxies" :groups="groups" @close="showBPSImport = false" @created="reload" />
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
@@ -528,6 +530,7 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
+import BPSBatchImportModal from '@/components/account/BPSBatchImportModal.vue'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
@@ -649,6 +652,7 @@ const handleConfigureNewAPIUpstream = (account: Account) => {
   if (authStore.isAdmin && account.type === 'apikey') newAPIConfigAccount.value = account
 }
 const showCreate = ref(false)
+const showBPSImport = ref(false)
 const showEdit = ref(false)
 const showSync = ref(false)
 const showImportData = ref(false)
@@ -1477,6 +1481,7 @@ const isAnyModalOpen = computed(() => {
   return (
     newAPIConfigAccount.value !== null ||
     showCreate.value ||
+    showBPSImport.value ||
     showEdit.value ||
     showSync.value ||
     showImportData.value ||

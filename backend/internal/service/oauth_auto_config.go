@@ -10,6 +10,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/google/uuid"
 )
 
@@ -155,6 +156,11 @@ func (s *adminServiceImpl) ApplyOAuthAutoConfig(ctx context.Context, input *Crea
 	// choose their own groups and must not inherit global groups or field overrides.
 	if _, observer := ObserverGroupIDs(ctx); observer {
 		return ValidateObserverGroupBindings(ctx, input.GroupIDs)
+	}
+	// A dedicated BPS import captures explicit group/model/proxy settings.
+	// Keep generic Codex bootstrap policy from replacing those selections.
+	if input.ExplicitBPSImport && input.Platform == PlatformOpenAI && input.Type == AccountTypeOAuth && input.Credentials["client_id"] == openai.ExcelClientID {
+		return nil
 	}
 	if input.Type != AccountTypeOAuth || s.settingService == nil {
 		return nil

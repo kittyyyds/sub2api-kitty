@@ -27,6 +27,7 @@ func originalBPSFixture(t *testing.T) *PluginInstallation {
 func TestOriginalBPSCompatibilityIsExact(t *testing.T) {
 	row := originalBPSFixture(t)
 	require.True(t, EvaluatePluginCompatibility(row.Manifest, PluginHostInfo{Version: "2.19.0-kitty.2"}).Tested)
+	require.True(t, EvaluatePluginCompatibility(row.Manifest, PluginHostInfo{Version: "2.19.0-kitty.3"}).Tested)
 	for _, version := range []string{"2.19.0-kitty.1", "2.19.0", "2.20.0-kitty.1"} {
 		require.False(t, EvaluatePluginCompatibility(row.Manifest, PluginHostInfo{Version: version}).Compatible)
 	}

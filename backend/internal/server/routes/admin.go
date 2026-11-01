@@ -453,6 +453,10 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 }
 
 func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	admin.POST("/accounts/bps-imports", h.Admin.Account.StartBPSImport)
+	admin.GET("/accounts/bps-imports", h.Admin.Account.ListBPSImports)
+	admin.GET("/accounts/bps-imports/:batch_id", h.Admin.Account.GetBPSImport)
+	admin.POST("/accounts/bps-imports/:batch_id/cancel", h.Admin.Account.CancelBPSImport)
 	accounts := admin.Group("/accounts")
 	{
 		accounts.GET("", h.Admin.Account.List)

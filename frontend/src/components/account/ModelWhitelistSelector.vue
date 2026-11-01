@@ -95,7 +95,7 @@
     <!-- Quick Actions -->
     <div class="mb-4 flex flex-wrap gap-2">
       <button
-        v-if="hasRelatedModels"
+        v-if="hasRelatedModels && showCatalogButton"
         type="button"
         @click="fillRelated"
         class="rounded-lg border border-blue-200 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
@@ -170,7 +170,9 @@ const props = withDefaults(defineProps<{
   syncBlockedReason?: string
   syncCredentials?: SyncUpstreamPreviewParams
   showSyncButton?: boolean
-}>(), { showSyncButton: true })
+  showCatalogButton?: boolean
+  catalogModels?: readonly string[]
+}>(), { showSyncButton: true, showCatalogButton: true })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string[]]
@@ -229,6 +231,9 @@ const canSyncUpstream = computed(() => {
 })
 
 const availableOptions = computed(() => {
+  if (props.catalogModels) {
+    return [...new Set([...props.catalogModels, ...props.modelValue])].map(value => ({value, label: value}))
+  }
   if (normalizedPlatforms.value.length === 0) {
     return allModels
   }

@@ -188,6 +188,10 @@ type OpenAIOAuthReauthAccountReader interface {
 }
 
 type OpenAIOAuthReauthService struct {
+	bpsImportMu     sync.Mutex
+	bpsImports      map[string]*bpsImportJob
+	bpsImportRunner bpsImportRunner
+
 	settings                AccountTokenGuardV2Settings
 	worker                  *reauthruntime.Manager
 	workerToken             string

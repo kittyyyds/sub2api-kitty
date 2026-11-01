@@ -23,7 +23,7 @@ func TestOriginalBPSManagedSignedProcess(t *testing.T) {
 	public, err := os.ReadFile(os.Getenv("BPS_HOST_TEST_PUBLIC_KEY"))
 	require.NoError(t, err)
 	cfg.Plugins.TrustedPublishers["oai-basispoints-v1"] = strings.TrimSpace(string(public))
-	host := PluginHostInfo{Version: "2.19.0-kitty.2", BuildType: "release"}
+	host := PluginHostInfo{Version: "2.19.0-kitty.3", BuildType: "release"}
 	f, err := os.Open(os.Getenv("BPS_HOST_TEST_PACKAGE"))
 	require.NoError(t, err)
 	defer f.Close()
