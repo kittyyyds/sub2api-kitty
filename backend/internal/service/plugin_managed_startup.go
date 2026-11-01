@@ -36,6 +36,9 @@ func (m *PluginManager) ValidateManagedStartup(ctx context.Context) error {
 		if isReviewedKittyBPSManaged(row) {
 			continue
 		}
+		if isReviewedOriginalBPSManaged(row) {
+			continue
+		}
 		if row.State == PluginStateStarting || row.State == PluginStateEnabled {
 			return errors.New("enabled plugins require a reviewed multi-instance lifecycle before a managed update")
 		}

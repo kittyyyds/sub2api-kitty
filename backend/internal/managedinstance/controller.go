@@ -147,6 +147,21 @@ func (c *Controller) Begin(ctx context.Context) (context.Context, func(), bool) 
 	return job, func() { once.Do(func() { stop(); cancel(); c.mu.Lock(); c.background--; c.mu.Unlock() }) }, true
 }
 
+// LeadershipContext permits a child process only on the active lease owner.
+// Normal drain leaves the context alive for the registered stop hook; lease
+// loss cancels it immediately. Process lifetime is not a background cycle.
+func (c *Controller) LeadershipContext() (context.Context, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.owned && time.Since(c.lastRenew) >= LeaseTTL/2 {
+		c.healthy = false
+		c.role = "draining"
+		c.errCode = "leadership_renewal_overdue"
+		c.cancelWork()
+	}
+	return c.workContext, c.role == "active" && c.owned && c.healthy && !c.stopping && !c.stopped
+}
+
 // Track is for request-owned asynchronous work. It remains allowed while the
 // old frontend drains and therefore does not depend on background leadership.
 func Track() func() {

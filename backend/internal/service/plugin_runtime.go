@@ -26,14 +26,16 @@ import (
 )
 
 type pluginRuntime struct {
-	installation *PluginInstallation
-	client       *hcplugin.Client
-	api          pluginv1.TransportPluginClient
-	inFlight     atomic.Int64
-	draining     atomic.Bool
-	done         chan struct{}
-	doneOnce     sync.Once
-	promptNoop   atomic.Bool
+	installation   *PluginInstallation
+	client         *hcplugin.Client
+	api            pluginv1.TransportPluginClient
+	inFlight       atomic.Int64
+	draining       atomic.Bool
+	done           chan struct{}
+	doneOnce       sync.Once
+	promptNoop     atomic.Bool
+	leadershipDone chan struct{}
+	leadershipOnce sync.Once
 }
 
 func startPluginRuntime(ctx context.Context, installation *PluginInstallation, startTimeout time.Duration, socketDir string, hostServices pluginv1.HostServiceServer) (*pluginRuntime, error) {
@@ -270,9 +272,35 @@ func (r *pluginRuntime) drain(timeout time.Duration) {
 }
 
 func (r *pluginRuntime) kill() {
+	if r != nil && r.leadershipDone != nil {
+		r.leadershipOnce.Do(func() { close(r.leadershipDone) })
+	}
 	if r != nil && r.client != nil {
 		r.client.Kill()
 	}
+}
+
+func (r *pluginRuntime) watchLeadership(ctx context.Context) {
+	r.leadershipDone = make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			r.kill()
+		case <-r.leadershipDone:
+		}
+	}()
+}
+
+func (r *pluginRuntime) drainUntilComplete() {
+	if r == nil {
+		return
+	}
+	r.draining.Store(true)
+	if r.inFlight.Load() == 0 {
+		r.doneOnce.Do(func() { close(r.done) })
+	}
+	<-r.done
+	r.kill()
 }
 
 func (r *pluginRuntime) roundTrip(ctx context.Context, request *http.Request, proxyURL string, account *Account) (*http.Response, error) {

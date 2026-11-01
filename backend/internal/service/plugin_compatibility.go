@@ -29,7 +29,7 @@ func EvaluatePluginCompatibility(manifest PluginManifest, host PluginHostInfo) P
 		result.Message = "插件协议版本与当前 Sub2API 不兼容"
 		return result
 	}
-	if (host.Version == "2.9.9-kitty.3" || host.Version == "2.9.9-kitty.4" || host.Version == "2.9.9-kitty.5" || host.Version == "2.9.9-kitty.6" || (host.Version == "2.18.1-kitty.1" || host.Version == "2.19.0-kitty.1")) && isPinnedGatewayPrompt(manifest) {
+	if (host.Version == "2.9.9-kitty.3" || host.Version == "2.9.9-kitty.4" || host.Version == "2.9.9-kitty.5" || host.Version == "2.9.9-kitty.6" || host.Version == "2.18.1-kitty.1" || host.Version == "2.19.0-kitty.1" || host.Version == "2.19.0-kitty.2") && isPinnedGatewayPrompt(manifest) {
 		result.Compatible = true
 		result.Tested = true
 		result.Status = "compatible"
@@ -44,6 +44,13 @@ func EvaluatePluginCompatibility(manifest PluginManifest, host PluginHostInfo) P
 		result.Tested = true
 		result.Status = "compatible"
 		result.Message = "当前 Kitty 版本已适配并验证此固定签名发布包"
+		return result
+	}
+	if host.Version == "2.19.0-kitty.2" && isPinnedOriginalBPS(manifest) {
+		result.Compatible = true
+		result.Tested = true
+		result.Status = "compatible"
+		result.Message = "Kitty 宿主已验证作者原始 0.6.12 签名包及单实例后台任务交接；非作者声明版本"
 		return result
 	}
 	if !matchesSemverRange(host.Version, manifest.Requires.Sub2API) {
