@@ -56,7 +56,7 @@ func newRechargeBonusPostgresFixture(t *testing.T, upgrade bool) (*sql.DB, *rech
 		INSERT INTO payment_orders(id) SELECT generate_series(1,100);
 	`)
 	require.NoError(t, err)
-	for _, migration := range []string{"182_recharge_bonus_credits.sql", "071_add_usage_billing_dedup.sql", "073_add_usage_billing_dedup_archive.sql"} {
+	for _, migration := range []string{"182_recharge_bonus_credits.sql", "071_add_usage_billing_dedup.sql", "073_add_usage_billing_dedup_archive.sql", "305_batch_image_owned_money.sql"} {
 		runRechargeBonusSQL(t, db, "../../migrations/"+migration)
 	}
 	if upgrade {

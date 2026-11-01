@@ -22,10 +22,15 @@ func TestKittyV219UsageAuditAndQueueTimingPostgresRoundTrip(t *testing.T) {
 	timing := &service.QueueTiming{Status: "measured", Source: "http_ingress_responses", Scope: "pre_final_forward", ServerFirstTokenMs: &serverFirst, ServerDurationMs: 625, ForwardFirstTokenMs: &forwardFirst, ForwardDurationMs: 500}
 	for _, batched := range []bool{false, true} {
 		row := &service.UsageLog{UserID: 1, APIKeyID: 166, AccountID: 205, Model: "isolated-release-fixture", RequestedModel: "isolated-release-fixture", InputTokens: 3, OutputTokens: 4, TotalCost: 0.125, ActualCost: 0.0875, RateMultiplier: 0.7, Stream: true, DurationMs: &duration, FirstTokenMs: &first, QueueWaitMs: &wait, QueueTiming: timing, UsageAudit: audit, CreatedAt: time.Now().UTC()}
+		row.RequestID = "isolated-v219-single"
+		var inserted bool
+		var err error
 		if batched {
 			row.RequestID = "isolated-v219-batched"
+			inserted, err = repo.Create(ctx, row)
+		} else {
+			inserted, err = repo.createSingle(ctx, db, row)
 		}
-		inserted, err := repo.Create(ctx, row)
 		require.NoError(t, err)
 		require.True(t, inserted)
 		saved, err := repo.GetByID(ctx, row.ID)
