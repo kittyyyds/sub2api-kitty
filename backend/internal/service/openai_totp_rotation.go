@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base32"
 	"errors"
-	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -169,7 +168,6 @@ func (s *OpenAIOAuthReauthService) ClaimTOTPRotation(ctx context.Context, worker
 	if record == nil {
 		return nil, nil
 	}
-	s.releaseMihomoLease(-record.TaskID)
 	account, cfg, err := s.rotationConfig(ctx, record.AccountID)
 	if err == nil && !record.ConfigUpdatedAt.Equal(cfg.UpdatedAt) {
 		err = errors.New("configuration changed")
@@ -194,26 +192,11 @@ func (s *OpenAIOAuthReauthService) ClaimTOTPRotation(ctx context.Context, worker
 				claim.ProxyURL, err = s.reauthProxyURL(ctx, account.ProxyID)
 			case OpenAIOAuthReauthProxySourceManagedProxy:
 				claim.ProxyURL, err = s.reauthProxyURL(ctx, cfg.ProxyID)
-			case OpenAIOAuthReauthProxySourceMihomo:
-				if s.acquireMihomoProxy == nil {
-					err = errors.New("proxy unavailable")
-				} else {
-					var release func()
-					claim.ProxyURL, release, err = s.acquireMihomoProxy(ctx, fmt.Sprintf("openai-totp-task:%d", record.TaskID))
-					if release != nil {
-						if err != nil {
-							release()
-						} else {
-							s.replaceMihomoLease(-record.TaskID, release)
-						}
-					}
-				}
 			}
 		}
 	}
 	if err != nil {
 		_ = repo.FinishTOTPRotation(ctx, record.TaskID, worker, false, "configuration_unavailable")
-		s.releaseMihomoLease(-record.TaskID)
 		return nil, infraerrors.BadRequest("TOTP_CONFIG_UNAVAILABLE", "2FA task login configuration is unavailable")
 	}
 	return claim, nil
@@ -275,7 +258,6 @@ func (s *OpenAIOAuthReauthService) FinishTOTPRotation(ctx context.Context, task 
 	if err = repo.FinishTOTPRotation(ctx, task, worker, success, code); err != nil {
 		return rotationError()
 	}
-	s.releaseMihomoLease(-task)
 	return nil
 }
 func (s *OpenAIOAuthReauthService) RetryTOTPRotation(ctx context.Context, id, task int64, action string) error {

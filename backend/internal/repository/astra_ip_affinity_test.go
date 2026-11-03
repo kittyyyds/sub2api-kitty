@@ -98,14 +98,14 @@ func TestAstraGatewayIPAffinityRevalidatesChangedEgress(t *testing.T) {
 	require.Equal(t, "waiting", wrapper.AstraGatewaySnapshot(t.Context()).Targets[0].State)
 	resp, err = wrapper.Do(forceAstraProbe(pinRequest(t)), "target", 300, 1)
 	consumeAffinityResponse(t, resp, err)
-	require.Equal(t, []string{"old-source", "old-source", "old-source", "new-source", "new-source", "new-source"}, proxies)
+	require.Equal(t, []string{"old-source", "old-source", "new-source", "new-source"}, proxies)
 	// A backup source must bring its own egress along with its Cookie.
 	backup := codexGatewayRoute{cookie: http.Cookie{Name: "__oailb", Value: "backup", Path: "/"}, proxy: "backup-source", expires: time.Now().Add(time.Minute)}
 	pool.recordSource(298, time.Now(), &backup, true)
 	pool.recordSource(299, time.Now(), nil, false)
 	resp, err = wrapper.Do(forceAstraProbe(pinRequest(t)), "target", 300, 1)
 	consumeAffinityResponse(t, resp, err)
-	require.Equal(t, []string{"backup-source", "backup-source", "backup-source"}, proxies[6:])
+	require.Equal(t, []string{"backup-source", "backup-source"}, proxies[4:])
 	// Turning affinity off publishes a fresh pool without stale source proxies.
 	cfg.Gateway.CodexGatewayPin.IPAffinity = false
 	require.NotSame(t, pool, wrapper.current(t.Context()))
@@ -113,7 +113,7 @@ func TestAstraGatewayIPAffinityRevalidatesChangedEgress(t *testing.T) {
 	consumeAffinityResponse(t, resp, err)
 	resp, err = wrapper.Do(forceAstraProbe(pinRequest(t)), "target", 300, 1)
 	consumeAffinityResponse(t, resp, err)
-	require.Equal(t, []string{"target", "target", "target"}, proxies[9:])
+	require.Equal(t, []string{"target", "target"}, proxies[6:])
 }
 
 func TestAstraGatewayIPAffinityRejectsFailedTarget(t *testing.T) {

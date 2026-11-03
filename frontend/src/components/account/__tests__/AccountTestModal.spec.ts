@@ -166,25 +166,6 @@ describe('AccountTestModal', () => {
     })
   })
 
-  it('offers the tool roundtrip only for BPS OAuth accounts', async () => {
-    const account = buildAccount()
-    account.extra = { openai_excel_bps: true }
-    const wrapper = mount(AccountTestModal, {
-      props: { show: true, account },
-      global: { stubs: { BaseDialog: BaseDialogStub, Select: SelectStub, TextArea: TextAreaStub, Icon: true } }
-    })
-    await flushPromises()
-    expect(wrapper.find('option[value="bps_tools"]').exists()).toBe(true)
-    expect(wrapper.find('option[value="compact"]').exists()).toBe(false)
-    ;(wrapper.vm as any).selectedModelId = 'gpt-5.4'
-    ;(wrapper.vm as any).testMode = 'bps_tools'
-    await (wrapper.vm as any).startTest()
-    await flushPromises()
-    const [, options] = (global.fetch as any).mock.calls[0]
-    expect(JSON.parse(options.body)).toMatchObject({ model_id: 'gpt-5.4', mode: 'bps_tools' })
-    wrapper.unmount()
-  })
-
   it('renders Chat Completions path status from test SSE', async () => {
     const encoder = new TextEncoder()
     const chunks = [
@@ -229,16 +210,15 @@ describe('AccountTestModal', () => {
 })
 
 
-describe('Excel authorization model errors', () => {
-  it('shows the authorization state, blocks an empty test and allows reloading', async () => {
+describe('Model catalog load errors', () => {
+  it('shows a safe error, blocks an empty test and allows reloading', async () => {
     getAvailableModelsMock.mockReset()
-    getAvailableModelsMock.mockRejectedValueOnce({reason: 'OPENAI_EXCEL_AUTH_VERIFICATION_REQUIRED', message: 'private error must not be rendered'})
+    getAvailableModelsMock.mockRejectedValueOnce({reason: 'MODEL_CATALOG_UNAVAILABLE', message: 'private error must not be rendered'})
     const wrapper = mount(AccountTestModal, {props: {show: false, account: buildAccount()}, global: {stubs: {BaseDialog: BaseDialogStub, Select: SelectStub, TextArea: TextAreaStub, Icon: true}}})
     await wrapper.setProps({show: true})
     await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toContain('admin.accounts.excelAuthErrors.OPENAI_EXCEL_AUTH_VERIFICATION_REQUIRED')
+    expect(wrapper.get('[role="alert"]').text()).toContain('admin.accounts.modelsLoadFailed')
     expect(wrapper.text()).not.toContain('private error')
-    expect(wrapper.get('[role="alert"] a').attributes('href')).toBe('/admin/token-guard-v2')
     const start = wrapper.findAll('button').find(b => b.text().includes('admin.accounts.startTest'))!
     expect(start.attributes('disabled')).toBeDefined()
     getAvailableModelsMock.mockResolvedValueOnce([{id:'gpt-6-astra',display_name:'Astra'}])
@@ -248,16 +228,4 @@ describe('Excel authorization model errors', () => {
     expect(start.attributes('disabled')).toBeUndefined()
     wrapper.unmount()
   })
-})
-
-
-it('keeps native model testing available during automatic BPS authorization', async () => {
-  getAvailableModelsMock.mockResolvedValue([{id:'gpt-6-sol',display_name:'Sol'}])
-  const wrapper = mount(AccountTestModal, {props: {show: false, account: {...buildAccount(), extra:{openai_excel_bps:true,openai_excel_bps_authorization_pending:true}}}, global: {stubs: {BaseDialog: BaseDialogStub, Select: SelectStub, TextArea: TextAreaStub, Icon:true}}})
-  await wrapper.setProps({show:true})
-  await flushPromises()
-  expect(wrapper.get('[role="status"]').text()).toContain('admin.accounts.bpsAuthorizing')
-  const start=wrapper.findAll('button').find(b=>b.text().includes('admin.accounts.startTest'))!
-  expect(start.attributes('disabled')).toBeUndefined()
-  wrapper.unmount()
 })

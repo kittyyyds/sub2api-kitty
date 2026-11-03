@@ -2,7 +2,7 @@
 
 SIWC (Sign in with ChatGPT) lets an eligible subscriber authorize ChatGPT plan
 usage through `https://api.openai.com/v1/responses`. This is a separate OAuth
-grant from Codex and Excel/BPS. A Codex token cannot be converted by editing the
+grant from Codex. A Codex token cannot be converted by editing the
 client ID or changing the upstream URL.
 
 ## Account editing
@@ -21,7 +21,7 @@ Open an OpenAI OAuth parent account and use the **OpenAI request protocol** pane
    address bar. The loopback page need not load. The server validates the URL,
    state, issued client ID, PKCE, signed ID token, nonce and account identity.
 3. Once bound, select **SIWC API** and save the account. Selecting **Codex** and
-   saving restores the existing Codex/BPS/Prism routing configuration.
+   saving restores the existing Codex/Prism routing configuration.
 
 Authorization stores a grant but does not silently change the selected protocol.
 The UI's bound status means credentials are present; it is not an entitlement or
@@ -69,7 +69,7 @@ Migration `292_openai_siwc.sql` adds the `siwc` worker task profile and a separa
 `openai_siwc_credentials` table. Grants are encrypted with the existing durable
 credential encryption key. Database backups must retain that key. Ordinary
 account API responses and account exports do not contain this separate grant.
-Codex and Excel grants, passwords, TOTP seeds, account status and scheduling
+Codex grants, passwords, TOTP seeds, account status and scheduling
 flags are not overwritten by SIWC binding or refresh.
 
 Each session is bound to the target account's credential snapshot and previous
@@ -106,8 +106,8 @@ a local error. HTTP requests carry their conversation history explicitly.
 This integration uses HTTP/SSE. WebSocket selection is disabled for SIWC.
 Compression (`/responses/compact`), native image generation, hosted `tool_search`
 and other unsupported endpoint/tool requests are rejected. Input token counting
-uses the local estimator. SIWC bypasses Codex tickets, cookies, fingerprint
-headers, plugin transport and BPS/Prism routes. A failed SIWC request never substitutes the same account's Codex credential
+uses the local estimator. SIWC bypasses Codex cookies, fingerprint
+headers, plugin transport and Prism routes. A failed SIWC request never substitutes the same account's Codex credential
 or an API key. Existing group-level account failover policies still apply.
 Requests use a truthful Sub2API OS/architecture user agent and a locally generated
 request ID. A single bounded printable `Session-Id` or `session_id` is mapped to

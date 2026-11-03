@@ -239,7 +239,6 @@ export default {
     modelPlaza: '模型价格',
     subscriptions: '订阅管理',
     accounts: '账号管理',
-    harvestFlow: '打票流程',
     plugins: '插件管理',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
@@ -277,7 +276,6 @@ export default {
     billing: '账单',
     tickets: '工单',
     securityPolicy: '安全策略',
-    tieredRouting: '分级路由',
     ticketsAdmin: '工单管理',
   },
 

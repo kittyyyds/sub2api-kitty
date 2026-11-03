@@ -64,7 +64,6 @@ import { getAstraGatewayRuntime, testAstraGateway, type AstraGatewayRuntime, typ
 defineProps<{ settings?: AstraGatewaySettings; dirty: boolean }>()
 const { t, te } = useI18n()
 const p = 'admin.astraGateway'
-const emit = defineEmits<{ scheduling: [records: NonNullable<AstraGatewayRuntime['scheduling_records']>] }>()
 const runtime = ref<AstraGatewayRuntime>()
 const repeatedGatewayHits = computed(() => runtime.value?.gateways?.reduce((sum, node) => sum + node.repeated_hits, 0) || 0)
 const error = ref('')
@@ -82,13 +81,13 @@ function remaining(expiry?: string) { return expiry ? Math.max(0, Math.ceil((Dat
 async function refresh() {
   if (refreshing) return
   refreshing = true
-  try { const result = await getAstraGatewayRuntime(); if (alive) { runtime.value = result; emit('scheduling', result.scheduling_records || []); error.value = '' } }
+  try { const result = await getAstraGatewayRuntime(); if (alive) { runtime.value = result; error.value = '' } }
   catch { if (alive) error.value = t(`${p}.runtimeError`) }
   finally { refreshing = false }
 }
 async function run(action: 'prepare' | 'verify' | 'ws', account = 0) {
   busy.value = true; error.value = ''
-  try { const result = await testAstraGateway(action, account, 'state_probe'); await refresh(); if (runtime.value) runtime.value.last_test = result }
+  try { const result = await testAstraGateway(action, account); await refresh(); if (runtime.value) runtime.value.last_test = result }
   catch { error.value = t(`${p}.testError`) }
   finally { busy.value = false }
 }

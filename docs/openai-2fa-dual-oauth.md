@@ -1,5 +1,7 @@
 # 2FA 账号同时使用 Codex 和 BPS
 
+> 历史文档：本地精简版已移除整套 Excel/BPS。以下内容仅用于追溯，不是当前操作指南。范围见 [功能移除记录](/docs/kitty-feature-removal-20261103.md)。
+
 已有密码/TOTP 登录账号继续保留 Codex OAuth。启用账号的 Excel/BPS 开关后，凭证运营后台每分钟检查缺少 Excel 授权的账号，复用已保存且加密的登录邮箱、密码、TOTP 和登录代理，为该账号单独完成官方 Excel OAuth。无需把原 Codex refresh token 转换成 Excel token，也不会替换原账号凭据。
 
 ## 使用条件

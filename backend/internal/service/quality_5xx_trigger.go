@@ -221,17 +221,12 @@ func (s *RateLimitService) temporarilyUnscheduleQuality5xx(ctx context.Context, 
 	return true
 }
 
-// Select an execution-only test for the account's actual model route. Never
-// bypass BPS to test direct ticket state when diagnosing the BPS route itself.
-func quality5xxTestConfig(account *Account, model string, cfg PelicanTestConfig) (PelicanTestConfig, bool) {
+// Select a bounded execution-only test for the account's actual model route.
+func quality5xxTestConfig(cfg PelicanTestConfig) (PelicanTestConfig, bool) {
 	cfg.ParallelCount = 1
 	if cfg.QuestionKind == QualityRandomQuestionKind {
 		// Preserve the configured external judge. Never substitute the public
 		// fixed candy answer or bypass judging for a random reasoning rule.
-		return cfg, !cfg.BPSRecoveryPending
-	}
-	if len(cfg.ModelIDs) <= 1 && openAICodexStateProbeUnsupportedReason(account, model, false) == "" {
-		cfg.QuestionKind = OpenAICodexStateProbeQuestionKind
 		return cfg, true
 	}
 	cfg.QuestionKind = "candy"
@@ -242,9 +237,6 @@ func quality5xxTestConfig(account *Account, model string, cfg PelicanTestConfig)
 		policy.ExpectedAnswer = "21"
 		policy.Judge = nil
 		cfg.Quality = &policy
-		// Only a direct state probe may advance an owned BPS recovery rule.
-		// A correct BPS candy answer cannot prove direct routing has recovered.
-		applyOutcome = policy.Action != QualityActionEnableBPS && !cfg.BPSRecoveryPending
 	}
 	return cfg, applyOutcome
 }

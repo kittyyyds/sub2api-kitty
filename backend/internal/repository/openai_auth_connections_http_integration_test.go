@@ -250,7 +250,9 @@ func TestOpenAIConnectionDatabaseRegistrationBoundary(t *testing.T) {
 	f := newConnectionHTTPFixture(t)
 	rejected := f.request("POST", "", `{"kind":"api_key","label":"Mixed","api_key":"synthetic-rejected"}`)
 	require.Equal(t, 400, rejected.Code, rejected.Body.String())
-	for _, kind := range []string{"codex", "bps", "siwc"} {
+	retired := f.request("POST", "", `{ "kind":"bps", "label":"Retired" }`)
+	require.Equal(t, 400, retired.Code, retired.Body.String())
+	for _, kind := range []string{"codex", "siwc"} {
 		created := connectionResponse(t, f.request("POST", "", fmt.Sprintf(`{"kind":%q,"label":"Synthetic OAuth"}`, kind)))
 		require.Equal(t, kind, created.Kind)
 	}
@@ -266,5 +268,5 @@ func TestOpenAIConnectionDatabaseRegistrationBoundary(t *testing.T) {
 	}
 	rows, err := f.repo.ListAuthConnections(context.Background(), f.accountID)
 	require.NoError(t, err)
-	require.Len(t, rows, 3, "stored grants must remain untouched")
+	require.Len(t, rows, 2, "stored grants must remain untouched")
 }

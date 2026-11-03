@@ -18,8 +18,6 @@
             @create="showCreate = true"
           >
             <template #after>
-              <button class="btn btn-secondary" data-testid="open-bps-batch-import" @click="showBPSImport = true">{{ t('openaiAuth.batchImport.entry') }}</button>
-              <a href="/admin/upstream-channels" class="btn btn-secondary" data-testid="manage-upstream-channels">{{ t('upstreamEntities.manage') }}</a>
               <!-- Auto Refresh Dropdown -->
               <div class="relative" ref="autoRefreshDropdownRef">
                 <button
@@ -228,7 +226,6 @@
             <span class="font-mono text-xs text-gray-500 dark:text-gray-400">#{{ value }}</span>
           </template>
           <template #cell-name="{ row, value }">
-            <a v-if="row.upstream_channel_binding" href="/admin/upstream-channels" class="block text-xs text-primary-600" data-testid="account-current-upstream">{{ row.upstream_channel_binding.channel ? `${row.upstream_channel_binding.channel.name} · ${row.upstream_channel_binding.channel.code}` : t('upstreamEntities.unbound') }}</a>
             <div class="flex flex-col">
               <HelpTooltip
                 v-if="accountHomepageUrl(row)"
@@ -255,7 +252,6 @@
               >
                 {{ accountDisplayEmail(row) }}
               </span>
-              <ExcelBPS403Badge :account="row" :groups="accountGroupsForRow(row)" :global-bps-enabled="appStore.cachedPublicSettings?.excel_bps_enabled !== false" />
             </div>
           </template>
           <template #cell-notes="{ value }">
@@ -295,7 +291,7 @@
           </template>
           <template #cell-status="{ row }">
             <div class="flex items-center gap-1.5">
-              <div><AccountStatusIndicator :account="row" :global-bps-enabled="appStore.cachedPublicSettings?.excel_bps_enabled !== false" @show-temp-unsched="handleShowTempUnsched" /><IQHistoryStrip :summary="iqSummaries[row.id]" :error="iqSummaryError" /></div>
+              <div><AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" /><IQHistoryStrip :summary="iqSummaries[row.id]" :error="iqSummaryError" /></div>
             </div>
           </template>
           <template #cell-schedulable="{ row }">
@@ -470,7 +466,6 @@
       <template #pagination><Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" /></template>
     </TablePageLayout>
     <NewAPIUpstreamConfigDialog v-if="authStore.isAdmin" :show="newAPIConfigAccount !== null" :account="newAPIConfigAccount" @close="newAPIConfigAccount = null" @saved="reload" />
-    <BPSBatchImportModal :show="showBPSImport" :proxies="proxies" :groups="groups" @close="showBPSImport = false" @created="reload" />
     <CreateAccountModal :show="showCreate" :proxies="proxies" :groups="groups" @close="showCreate = false" @created="reload" />
     <EditAccountModal :show="showEdit" :account="edAcc" :proxies="proxies" :groups="groups" @close="showEdit = false" @updated="handleAccountUpdated" />
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
@@ -530,7 +525,6 @@ import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
-import BPSBatchImportModal from '@/components/account/BPSBatchImportModal.vue'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
@@ -551,7 +545,6 @@ import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vu
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import SchedulableTimerControl from '@/components/account/SchedulableTimerControl.vue'
 import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
-import ExcelBPS403Badge from '@/components/account/ExcelBPS403Badge.vue'
 import UpstreamBillingRateCell from '@/components/account/UpstreamBillingRateCell.vue'
 import NewAPIUpstreamConfigDialog from '@/components/account/NewAPIUpstreamConfigDialog.vue'
 import AccountPriorityCell from '@/components/account/AccountPriorityCell.vue'
@@ -652,7 +645,6 @@ const handleConfigureNewAPIUpstream = (account: Account) => {
   if (authStore.isAdmin && account.type === 'apikey') newAPIConfigAccount.value = account
 }
 const showCreate = ref(false)
-const showBPSImport = ref(false)
 const showEdit = ref(false)
 const showSync = ref(false)
 const showImportData = ref(false)
@@ -1481,7 +1473,6 @@ const isAnyModalOpen = computed(() => {
   return (
     newAPIConfigAccount.value !== null ||
     showCreate.value ||
-    showBPSImport.value ||
     showEdit.value ||
     showSync.value ||
     showImportData.value ||

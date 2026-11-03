@@ -301,7 +301,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_TurnRetryForcesF
 	lastAcquire := ap.lastAcquire
 	ap.mu.Unlock()
 	require.NotNil(t, lastAcquire)
-	require.Equal(t, openAIAccountProxyURL(account), lastAcquire.ProxyURL)
+	require.Empty(t, lastAcquire.ProxyURL, "this account has no configured proxy")
 	staleConnB := newOpenAIWSConn(pool.nextConnID(account.ID), account.ID, staleB, nil)
 	staleConnB.handshakeCompatibility = openAIWSAcquireCompatibility(*lastAcquire)
 	staleConnB.routingAffinity = normalizeOpenAIWSRoutingAffinity(lastAcquire.Headers)

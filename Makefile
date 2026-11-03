@@ -25,7 +25,6 @@ FRONTEND_CRITICAL_VITEST := \
 	src/api/__tests__/groupCacheTest.spec.ts \
 	src/views/admin/__tests__/GroupCacheTestView.spec.ts \
 	src/components/account/__tests__/OpenAIRequestTimezoneField.spec.ts \
-	src/components/admin/__tests__/HarvestGatewayBorrowPanel.spec.ts \
 	src/components/admin/__tests__/AstraGatewayRuntime.spec.ts \
 	src/components/admin/__tests__/AstraGatewayHistory.spec.ts \
 	src/views/admin/ops/__tests__/TokenGuardV2View.spec.ts \
@@ -46,12 +45,9 @@ FRONTEND_CRITICAL_VITEST := \
 	src/views/admin/__tests__/AccountsView.bulkEdit.spec.ts \
 	src/utils/__tests__/qualityRulePatch.spec.ts \
 	src/components/admin/operations/__tests__/QualityOwnershipReview.spec.ts \
-	src/utils/__tests__/accountAutoBPS.spec.ts \
 	src/components/admin/operations/__tests__/QualityProbeSchedule.spec.ts \
 	src/components/admin/operations/__tests__/SmartOpsNav.spec.ts \
 	src/components/layout/__tests__/AppSidebar.spec.ts \
-	src/components/account/__tests__/CreateAccountModal.autoBPS.spec.ts \
-	src/components/account/__tests__/EditAccountModal.autoBPS.spec.ts \
 	src/stores/__tests__/accountQuality.spec.ts \
 	src/views/admin/__tests__/UsageView.spec.ts \
 	src/components/common/__tests__/DateRangePicker.rolling24h.spec.ts \
@@ -85,7 +81,6 @@ FRONTEND_CRITICAL_VITEST := \
 	src/components/account/__tests__/OpenAIReferralCell.spec.ts \
 	src/components/account/__tests__/OpenAIReferralCell.transport.spec.ts \
 	src/components/account/__tests__/OpenAIQuotaResetCell.spark_shadow.spec.ts \
-	src/components/account/__tests__/ExcelBPS403Badge.spec.ts \
 	src/components/account/__tests__/BulkEditAccountModal.spec.ts \
 	src/constants/__tests__/platforms.spec.ts \
 	src/components/account/__tests__/credentialsBuilder.platformCatalog.spec.ts \
@@ -110,7 +105,6 @@ FRONTEND_CRITICAL_VITEST := \
 	src/components/settings/ServerlessSettings.spec.ts \
 	src/components/user/profile/__tests__/ProfileIdentityBindingsSection.spec.ts \
 	src/views/admin/__tests__/SettingsView.spec.ts \
-	src/views/admin/__tests__/HarvestFlowView.spec.ts \
 	src/views/admin/settings/MihomoSettings.spec.ts \
 	src/views/admin/settings/MihomoCountryFilter.spec.ts \
 	src/features/channel-monitor-v2/__tests__/designSystem.structure.spec.ts \

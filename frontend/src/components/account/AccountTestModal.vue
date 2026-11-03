@@ -7,15 +7,10 @@
   >
     <div class="space-y-4">
       <AccountTestTiming :timing="connectionTiming.timing.value" :delivery="connectionTiming.delivery.value" />
-      <div v-if="account?.extra?.openai_excel_bps_authorization_pending === true" role="status" class="text-sm text-amber-700 dark:text-amber-300">
-        {{ t('admin.accounts.bpsAuthorizing') }}
-        <a href="/admin/token-guard-v2" target="_blank" rel="noopener noreferrer" class="ml-2 underline">{{ t('admin.accounts.openCredentialOperations') }}</a>
-      </div>
       <div v-if="modelLoadError" role="alert" class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
         <p>{{ modelLoadError }}</p>
         <div class="mt-2 flex gap-4">
           <button type="button" :disabled="loadingModels" class="underline" @click="loadAvailableModels">{{ t('admin.accounts.retryModels') }}</button>
-          <a v-if="modelAuthError" href="/admin/token-guard-v2" target="_blank" rel="noopener noreferrer" class="underline">{{ t('admin.accounts.openCredentialOperations') }}</a>
         </div>
       </div>
       <AccountTestEvidence v-if="upstreamEvidence" :evidence="upstreamEvidence" />
@@ -309,24 +304,15 @@ const selectedModelId = ref('')
 const testPrompt = ref('')
 const loadingModels = ref(false)
 const modelLoadError = ref('')
-const modelAuthError = ref(false)
 let modelLoadGeneration = 0
 let abortController: AbortController | null = null
 const generatedImages = ref<PreviewImage[]>([])
-const testMode = ref<'default' | 'compact' | 'bps_tools'>('default')
+const testMode = ref<'default' | 'compact'>('default')
 const isOpenAIAccount = computed(() => props.account?.platform === 'openai')
-const isBPSAccount = computed(() =>
-  isOpenAIAccount.value && props.account?.type === 'oauth' && props.account?.extra?.openai_excel_bps === true && props.account?.extra?.openai_excel_bps_authorization_pending !== true
-)
-const openAITestModeOptions = computed(() => isBPSAccount.value
-  ? [
-      { value: 'default', label: t('admin.accounts.openai.testModeDefault') },
-      { value: 'bps_tools', label: t('admin.accounts.openai.testModeBPSTools') }
-    ]
-  : [
-      { value: 'default', label: t('admin.accounts.openai.testModeDefault') },
-      { value: 'compact', label: t('admin.accounts.openai.testModeCompact') }
-    ])
+const openAITestModeOptions = computed(() => [
+  { value: 'default', label: t('admin.accounts.openai.testModeDefault') },
+  { value: 'compact', label: t('admin.accounts.openai.testModeCompact') }
+])
 const previewImageUrl = ref('')
 const prioritizedGeminiModels = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.0-flash']
 const supportsGeminiImageTest = computed(() => {
@@ -367,7 +353,6 @@ watch(
     } else {
       ++modelLoadGeneration
       modelLoadError.value = ''
-      modelAuthError.value = false
       abortStream()
     }
   }
@@ -385,7 +370,6 @@ const loadAvailableModels = async () => {
   const generation = ++modelLoadGeneration
   loadingModels.value = true
   modelLoadError.value = ''
-  modelAuthError.value = false
   availableModels.value = []
   selectedModelId.value = '' // Reset selection before loading
   try {
@@ -406,11 +390,7 @@ const loadAvailableModels = async () => {
     }
   } catch (error) {
     if (generation !== modelLoadGeneration) return
-    const reason = typeof error === 'object' && error !== null && 'reason' in error ? String(error.reason) : ''
-    modelAuthError.value = reason.startsWith('OPENAI_EXCEL_AUTH_')
-    const key = 'admin.accounts.excelAuthErrors.' + reason
-    const authReasons = ['OPENAI_EXCEL_AUTH_PENDING', 'OPENAI_EXCEL_AUTH_FAILED', 'OPENAI_EXCEL_AUTH_VERIFICATION_REQUIRED', 'OPENAI_EXCEL_AUTH_CONFIG_REQUIRED', 'OPENAI_EXCEL_AUTH_REQUIRED', 'OPENAI_EXCEL_AUTH_UNAVAILABLE']
-    modelLoadError.value = authReasons.includes(reason) ? t(key) : t('admin.accounts.modelsLoadFailed')
+    modelLoadError.value = t('admin.accounts.modelsLoadFailed')
     // Fallback to empty list
     availableModels.value = []
     selectedModelId.value = ''

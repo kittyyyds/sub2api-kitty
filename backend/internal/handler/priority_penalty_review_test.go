@@ -3,11 +3,16 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,21 +54,12 @@ func TestPriorityPenaltyReviewHandlerFailover(t *testing.T) {
 			concurrency := service.NewConcurrencyService(slots)
 			repo := &initialAdmissionRepo{}
 			for id := int64(1); id <= 2; id++ {
-				repo.accounts = append(repo.accounts, service.Account{ID: id, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Status: service.StatusActive, Schedulable: true, GroupIDs: []int64{3131}, Priority: int(id), Concurrency: 1, Credentials: map[string]any{"access_token": fmt.Sprintf("test-token-%d", id), "chatgpt_account_id": fmt.Sprintf("test-account-%d", id)}, Extra: map[string]any{"openai_excel_bps": true}})
+				repo.accounts = append(repo.accounts, service.Account{ID: id, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Status: service.StatusActive, Schedulable: true, GroupIDs: []int64{3131}, Priority: int(id), Concurrency: 1, Credentials: map[string]any{"access_token": fmt.Sprintf("test-token-%d", id), "chatgpt_account_id": fmt.Sprintf("test-account-%d", id)}, Extra: map[string]any{"openai_passthrough": false}})
 			}
-			upstream := &excelBPSFailoverUpstream{answer: func(int) *http.Response {
-				// Responses uses BPS's explicit failover classification. Chat
-				// 429 follows its existing same-account retry policy, so use
-				// an ordinary retryable 503 to reach its account-switch seam.
-				if chat {
-					return &http.Response{StatusCode: 503, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"error":{"message":"previous synthetic supplier failure"}}`))}
-				}
-				response := excelBPS429("1")
-				response.Body = io.NopCloser(strings.NewReader(`{"error":{"code":"basispoints_rate_limited","message":"previous synthetic supplier failure"}}`))
-				return response
+			upstream := &priorityReviewUpstream{answer: func(int) *http.Response {
+				return &http.Response{StatusCode: 503, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"error":{"message":"previous synthetic supplier failure"}}`))}
 			}, onDo: func(int) { slots.failed = true }}
 			gateway := service.NewOpenAIGatewayService(repo, nil, penaltyModeUsage{}, nil, nil, nil, nil, nil, cfg, nil, concurrency, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, settings, nil)
-			t.Cleanup(func() { _ = gateway.CloseExcelBPSImages() })
 			billing := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg, nil)
 			t.Cleanup(billing.Stop)
 			h := NewOpenAIGatewayHandler(gateway, concurrency, billing, service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg), nil, nil, nil, nil, cfg)
@@ -87,7 +83,7 @@ func TestPriorityPenaltyReviewHandlerFailover(t *testing.T) {
 			}
 			requestCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			c, rec := newExcelBPSFailoverTestContext(requestCtx, false)
+			c, rec := newPriorityReviewContext(requestCtx)
 			if chat {
 				body := `{"model":"gpt-6-astra","messages":[{"role":"user","content":"synthetic"}],"stream":false}`
 				c.Request.Body = io.NopCloser(strings.NewReader(body))
@@ -106,4 +102,52 @@ func TestPriorityPenaltyReviewHandlerFailover(t *testing.T) {
 			require.Contains(t, slots.released, int64(2), "second account slot must be released")
 		})
 	}
+}
+
+type priorityReviewUpstream struct {
+	service.HTTPUpstream
+	mu         sync.Mutex
+	accountIDs []int64
+	bodies     [][]byte
+	urls       []string
+	answer     func(call int) *http.Response
+	onDo       func(call int)
+}
+
+func (u *priorityReviewUpstream) Do(req *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+	body, _ := io.ReadAll(req.Body)
+	u.mu.Lock()
+	call := len(u.accountIDs)
+	u.accountIDs = append(u.accountIDs, accountID)
+	u.bodies = append(u.bodies, body)
+	u.urls = append(u.urls, req.URL.String())
+	u.mu.Unlock()
+	if u.onDo != nil {
+		u.onDo(call)
+	}
+	return u.answer(call), nil
+}
+
+func (u *priorityReviewUpstream) calls() []int64 {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return append([]int64(nil), u.accountIDs...)
+}
+
+func newPriorityReviewContext(ctx context.Context) (*gin.Context, *httptest.ResponseRecorder) {
+	groupID := int64(3131)
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader([]byte(`{"model":"gpt-6-astra","stream":false,"input":[{"role":"user","content":"synthetic"}]}`)))
+	req = req.WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+	c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{
+		ID:      99,
+		GroupID: &groupID,
+		Group:   &service.Group{ID: groupID, Platform: service.PlatformOpenAI},
+		User:    &service.User{ID: 100},
+	})
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 100, Concurrency: 0})
+	return c, rec
 }

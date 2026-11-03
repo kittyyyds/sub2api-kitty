@@ -30,19 +30,30 @@ const openAIWSIngressSessionHashContextKey = "openai_ws_ingress_session_hash"
 // 读取该标记补记 lineage，让下一轮进场预剥离可明确归属的同一失效密文。
 const openAIStreamInvalidEncryptedContentContextKey = "openai_stream_invalid_encrypted_content"
 
-// isOpenAIInvalidEncryptedContentEvent 判断流内 error / response.failed 事件是否
-// 为上游 invalid_encrypted_content 拒绝。判定规则复用 isExcelBPSInvalidEncryptedContent
-// （显式错误码优先，缺码时才匹配固定诊断文案），并覆盖 response.failed 嵌套的
-// response.error。
+func isOpenAIInvalidEncryptedContentResponse(raw []byte) bool {
+	if !gjson.ValidBytes(raw) {
+		return false
+	}
+	if code := extractUpstreamErrorCode(raw); code != "" {
+		return code == "invalid_encrypted_content"
+	}
+	message := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(raw)))
+	return strings.HasPrefix(message, "the encrypted content ") &&
+		strings.Contains(message, "could not be verified") &&
+		strings.Contains(message, "could not be decrypted or parsed")
+}
+
+// isOpenAIInvalidEncryptedContentEvent checks an error event and its nested
+// response.failed error object.
 func isOpenAIInvalidEncryptedContentEvent(payload []byte) bool {
-	if isExcelBPSInvalidEncryptedContent(payload) {
+	if isOpenAIInvalidEncryptedContentResponse(payload) {
 		return true
 	}
 	nested := gjson.GetBytes(payload, "response.error")
 	if !nested.IsObject() {
 		return false
 	}
-	return isExcelBPSInvalidEncryptedContent([]byte(`{"error":` + nested.Raw + `}`))
+	return isOpenAIInvalidEncryptedContentResponse([]byte(`{"error":` + nested.Raw + `}`))
 }
 
 func markOpenAIStreamInvalidEncryptedContent(c *gin.Context, rejection []byte) {

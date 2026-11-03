@@ -218,7 +218,6 @@ export interface LoginAgreementDocument {
 }
 
 export interface PublicSettings {
-  excel_bps_enabled?: boolean
   prism_browser_enabled?: boolean
   registration_enabled: boolean
   email_verify_enabled: boolean
@@ -1047,14 +1046,6 @@ export interface SecurityPolicyKeywordSeed {
   category: string
 }
 
-// ==================== Tiered Routing Types ====================
-
-export interface TieredRoutingSettings {
-  enabled: boolean
-  premium_user_ids: number[]
-  min_balance_for_premium: number
-}
-
 // ==================== Support Ticket Types ====================
 
 export interface TicketReply {
@@ -1486,14 +1477,6 @@ export interface OpenCodeGoUsageSettings {
   debounce_minutes: number
 }
 
-export interface ExcelBPSCredentialState {
- status: string
- expires_at?: string
- observed_at?: string
- error_code?: string
- requires_manual_resume?: boolean
-}
-
 export interface GrokCatalogScope {
   account_id: number
   account_type: string
@@ -1530,8 +1513,6 @@ export interface Account {
   protection_scope?: 'codex_v3' | 'generic_v1' | 'legacy' | 'disabled'
   /** Concrete strategy: mode1, mode2, legacy, generic, or disabled. */
   protection_mode?: 'mode1' | 'mode2' | 'legacy' | 'generic' | 'disabled' | string
-  upstream_channel_binding?: import('@/api/admin/upstreamChannels').ChannelBinding
- excel_bps_credential_state?: ExcelBPSCredentialState
   id: number
   name: string
   notes?: string | null
@@ -1544,16 +1525,6 @@ export interface Account {
   credentials?: Record<string, unknown>
   credentials_status?: Record<string, boolean>
   ollama_cloud_usage?: OllamaCloudUsageState
-  codex_turn_tickets?: Array<{
-    standby_expires_at?: string
-    probe?: { result: string; http_status?: number; checked_at: string; next_probe_at?: string }
-    model: string
-    length?: number
-    ready: boolean
-    remaining_seconds: number
-    blocked: boolean
-    expires_at?: string
-  }>
   opencode_go_usage?: OpenCodeGoUsageState
   // Extra fields including Codex usage, OpenAI compact capability, and model-level rate limits.
   extra?: (CodexUsageSnapshot & OpenAICompactState & {
@@ -1875,8 +1846,6 @@ export interface OpenAIResponsesState {
 
 export interface CreateAccountRequest {
   import_ticket?: string
-  upstream_channel_id?: number
-  confirm_upstream_channel_binding?: boolean
   name: string
   notes?: string | null
   platform: AccountPlatform
@@ -2889,38 +2858,16 @@ export interface QualityJudgment {
   group_id?: number
   model_id?: string
 }
-// 「降智开 BPS」规则：何时开（连续降智次数 / 用量百分比，0 = 不按该条件）和开成什么样（与账号 BPS 选项一一对应）。
-export interface QualityBPSPolicy {
-  failure_threshold: number
-  usage_percent: number
-  require_all: boolean
-  all_models: boolean
-  models: string[]
-  omit_unsupported_tools: boolean
-  ignore_encrypted_content: boolean
-  auto_disable_on_403: boolean
-  auto_recover_on_403?: boolean
-  recovery_interval_minutes?: number
-  auto_move_on_403: boolean
-  target_group_id: number
-  session_proxy: boolean
-  proxy_source: 'mihomo' | 'ip_pool' | ''
-  cache_creation_as_input: boolean
-  // 规则开了 auto_restore 时：连续满血几轮才关 BPS；按用量开启时用量仍高是否先不关。
-  pass_threshold: number
-  hold_on_usage: boolean
-}
 export interface QualityPolicy {
   trigger_on_upstream_5xx?: boolean
   admission?: import('@/utils/openaiTwoFAAdmission').OpenAITwoFAAdmissionConfig
   judge?: QualityJudgeConfig
   expected_answer: string
-  action: 'openai_two_fa_admission' | 'isolate_models' | 'remove_groups' | 'remove_models' | 'disable_scheduling' | 'enable_bps' | 'observe_only'
+  action: 'openai_two_fa_admission' | 'isolate_models' | 'remove_groups' | 'remove_models' | 'disable_scheduling' | 'observe_only'
   remove_group_ids: number[]
   remove_models?: string[]
   recovery_concurrency?: number
   auto_restore: boolean
-  bps?: QualityBPSPolicy
 }
 
 export interface QualityRestoreDiagnostic {
@@ -2950,10 +2897,10 @@ export interface PelicanTestConfig {
   quality_model_actions?: Record<string, string>
   trigger_source?: string
   quality?: QualityPolicy
-  question_kind?: 'candy' | 'pelican' | 'state_probe' | 'random_reasoning'
+  question_kind?: 'candy' | 'pelican' | 'random_reasoning'
   // Result-only identity of a runtime-generated question.
   random_question?: { id: string; family: 'paths' | 'weighted_xor'; version: string }
-  test_channel?: 'account' | 'bps'
+  test_channel?: 'account'
   prompt: string
   reasoning_effort: string
   parallel_count: number

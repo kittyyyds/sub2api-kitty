@@ -1,10 +1,12 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -13,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/mihomo"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/tidwall/gjson"
 )
 
 // astraContextMutex bounds admission waits without spawning a goroutine per
@@ -54,7 +57,7 @@ type astraTargetValidation struct {
 }
 
 // Resolve a borrowed route for ordinary traffic without probing its quality.
-// Only an explicit diagnostic request runs the two-shot target probe.
+// Only an explicit diagnostic request runs the target route check.
 func (s *astraRoutingUpstream) targetRouteOnce(req *http.Request, proxy string, id int64, n int, profile *tlsfingerprint.Profile) (resultCookie *http.Cookie, resultKey [32]byte, resultProxy string, release func(), resultErr error) {
 	release = func() {}
 	defer func() {
@@ -165,16 +168,8 @@ func (s *astraRoutingUpstream) targetRouteOnce(req *http.Request, proxy string, 
 	}
 
 	probe := req.Clone(service.WithHTTPUpstreamRedirectsDisabled(ctx))
-	replaceCodexGatewayCookie(probe, cookie)
-	result := service.ProbeOpenAICodexStateRoute(ctx, s.delegate, probe, proxy, id, n, profile)
-	passed := result.Verdict == service.OpenAICodexStateHealthy
-	reason := "target_probe_failed"
-	if result.Verdict == service.OpenAICodexStateDegraded {
-		reason = "target_probe_degraded"
-	}
-	if result.Failure == "route_changed" {
-		reason = "target_route_changed"
-	}
+	answer, reason, probeErr := probeAstraTargetRoute(ctx, s.delegate, probe, cookie, proxy, id, n, profile)
+	passed := probeErr == nil
 
 	if s.current(req.Context()) != pool {
 		return nil, key, proxy, release, errors.New("configuration_changed")
@@ -203,7 +198,7 @@ func (s *astraRoutingUpstream) targetRouteOnce(req *http.Request, proxy string, 
 		reason = "target_probe_passed"
 	}
 	host := astraRoutingHost(cookie.Value)
-	pool.targetChecks[id] = astraTargetValidation{node: route.node, key: key, cookieFingerprint: sha256.Sum256([]byte(cookie.Value)), proxyFingerprint: sha256.Sum256([]byte(proxy)), passed: passed, checked: time.Now(), expires: expires, retryAfter: time.Now().Add(15 * time.Second), sourceID: sourceID, reason: reason, gateway: host}
+	pool.targetChecks[id] = astraTargetValidation{node: route.node, key: key, cookieFingerprint: sha256.Sum256([]byte(cookie.Value)), proxyFingerprint: sha256.Sum256([]byte(proxy)), passed: passed, checked: time.Now(), expires: expires, retryAfter: time.Now().Add(15 * time.Second), sourceID: sourceID, reason: reason, answer: answer, gateway: host}
 	pool.mu.Lock()
 	pool.observeGatewayTarget(host, passed)
 	pool.mu.Unlock()
@@ -216,39 +211,89 @@ func (s *astraRoutingUpstream) targetRouteOnce(req *http.Request, proxy string, 
 	return cookie, key, proxy, release, nil
 }
 
+func probeAstraTargetRoute(ctx context.Context, upstream service.HTTPUpstream, template *http.Request, cookie *http.Cookie, proxy string, accountID int64, concurrency int, profile *tlsfingerprint.Profile) (string, string, error) {
+	if upstream == nil || template == nil || cookie == nil {
+		return "", "target_probe_failed", errors.New("target_probe_unavailable")
+	}
+	payload, err := json.Marshal(map[string]any{
+		"model":     "gpt-6-astra",
+		"stream":    true,
+		"input":     "Reply with OK only.",
+		"reasoning": map[string]string{"effort": "low"},
+	})
+	if err != nil {
+		return "", "target_probe_failed", err
+	}
+	probe, err := http.NewRequestWithContext(service.WithHTTPUpstreamRedirectsDisabled(ctx), http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", bytes.NewReader(payload))
+	if err != nil {
+		return "", "target_probe_failed", err
+	}
+	probe.Header = template.Header.Clone()
+	probe.Header.Set("Accept", "text/event-stream")
+	probe.Header.Set("Content-Type", "application/json")
+	replaceCodexGatewayCookie(probe, cookie)
+	resp, err := upstream.DoWithTLS(probe, proxy, accountID, concurrency, profile)
+	if err != nil {
+		return "", "target_probe_failed", err
+	}
+	if resp == nil || resp.Body == nil {
+		return "", "target_probe_failed", errors.New("target_probe_empty_response")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "target_probe_failed", errors.New("target_probe_http_error")
+	}
+	for _, got := range resp.Cookies() {
+		if got.Name == "__oailb" && (got.Value != cookie.Value || got.MaxAge < 0 || (!got.Expires.IsZero() && !time.Now().Before(got.Expires))) {
+			return "", "target_route_changed", errors.New("target_route_changed")
+		}
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20+1))
+	if err != nil || len(body) > 1<<20 {
+		return "", "target_probe_failed", errors.New("target_probe_stream_error")
+	}
+	completed := false
+	model := ""
+	answer := strings.Builder{}
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "[DONE]" || !gjson.Valid(data) {
+			continue
+		}
+		event := gjson.Parse(data)
+		switch event.Get("type").String() {
+		case "response.output_text.delta":
+			answer.WriteString(event.Get("delta").String())
+		case "error", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
+			return "", "target_probe_failed", errors.New("target_probe_incomplete")
+		case "response.completed", "response.done":
+			if event.Get("response.status").String() != "completed" || event.Get("response.error").Exists() {
+				return "", "target_probe_failed", errors.New("target_probe_incomplete")
+			}
+			completed = true
+			model = event.Get("response.model").String()
+		}
+	}
+	if !completed || (model != "" && model != "gpt-6-astra") {
+		return "", "target_probe_failed", errors.New("target_probe_incomplete")
+	}
+	return strings.TrimSpace(answer.String()), "target_probe_passed", nil
+}
+
 // Manual verification always refreshes the evidence instead of accepting a cached pass.
 type astraForceProbeKey struct{}
 
 func (s *astraRoutingUpstream) VerifyAstraGatewayTarget(ctx context.Context, req *http.Request, proxy string, id int64, n int) error {
-	if s.unifiedTickets(ctx) {
-		return s.tickets.VerifyStoredAstraTarget(ctx, id)
-	}
 	req = req.Clone(context.WithValue(ctx, astraForceProbeKey{}, true))
 	_, _, _, release, err := s.targetRouteOnce(req, proxy, id, n, nil)
 	release()
 	return err
 }
 func (s *astraRoutingUpstream) CodexGatewayPinWSRequest(ctx context.Context, headers http.Header, proxy string, id int64, n int) (string, string, func(), error) {
-	if s.unifiedTickets(ctx) {
-		if !containsTarget(s.cfg.AstraRouting(ctx).CookiePool.TargetAccountIDs, id) {
-			return "", proxy, func() {}, nil
-		}
-		borrowed := headers.Clone()
-		effective, release, err := s.tickets.ApplyStoredAstraTarget(ctx, borrowed, id, "websocket")
-		if err != nil {
-			if release != nil {
-				release()
-			}
-			return "", proxy, func() {}, ctx.Err()
-		}
-		for key := range headers {
-			delete(headers, key)
-		}
-		for key, values := range borrowed {
-			headers[key] = values
-		}
-		return "", effective, release, nil
-	}
 	pool := s.current(ctx)
 	if pool == nil || !containsTarget(pool.config.TargetAccountIDs, id) {
 		return "", proxy, func() {}, nil

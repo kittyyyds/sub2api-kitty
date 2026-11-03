@@ -173,13 +173,8 @@ func IsOpenAIModelCapabilityRejection(err error) bool {
 	return errors.As(err, &denied) && (denied.Reason == "model_not_supported" || denied.Reason == "image_model_not_supported")
 }
 
-func denyOpenAITicket() error {
-	return &OpenAITurnAdmissionError{Reason: "model_ticket_unavailable", cause: ErrOpenAICodexTicketUnavailable}
-}
-
 // Used only to detect a binding change, never logged. Include routing/identity
 // settings but not mutable authentication credentials, usage, or
-// harvested-ticket observations.
 //
 // Authentication credentials intentionally do not participate in this
 // fingerprint. OAuth refresh and agent-task renewal replace access
@@ -194,7 +189,7 @@ func openAITurnRouteFingerprint(a *Account) [32]byte {
 	routeExtra := make(map[string]any)
 	for _, key := range []string{
 		codexFingerprintSeedExtraKey, codexFingerprintModeExtraKey,
-		OpenAISIWCEnabledKey, "openai_passthrough", "openai_oauth_passthrough", "openai_excel_bps", "openai_excel_bps_models", "openai_excel_bps_mihomo",
+		OpenAISIWCEnabledKey, "openai_passthrough", "openai_oauth_passthrough",
 		"openai_prism_browser", PrismBrowserModelsKey,
 		"openai_oauth_responses_websockets_v2_mode", "openai_apikey_responses_websockets_v2_mode",
 		"openai_oauth_responses_websockets_v2_enabled", "openai_apikey_responses_websockets_v2_enabled",
@@ -422,60 +417,26 @@ func (s *OpenAIGatewayService) admitOpenAITurnWithGroup(
 			latest.isRateLimitActiveForKey(openAIImageGenerationRateLimitKey))) {
 		return nil, denyOpenAITurn("model_rate_limited")
 	}
-	if !latest.HasManagedOpenAIConnections() && s.openAICodexTicketBlocksAccount(latest, outboundModel) {
-		return nil, denyOpenAITicket()
-	}
 	return latest, nil
 }
 
-// A connection is bound to the ticket actually sent at handshake, not the
-// response's turn-state header and not the most recently harvested standby.
 type openAIWSTurnBinding struct {
 	model       string
-	ticket      *openAICodexTicket
 	fingerprint [32]byte
 	createdAt   time.Time
 }
 
 func (s *OpenAIGatewayService) bindOpenAIWSHandshake(account *Account, model string, headers http.Header) *openAIWSTurnBinding {
-	b := &openAIWSTurnBinding{model: strings.TrimSpace(model), fingerprint: openAITurnRouteFingerprint(account), createdAt: time.Now()}
-	ticket := s.lookupOpenAICodexTicket(account, b.model)
-	if ticket != nil && ticket.State == headers.Get(openAICodexTurnStateHeader) {
-		copy := *ticket
-		copy.Standby = nil
-		b.ticket = &copy
-	}
-	return b
+	return &openAIWSTurnBinding{model: strings.TrimSpace(model), fingerprint: openAITurnRouteFingerprint(account), createdAt: time.Now()}
 }
 
 func (s *OpenAIGatewayService) checkOpenAIWSBinding(account *Account, model string, b *openAIWSTurnBinding) error {
 	if account.isPrismBrowserUpstreamModelEnabled(model) {
 		return denyOpenAITurn("prism_requires_http")
 	}
-	if account.isExcelBPSUpstreamModelEnabled(model) {
-		return denyOpenAITurn("excel_bps_requires_http")
-	}
 	if b == nil || openAITurnRouteFingerprint(account) != b.fingerprint ||
 		time.Since(b.createdAt) >= openAIWSConnMaxAge {
 		return denyOpenAITurn("connection_binding_expired")
-	}
-	if !isOpenAICodexTicketAccount(account) || !s.openAICodexTicketEnabled() ||
-		!s.openAICodexTicketConfig().FailClosed || !s.openAICodexTicketGatedModel(model) {
-		return nil
-	}
-	if b.ticket == nil {
-		return denyOpenAITurn("connection_ticket_missing")
-	}
-	if b.model != strings.TrimSpace(model) || !b.ticket.valid(time.Now(), openAICodexTicketTargetLength(account, s.openAICodexTicketConfig())) ||
-		!ticketIdentityMatches(account, b.ticket) {
-		return denyOpenAITurn("connection_ticket_expired")
-	}
-	// Require the bound ticket still to be known to the authoritative inventory.
-	// A new standby does not retire an otherwise valid primary binding.
-	current := s.lookupOpenAICodexTicket(account, model)
-	if current == nil || current.Revoked ||
-		(current.State != b.ticket.State && (current.Standby == nil || current.Standby.Revoked || current.Standby.State != b.ticket.State)) {
-		return denyOpenAITurn("connection_ticket_revoked")
 	}
 	return nil
 }

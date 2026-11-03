@@ -53,7 +53,7 @@ func TestModelCapabilityCooldownDiagnosis(t *testing.T) {
 func TestOpenAIAdmissionPreservesCapabilityCooldownCause(t *testing.T) {
 	for _, reason := range []string{upstreamModelNotFoundReason, upstreamModelNotFound401Reason, upstreamCodexPlanGatedModelReason, "upstream_429", ""} {
 		t.Run(reason, func(t *testing.T) {
-			account := ticketTestAccount(901)
+			account := openAIOAuthFixture(901)
 			setAccountModelRateLimitSnapshot(account, "gpt-5.2", time.Now().Add(time.Hour), reason, time.Now())
 			svc := &OpenAIGatewayService{accountRepo: &turnAdmissionRepo{account: account}}
 			_, err := svc.admitOpenAITurn(context.Background(), nil, account, "gpt-5.2")

@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -98,7 +97,7 @@ func (r *issue578Repo) UpdateExtra(ctx context.Context, id int64, updates map[st
 }
 
 func issue578Account() *Account {
-	a := excelAccount()
+	a := &Account{ID: 300, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Concurrency: 10, Credentials: map[string]any{"access_token": "test-token", "chatgpt_account_id": "test-account"}, Extra: map[string]any{"openai_passthrough": true}}
 	a.Extra["codex_5h_used_percent"] = 89.0
 	a.Extra["codex_7d_used_percent"] = 20.0
 	a.Extra["codex_5h_reset_at"] = time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
@@ -126,13 +125,13 @@ func TestIssue578HeaderLatestValue(t *testing.T) {
 	s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(80 * time.Millisecond)}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // downstream disconnect must not cancel snapshot bookkeeping
-	s.UpdateCodexUsageSnapshotFromHeaders(ctx, a.ID, excelBPSQuotaHeaders("89", "20"))
+	s.UpdateCodexUsageSnapshotFromHeaders(ctx, a.ID, issue578QuotaHeaders("89", "20"))
 	issue578WaitUsage(t, r, a.ID, 89)
 	require.Eventually(t, func() bool { r.mu.Lock(); defer r.mu.Unlock(); return r.writes == 1 }, time.Second, time.Millisecond)
 	for i := 0; i < 200; i++ {
-		s.UpdateCodexUsageSnapshotFromHeaders(ctx, a.ID, excelBPSQuotaHeaders("95", "20"))
+		s.UpdateCodexUsageSnapshotFromHeaders(ctx, a.ID, issue578QuotaHeaders("95", "20"))
 	}
-	s.UpdateCodexUsageSnapshotFromHeaders(ctx, a.ID, excelBPSQuotaHeaders("100", "20"))
+	s.UpdateCodexUsageSnapshotFromHeaders(ctx, a.ID, issue578QuotaHeaders("100", "20"))
 	current := issue578WaitUsage(t, r, a.ID, 100)
 	require.True(t, EvaluateAccountSchedulingThreshold(current, nil, time.Now()).ShouldPause, "89 -> 100 must close the explicit 90%% scheduling gate")
 	paused, _ := shouldAutoPauseOpenAIAccountByQuota(context.Background(), current)
@@ -148,14 +147,14 @@ func TestIssue578HeaderSerialAndRetry(t *testing.T) {
 			a := issue578Account()
 			r := &issue578Repo{accounts: map[int64]*Account{a.ID: a}, fail: fail, entered: make(chan struct{}), release: make(chan struct{})}
 			s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(40 * time.Millisecond)}
-			s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("89", "20"))
+			s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("89", "20"))
 			select {
 			case <-r.entered:
 			case <-time.After(time.Second):
 				t.Fatal("first write did not start")
 			}
 			time.Sleep(70 * time.Millisecond) // let the throttle expire while the old write is blocked
-			s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("100", "20"))
+			s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("100", "20"))
 			time.Sleep(20 * time.Millisecond)
 			r.mu.Lock()
 			active := r.maxActive
@@ -170,7 +169,7 @@ func TestIssue578HeaderSerialAndRetry(t *testing.T) {
 		r := &issue578Repo{accounts: map[int64]*Account{a.ID: a}, fail: 2}
 		s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(40 * time.Millisecond)}
 		startedAt := time.Now()
-		s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("100", "20"))
+		s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("100", "20"))
 		issue578WaitUsage(t, r, a.ID, 100)
 		require.GreaterOrEqual(t, time.Since(startedAt), 80*time.Millisecond, "failures must consume the write interval")
 		r.mu.Lock()
@@ -215,39 +214,13 @@ func TestIssue578QueryUsageSynchronizesNonzero(t *testing.T) {
 	require.True(t, paused)
 }
 
-func TestIssue578BPSTTLRefreshAndThrottle(t *testing.T) {
-	a := issue578Account()
-	require.False(t, a.IsOpenAIResponsesWebSocketV2Enabled())
-	u := &UsageInfo{}
-	applyExtraToUsage(u, a.Extra, time.Now())
-	require.True(t, shouldRefreshOpenAICodexSnapshot(a, u, time.Now()), "complete BPS windows must expire without WSv2")
-	r := &issue578Repo{accounts: map[int64]*Account{a.ID: a}}
-	var calls atomic.Int32
-	q := issue578Quota(t, r, func(w http.ResponseWriter, req *http.Request) {
-		require.Equal(t, "Bearer synthetic-oauth-token", req.Header.Get("Authorization"), "usage must use OAuth credentials, not the BPS grant")
-		w.Header().Set("Content-Type", "application/json")
-		if req.URL.Path == "/backend-api/wham/usage" {
-			calls.Add(1)
-			_, _ = w.Write([]byte(issue578UsageBody))
-			return
-		}
-		require.Equal(t, "/backend-api/wham/rate-limit-reset-credits", req.URL.Path)
-		_, _ = w.Write([]byte(`{}`))
-	})
-	s := &AccountUsageService{accountRepo: r, openAIQuotaService: q, cache: NewUsageCache()}
-	// Reuse the stale caller snapshot to verify the probe throttle itself.
-	for i := 0; i < 3; i++ {
-		copy := *a
-		copy.Extra = map[string]any{}
-		for k, v := range a.Extra {
-			copy.Extra[k] = v
-		}
-		got, err := s.getOpenAIUsage(context.Background(), &copy, false)
-		require.NoError(t, err)
-		if i == 0 {
-			require.Equal(t, 100.0, got.FiveHour.Utilization)
-		}
-	}
-	require.EqualValues(t, 1, calls.Load(), "repeated stale reads must not query upstream without a TTL bound")
-	issue578WaitUsage(t, r, a.ID, 100)
+func issue578QuotaHeaders(used5h, used7d string) http.Header {
+	headers := http.Header{}
+	headers.Set("x-codex-primary-used-percent", used7d)
+	headers.Set("x-codex-primary-reset-after-seconds", "604800")
+	headers.Set("x-codex-primary-window-minutes", "10080")
+	headers.Set("x-codex-secondary-used-percent", used5h)
+	headers.Set("x-codex-secondary-reset-after-seconds", "18000")
+	headers.Set("x-codex-secondary-window-minutes", "300")
+	return headers
 }

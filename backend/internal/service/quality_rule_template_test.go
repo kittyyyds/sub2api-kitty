@@ -188,17 +188,18 @@ func (r *fakeTemplateRepo) MarkSynced(_ context.Context, id int64, at time.Time)
 	return nil
 }
 
-func probeTemplate() *QualityRuleTemplate {
+func answerTemplate() *QualityRuleTemplate {
 	return &QualityRuleTemplate{
 		AccountFilter:  QualityRuleAccountFilter{Group: " 7 ", Statuses: []string{"active", "active"}},
 		ModelID:        "gpt-5.4",
 		CronExpression: "*/30 * * * *",
 		Enabled:        true,
 		PelicanConfig: &PelicanTestConfig{
-			QuestionKind:    OpenAICodexStateProbeQuestionKind,
+			QuestionKind:    "candy",
+			Prompt:          CandyPrompt,
 			ReasoningEffort: "medium",
 			ParallelCount:   1,
-			Quality:         &QualityPolicy{Action: "disable_scheduling", AutoRestore: true},
+			Quality:         &QualityPolicy{ExpectedAnswer: "21", Judge: &QualityJudgeConfig{GroupID: 1, ModelID: "judge", Prompt: "grade"}, Action: "disable_scheduling", AutoRestore: true},
 		},
 	}
 }
@@ -228,7 +229,8 @@ func TestProvideScheduledTestServiceWiresTemplateRepository(t *testing.T) {
 
 func TestQualityTemplateCoversMatchingAndLaterAccounts(t *testing.T) {
 	plans := newTemplatePlanRepo()
-	// Account 2 already has a quarantine rule; 3 is not an OpenAI OAuth account; 4 is a UI test account.
+	// Account 2 already has a quarantine rule. Ordinary answer tests also cover
+	// other platforms and UI fixtures; the retired state probe restrictions do not apply.
 	_, _ = plans.add(&ScheduledTestPlan{AccountID: 2, PelicanConfig: &PelicanTestConfig{Quality: &QualityPolicy{Action: "remove_groups"}}})
 	templates := newFakeTemplateRepo(plans,
 		openAIOAuthAccount(1), openAIOAuthAccount(2),
@@ -237,11 +239,14 @@ func TestQualityTemplateCoversMatchingAndLaterAccounts(t *testing.T) {
 	)
 	svc := newTemplateService(plans, templates)
 
-	template, created, err := svc.CreateQualityTemplate(context.Background(), probeTemplate())
+	template, created, err := svc.CreateQualityTemplate(context.Background(), answerTemplate())
 	require.NoError(t, err)
-	require.Equal(t, 1, created)
+	require.Equal(t, 3, created)
 	require.Equal(t, QualityRuleAccountFilter{Group: "7", Statuses: []string{"active"}}, templates.filters[0])
-	require.Len(t, template.PlanIDs, 1)
+	require.Len(t, template.PlanIDs, 3)
+	require.Len(t, plans.plans, 4)
+	require.Contains(t, plansByAccount(plans), int64(3))
+	require.Contains(t, plansByAccount(plans), int64(4))
 	require.NotNil(t, template.LastSyncedAt)
 	first := plansByAccount(plans)[1]
 	require.NotNil(t, first)
@@ -277,7 +282,7 @@ func TestQualityTemplateUpdatePropagatesAndPauseStopsFollowing(t *testing.T) {
 	plans := newTemplatePlanRepo()
 	templates := newFakeTemplateRepo(plans, openAIOAuthAccount(1), openAIOAuthAccount(2))
 	svc := newTemplateService(plans, templates)
-	template, created, err := svc.CreateQualityTemplate(context.Background(), probeTemplate())
+	template, created, err := svc.CreateQualityTemplate(context.Background(), answerTemplate())
 	require.NoError(t, err)
 	require.Equal(t, 2, created)
 
@@ -318,7 +323,7 @@ func TestQualityTemplateSyncSkipsStaleTemplateVersion(t *testing.T) {
 	plans := newTemplatePlanRepo()
 	templates := newFakeTemplateRepo(plans)
 	svc := newTemplateService(plans, templates)
-	template, _, err := svc.CreateQualityTemplate(context.Background(), probeTemplate())
+	template, _, err := svc.CreateQualityTemplate(context.Background(), answerTemplate())
 	require.NoError(t, err)
 	stale := *template
 	_, err = templates.Update(context.Background(), template)
@@ -335,7 +340,7 @@ func TestQualityTemplateDeleteKeepsOrRemovesRules(t *testing.T) {
 		plans := newTemplatePlanRepo()
 		templates := newFakeTemplateRepo(plans, openAIOAuthAccount(1), openAIOAuthAccount(2))
 		svc := newTemplateService(plans, templates)
-		template, _, err := svc.CreateQualityTemplate(context.Background(), probeTemplate())
+		template, _, err := svc.CreateQualityTemplate(context.Background(), answerTemplate())
 		require.NoError(t, err)
 		deleted, err := svc.DeleteQualityTemplate(context.Background(), template.ID, deletePlans)
 		require.NoError(t, err)
@@ -359,9 +364,9 @@ func TestQualityTemplateValidation(t *testing.T) {
 		"bad cron":           func(t *QualityRuleTemplate) { t.CronExpression = "nope" },
 		"bad group":          func(t *QualityRuleTemplate) { t.AccountFilter.Group = "abc" },
 		"bad status":         func(t *QualityRuleTemplate) { t.AccountFilter.Statuses = []string{"deleted"} },
-		"probe parallel":     func(t *QualityRuleTemplate) { t.PelicanConfig.ParallelCount = 2 },
+		"too many parallel":  func(t *QualityRuleTemplate) { t.PelicanConfig.ParallelCount = 9 },
 	} {
-		template := probeTemplate()
+		template := answerTemplate()
 		change(template)
 		_, _, err := svc.CreateQualityTemplate(context.Background(), template)
 		require.Error(t, err, name)
@@ -369,7 +374,7 @@ func TestQualityTemplateValidation(t *testing.T) {
 	require.Empty(t, plans.plans)
 
 	unwired := NewScheduledTestService(plans, &pelicanResults{})
-	_, _, err := unwired.CreateQualityTemplate(context.Background(), probeTemplate())
+	_, _, err := unwired.CreateQualityTemplate(context.Background(), answerTemplate())
 	require.Error(t, err)
 	added, err := unwired.SyncQualityTemplates(context.Background())
 	require.NoError(t, err)
@@ -380,4 +385,36 @@ func TestQualityTemplateGroupID(t *testing.T) {
 	require.Equal(t, int64(0), QualityTemplateGroupID(QualityRuleAccountFilter{}))
 	require.Equal(t, int64(AccountListGroupUngrouped), QualityTemplateGroupID(QualityRuleAccountFilter{Group: "ungrouped"}))
 	require.Equal(t, int64(12), QualityTemplateGroupID(QualityRuleAccountFilter{Group: "12"}))
+}
+
+func TestQualityTemplateDoesNotTreatRetiredBPSRuleAsQuarantine(t *testing.T) {
+	plans := newTemplatePlanRepo()
+	_, _ = plans.add(&ScheduledTestPlan{AccountID: 1, PelicanConfig: &PelicanTestConfig{Quality: &QualityPolicy{Action: "enable_bps"}}})
+	templates := newFakeTemplateRepo(plans, openAIOAuthAccount(1))
+	svc := newTemplateService(plans, templates)
+	template, created, err := svc.CreateQualityTemplate(context.Background(), answerTemplate())
+	require.NoError(t, err)
+	require.Equal(t, 1, created)
+	require.Len(t, template.PlanIDs, 1)
+	require.Len(t, plans.plans, 2)
+	require.Equal(t, "disable_scheduling", plans.plans[template.PlanIDs[0]].PelicanConfig.Quality.Action)
+}
+
+func TestRetiredQualityRulesCannotExecute(t *testing.T) {
+	for name, change := range map[string]func(*ScheduledTestPlan){
+		"bps action":  func(p *ScheduledTestPlan) { p.PelicanConfig.Quality.Action = "enable_bps" },
+		"bps channel": func(p *ScheduledTestPlan) { p.PelicanConfig.TestChannel = "bps" },
+		"state probe": func(p *ScheduledTestPlan) { p.PelicanConfig.QuestionKind = "state_probe" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			plan := answerTemplate().planFor(1)
+			change(plan)
+			_, err := nextPlanRun(plan, time.Now())
+			require.Error(t, err)
+			// No repository or upstream is wired: rejection must happen before either
+			// is touched, including when the rule came from historical persisted data.
+			runner := &ScheduledTestRunnerService{}
+			require.False(t, runner.runPelicanPlan(context.Background(), plan))
+		})
+	}
 }

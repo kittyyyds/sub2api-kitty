@@ -367,7 +367,7 @@ func TestAstraGatewayTargetPreparesSourceBeforeForwarding(t *testing.T) {
 	resp, err := wrapper.Do(forceAstraProbe(pinRequest(t)), "", 300, 1)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
-	require.Equal(t, 3, calls)
+	require.Equal(t, 2, calls)
 }
 
 func TestTrustedSourceAcquisitionDoesNotRequireCandyAnswer(t *testing.T) {

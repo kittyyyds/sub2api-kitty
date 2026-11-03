@@ -85,13 +85,8 @@ func TestOpenAIOAuthReauthEngineRejectsInvalidModeAndConfiguration(t *testing.T)
 
 func TestOpenAIOAuthReauthEngineRemoteDoesNotAcquireLocalProxy(t *testing.T) {
 	svc, _, _, _, _, _ := newReauthTestService("acct-1")
-	acquired := false
-	svc.acquireMihomoProxy = func(context.Context, string) (string, func(), error) {
-		acquired = true
-		return "http://127.0.0.1:9999", func() {}, nil
-	}
 	ctx := context.Background()
-	_, err := svc.SaveCredentialConfig(ctx, 42, OpenAIOAuthReauthConfigInput{LoginEmail: "user@example.com", CredentialMode: OpenAIOAuthReauthModePasswordTOTP, Engine: OpenAIOAuthReauthEngineSessionStudio, ProxySource: OpenAIOAuthReauthProxySourceMihomo, Password: "secret"})
+	_, err := svc.SaveCredentialConfig(ctx, 42, OpenAIOAuthReauthConfigInput{LoginEmail: "user@example.com", CredentialMode: OpenAIOAuthReauthModePasswordTOTP, Engine: OpenAIOAuthReauthEngineSessionStudio, ProxySource: OpenAIOAuthReauthProxySourceAccount, Password: "secret"})
 	require.NoError(t, err)
 	_, err = svc.CreateTask(ctx, 42)
 	require.NoError(t, err)
@@ -99,7 +94,6 @@ func TestOpenAIOAuthReauthEngineRemoteDoesNotAcquireLocalProxy(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, claim)
 	require.Empty(t, claim.ProxyURL)
-	require.False(t, acquired)
 }
 
 func TestOpenAIOAuthReauthEngineRemoteStillChecksIdentity(t *testing.T) {

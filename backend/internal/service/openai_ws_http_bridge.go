@@ -579,9 +579,6 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		if admissionErr == nil && statefulSession && (latest.ID != account.ID || latest.AuthConnectionID != account.AuthConnectionID || latest.AuthConnectionRevision != account.AuthConnectionRevision || !smartProtocolHTTPSupported(latest)) {
 			admissionErr = denyOpenAITurn("authorization_binding_changed")
 		}
-		if admissionErr == nil {
-			admissionErr = s.applyOpenAICodexTicket(ctx, latest, actualModel, upstreamReq.Header)
-		}
 		if admissionErr != nil {
 			// The bridge can reach this point on continuation turns after the
 			// ingress loop has already persisted response/session affinity. Do

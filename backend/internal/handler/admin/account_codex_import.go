@@ -676,6 +676,9 @@ func normalizeCodexImportEntry(entry codexImportEntry) (*codexImportAccount, err
 	if item.ClientID != "" {
 		item.Credentials["client_id"] = item.ClientID
 	}
+	if item.Credentials["client_id"] == openai.ExcelClientID {
+		return nil, errors.New("legacy Excel OAuth credentials are no longer supported; import a standard Codex OAuth account")
+	}
 	if item.IDToken != "" {
 		item.Credentials["id_token"] = item.IDToken
 		_ = enrichCodexImportAccountFromJWT(item, item.IDToken, false, now)

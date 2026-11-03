@@ -44,7 +44,7 @@ func rotationFixture(t *testing.T, limit int, successNode string) (*astraRouting
 	wrapper.delegate = gatewayPinDelegate{call: func(r *http.Request, proxy string, id int64, _ int, _ *tlsfingerprint.Profile) (*http.Response, error) {
 		node, ok := active[proxy]
 		require.True(t, ok, "lease must outlive probe and business response")
-		require.Equal(t, service.HTTPUpstreamProfileOpenAIHarvest, service.HTTPUpstreamProfileFromContext(r.Context()))
+		require.Equal(t, service.HTTPUpstreamProfileOpenAIFreshConnection, service.HTTPUpstreamProfileFromContext(r.Context()))
 		calls = append(calls, fmt.Sprintf("%s:%d", node, id))
 		if id == 299 {
 			return pinResponse("__oailb=" + node + "; Path=/; Secure; Max-Age=230"), nil
@@ -55,8 +55,8 @@ func rotationFixture(t *testing.T, limit int, successNode string) (*astraRouting
 		require.NoError(t, err)
 		require.Equal(t, node, cookie.Value)
 		resp := pinResponse("")
-		if node != successNode && r.Header.Get("X-Codex-Turn-State") != "" {
-			resp.Header.Set("X-Codex-Turn-State", "different-ticket")
+		if node != successNode {
+			resp.StatusCode = http.StatusBadGateway
 		}
 		return resp, nil
 	}}
@@ -90,7 +90,7 @@ func TestAstraGatewayRotationRejectsBadNodeAndPinsSuccessfulNode(t *testing.T) {
 	require.Equal(t, 1, *leases, "actual response still owns node lease")
 	consumeAffinityResponse(t, resp, err)
 	require.Zero(t, *leases)
-	require.Equal(t, []string{"bad:299", "bad:300", "bad:300", "good:299", "good:300", "good:300", "good:300"}, *calls)
+	require.Equal(t, []string{"bad:299", "bad:300", "good:299", "good:300", "good:300"}, *calls)
 	snapshot := s.AstraGatewaySnapshot(t.Context())
 	require.Equal(t, 1, snapshot.ReadyRoutes)
 	require.Equal(t, "SG", snapshot.Targets[0].ProxyCountry)
@@ -98,7 +98,7 @@ func TestAstraGatewayRotationRejectsBadNodeAndPinsSuccessfulNode(t *testing.T) {
 	// A new private listener for the same node must reuse qualification, not credentials.
 	resp, err = s.Do(rotationBusinessTarget(t), "target-original", 300, 1)
 	consumeAffinityResponse(t, resp, err)
-	require.Len(t, *calls, 8)
+	require.Len(t, *calls, 6)
 	cookie, proxy, release, err := s.CodexGatewayPinWSRequest(t.Context(), rotationTarget(t).Header, "target-original", 300, 1)
 	require.NoError(t, err)
 	require.Equal(t, "good", cookie)
@@ -106,7 +106,7 @@ func TestAstraGatewayRotationRejectsBadNodeAndPinsSuccessfulNode(t *testing.T) {
 	require.Equal(t, 1, *leases)
 	release()
 	require.Zero(t, *leases)
-	require.Len(t, *calls, 8, "WS reuses node qualification while owning its own dial lease")
+	require.Len(t, *calls, 6, "WS reuses node qualification while owning its own dial lease")
 	// Explicit diagnostics can acquire another exit after expiration.
 	pool := s.current(t.Context())
 	route := pool.routes[299]
@@ -119,12 +119,12 @@ func TestAstraGatewayRotationBoundedAndFailsClosed(t *testing.T) {
 	s, calls, leases := rotationFixture(t, 2, "never")
 	_, err := s.Do(rotationTarget(t), "target-original", 300, 1)
 	require.ErrorContains(t, err, "astra_rotation_exhausted")
-	require.Equal(t, []string{"bad:299", "bad:300", "bad:300", "good:299", "good:300", "good:300"}, *calls)
+	require.Equal(t, []string{"bad:299", "bad:300", "good:299", "good:300"}, *calls)
 	require.Zero(t, *leases)
 	require.Zero(t, s.AstraGatewaySnapshot(t.Context()).ReadyRoutes)
 	_, err = s.Do(rotationTarget(t), "target-original", 300, 1)
 	require.ErrorContains(t, err, "source_probe_cooldown")
-	require.Len(t, *calls, 6)
+	require.Len(t, *calls, 4)
 }
 func TestAstraGatewayRotationCancellationAndUnavailablePool(t *testing.T) {
 	s, calls, leases := rotationFixture(t, 3, "good")

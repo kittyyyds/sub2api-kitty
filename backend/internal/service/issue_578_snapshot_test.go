@@ -104,9 +104,9 @@ func TestIssue578ExplicitRefreshWinsDelayedHeader(t *testing.T) {
 	a := issue578Account()
 	r := &issue578Repo{accounts: map[int64]*Account{a.ID: a}}
 	s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(120 * time.Millisecond)}
-	s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("89", "20"))
+	s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("89", "20"))
 	require.Eventually(t, func() bool { r.mu.Lock(); defer r.mu.Unlock(); return r.writes == 1 }, time.Second, time.Millisecond)
-	s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("95", "20"))
+	s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("95", "20"))
 	q := issue578Quota(t, r, func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if req.URL.Path == "/backend-api/wham/usage" {
@@ -169,7 +169,7 @@ func TestIssue578OlderQueryCannotUndoLaterHeaders(t *testing.T) {
 		t.Fatal("quota query did not reach the local server")
 	}
 	s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(40 * time.Millisecond)}
-	s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("100", "20"))
+	s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("100", "20"))
 	issue578WaitUsage(t, r, a.ID, 100)
 	unblock()
 	select {

@@ -137,8 +137,6 @@ func (m *Manager) BindStaticNodes(ctx context.Context, names []string) ([]Static
 	defer m.release()
 	m.mu.Lock()
 	next.Disabled = m.saved.Disabled
-	next.UseOnce = m.saved.UseOnce
-	next.CollectionLastNode = m.saved.CollectionLastNode
 	m.mu.Unlock()
 	if err := m.run(ctx, "static_bind", next); err != nil {
 		return nil, err
@@ -186,8 +184,6 @@ func (m *Manager) DeactivateStaticNodes(ctx context.Context, names []string) err
 	defer m.release()
 	m.mu.Lock()
 	next.Disabled = m.saved.Disabled
-	next.UseOnce = m.saved.UseOnce
-	next.CollectionLastNode = m.saved.CollectionLastNode
 	m.mu.Unlock()
 	if running {
 		return m.run(ctx, "static_unbind", next)

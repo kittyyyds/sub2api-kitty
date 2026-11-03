@@ -38,7 +38,7 @@
               <pre v-else-if="card.record.output && !card.record.html" class="whitespace-pre-wrap break-words p-4 text-sm text-gray-800">{{ card.record.output }}</pre>
               <p v-else class="p-4 text-sm text-red-500">{{ card.loadError || card.record.error || t('admin.accounts.pelicanTest.invalidHtml') }}</p>
             </div>
-            <p v-if="card.record.error && !card.record.verdict" class="mt-2 line-clamp-2 break-words text-xs text-red-500">{{ card.record.error }}</p>
+            <p v-if="card.record.error" class="mt-2 line-clamp-2 break-words text-xs text-red-500">{{ card.record.error }}</p>
           </div>
           <div class="border-t border-gray-100 px-4 py-3 text-sm text-primary-600 dark:border-dark-700">{{ t('admin.accounts.pelicanTest.preview') }}</div>
           <button type="button" class="absolute inset-0 z-10 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" :aria-label="`${card.account.name} · ${t('admin.accounts.pelicanTest.preview')}`" @click="openRecord(card)" />
@@ -70,7 +70,7 @@ import { useI18n } from 'vue-i18n'
 import { scheduledTestsAPI } from '@/api/admin/scheduledTests'
 import type { PelicanHistoryResult } from '@/api/admin/scheduledTests'
 import { extractPelicanHtml } from '@/utils/pelicanHtml'
-import { isTextAnswerKind, stateProbeVerdict, type StateProbeVerdict } from '@/utils/intelligenceTest'
+import { isTextAnswerKind } from '@/utils/intelligenceTest'
 import type { Account, AccountListItem, PelicanTestConfig, ScheduledTestResult } from '@/types'
 
 interface ManualRun {
@@ -100,8 +100,6 @@ interface DisplayRecord {
   modelId?: string
   reasoningEffort?: string
   status: string
-  // 定时探针结果的判定；有判定时优先展示判定和探针摘要，不展示原始错误标记。
-  verdict?: StateProbeVerdict
   html: string
   output: string
   error: string
@@ -136,19 +134,14 @@ function formatDate(value?: string) {
   if (!value || !Number.isFinite(Date.parse(value))) return '—'
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value))
 }
-const verdictKeys: Record<StateProbeVerdict, string> = { healthy: 'verdictHealthy', degraded: 'verdictDegraded', inconclusive: 'verdictInconclusive' }
 function statusLabel(record: DisplayRecord) {
-  if (record.verdict) return t(`admin.accounts.pelicanTest.probe.${verdictKeys[record.verdict]}`)
   return t(record.status === 'success' ? 'admin.accounts.pelicanTest.success' : 'admin.accounts.pelicanTest.failed')
 }
 function statusClass(record: DisplayRecord) {
-  if (record.verdict === 'inconclusive') return 'text-gray-500'
-  if (record.verdict) return record.verdict === 'healthy' ? 'text-emerald-600' : 'text-red-500'
   return record.status === 'success' ? 'text-emerald-600' : 'text-red-500'
 }
 function detailText(card: Card) {
   if (card.loadError) return card.loadError
-  if (card.record.verdict) return card.record.output || card.record.error
   return card.record.error || card.record.output
 }
 function duration(value?: number) { return typeof value === 'number' && Number.isFinite(value) ? `${(value / 1000).toFixed(1)} s` : '—' }
@@ -198,7 +191,7 @@ function manualCards(server: PelicanHistoryResult[]): Card[] {
 function serverRecord(result: ScheduledTestResult): DisplayRecord {
   return { source: 'scheduled', startedAt: result.started_at, durationMs: result.latency_ms,
     modelId: result.pelican_config?.model_id, reasoningEffort: result.pelican_config?.reasoning_effort,
-    status: result.status, verdict: stateProbeVerdict(result) ?? undefined, output: result.response_text || '',
+    status: result.status, output: result.response_text || '',
     html: isTextAnswerKind(result.pelican_config?.question_kind) ? '' : extractPelicanHtml(result.response_text || ''), error: result.error_message }
 }
 async function loadBody(card: Card) {

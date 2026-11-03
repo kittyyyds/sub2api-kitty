@@ -90,7 +90,6 @@ var ProviderSet = wire.NewSet(
 	NewQualityRuleTemplateRepository, // 质量运维分组规则仓储
 	NewPelicanShowcaseRepository,     // 鹈鹕测智用户展示快照仓储
 	NewPelicanGroupTestRepository,    // 鹈鹕测智分组测试计划与结果仓储
-	NewControlledExperimentRepository,
 	NewProxyRepository,
 	NewRedeemCodeRepository,
 	NewPromoCodeRepository,
@@ -108,8 +107,6 @@ var ProviderSet = wire.NewSet(
 	NewSettingRepository,
 	NewSecurityPolicyRepository,
 	NewSecurityPolicySessionStore,
-	NewCodexHarvestNodeRepository,
-	NewCodexHarvestFlowRepository,
 	NewScopedAdminKeyRepository,
 	NewOpsRepository,
 	NewAuditLogRepository,

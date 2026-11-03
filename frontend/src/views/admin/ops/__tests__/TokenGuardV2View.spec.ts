@@ -160,7 +160,7 @@ describe('TokenGuardV2View', () => {
     }))
   })
 
-  it('saves the managed Mihomo pool without a proxy id', async () => {
+  it('saves the account proxy choice without a managed proxy id', async () => {
     wrapper = mount(TokenGuardV2View, {
       global: {
         stubs: {
@@ -177,12 +177,12 @@ describe('TokenGuardV2View', () => {
     await flushPromises()
 
     await wrapper.findAll('button').find(button => button.text() === 'tokenGuardV2.edit')!.trigger('click')
-    await wrapper.get('#token-guard-v2-proxy').setValue('mihomo')
+    await wrapper.get('#token-guard-v2-proxy').setValue('account')
     await wrapper.get('#token-guard-v2-editor').trigger('submit')
     await flushPromises()
 
     expect(api.updateGuard).toHaveBeenCalledWith(42, expect.objectContaining({
-      proxy_source: 'mihomo',
+      proxy_source: 'account',
       proxy_id: null,
     }))
   })
@@ -277,7 +277,7 @@ describe('TokenGuardV2View', () => {
           probe_detail: 'credential was rejected',
           fail_streak: 2,
           next_probe_at: '2026-09-28T10:00:00Z',
-          login_config: { account_id: 44, login_email: 'secondary@example.com', credential_mode: 'email_otp_url', proxy_source: 'mihomo', password_configured: false, totp_configured: false, configured: true },
+          login_config: { account_id: 44, login_email: 'secondary@example.com', credential_mode: 'email_otp_url', proxy_source: 'account', password_configured: false, totp_configured: false, configured: true },
         },
       ],
     })

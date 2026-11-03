@@ -135,21 +135,14 @@ func qualityRuleScope(cfg *PelicanTestConfig) string {
 		return ""
 	}
 	switch cfg.Quality.Action {
-	case QualityActionEnableBPS:
+	case "enable_bps":
+		// Match the historical database index without executing this retired action.
+		// An old BPS rule must not occupy an ordinary rule's quarantine scope.
 		return "bps"
 	case QualityActionObserveOnly:
 		return "observation"
 	}
 	return "quarantine"
-}
-
-// Same rule as the quality-ops account picker: probes only run on real OpenAI OAuth accounts.
-func qualityProbeSupportsAccount(account QualityTemplateAccount) bool {
-	if account.Platform != PlatformOpenAI || (account.Type != AccountTypeOAuth && account.Type != AccountTypeSetupToken) {
-		return false
-	}
-	synthetic, _ := account.Extra["synthetic_ui_test"].(bool)
-	return !synthetic
 }
 
 // Every plan gets its own copy: validation writes the model into the config.
@@ -386,7 +379,7 @@ func (s *ScheduledTestService) syncQualityTemplate(ctx context.Context, t *Quali
 		return 0, err
 	}
 	now := time.Now()
-	scope, probe := qualityRuleScope(t.PelicanConfig), isOpenAICodexStateProbePlan(t.PelicanConfig)
+	scope := qualityRuleScope(t.PelicanConfig)
 	created := 0
 	var firstErr error
 	for _, account := range accounts {
@@ -395,9 +388,6 @@ func (s *ScheduledTestService) syncQualityTemplate(ctx context.Context, t *Quali
 			continue
 		}
 		if _, ok := taken[key]; ok {
-			continue
-		}
-		if probe && !qualityProbeSupportsAccount(account) {
 			continue
 		}
 		plan := t.planFor(account.ID)

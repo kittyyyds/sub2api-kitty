@@ -303,7 +303,7 @@ func (s *astraRoutingUpstream) targetRoute(req *http.Request, proxy string, id i
 
 // A reused listener must open a new CONNECT, never reuse a previous node's idle connection.
 func astraFreshRequest(r *http.Request) *http.Request {
-	return r.Clone(service.WithHTTPUpstreamProfile(r.Context(), service.HTTPUpstreamProfileOpenAIHarvest))
+	return r.Clone(service.WithHTTPUpstreamProfile(r.Context(), service.HTTPUpstreamProfileOpenAIFreshConnection))
 }
 
 type astraLeaseBody struct {

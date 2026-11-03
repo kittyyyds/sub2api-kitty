@@ -7,7 +7,6 @@ import { listQualityPlans } from '@/api/admin/accountQuality'
 import { getAllIncludingInactive, getAvailableModels } from '@/api/admin/groups'
 import type { Group } from '@/types'
 import { defaultModelBillingConfig } from '@/utils/modelBilling'
-import { defaultExcelBPSDefaults } from '@/utils/excelBPSDefaults'
 import { defaultOAuthModelMappings } from '@/utils/oauthModelMappings'
 import { defaultOpenAITwoFAAdmissionConfig } from '@/utils/openaiTwoFAAdmission'
 vi.mock('@/components/account/ModelWhitelistSelector.vue', () => ({ default: { props: ['modelValue'], template: '<div data-testid="model-selection">{{ modelValue.join(", ") }}</div>' } }))
@@ -21,7 +20,7 @@ vi.mock('@/api/client',()=>({apiClient:{get:vi.fn(),put:vi.fn()}}))
 vi.mock('@/api/admin/autoConfig', async importOriginal => ({ ...await importOriginal<typeof import('@/api/admin/autoConfig')>(), getAutoConfig: vi.fn(), saveAutoConfig: vi.fn() }))
 vi.mock('@/api/admin/accountQuality', () => ({ listQualityPlans: vi.fn() }))
 vi.mock('@/api/admin/groups', () => ({ getAllIncludingInactive: vi.fn(), getAvailableModels: vi.fn() }))
-const config: AutoConfig = { iq_bootstrap: defaultIQBootstrap(), openai_two_fa_admission: defaultOpenAITwoFAAdmissionConfig(), model_billing: defaultModelBillingConfig(), model_mappings: defaultOAuthModelMappings('openai'), excel_bps: defaultExcelBPSDefaults(), enabled: false, platform: 'openai', priority: 50, load_factor: 1, concurrency: 3, cost_multiplier: 0.07, group_ids: [], upgrade_enabled: false, upgrade_group_ids: [], successes_per_step: 20, upgrade_step: 1, max_concurrency: 100, cooldown_seconds: 60, revision: '' }
+const config: AutoConfig = { iq_bootstrap: defaultIQBootstrap(), openai_two_fa_admission: defaultOpenAITwoFAAdmissionConfig(), model_billing: defaultModelBillingConfig(), model_mappings: defaultOAuthModelMappings('openai'), enabled: false, platform: 'openai', priority: 50, load_factor: 1, concurrency: 3, cost_multiplier: 0.07, group_ids: [], upgrade_enabled: false, upgrade_group_ids: [], successes_per_step: 20, upgrade_step: 1, max_concurrency: 100, cooldown_seconds: 60, revision: '' }
 beforeEach(() => {
  vi.resetAllMocks(); vi.mocked(getAvailableModels).mockResolvedValue(['gpt-test']); vi.mocked(listQualityPlans).mockResolvedValue([]); state.auth = reactive({ user: { id: 1, role: 'admin' } })
  vi.mocked(getAutoConfig).mockResolvedValue(structuredClone(config)); vi.mocked(saveAutoConfig).mockImplementation(async c => c)
@@ -117,29 +116,8 @@ describe('AutoConfigView', () => {
   expect(w.get<HTMLInputElement>('[data-testid="model-billing-multiplier-0"]').element.value).toBe('12.5')
   w.unmount()
  })
- it('saves only the reusable BPS template without any account activation switch', async () => {
-  const w = mount(AutoConfigView); await flushPromises()
-  expect(w.find('[data-testid="bps-initialize_enabled"]').exists()).toBe(false)
-  expect(w.get<HTMLInputElement>('[data-testid="bps-ignore_encrypted_content"]').element.checked).toBe(true)
-  await w.get('[data-testid="bps-ignore_encrypted_content"]').setValue(false)
-  await w.get('form').trigger('submit'); await flushPromises()
-  expect(saveAutoConfig).toHaveBeenCalledWith({ ...config, excel_bps: { ...config.excel_bps, ignore_encrypted_content: false } }); w.unmount()
- })
- it('restores the recommended template options', async () => {
-  const w = mount(AutoConfigView); await flushPromises()
-  await w.get('[data-testid="bps-ignore_encrypted_content"]').setValue(false)
-  await w.get('[data-testid="bps-reset-options"]').trigger('click')
-  expect(w.get<HTMLInputElement>('[data-testid="bps-ignore_encrypted_content"]').element.checked).toBe(true); w.unmount()
- })
- it('keeps recovery dependent on automatic 403 disabling', async () => {
-  const w = mount(AutoConfigView); await flushPromises()
-  await w.get('[data-testid="bps-auto_recover_on_403"]').setValue(true)
-  await w.get('[data-testid="bps-auto_disable_on_403"]').setValue(false)
-  const recovery = w.get<HTMLInputElement>('[data-testid="bps-auto_recover_on_403"]')
-  expect(recovery.element.disabled).toBe(true); expect(recovery.element.checked).toBe(false); w.unmount()
- })
  it('fills compatible defaults when loading legacy settings', async () => {
-  const { excel_bps: _bps, model_billing: _billing, model_mappings: _mapping, ...legacy } = config
+  const { model_billing: _billing, model_mappings: _mapping, ...legacy } = config
   vi.mocked(getAutoConfig).mockResolvedValueOnce(legacy)
   const w = mount(AutoConfigView); await flushPromises()
   await w.get('form').trigger('submit'); await flushPromises()
@@ -182,7 +160,7 @@ describe('AutoConfigView', () => {
  })
 })
 
-const qualityPlan = { id: 81, account_id: 21, account_name: 'Source account', model_id: 'gpt-5.4', cron_expression: '*/5 * * * *', enabled: true, max_results: 100, pelican_config: { question_kind: 'state_probe', parallel_count: 1, reasoning_effort: 'high', quality: { action: 'observe_only' } } } as any
+const qualityPlan = { id: 81, account_id: 21, account_name: 'Source account', model_id: 'gpt-5.4', cron_expression: '*/5 * * * *', enabled: true, max_results: 100, pelican_config: { question_kind: 'candy', prompt: 'What is 3 times 7?', parallel_count: 1, reasoning_effort: 'high', quality: { action: 'observe_only', expected_answer: '21' } } } as any
 it('copies a selected quality rule without account identity and clears it on platform change', async () => {
  vi.mocked(listQualityPlans).mockResolvedValue([structuredClone(qualityPlan)])
  const w = mount(AutoConfigView); await flushPromises()
@@ -193,7 +171,7 @@ it('copies a selected quality rule without account identity and clears it on pla
  expect(saved).not.toHaveProperty('account_id')
  expect(w.get('[data-testid="quality-rule-summary"]').text()).toContain('gpt-5.4')
  await w.get('[data-testid="platform"]').setValue('anthropic')
- expect(w.find('[data-testid="quality-rule-select"] option[value="81"]').exists()).toBe(false)
+ expect((w.get('[data-testid="quality-rule-select"]').element as HTMLSelectElement).value).toBe('')
  await w.get('form').trigger('submit'); await flushPromises()
  expect(vi.mocked(saveAutoConfig).mock.calls[1][0].quality_rule).toBeNull()
  w.unmount()

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -39,23 +40,27 @@ func (r *astraModeRepo) ApplyAstraScheduling(_ context.Context, _ int64, s confi
 	r.calls++
 	return AstraSchedulingActionResult{Changed: true, Allowed: ready, Action: s.EffectiveSchedulingMode()}, nil
 }
-func TestAstraModeSyncNeverAppliesProbeScheduling(t *testing.T) {
-	s := config.AstraRoutingSettings{AccountScheduling: true, SchedulingMode: "model", Revision: "test", CookiePool: config.CodexGatewayPinConfig{Enabled: true, TargetAccountIDs: []int64{300}}}
-	cfg := &config.Config{}
-	cfg.SetAstraRoutingLoader(func(context.Context) config.AstraRoutingSettings { return s })
-	a := &Account{ID: 300, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: false}
-	repo := &astraModeRepo{astraSchedulingRepo: astraSchedulingRepo{accounts: map[int64]*Account{300: a}}}
-	svc := &AccountTestService{cfg: cfg, accountRepo: repo, httpUpstream: &astraSetupUpstream{snapshot: AstraGatewayRuntime{Revision: "test"}}}
-	svc.syncAstraAccountScheduling(t.Context())
-	require.Zero(t, repo.calls)
-	require.Empty(t, repo.writes)
-	s.AccountScheduling = false
-	svc.syncAstraAccountScheduling(t.Context())
-	require.Zero(t, repo.calls)
-}
-
 func TestAstraModelBlockPreservesSpecificOtherModelWithWildcard(t *testing.T) {
 	a := &Account{Credentials: map[string]any{"model_mapping": map[string]any{"gpt-6-*": "gpt-6-astra", "gpt-6-sol": "gpt-6-sol"}}, Extra: map[string]any{"astra_model_disabled": true}}
 	require.True(t, a.IsModelSupported("gpt-6-sol"))
 	require.False(t, a.IsModelSupported("gpt-6-other"))
+}
+
+type astraSchedulingRepo struct {
+	AccountRepository
+	accounts map[int64]*Account
+	writes   []bool
+	fail     bool
+}
+
+func (r *astraSchedulingRepo) GetByID(_ context.Context, id int64) (*Account, error) {
+	return r.accounts[id], nil
+}
+func (r *astraSchedulingRepo) SetSchedulable(_ context.Context, id int64, enabled bool) error {
+	r.writes = append(r.writes, enabled)
+	if r.fail {
+		return errors.New("offline")
+	}
+	r.accounts[id].Schedulable = enabled
+	return nil
 }

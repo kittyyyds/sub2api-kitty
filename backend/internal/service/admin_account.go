@@ -531,7 +531,6 @@ func buildAccountForCreate(input *CreateAccountInput, accountExtra map[string]an
 	if err := ValidateVideoAccount(input.Platform, input.Type, input.Credentials); err != nil {
 		return nil, err
 	}
-	accountExtra = MergeOpenAICodexTicketExtra(accountExtra, nil)
 	if input.Platform == PlatformTypeSafe && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
 	}
@@ -692,9 +691,6 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 
 	account, err := buildAccountForCreate(input, accountExtra)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.validateExcelBPS403GroupSettings(ctx, account); err != nil {
 		return nil, err
 	}
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
@@ -917,7 +913,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 				normalizedExtra[key] = value
 			}
 		}
-		normalizedExtra = MergeOpenAICodexTicketExtra(normalizedExtra, account.Extra)
 		normalizedExtra = prepareCodexFingerprintExtraForUpdate(account, normalizedExtra)
 
 		account.Extra = normalizedExtra
@@ -1095,9 +1090,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 
-	if err := s.validateExcelBPS403GroupSettings(ctx, account); err != nil {
-		return nil, err
-	}
 	billingSettingsAppliedAtomically := false
 	updater := s.accountBillingRepo
 	if updater == nil {
@@ -1189,26 +1181,6 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 	if err := ValidateAccountCostMultiplierExtra(updates); err != nil {
 		return err
 	}
-	_, moveChanged := updates[ExcelBPSAutoMoveOn403Key]
-	_, targetChanged := updates[ExcelBPS403TargetGroupIDKey]
-	_, bpsChanged := updates["openai_excel_bps"]
-	if moveChanged || targetChanged || bpsChanged {
-		account, err := s.accountRepo.GetByID(ctx, id)
-		if err != nil {
-			return err
-		}
-		merged := *account
-		merged.Extra = make(map[string]any, len(account.Extra)+len(updates))
-		maps.Copy(merged.Extra, account.Extra)
-		maps.Copy(merged.Extra, updates)
-		if err := s.validateExcelBPS403GroupSettings(ctx, &merged); err != nil {
-			return err
-		}
-		if s.excelOAuthReauth != nil {
-			updates[ExcelBPSAuthorizationPendingKey] = merged.Extra[ExcelBPSAuthorizationPendingKey]
-		}
-	}
-	updates = MergeOpenAICodexTicketExtra(updates, nil)
 	updates = sanitizedCodexFingerprintExtraUpdates(updates)
 	delete(updates, OpenAITwoFAAdmissionExtraKey)
 	updates = stripOpenAIAutoResetCreditManagedExtra(updates, true)
@@ -1248,7 +1220,6 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		return nil, err
 	}
 	// Managed probe/session state may only enter through dedicated typed endpoints.
-	input.Extra = MergeOpenAICodexTicketExtra(input.Extra, nil)
 	input.Extra = sanitizedCodexFingerprintExtraUpdates(input.Extra)
 	input.Extra = stripOpenAIAutoResetCreditManagedExtra(input.Extra, true)
 	delete(input.Extra, OpenAITwoFAAdmissionExtraKey)
@@ -1349,31 +1320,6 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 			return nil, err
 		}
 		result.LongContextInheritedCount = inheritedCount
-	}
-	_, moveChanged := input.Extra[ExcelBPSAutoMoveOn403Key]
-	_, targetChanged := input.Extra[ExcelBPS403TargetGroupIDKey]
-	_, bpsChanged := input.Extra["openai_excel_bps"]
-	pendingByAccount := make(map[int64]bool)
-	_, planChanged := input.Credentials["plan_type"]
-	if moveChanged || targetChanged || bpsChanged || planChanged {
-		for _, account := range cachedTargets {
-			if account == nil {
-				continue
-			}
-			merged := *account
-			merged.Credentials = maps.Clone(account.Credentials)
-			if merged.Credentials == nil {
-				merged.Credentials = make(map[string]any)
-			}
-			maps.Copy(merged.Credentials, input.Credentials)
-			merged.Extra = make(map[string]any, len(account.Extra)+len(input.Extra))
-			maps.Copy(merged.Extra, account.Extra)
-			maps.Copy(merged.Extra, input.Extra)
-			if err := s.validateExcelBPS403GroupSettings(ctx, &merged); err != nil {
-				return nil, err
-			}
-			pendingByAccount[account.ID] = merged.Extra[ExcelBPSAuthorizationPendingKey] == true
-		}
 	}
 	if input.ProbeEnabled != nil {
 		for _, accountID := range input.AccountIDs {
@@ -1586,9 +1532,6 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	}
 
 	// Run bulk update for column/jsonb fields first.
-	if s.excelOAuthReauth != nil && bpsChanged {
-		repoUpdates.ExcelBPSAuthorizationPending = pendingByAccount
-	}
 	if _, err := s.accountRepo.BulkUpdate(ctx, input.AccountIDs, repoUpdates); err != nil {
 		return nil, err
 	}
@@ -1756,9 +1699,6 @@ func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Ac
 		if s.runtimeBlocker != nil {
 			s.runtimeBlocker.ClearAccountSchedulingBlock(id)
 		}
-		if account != nil && account.Platform == PlatformOpenAI && s.settingService != nil {
-			s.settingService.NotifyCodexHarvest()
-		}
 	})
 	return account, nil
 }
@@ -1787,11 +1727,6 @@ func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, 
 	if err != nil {
 		return nil, err
 	}
-	AfterAccountCommit(ctx, func(context.Context) {
-		if schedulable && updated != nil && updated.Platform == PlatformOpenAI && s.settingService != nil {
-			s.settingService.NotifyCodexHarvest()
-		}
-	})
 	return updated, nil
 }
 

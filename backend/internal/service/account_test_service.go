@@ -165,9 +165,6 @@ type AccountTestService struct {
 	modelMetadataRegistryAt   time.Time
 	pluginManager             *PluginManager
 	openaiGatewayService      *OpenAIGatewayService
-	bpsProbeMu                sync.Mutex
-	bpsProbeAccounts          map[int64]struct{}
-	stateProbeAccounts        sync.Map
 	modelTraceAccounts        sync.Map
 	agentIdentityTaskMu       sync.Mutex
 	agentIdentityWS           agentIdentityWSConnectionInvalidator
@@ -405,17 +402,6 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		actual, err := modelTraceEnvironmentForAccount(account, modelID)
 		if err != nil || actual != expected {
 			return s.sendErrorAndEnd(c, "ModelTrace account route is unsupported or changed during the test")
-		}
-	}
-	if options, ok := pelicanTestOptionsFromContext(ctx); ok {
-		if options.testChannel == "bps" {
-			model := strings.TrimSpace(modelID)
-			if model == "" {
-				model = openai.DefaultTestModel
-			}
-			if !account.IsExcelBPSEnabledForModel(model) || s.openaiGatewayService == nil || !s.openaiGatewayService.excelBPSGloballyEnabled(ctx) {
-				return s.sendErrorAndEnd(c, "BPS observation unavailable: BPS must be enabled for this model; native fallback is disabled")
-			}
 		}
 	}
 	if err := accountTestCooldown(ctx, account, resolveAccountTestModel(account, modelID), time.Now()); err != nil {
@@ -935,38 +921,17 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	ctx := c.Request.Context()
 	mode = normalizeAccountTestMode(mode)
 	if account.IsExcelOAuth() {
-		model := strings.TrimSpace(modelID)
-		if model == "" {
-			model = openai.DefaultTestModel
-		}
-		if s.openaiGatewayService == nil || s.openaiGatewayService.validateExcelOAuthRoute(ctx, account, model) != nil {
-			return s.sendErrorAndEnd(c, errExcelOAuthRouteUnavailable.Error())
-		}
+		return s.sendErrorAndEnd(c, errExcelOAuthRouteUnavailable.Error())
 	}
 
 	if account.IsSIWCEnabled() {
 		if s.openaiGatewayService == nil {
 			return s.sendErrorAndEnd(c, "SIWC gateway is unavailable")
 		}
-		if mode == AccountTestModeBPSTools || isOpenAIImageModel(account.GetMappedModel(strings.TrimSpace(modelID))) {
+		if isOpenAIImageModel(account.GetMappedModel(strings.TrimSpace(modelID))) {
 			return s.sendErrorAndEnd(c, "This test mode is not supported by SIWC")
 		}
 		return s.testResponsesGatewayAccountConnection(c, account, modelID, prompt)
-	}
-	// Excel/BPS accounts must use the same gateway path as user Responses
-	// requests. The legacy account-test probe hard-codes ChatGPT Codex and
-	// silently bypasses the account's protocol toggle, producing misleading
-	// quality-test results.
-	if mode == AccountTestModeBPSTools {
-		if s.openaiGatewayService == nil || !s.openaiGatewayService.excelBPSGloballyEnabled(ctx) {
-			return s.sendErrorAndEnd(c, "Excel BPS is disabled globally")
-		}
-		return s.testExcelBPSToolRoundtrip(c, account, modelID)
-	}
-	// Image models use the image test below, which applies the gateway's BPS
-	// image routing; the text BPS test would send them to /responses.
-	if account.IsExcelBPSEnabled() && s.openaiGatewayService != nil && s.openaiGatewayService.excelBPSGloballyEnabled(ctx) && !isOpenAIImageModel(account.GetMappedModel(strings.TrimSpace(modelID))) {
-		return s.testExcelBPSAccountConnection(c, account, modelID, prompt)
 	}
 
 	// Default to openai.DefaultTestModel for OpenAI testing
@@ -1177,10 +1142,6 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	return s.processOpenAIStream(accountTestResponseContext(c, resp), resp.Body)
 }
 
-func (s *AccountTestService) testExcelBPSAccountConnection(c *gin.Context, account *Account, modelID, prompt string) error {
-	return s.testResponsesGatewayAccountConnection(c, account, modelID, prompt)
-}
-
 func (s *AccountTestService) testResponsesGatewayAccountConnection(c *gin.Context, account *Account, modelID, prompt string) error {
 	model := strings.TrimSpace(modelID)
 	if model == "" {
@@ -1190,14 +1151,14 @@ func (s *AccountTestService) testResponsesGatewayAccountConnection(c *gin.Contex
 	prompt = promptOrDefault(prompt)
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: model})
 
-	body, err := buildExcelBPSAccountTestBody(model, prompt)
+	body, err := buildResponsesAccountTestBody(model, prompt)
 	if err != nil {
-		return s.sendErrorAndEnd(c, "Failed to create Excel BPS test payload")
+		return s.sendErrorAndEnd(c, "Failed to create Responses test payload")
 	}
 
 	probe := httptest.NewRecorder()
 	probeCtx, _ := gin.CreateTestContext(probe)
-	probeCtx.Request = c.Request.Clone(s.withBPSTestEvidence(c.Request.Context(), c))
+	probeCtx.Request = c.Request.Clone(c.Request.Context())
 	if probeCtx.Request.Header == nil {
 		probeCtx.Request.Header = make(http.Header)
 	}
@@ -1214,17 +1175,6 @@ func (s *AccountTestService) testResponsesGatewayAccountConnection(c *gin.Contex
 		var failover *UpstreamFailoverError
 		if errors.As(err, &failover) && failover.ClientMessage != "" {
 			return s.sendErrorAndEnd(c, failover.ClientMessage)
-		}
-		var local *excelBPSForwardError
-		if errors.As(err, &local) && strings.HasPrefix(local.code, "basispoints_auth_") {
-			var payload struct {
-				Error struct {
-					Message string `json:"message"`
-				} `json:"error"`
-			}
-			if json.Unmarshal(probe.Body.Bytes(), &payload) == nil && payload.Error.Message != "" {
-				return s.sendErrorAndEnd(c, local.Error()+": "+payload.Error.Message)
-			}
 		}
 		return s.sendErrorAndEnd(c, err.Error())
 	}
@@ -1262,7 +1212,7 @@ func (s *AccountTestService) testResponsesGatewayAccountConnection(c *gin.Contex
 	return nil
 }
 
-func buildExcelBPSAccountTestBody(model, prompt string) ([]byte, error) {
+func buildResponsesAccountTestBody(model, prompt string) ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"model": model, "stream": true, "store": false,
 		"input": []any{map[string]any{"type": "message", "role": "user", "content": []any{
@@ -3578,11 +3528,6 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	applyOpenAIImagesDefaults(parsed)
 
 	upstreamModel := account.GetMappedModel(parsed.Model)
-	if s.openaiGatewayService != nil && s.openaiGatewayService.excelBPSGloballyEnabled(ctx) && account.IsExcelBPSImagesEnabledForModel(parsed.Model) {
-		if handled, err := s.testExcelBPSImages(c, ctx, account, parsed, upstreamModel); handled {
-			return err
-		}
-	}
 	if credentialAccount.IsExcelOAuth() {
 		return s.sendErrorAndEnd(c, errExcelOAuthRouteUnavailable.Error())
 	}
@@ -3700,52 +3645,6 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 
 	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 	return nil
-}
-
-// testExcelBPSImages runs the gateway's BPS image route. handled=false means
-// BPS rejected the request format, so the caller tests Codex like user traffic.
-func (s *AccountTestService) testExcelBPSImages(c *gin.Context, ctx context.Context, account *Account, parsed *OpenAIImagesRequest, upstreamModel string) (bool, error) {
-	if excelBPSImagesUnsupportedReason(parsed) != "" {
-		return false, nil
-	}
-	s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("Calling Excel BPS /images/generations; image model: %s\n", upstreamModel)})
-	probe := httptest.NewRecorder()
-	probeCtx, _ := gin.CreateTestContext(probe)
-	probeCtx.Request = c.Request.Clone(ctx)
-	_, fallback, err := s.openaiGatewayService.forwardExcelBPSImages(ctx, probeCtx, account, parsed, parsed.Model, upstreamModel, time.Now())
-	if fallback {
-		s.sendEvent(c, TestEvent{Type: "content", Text: "Excel BPS rejected this request format; user requests fall back to Codex, testing Codex\n"})
-		return false, nil
-	}
-	if err != nil {
-		// A single-account test has no other account to fail over to.
-		var upErr *OpenAIImagesUpstreamError
-		if errors.As(err, &upErr) {
-			return true, s.sendErrorAndEnd(c, upErr.clientMessage())
-		}
-		var failover *UpstreamFailoverError
-		if errors.As(err, &failover) && failover.ClientMessage != "" {
-			return true, s.sendErrorAndEnd(c, failover.ClientMessage)
-		}
-		return true, s.sendErrorAndEnd(c, err.Error())
-	}
-	results, err := parseCodexDirectImagesResponse(probe.Body.Bytes())
-	if err != nil {
-		return true, s.sendErrorAndEnd(c, fmt.Sprintf("Failed to parse Excel BPS image response: %s", err.Error()))
-	}
-	for _, item := range results {
-		if item.RevisedPrompt != "" {
-			s.sendEvent(c, TestEvent{Type: "content", Text: item.RevisedPrompt})
-		}
-		mimeType := openAIImageOutputMIMEType(item.OutputFormat)
-		s.sendEvent(c, TestEvent{
-			Type:     "image",
-			ImageURL: "data:" + mimeType + ";base64," + item.Result,
-			MimeType: mimeType,
-		})
-	}
-	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
-	return true, nil
 }
 
 func (s *AccountTestService) sendEvent(c *gin.Context, event TestEvent) {

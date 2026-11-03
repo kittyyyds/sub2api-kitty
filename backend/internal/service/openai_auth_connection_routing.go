@@ -21,7 +21,7 @@ func (c *OpenAIAuthConnection) Supports(capability string) bool {
 		return false
 	}
 	switch c.Kind {
-	case "codex", "bps", "siwc", "api_key":
+	case "codex", "siwc", "api_key":
 	default:
 		return false
 	}
@@ -82,8 +82,8 @@ func (s *OpenAIGatewayService) prepareAuthConnection(ctx context.Context, c *gin
 		c.Set("openai_auth_connection_id", "")
 	}
 	managed := account.HasManagedOpenAIConnections()
-	if account != nil && account.Platform == PlatformOpenAI && s.excelOAuthReauth != nil {
-		if repo, ok := s.excelOAuthReauth.repo.(OpenAIAuthConnectionRepository); ok {
+	if account != nil && account.Platform == PlatformOpenAI && s.openAIOAuthReauth != nil {
+		if repo, ok := s.openAIOAuthReauth.repo.(OpenAIAuthConnectionRepository); ok {
 			current, err := repo.AuthConnectionsManaged(ctx, account.ID)
 			if err != nil {
 				return nil, err
@@ -98,10 +98,10 @@ func (s *OpenAIGatewayService) prepareAuthConnection(ctx context.Context, c *gin
 	if account.IsCredentialShadow() {
 		return nil, infraerrors.BadRequest("OPENAI_CONNECTION_SHADOW_UNSUPPORTED", "Managed connections require the parent account route")
 	}
-	if s.excelOAuthReauth == nil {
+	if s.openAIOAuthReauth == nil {
 		return nil, errors.New("authorization connection service unavailable")
 	}
-	connections, err := s.excelOAuthReauth.listRuntimeAuthConnections(ctx, account.ID)
+	connections, err := s.openAIOAuthReauth.listRuntimeAuthConnections(ctx, account.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (s *OpenAIGatewayService) prepareAuthConnection(ctx context.Context, c *gin
 		}
 	}
 	if pinned != "" && c != nil && c.GetString("openai_auth_connection_session_hash") != "" {
-		r, repoErr := s.excelOAuthReauth.connectionRepository()
+		r, repoErr := s.openAIOAuthReauth.connectionRepository()
 		if repoErr != nil {
 			return nil, repoErr
 		}
@@ -143,18 +143,18 @@ func (s *OpenAIGatewayService) prepareAuthConnection(ctx context.Context, c *gin
 	if chosen == nil {
 		return nil, infraerrors.BadRequest("OPENAI_CONNECTION_NOT_CAPABLE", "No authorized connection supports this endpoint; select or authorize an appropriate connection")
 	}
-	if _, err = s.excelOAuthReauth.ConnectionAccessToken(ctx, account.ID, chosen.ID); err != nil {
+	if _, err = s.openAIOAuthReauth.ConnectionAccessToken(ctx, account.ID, chosen.ID); err != nil {
 		return nil, err
 	}
 	// Refresh may have rotated this record. Never project a stale token/client.
-	chosen, err = s.excelOAuthReauth.authConnection(ctx, account.ID, chosen.ID)
+	chosen, err = s.openAIOAuthReauth.authConnection(ctx, account.ID, chosen.ID)
 	if err != nil {
 		return nil, err
 	}
 	if !chosen.Supports(capability) {
 		return nil, connectionChanged()
 	}
-	creds, err := s.excelOAuthReauth.readConnectionCredentials(chosen)
+	creds, err := s.openAIOAuthReauth.readConnectionCredentials(chosen)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (s *OpenAIGatewayService) prepareAuthConnection(ctx context.Context, c *gin
 	}
 	out.Extra = shallowCopyMap(account.Extra)
 	for key := range out.Extra {
-		if IsOpenAICodexTicketPrivateExtraKey(key) || strings.HasPrefix(key, "codex_harvest") || key == OpenAICodexSkipHarvestExtraKey {
+		if IsRetiredAccountSecretKey(key) {
 			delete(out.Extra, key)
 		}
 	}
@@ -185,9 +185,7 @@ func (s *OpenAIGatewayService) prepareAuthConnection(ctx context.Context, c *gin
 	out.Extra["openai_connections_managed"] = true
 	out.Extra["openai_connection_kind"] = chosen.Kind
 	out.Extra[OpenAISIWCEnabledKey] = chosen.Kind == "siwc"
-	out.Extra["openai_excel_bps"] = chosen.Kind == "bps"
 	delete(out.Extra, "openai_excel_bps_models")
-	delete(out.Extra, ExcelBPSAuthorizationPendingKey)
 	out.Extra["openai_prism_browser"] = false
 	out.Extra["openai_copilot_sdk"] = false
 	out.Extra["openai_responses_supported"] = true
@@ -203,9 +201,6 @@ func (s *OpenAIGatewayService) prepareAuthConnection(ctx context.Context, c *gin
 		out.Credentials["base_url"] = "https://api.openai.com"
 	} else {
 		out.Type = AccountTypeOAuth
-	}
-	if s.openAICodexTicketBlocksAccount(&out, model) {
-		return nil, denyOpenAITicket()
 	}
 	if c != nil {
 		c.Set("openai_auth_connection_id", chosen.ID)
@@ -310,8 +305,8 @@ func (s *OpenAIOAuthReauthService) validateAuthConnectionPolicy(ctx context.Cont
 }
 
 func (s *OpenAIGatewayService) attributeRegionalConnectionResult(ctx context.Context, c *gin.Context, account *Account, result *OpenAIForwardResult) {
-	if result == nil || !result.RegionalMetered || result.AuthConnectionID == "" || s.excelOAuthReauth == nil || account == nil {
+	if result == nil || !result.RegionalMetered || result.AuthConnectionID == "" || s.openAIOAuthReauth == nil || account == nil {
 		return
 	}
-	s.excelOAuthReauth.recordConnectionUsage(ctx, account.ID, getAPIKeyIDFromContext(c), result.AuthConnectionID, resolveUsageBillingRequestID(ctx, result.RequestID))
+	s.openAIOAuthReauth.recordConnectionUsage(ctx, account.ID, getAPIKeyIDFromContext(c), result.AuthConnectionID, resolveUsageBillingRequestID(ctx, result.RequestID))
 }

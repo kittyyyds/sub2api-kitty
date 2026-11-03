@@ -3,7 +3,6 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, ref } from 'vue'
 import OpenAIRequestTimezoneField from '../OpenAIRequestTimezoneField.vue'
 import { readOpenAIRequestTimezone, withOpenAIRequestTimezone } from '@/utils/openAIRequestTimezone'
-import { withAccountTierRouting } from '@/utils/accountTierRouting'
 
 const { catalog, probe } = vi.hoisted(() => ({ catalog: vi.fn(), probe: vi.fn() }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
@@ -42,13 +41,10 @@ describe('OpenAI request timezone account settings', () => {
     expect(catalog).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves tier routing, model mappings and custom account fields in both save orders', () => {
-    const original = { pool: 'premium', tiered_routing_enabled: true, quota_daily_limit: 50, custom_feature: { keep: true }, openai_passthrough: true }
+  it('preserves unrelated account fields when saving the request timezone', () => {
+    const original = { quota_daily_limit: 50, custom_feature: { keep: true }, openai_passthrough: true }
     const settings = { enabled: true, timezone: 'America/New_York', syncSearch: false }
-    const withTimezoneFirst = withAccountTierRouting(withOpenAIRequestTimezone(original, settings), true, 'premium')
-    const withTierFirst = withOpenAIRequestTimezone(withAccountTierRouting(original, true, 'premium'), settings)
-    expect(withTimezoneFirst).toEqual(withTierFirst)
-    expect(withTierFirst).toMatchObject(original)
+    expect(withOpenAIRequestTimezone(original, settings)).toMatchObject(original)
     expect(original).not.toHaveProperty('openai_request_timezone')
     expect(readOpenAIRequestTimezone({ openai_request_timezone: 'Asia/Tokyo' }).enabled).toBe(false)
   })

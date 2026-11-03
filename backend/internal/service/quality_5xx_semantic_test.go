@@ -27,6 +27,11 @@ func qualitySignalTestLimiter(t *testing.T) (*RateLimitService, *miniredis.Minir
 	return &RateLimitService{qualityTrigger: &quality5xxTrigger{queue: queue}}, r
 }
 
+func quality5xxFixtureConfig() *PelicanTestConfig {
+	return &PelicanTestConfig{QuestionKind: "candy", Prompt: CandyPrompt, ReasoningEffort: "high", ParallelCount: 1,
+		Quality: &QualityPolicy{ExpectedAnswer: "21", Judge: &QualityJudgeConfig{GroupID: 1, ModelID: "judge", Prompt: "grade"}, Action: "disable_scheduling"}}
+}
+
 func TestQuality5xxSemanticStreams(t *testing.T) {
 	for _, passthrough := range []bool{false, true} {
 		for _, tc := range []struct {
@@ -82,64 +87,31 @@ func TestQuality5xxWebsocketSemanticFailure(t *testing.T) {
 	}
 }
 
-func TestQuality5xxBPSStreamFailure(t *testing.T) {
-	limiter, client := qualitySignalTestLimiter(t)
-	wire := "data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"server_is_overloaded\",\"message\":\"overloaded\"}}}\n\n"
-	upstream := &httpUpstreamRecorder{resp: &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(wire))}}
-	svc := openAIClientToolsTestService(upstream)
-	svc.rateLimitService = limiter
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = httptest.NewRequest("POST", "/v1/responses", nil)
-	account := excelAccount()
-	_, err := svc.Forward(c.Request.Context(), c, account, []byte(`{"model":"gpt-6-astra","stream":true,"input":"hi"}`))
-	require.Error(t, err)
-	require.Equal(t, []string{fmt.Sprint(account.ID)}, qualityTestMembers(t, client))
-}
-
-func TestQuality5xxChoosesProbeOrCandyWithoutChangingRule(t *testing.T) {
-	for _, bps := range []bool{false, true} {
-		for _, recovery := range []bool{false, true} {
-			t.Run(fmt.Sprintf("bps=%t/recovery=%t", bps, recovery), func(t *testing.T) {
-				plans, results := &qualityTriggerPlans{}, &pelicanResults{}
-				account := stateProbeAccount()
-				if bps {
-					account.Extra = map[string]any{"openai_excel_bps": true}
-				}
-				plan := pelicanPlan()
-				plan.TriggerSource = quality5xxSource
-				plan.PelicanConfig = stateProbePlanConfig()
-				plan.PelicanConfig.Quality = &QualityPolicy{Action: "disable_scheduling", TriggerOnUpstream5xx: true}
-				if recovery {
-					plan.PelicanConfig.Quality.Action = QualityActionEnableBPS
-					plan.PelicanConfig.Quality.BPS = &QualityBPSPolicy{FailureThreshold: 1, AllModels: true}
-				}
-				original := plan.PelicanConfig
-				runner := &ScheduledTestRunnerService{planRepo: plans, scheduledSvc: NewScheduledTestService(plans, results), accountTestSvc: &AccountTestService{accountRepo: &stateProbeAccountRepo{account: account}}}
-				calls := 0
-				runner.runPelican = func(_ context.Context, _ int64, _ string, cfg *PelicanTestConfig) (*ScheduledTestResult, error) {
-					calls++
-					if bps {
-						require.Equal(t, "candy", cfg.QuestionKind)
-						require.Equal(t, CandyPrompt, cfg.Prompt)
-						return &ScheduledTestResult{Status: "success", ResponseText: "21"}, nil
-					}
-					require.Equal(t, OpenAICodexStateProbeQuestionKind, cfg.QuestionKind)
-					return &ScheduledTestResult{Status: "success", QualityJudgment: &QualityJudgment{Verdict: "correct"}}, nil
-				}
-				require.True(t, runner.runOnePlan(context.Background(), plan))
-				require.Equal(t, 1, calls)
-				require.Len(t, results.results, 1)
-				require.Equal(t, "success", results.results[0].Status)
-				require.Equal(t, OpenAICodexStateProbeQuestionKind, original.QuestionKind)
-				require.Empty(t, original.Quality.ExpectedAnswer)
-				if bps && recovery {
-					require.Zero(t, plans.outcomes, "BPS candy is not evidence of direct recovery")
-				} else {
-					require.Equal(t, 1, plans.outcomes)
-				}
-			})
-		}
+func TestQuality5xxChoosesAnswerCheckWithoutChangingRule(t *testing.T) {
+	plans, results := &qualityTriggerPlans{}, &pelicanResults{}
+	account := &Account{ID: 42, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive}
+	plan := pelicanPlan()
+	plan.TriggerSource = quality5xxSource
+	plan.PelicanConfig = quality5xxFixtureConfig()
+	plan.PelicanConfig.Quality.TriggerOnUpstream5xx = true
+	original := plan.PelicanConfig
+	runner := &ScheduledTestRunnerService{planRepo: plans, scheduledSvc: NewScheduledTestService(plans, results), accountTestSvc: &AccountTestService{accountRepo: &qualitySupportAccounts{account: account}}}
+	calls := 0
+	runner.judgeQuality = func(context.Context, int64, *PelicanTestConfig, string) *QualityJudgment {
+		return &QualityJudgment{Verdict: "correct"}
 	}
+	runner.runPelican = func(_ context.Context, _ int64, _ string, cfg *PelicanTestConfig) (*ScheduledTestResult, error) {
+		calls++
+		require.Equal(t, "candy", cfg.QuestionKind)
+		return &ScheduledTestResult{Status: "success", ResponseText: "21", PelicanConfig: cfg}, nil
+	}
+	require.True(t, runner.runOnePlan(context.Background(), plan))
+	require.Equal(t, 1, calls)
+	require.Len(t, results.results, 1)
+	require.Equal(t, "success", results.results[0].Status)
+	require.Equal(t, "candy", original.QuestionKind)
+	require.Equal(t, "21", original.Quality.ExpectedAnswer)
+	require.Equal(t, 1, plans.outcomes)
 }
 
 type qualityRecentPlanRepo struct {
@@ -155,8 +127,8 @@ func TestQuality5xxDoesNotSkipRecentlyCompletedPlan(t *testing.T) {
 	plan := pelicanPlan()
 	recent, future := time.Now().Add(-time.Second), time.Now().Add(time.Hour)
 	plan.LastRunAt, plan.NextRunAt = &recent, &future
-	plan.PelicanConfig = stateProbePlanConfig()
-	plan.PelicanConfig.Quality = &QualityPolicy{Action: "disable_scheduling", TriggerOnUpstream5xx: true}
+	plan.PelicanConfig = quality5xxFixtureConfig()
+	plan.PelicanConfig.Quality.TriggerOnUpstream5xx = true
 	plans, results := &qualityRecentPlanRepo{plan: plan}, &pelicanResults{}
 	runner := &ScheduledTestRunnerService{planRepo: plans, scheduledSvc: NewScheduledTestService(plans, results)}
 	runner.runPelican = func(context.Context, int64, string, *PelicanTestConfig) (*ScheduledTestResult, error) {
@@ -169,8 +141,8 @@ func TestQuality5xxDoesNotSkipRecentlyCompletedPlan(t *testing.T) {
 
 func TestQuality5xxCoalescesWithOverlappingCron(t *testing.T) {
 	plan := pelicanPlan()
-	plan.PelicanConfig = stateProbePlanConfig()
-	plan.PelicanConfig.Quality = &QualityPolicy{Action: "disable_scheduling", TriggerOnUpstream5xx: true}
+	plan.PelicanConfig = quality5xxFixtureConfig()
+	plan.PelicanConfig.Quality.TriggerOnUpstream5xx = true
 	observed, until := time.Now(), time.Now().Add(time.Minute)
 	plan.RunningUntil = &until
 	plans := &qualityRecentPlanRepo{plan: plan}

@@ -17,7 +17,7 @@ func TestBulkAliasScopeRepairPreservesExistingMappings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]any{OpenAIModelMappingModeKey: "aliases"}, repo.lastBulkUpdate.Credentials)
 	require.NotContains(t, repo.lastBulkUpdate.Credentials, "model_mapping")
-	require.NotContains(t, repo.lastBulkUpdate.Extra, "openai_excel_bps")
+	require.Nil(t, repo.lastBulkUpdate.Extra)
 	account.Credentials[OpenAIModelMappingModeKey] = "aliases"
 	_, err = svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{AccountIDs: []int64{1}, Credentials: map[string]any{"model_mapping": map[string]any{"gpt-6-sol": "gpt-6-sol"}}})
 	require.NoError(t, err)

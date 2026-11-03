@@ -12,7 +12,7 @@
         <button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="refresh(false)">{{ text('刷新状态', 'Refresh status') }}</button>
         <button type="button" class="btn btn-primary btn-sm" :disabled="busy || !loaded" @click="save">{{ text('保存 Serverless 配置', 'Save Serverless configuration') }}</button>
       </div>
-      <p class="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{{ text('同一 API Key 固定到同一 Pod（最后使用后保留 24 小时）。停用分流或 Pod 只阻止新绑定；已有绑定继续使用原 Pod。绑定实例失联或重启时返回错误，不自动迁移会话。首次启用前先结束存量 BPS/WS 会话。', 'Each API Key stays on one Pod for 24 hours after last use. Disabling routing or a Pod stops new bindings; existing bindings remain. A missing or restarted bound instance returns an error without moving the conversation. Finish existing BPS/WS conversations before first enabling routing.') }}</p>
+      <p class="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{{ text('同一 API Key 固定到同一 Pod（最后使用后保留 24 小时）。停用分流或 Pod 只阻止新绑定；已有绑定继续使用原 Pod。绑定实例失联或重启时返回错误，不自动迁移会话。首次启用前先结束存量 WS 会话。', 'Each API Key stays on one Pod for 24 hours after last use. Disabling routing or a Pod stops new bindings; existing bindings remain. A missing or restarted bound instance returns an error without moving the conversation. Finish existing WS conversations before first enabling routing.') }}</p>
 
       <section class="space-y-3">
         <h3 class="font-medium">{{ text('自动注册的 Pod', 'Automatically registered Pods') }}</h3>

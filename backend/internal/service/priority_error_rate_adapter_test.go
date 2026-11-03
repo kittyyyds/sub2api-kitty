@@ -162,35 +162,3 @@ func TestPriorityErrorRateLateCloseCannotOverwriteRetry(t *testing.T) {
 	require.Equal(t, int64(1), got.Successes)
 	require.Equal(t, int64(1), got.Failures)
 }
-
-func TestPriorityErrorRateBPSActualAdapter(t *testing.T) {
-	for _, failed := range []bool{false, true} {
-		t.Run(fmt.Sprint(failed), func(t *testing.T) {
-			wire := "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_mock\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"
-			if failed {
-				wire = "data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"mock upstream failure\"}}}\n\n"
-			}
-			upstream := &httpUpstreamRecorder{resp: priorityMockResponse(200, wire, true)}
-			svc := openAIClientToolsTestService(upstream)
-			a := excelAccount()
-			a.Extra["openai_excel_bps_mihomo"] = false
-			body := []byte(`{"model":"gpt-5.6-sol","input":"mock","stream":true}`)
-			_, err := svc.Forward(context.Background(), newOpenAIRejectedFieldTestContext(body), a, body)
-			if failed {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-			require.NotNil(t, upstream.lastReq)
-			require.Equal(t, "bps.openai.com", upstream.lastReq.URL.Host)
-			got := svc.openaiAccountStats.attempts.snapshot(priorityAttemptKey{accountID: a.ID, model: "gpt-5.6-sol", endpoint: "/v1/responses"}, time.Now(), 10, 5)
-			if failed {
-				require.Equal(t, int64(1), got.Failures)
-				require.Zero(t, got.Successes)
-			} else {
-				require.Equal(t, int64(1), got.Successes)
-				require.Zero(t, got.Failures)
-			}
-		})
-	}
-}

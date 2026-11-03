@@ -372,6 +372,7 @@ docs/*
 !docs/stream-timing.md
 !docs/user-traffic.md
 !docs/typesafe-content-audit.md
+!docs/kitty-feature-removal-20261103.md
 !docs/multi-host-session-owner.md
 !docs/security-penalties.md
 !docs/ip-risk-control.md

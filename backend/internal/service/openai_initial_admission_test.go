@@ -24,9 +24,9 @@ func TestOpenAIInitialAdmissionMarker(t *testing.T) {
 }
 
 func TestOpenAIInitialAdmissionRecoveryDoesNotMarkReplaySafe(t *testing.T) {
-	selected := ticketTestAccount(100)
+	selected := openAIOAuthFixture(100)
 	latest := *selected
-	latest.Extra = map[string]any{"openai_excel_bps": true}
+	latest.Schedulable = false
 	svc := &OpenAIGatewayService{accountRepo: &turnAdmissionRepo{account: &latest}}
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)

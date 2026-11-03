@@ -59,7 +59,7 @@ func TestOpenAISSEReadPumpFullForwardSilence(t *testing.T) {
 		cfg:          &config.Config{Gateway: config.GatewayConfig{StreamDataIntervalTimeout: 1}},
 		httpUpstream: &sseLifecycleLoopbackUpstream{client: server.Client(), target: target},
 	}
-	a := ticketTestAccount(732)
+	a := openAIOAuthFixture(732)
 	a.Extra = map[string]any{"openai_passthrough": true}
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)

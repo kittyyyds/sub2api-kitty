@@ -239,7 +239,6 @@ export default {
     modelPlaza: 'Model Pricing',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
-    harvestFlow: 'Ticket Flow',
     plugins: 'Plugins',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
@@ -277,7 +276,6 @@ export default {
     billing: 'Billing',
     tickets: 'Tickets',
     securityPolicy: 'Security Policy',
-    tieredRouting: 'Tiered Routing',
     ticketsAdmin: 'Ticket Management',
   },
 

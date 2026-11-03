@@ -160,9 +160,7 @@ func (s *ScheduledTestService) supportedQualityModels(ctx context.Context, plan 
 			// Native candy tests can exercise explicitly configured public model
 			// names even when an upstream /models catalog omits them. This applies
 			// to every account type; it does not claim upstream availability.
-			// State probes and BPS retain their route-specific discovery checks.
-			if isQualityAnswerQuestion(plan.PelicanConfig.QuestionKind) && plan.PelicanConfig.TestChannel != "bps" &&
-				!account.IsExcelBPSEnabled() && !account.IsOpenAIPassthroughEnabled() {
+			if isQualityAnswerQuestion(plan.PelicanConfig.QuestionKind) && !account.IsOpenAIPassthroughEnabled() {
 				for model := range account.GetModelMapping() {
 					catalog = append(catalog, model)
 				}
@@ -222,7 +220,7 @@ func (s *ScheduledTestService) eligibleQualityModels(ctx context.Context, plan *
 	if len(allowed) == 0 {
 		return nil, blocked, nil
 	}
-	manual := isQualityAnswerQuestion(plan.PelicanConfig.QuestionKind) && plan.PelicanConfig.TestChannel != "bps" && !account.IsExcelBPSEnabled() && !account.IsOpenAIPassthroughEnabled()
+	manual := isQualityAnswerQuestion(plan.PelicanConfig.QuestionKind) && plan.PelicanConfig.TestChannel != "bps" && !account.IsOpenAIPassthroughEnabled()
 	if manual {
 		configured := true
 		for _, model := range allowed {

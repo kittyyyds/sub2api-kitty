@@ -27,7 +27,6 @@ func (h *SettingHandler) SavePriorityScheduling(c *gin.Context) {
 		ErrorRatePriorSamples      *int     `json:"error_rate_prior_samples"`
 		OAuthQuotaPriority         *bool    `json:"oauth_quota_priority"`
 		OAuthQuotaThreshold        *int     `json:"oauth_quota_threshold"`
-		BalanceProtocols           *bool    `json:"balance_protocols"`
 		LatencyPenaltyMode         *string  `json:"latency_penalty_mode"`
 		LatencyPenaltyMinutes      *int     `json:"latency_penalty_minutes"`
 		LatencyPercentile          *int     `json:"latency_percentile"`
@@ -40,7 +39,7 @@ func (h *SettingHandler) SavePriorityScheduling(c *gin.Context) {
 		return
 	}
 	cfg := request.PrioritySchedulingConfig
-	if request.ErrorRateWeight == nil || request.ErrorRateWindowMinutes == nil || request.ErrorRatePriorSamples == nil || request.OAuthQuotaPriority == nil || request.OAuthQuotaThreshold == nil || request.BalanceProtocols == nil || request.LatencyPenaltyMode == nil || request.LatencyPenaltyMinutes == nil || request.LatencyPercentile == nil || request.LatencyMeasurement == nil || request.RecoveryExplorationPercent == nil {
+	if request.ErrorRateWeight == nil || request.ErrorRateWindowMinutes == nil || request.ErrorRatePriorSamples == nil || request.OAuthQuotaPriority == nil || request.OAuthQuotaThreshold == nil || request.LatencyPenaltyMode == nil || request.LatencyPenaltyMinutes == nil || request.LatencyPercentile == nil || request.LatencyMeasurement == nil || request.RecoveryExplorationPercent == nil {
 		current, err := h.settingService.GetPrioritySchedulingConfig(c.Request.Context())
 		if err != nil {
 			response.Error(c, http.StatusServiceUnavailable, "Priority scheduling configuration unavailable")
@@ -49,7 +48,6 @@ func (h *SettingHandler) SavePriorityScheduling(c *gin.Context) {
 		cfg.ErrorRateWeight = current.ErrorRateWeight
 		cfg.ErrorRateWindowMinutes = current.ErrorRateWindowMinutes
 		cfg.ErrorRatePriorSamples = current.ErrorRatePriorSamples
-		cfg.BalanceProtocols = current.BalanceProtocols
 		cfg.OAuthQuotaPriority = current.OAuthQuotaPriority
 		cfg.OAuthQuotaThreshold = current.OAuthQuotaThreshold
 		cfg.LatencyPenaltyMode = current.LatencyPenaltyMode
@@ -72,9 +70,6 @@ func (h *SettingHandler) SavePriorityScheduling(c *gin.Context) {
 	}
 	if request.OAuthQuotaThreshold != nil {
 		cfg.OAuthQuotaThreshold = *request.OAuthQuotaThreshold
-	}
-	if request.BalanceProtocols != nil {
-		cfg.BalanceProtocols = *request.BalanceProtocols
 	}
 	if request.LatencyPenaltyMode != nil {
 		if *request.LatencyPenaltyMode == "" {

@@ -15,6 +15,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type prismAdmissionAccountRepo struct {
+	service.AccountRepository
+	account *service.Account
+}
+
+func (r prismAdmissionAccountRepo) GetOpenAITurnAdmission(context.Context, int64) (*service.Account, *service.Account, error) {
+	return r.account, nil, nil
+}
+
 func TestPrismErrorDoesNotAppendFallback(t *testing.T) {
 	for _, status := range []int{400, 401, 409, 422, 429, 502, 200} {
 		for _, mode := range []string{"json", "stream", "stream_started"} {
@@ -28,7 +37,7 @@ func TestPrismErrorDoesNotAppendFallback(t *testing.T) {
 				cfg.Gateway.PrismBrowser = config.GatewayPrismBrowserConfig{Enabled: true, BaseURL: server.URL + "/v1", APIKey: "fixture"}
 				account := &service.Account{ID: 300, Status: service.StatusActive, Schedulable: true, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth,
 					Credentials: map[string]any{"access_token": "fixture"}, Extra: map[string]any{"openai_prism_browser": true}}
-				gateway := service.NewOpenAIGatewayService(excelBPSErrorAccountRepo{account: account}, nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+				gateway := service.NewOpenAIGatewayService(prismAdmissionAccountRepo{account: account}, nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 				body, err := json.Marshal(map[string]any{"model": "gpt-6.1-sol", "input": "hi", "stream": mode != "json"})
 				require.NoError(t, err)
 				rec := httptest.NewRecorder()
@@ -85,7 +94,7 @@ func TestPrismUnselectedModelsUseExistingNativeRoute(t *testing.T) {
 			account := &service.Account{ID: 300, Status: service.StatusActive, Schedulable: true, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth,
 				Credentials: map[string]any{"access_token": "fixture"}, Extra: map[string]any{"openai_prism_browser": true,
 					service.PrismBrowserModelsKey: []string{"gpt-6.1-sol"}, "openai_passthrough": true}}
-			gateway := service.NewOpenAIGatewayService(excelBPSErrorAccountRepo{account: account}, nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil)
+			gateway := service.NewOpenAIGatewayService(prismAdmissionAccountRepo{account: account}, nil, nil, nil, nil, nil, nil, nil, cfg, nil, nil, nil, nil, nil, upstream, nil, nil, nil, nil, nil, nil, nil, nil)
 			body, err := json.Marshal(map[string]any{"model": model, "input": "hi"})
 			require.NoError(t, err)
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())

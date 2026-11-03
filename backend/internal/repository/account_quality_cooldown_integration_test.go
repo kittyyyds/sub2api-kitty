@@ -14,7 +14,7 @@ func TestQualityCooldownDeadlinePersistedRecovery(t *testing.T) {
 	for _, outcome := range []string{"failed", "inconclusive", "skipped", "passed"} {
 		t.Run(outcome, func(t *testing.T) {
 			models := []string{"gpt-6.1-terra", "gpt-5.6-terra", "gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra", "gpt-5.6-sol"}
-			f := newQualityBPSFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: models, AutoRestore: true})
+			f := newQualityIntegrationFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: models, AutoRestore: true})
 			require.Equal(t, "models_cooled", f.apply("failed"))
 			var raw []byte
 			require.NoError(t, integrationDB.QueryRow(`SELECT state FROM account_quality_states WHERE plan_id=$1`, f.plan.ID).Scan(&raw))

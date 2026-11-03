@@ -22,37 +22,24 @@ func (s *OpenAIOAuthReauthService) legacyAuthConnections(ctx context.Context, a 
 	selected := "primary"
 	if a.IsSIWCEnabled() {
 		selected = "siwc"
-	} else if a.IsExcelBPSEnabled() && !a.IsExcelOAuth() {
-		selected = "bps"
 	}
-	if a.GetCredential("access_token") != "" || a.GetCredential("api_key") != "" {
+	if !a.IsExcelOAuth() && (a.GetCredential("access_token") != "" || a.GetCredential("api_key") != "") {
 		kind := "codex"
 		caps := []string{"responses", "chat_completions", "responses_compact"}
 		if a.Type == AccountTypeAPIKey {
 			kind = "api_key"
 			caps = []string{"responses", "chat_completions", "embeddings"}
-		} else if a.IsExcelOAuth() {
-			kind = "bps"
-			caps = []string{"responses", "chat_completions"}
 		}
 		result = append(result, &OpenAIAuthConnection{ID: legacyConnectionID(a.ID, "primary"), AccountID: a.ID, Kind: kind, Label: "Legacy primary", Legacy: true, Status: "active", ClientID: a.GetCredential("client_id"), Workspace: a.GetCredential("chatgpt_account_id"), Scopes: []string{}, Capabilities: caps, Preferred: !a.HasManagedOpenAIConnections() && selected == "primary"})
 	}
-	for _, kind := range []string{"bps", "siwc"} {
+	for _, kind := range []string{"siwc"} {
 		var ciphertext string
 		var err error
-		if kind == "bps" {
-			r, ok := s.repo.(OpenAIExcelOAuthRepository)
-			if !ok {
-				continue
-			}
-			ciphertext, err = r.GetExcelCredentials(ctx, a.ID)
-		} else {
-			r, ok := s.repo.(OpenAISIWCOAuthRepository)
-			if !ok {
-				continue
-			}
-			ciphertext, err = r.GetSIWCCredentials(ctx, a.ID)
+		r, ok := s.repo.(OpenAISIWCOAuthRepository)
+		if !ok {
+			continue
 		}
+		ciphertext, err = r.GetSIWCCredentials(ctx, a.ID)
 		if err != nil {
 			return nil, err
 		}

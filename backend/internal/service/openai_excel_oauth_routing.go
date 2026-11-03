@@ -10,18 +10,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Only the primary Excel grant is BPS-only. A Codex account with an independent
-// Excel grant still supports native Codex requests.
+// Recognize retired Excel credentials only to prevent them from being sent
+// through the standard Codex protocol.
 func (a *Account) IsExcelOAuth() bool {
 	return a != nil && a.IsOpenAIOAuthLike() && strings.TrimSpace(a.GetCredential("client_id")) == openai.ExcelClientID
 }
 
-var errExcelOAuthRouteUnavailable = errors.New("an enabled Excel BPS route is required for Excel OAuth credentials and the requested model; native Codex is unavailable")
+var errExcelOAuthRouteUnavailable = errors.New("legacy Excel OAuth credentials are no longer supported; import a standard Codex OAuth account")
 
 const excelOAuthRouteErrorCode = "excel_oauth_route_unavailable"
 
 func (s *OpenAIGatewayService) validateExcelOAuthRoute(ctx context.Context, account *Account, model string) error {
-	if account.IsExcelOAuth() && (!account.IsExcelBPSEnabledForModel(model) || !s.excelBPSGloballyEnabled(ctx)) {
+	if account.IsExcelOAuth() {
 		return errExcelOAuthRouteUnavailable
 	}
 	return nil

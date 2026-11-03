@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/requesttiming"
 	"github.com/Wei-Shaw/sub2api/internal/util/transportdiag"
 	pluginv1 "github.com/Wei-Shaw/sub2api/pkg/pluginapi/v1"
@@ -61,7 +60,6 @@ type PluginManager struct {
 	runtimes           map[int64]*pluginRuntime
 	localInstallations map[int64]*PluginInstallation
 	started            bool
-	managedRegistered  sync.Once
 	reconcileCancel    context.CancelFunc
 	reconcileDone      chan struct{}
 	route              atomic.Pointer[pluginRoute]
@@ -89,11 +87,6 @@ func (m *PluginManager) MaxUploadBytes() int64 {
 }
 
 func (m *PluginManager) Start(ctx context.Context) error {
-	if managedinstance.Enabled() {
-		m.managedRegistered.Do(func() {
-			managedinstance.Register("stateful-plugin-runtimes", func() {}, m.stopManagedRuntimes)
-		})
-	}
 	m.operationMu.Lock()
 	m.mu.Lock()
 	if m.started {
@@ -336,13 +329,6 @@ func (m *PluginManager) reconcileCapability(ctx context.Context, installations [
 
 	rollout := bindingRollout(enabled.Bindings)
 	current := slot.Load()
-	if managedPluginRequiresLeader(enabled) && !m.managedPluginAllowed(enabled) {
-		// Existing requests can drain; standby never starts background workers.
-		if current == nil || current.runtime == nil {
-			slot.Store(&pluginRoute{capability: capability, pluginID: enabled.ID, rolloutPercent: rollout, unavailable: "插件等待当前实例取得后台任务租约"})
-		}
-		return nil
-	}
 	if current != nil && current.pluginID == enabled.ID && current.runtime != nil &&
 		!current.runtime.client.Exited() && current.rolloutPercent == rollout &&
 		current.runtime.installation.BinarySHA256 == enabled.BinarySHA256 &&
@@ -616,9 +602,6 @@ func (m *PluginManager) Enable(ctx context.Context, id int64, acceptUntested boo
 	if err != nil {
 		return nil, err
 	}
-	if !m.managedPluginAllowed(installation) {
-		return nil, errors.New("当前实例不持有插件后台任务租约")
-	}
 	slot := m.routeSlot(pluginInstallationCapability(installation))
 	if active := slot.Load(); active != nil && active.pluginID != id {
 		return nil, errors.New("该插件能力已有启用插件，请先停用同类插件")
@@ -760,9 +743,6 @@ func (m *PluginManager) SaveConfig(ctx context.Context, id int64, raw json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	if !m.managedPluginAllowed(installation) {
-		return nil, errors.New("当前实例不持有插件后台任务租约")
-	}
 	previousConfig, err := m.decryptConfig(installation)
 	if err != nil {
 		return nil, err
@@ -847,9 +827,6 @@ func (m *PluginManager) Test(ctx context.Context, id int64) (*pluginv1.TestConfi
 	installation, err := m.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	if !m.managedPluginAllowed(installation) {
-		return nil, errors.New("当前实例不持有插件后台任务租约")
 	}
 	configJSON, err := m.decryptConfig(installation)
 	if err != nil {
@@ -1086,15 +1063,6 @@ func (m *PluginManager) markRuntimeUnavailable(failedRoute *pluginRoute, message
 }
 
 func (m *PluginManager) prepareRuntime(ctx context.Context, installation *PluginInstallation, validateConfig bool) (*pluginRuntime, error) {
-	if managedPluginRequiresLeader(installation) {
-		// Complete admitted responses before replacing this recovery worker.
-		m.mu.Lock()
-		old := m.runtimes[installation.ID]
-		m.mu.Unlock()
-		if old != nil {
-			old.drainUntilComplete()
-		}
-	}
 	runtime, err := m.newRuntime(ctx, installation)
 	if err != nil {
 		return nil, err
@@ -1126,25 +1094,12 @@ func (m *PluginManager) publishRuntimeLocked(installation *PluginInstallation, r
 }
 
 func (m *PluginManager) newRuntime(ctx context.Context, installation *PluginInstallation) (*pluginRuntime, error) {
-	if !m.managedPluginAllowed(installation) {
-		return nil, errors.New("此插件只能由持有后台任务租约的主实例启动")
-	}
 	socketDir := filepath.Join(m.installer.RootDir(), "runtime")
 	if err := os.MkdirAll(socketDir, 0o700); err != nil {
 		return nil, err
 	}
 	timeout := time.Duration(m.cfg.Plugins.StartTimeoutSeconds) * time.Second
 	runtime, err := startPluginRuntime(ctx, installation, timeout, socketDir, m.buildHostServices(installation))
-	if err == nil && managedPluginRequiresLeader(installation) {
-		if controller := managedinstance.Current(); controller != nil {
-			leadership, allowed := controller.LeadershipContext()
-			if !allowed {
-				runtime.kill()
-				return nil, errors.New("插件启动期间实例失去后台任务租约")
-			}
-			runtime.watchLeadership(leadership)
-		}
-	}
 	return runtime, err
 }
 

@@ -61,7 +61,6 @@ func TestAutoConfigModelBillingScopedRoundTrip(t *testing.T) {
 		require.Equal(t, original.ModelBilling, saved.ModelBilling)
 		require.Equal(t, original.IQBootstrap, saved.IQBootstrap)
 		require.Equal(t, original.OpenAITwoFAAdmission, saved.OpenAITwoFAAdmission)
-		require.Equal(t, original.ExcelBPS, saved.ExcelBPS)
 		require.Equal(t, 9, saved.Concurrency)
 		get := httptest.NewRecorder()
 		router.ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/config", nil))

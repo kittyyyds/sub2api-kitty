@@ -51,7 +51,6 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 // AccountHandler handles admin account management
 type AccountHandler struct {
 	claudeResetCredits      claudeResetReader
-	upstreamChannels        *service.ChannelService
 	adminService            service.AdminService
 	oauthService            *service.OAuthService
 	openaiOAuthService      *service.OpenAIOAuthService
@@ -70,8 +69,6 @@ type AccountHandler struct {
 	grokImportProber        grokImportProber
 	upstreamBillingProbe    *service.UpstreamBillingProbeService
 	ollamaCloudUsage        *service.OllamaCloudUsageService
-	codexTicketSettings     *service.SettingService
-	codexHarvest            *service.CodexHarvestService
 	openAIGatewayService    *service.OpenAIGatewayService
 	cfg                     *config.Config
 	opencodeGoUsage         *service.OpenCodeGoUsageService
@@ -84,11 +81,6 @@ func (h *AccountHandler) SetUpstreamBillingProbeService(probe *service.UpstreamB
 
 func (h *AccountHandler) SetOllamaCloudUsageService(usage *service.OllamaCloudUsageService) {
 	h.ollamaCloudUsage = usage
-}
-
-// SetCodexTicketSettings supplies the live policy without mutating shared config.
-func (h *AccountHandler) SetCodexTicketSettings(settings *service.SettingService) {
-	h.codexTicketSettings = settings
 }
 
 func (h *AccountHandler) SetOpenCodeGoUsageService(usage *service.OpenCodeGoUsageService) {
@@ -137,8 +129,6 @@ func NewAccountHandler(
 // CreateAccountRequest represents create account request
 type CreateAccountRequest struct {
 	ImportTicket            string         `json:"import_ticket"`
-	UpstreamChannelID       int64          `json:"upstream_channel_id"`
-	ConfirmUpstreamChannel  bool           `json:"confirm_upstream_channel_binding"`
 	Name                    string         `json:"name" binding:"required"`
 	Notes                   *string        `json:"notes"`
 	Platform                string         `json:"platform" binding:"required"`
@@ -372,7 +362,6 @@ const accountListGroupUngroupedQueryValue = "ungrouped"
 
 func (h *AccountHandler) accountResponseFromService(account *service.Account) *dto.Account {
 	out := dto.AccountFromService(account)
-	h.enrichCodexTicketStatus(account, out)
 	if h != nil && h.ollamaCloudUsage != nil && out != nil {
 		h.ollamaCloudUsage.EnrichState(out.OllamaCloudUsage)
 	}
@@ -381,7 +370,6 @@ func (h *AccountHandler) accountResponseFromService(account *service.Account) *d
 
 func (h *AccountHandler) accountListResponseFromService(account *service.Account) *dto.Account {
 	out := dto.AccountFromServiceShallow(account)
-	h.enrichCodexTicketStatus(account, out)
 	if out != nil && account != nil {
 		out.Proxy = dto.ProxyFromService(account.Proxy)
 	}
@@ -389,18 +377,6 @@ func (h *AccountHandler) accountListResponseFromService(account *service.Account
 		h.ollamaCloudUsage.EnrichState(out.OllamaCloudUsage)
 	}
 	return out
-}
-
-func (h *AccountHandler) enrichCodexTicketStatus(account *service.Account, out *dto.Account) {
-	if h != nil && h.cfg != nil && out != nil {
-		cfg := h.cfg.Gateway.OpenAICodexTicket
-		if h.codexTicketSettings != nil {
-			cfg.Enabled = h.codexTicketSettings.GetOpenAICodexTicketEnabled(context.Background(), cfg.Enabled)
-			cfg.Models = h.codexTicketSettings.GetOpenAICodexTicketModels(context.Background(), cfg.Models)
-			cfg.FailClosed = h.codexTicketSettings.GetOpenAICodexTicketFailClosed(context.Background())
-		}
-		out.CodexTurnTickets = service.OpenAICodexTicketStatuses(account, cfg, time.Now())
-	}
 }
 
 func (h *AccountHandler) isSimpleMode() bool {
@@ -458,10 +434,6 @@ func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, ac
 		}
 	}
 
-	// Analytics enrichment is separate from the scheduler account domain.
-	if err := h.enrichUpstreamChannelBindings(ctx, []AccountWithConcurrency{item}); err != nil {
-		slog.Warn("upstream_channel_readback_failed")
-	}
 	h.enrichShadowParents(ctx, []AccountWithConcurrency{item})
 
 	return item
@@ -908,10 +880,6 @@ func (h *AccountHandler) List(c *gin.Context) {
 		result[i] = item
 	}
 
-	if err := h.enrichUpstreamChannelBindings(c.Request.Context(), result); err != nil {
-		response.InternalError(c, "Upstream channel readback failed")
-		return
-	}
 	h.enrichShadowParents(c.Request.Context(), result)
 
 	if lite {
@@ -1102,14 +1070,6 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
-	if _, observer := service.ObserverGroupIDs(c.Request.Context()); observer && req.UpstreamChannelID > 0 {
-		response.ErrorFrom(c, service.ErrObserverScope)
-		return
-	}
-	if req.UpstreamChannelID < 0 || (req.UpstreamChannelID > 0 && !req.ConfirmUpstreamChannel) {
-		response.ErrorFrom(c, service.ErrUpstreamChannelValidation)
-		return
-	}
 	if err := service.ValidateOpenAILongContextBillingExtra(req.Platform, req.Extra); err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -1137,9 +1097,6 @@ func (h *AccountHandler) Create(c *gin.Context) {
 	var createdAccount *service.Account
 
 	result, err := executeAdminIdempotent(c, "admin.accounts.create", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
-		if req.UpstreamChannelID > 0 {
-			ctx = service.WithInitialUpstreamChannel(ctx, req.UpstreamChannelID)
-		}
 		account, execErr := h.adminService.CreateAccount(ctx, &service.CreateAccountInput{
 			ImportTicket:          req.ImportTicket,
 			Name:                  req.Name,
@@ -1449,34 +1406,6 @@ func (h *AccountHandler) PelicanTest(c *gin.Context) {
 	if err := h.accountTestService.TestPelicanAccountConnection(c, accountID, req.ModelID, req.Prompt, req.ReasoningEffort); err != nil {
 		return
 	}
-}
-
-type StateProbeRequest struct {
-	ModelID string `json:"model_id"`
-}
-
-// StateProbe runs the two-shot Codex turn-state probe (degraded / healthy).
-// POST /api/v1/admin/accounts/:id/state-probe
-func (h *AccountHandler) StateProbe(c *gin.Context) {
-	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, "Invalid account ID")
-		return
-	}
-
-	var req StateProbeRequest
-	if c.Request.ContentLength != 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			response.BadRequest(c, "Invalid request: "+err.Error())
-			return
-		}
-	}
-	result, err := h.accountTestService.ProbeOpenAICodexState(c.Request.Context(), accountID, req.ModelID)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, result)
 }
 
 // RecoverState handles unified recovery of recoverable account runtime state.
@@ -3015,6 +2944,10 @@ func (h *AccountHandler) respondAvailableModels(c *gin.Context, account *service
 
 	// Handle OpenAI accounts
 	if account.IsOpenAI() {
+		if account.IsExcelOAuth() {
+			response.Error(c, http.StatusBadRequest, "legacy Excel OAuth credentials are no longer supported; import a standard Codex OAuth account")
+			return
+		}
 		// Prefer the shared, account-keyed upstream catalog. If discovery fails,
 		// retain the legacy local catalog below so the test dialog remains usable.
 		if h.accountTestService != nil {
@@ -3023,13 +2956,6 @@ func (h *AccountHandler) respondAvailableModels(c *gin.Context, account *service
 				return
 			} else if infraerrors.Reason(fetchErr) == "OPENAI_CODEX_MODELS_CREDENTIALS_INVALID" {
 				response.ErrorFrom(c, fetchErr)
-				return
-			} else if account.IsExcelBPSEnabled() {
-				if service.IsExcelAuthorizationError(fetchErr) {
-					response.ErrorFrom(c, fetchErr)
-					return
-				}
-				response.Error(c, http.StatusBadGateway, "Excel BPS model discovery is unavailable")
 				return
 			}
 		}

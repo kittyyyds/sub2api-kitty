@@ -99,7 +99,6 @@
       <template #table>
         <div v-if="activeManagementTab !== 'proxies'" class="min-h-0 flex-1 overflow-y-auto p-4">
           <ProxyBindingSettings v-if="activeManagementTab === 'binding'" />
-          <HarvestProxySettings v-else-if="activeManagementTab === 'harvest'" />
           <MihomoSettings v-else :section="activeManagementTab" @static-proxies-added="loadProxies" />
         </div>
         <div v-show="activeManagementTab === 'proxies'" ref="proxyTableRef" class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -935,7 +934,6 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MihomoSettings from './settings/MihomoSettings.vue'
-import HarvestProxySettings from '@/components/admin/HarvestProxySettings.vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -969,7 +967,6 @@ const route = useRoute()
 const router = useRouter()
 const managementTabs = [
   { key: 'proxies', label: 'admin.proxies.proxyList' },
-  { key: 'harvest', label: 'admin.settings.gatewayForwarding.codexTicketHarvestProxy' },
   { key: 'subscriptions', label: 'admin.proxies.subscriptions' },
   { key: 'dynamic', label: 'admin.proxies.dynamicProxies' },
   { key: 'nodes', label: 'admin.proxies.nodes' },

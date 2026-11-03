@@ -12,7 +12,7 @@ python3 deploy/traffic/preflight.py deploy/traffic/multi-host.example.json
 
 - 2–16个节点、唯一安全id，一个full auto/writer，其余gateway auto/reader；不提供选主或writer自动接管。工具不修改应用默认行为；它检查的是本次有限的共享Redis部署约定。
 - 每节点声明1–16个`scheduler_buckets`（如虚构`17:openai:single`）；reader须显式开启scheduler_readiness、覆盖所声明承接桶，writer声明覆盖reader的桶。年龄范围沿用应用0–86400秒。清单不证明发布者实际已发布或账号可调度。
-- `capabilities`仅允许`http-responses`、`native-ws`、`bps-relay`，表示运营者希望承接的路径。v1不含WS bridge/passthrough、区域快照或其他协议；不支持的字段直接拒绝，不能借工具通过声称这些模式已支持。
+- `capabilities`仅允许`http-responses`、`native-ws`，表示运营者希望承接的路径。v1不含WS bridge/passthrough、区域快照或其他协议；不支持的字段直接拒绝，不能借工具通过声称这些模式已支持。
 - 声明native-ws须开启node-owner门禁并提供唯一node_id；这提供安全拒绝，不迁移socket、不自动重放。仍需要实际WS模式配置和运行路径验收。HTTP tenant-owner与node owner不是同一种授权。
 - 声明bps-relay须显式提供本节点HTTPS origin，所有非空owner origin必须不同；默认443/大小写/末尾斜杠作同一origin处理。域名不同仍可能指向相同LB，工具无法识别，不作网络健康保证。原生附件file ID、异步S3输出不在此能力里。
 

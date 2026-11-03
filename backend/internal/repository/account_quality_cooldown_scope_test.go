@@ -19,7 +19,7 @@ func TestQualityCooldownActionGuardRetainsAllOwnershipLayouts(t *testing.T) {
 		"recovery ramp":        {RecoveryTarget: &concurrency},
 	} {
 		t.Run(name, func(t *testing.T) {
-			for _, action := range []string{service.QualityActionObserveOnly, "disable_scheduling", service.QualityActionEnableBPS, service.QualityActionIsolateModels} {
+			for _, action := range []string{service.QualityActionObserveOnly, "disable_scheduling", service.QualityActionIsolateModels} {
 				plan := &service.ScheduledTestPlan{PelicanConfig: &service.PelicanTestConfig{Quality: &service.QualityPolicy{Action: action}}}
 				require.Error(t, checkQualityIsolationScope(plan, &state), "cooldown ownership must block action changes: "+action)
 				plan.PelicanConfig.Quality.Action = service.QualityActionRemoveModel

@@ -1046,9 +1046,6 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 				}
 			}
 		}
-		if err == nil {
-			accounts = FilterTierPoolAccounts(accounts, TierPoolFromContext(ctx))
-		}
 		return accounts, useMixed, err
 	}
 	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
@@ -1094,7 +1091,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 					"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 			}
 		}
-		return FilterTierPoolAccounts(s.filterAccountsBySchedulingThreshold(ctx, filtered), TierPoolFromContext(ctx)), useMixed, nil
+		return s.filterAccountsBySchedulingThreshold(ctx, filtered), useMixed, nil
 	}
 
 	var accounts []Account
@@ -1134,7 +1131,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 	if platform == PlatformGrok || strings.EqualFold(platform, PlatformGrok) {
 		accounts = s.filterGrokFreeQuotaAccountsForGateway(ctx, accounts)
 	}
-	return FilterTierPoolAccounts(accounts, TierPoolFromContext(ctx)), useMixed, nil
+	return accounts, useMixed, nil
 }
 
 // WithSingleAntigravityAccountGroupProbe 为请求挂载「分组是否只有一个 antigravity 可调度账号」的延迟判定。

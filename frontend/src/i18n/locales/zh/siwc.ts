@@ -1,6 +1,6 @@
 export default {
   "protocol": "OpenAI 请求协议",
-  "codex": "Codex（保留现有 BPS / Prism 配置）",
+  "codex": "Codex（保留现有 Prism 配置）",
   "siwc": "SIWC API（Sign in with ChatGPT）",
   "protocolHint": "授权完成后可随时切换，保存账号后生效。SIWC 使用 ChatGPT 套餐调用官方 Responses API，Codex 凭据独立保留。",
   "bound": "SIWC 已绑定（凭据存在，不代表实时可用性）",

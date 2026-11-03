@@ -246,7 +246,7 @@ describe('AppSidebar customer grouped navigation', () => {
     expect(smartOpsGroup).toBeDefined()
     expect(wrapper.find('a[href="/admin/account-quality"]').exists()).toBe(false)
     await smartOpsGroup!.trigger('click')
-    for (const path of ['/admin/account-quality', '/admin/account-ops', '/admin/token-guard', '/admin/harvest-flow']) {
+    for (const path of ['/admin/account-quality', '/admin/account-ops', '/admin/token-guard']) {
       expect(wrapper.find(`a[href="${path}"]`).exists()).toBe(true)
     }
 

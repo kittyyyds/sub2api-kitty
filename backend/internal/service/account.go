@@ -1136,7 +1136,7 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 
 func (a *Account) isModelMappingSupported(requestedModel string) bool {
 	// Apply the credential boundary before passthrough's model allowlist bypass.
-	if a.IsExcelOAuth() && !a.IsExcelBPSEnabledForModel(requestedModel) {
+	if a.IsExcelOAuth() {
 		return false
 	}
 	if blocked, _ := a.Extra["astra_model_disabled"].(bool); blocked {
@@ -2427,146 +2427,6 @@ func (a *Account) IsOpenAIPassthroughEnabled() bool {
 	return false
 }
 
-// IsExcelBPSEnabled routes an existing ChatGPT OAuth account to the Excel gateway.
-// Credentials and refresh remain on the original account; no sidecar is involved.
-func (a *Account) IsExcelBPSEnabled() bool {
-	if a.IsSIWCEnabled() {
-		return false
-	}
-	if a == nil || a.Platform != PlatformOpenAI || a.Type != AccountTypeOAuth || a.IsShadow() || a.IsOpenAIAgentIdentity() || a.IsOpenAIPersonalAccessToken() {
-		return false
-	}
-	if strings.EqualFold(strings.TrimSpace(a.GetCredential("plan_type")), "free") {
-		return false
-	}
-	enabled, _ := a.Extra["openai_excel_bps"].(bool)
-	return enabled && a.Extra[ExcelBPSAuthorizationPendingKey] != true
-}
-
-// The requested switch stays on while the worker prepares the independent grant.
-const ExcelBPSAuthorizationPendingKey = "openai_excel_bps_authorization_pending"
-
-const ExcelBPSIgnoreEncryptedContentKey = "openai_excel_bps_ignore_encrypted_content"
-
-// IsExcelBPSIgnoreEncryptedContentEnabled opts into replacing ciphertext that
-// BPS cannot forward, such as sub-agent messages in an old Codex conversation,
-// with an omission notice instead of rejecting the whole request.
-func (a *Account) IsExcelBPSIgnoreEncryptedContentEnabled() bool {
-	if !a.IsExcelBPSEnabled() {
-		return false
-	}
-	enabled, _ := a.Extra[ExcelBPSIgnoreEncryptedContentKey].(bool)
-	return enabled
-}
-
-func (a *Account) IsExcelBPSMihomoEnabled() bool {
-	if !a.IsExcelBPSEnabled() {
-		return false
-	}
-	enabled, _ := a.Extra["openai_excel_bps_mihomo"].(bool)
-	return enabled
-}
-
-// ExcelBPSProxySourceKey selects the pool behind the BPS session proxy toggle:
-// the managed Mihomo kernel (default) or the admin proxy list (IP 管理).
-const ExcelBPSProxySourceKey = "openai_excel_bps_proxy_source"
-
-const (
-	ExcelBPSProxySourceMihomo = "mihomo"
-	ExcelBPSProxySourceIPPool = "ip_pool"
-)
-
-// ExcelBPSProxySource is meaningful only while the session proxy is enabled;
-// unknown stored values fall back to the Mihomo pool rather than direct.
-func (a *Account) ExcelBPSProxySource() string {
-	if !a.IsExcelBPSMihomoEnabled() {
-		return ""
-	}
-	source, _ := a.Extra[ExcelBPSProxySourceKey].(string)
-	if source == ExcelBPSProxySourceIPPool {
-		return ExcelBPSProxySourceIPPool
-	}
-	return ExcelBPSProxySourceMihomo
-}
-
-// IsExcelBPSCacheCreationAsInputEnabled controls local billing and downstream usage.
-// The setting has no effect unless this account uses the Excel/BPS protocol.
-func (a *Account) IsExcelBPSCacheCreationAsInputEnabled() bool {
-	if !a.IsExcelBPSEnabled() {
-		return false
-	}
-	enabled, _ := a.Extra["openai_excel_bps_cache_creation_as_input"].(bool)
-	return enabled
-}
-
-// IsExcelBPSAutoDisableOn403Enabled opts into disabling BPS after a generic 403.
-func (a *Account) IsExcelBPSAutoDisableOn403Enabled() bool {
-	if !a.IsExcelBPSEnabled() {
-		return false
-	}
-	enabled, _ := a.Extra["openai_excel_bps_auto_disable_on_403"].(bool)
-	return enabled
-}
-
-// isExcelBPSAllModelsEnabled preserves legacy account-wide routing. An explicit
-// list, including an empty or malformed list, never enables BPS for all models.
-func (a *Account) isExcelBPSAllModelsEnabled() bool {
-	if !a.IsExcelBPSEnabled() {
-		return false
-	}
-	_, scoped := a.Extra["openai_excel_bps_models"]
-	return !scoped
-}
-
-// IsExcelBPSEnabledForModel selects the protocol after account model mapping.
-// The list selects a protocol; it does not restrict access to other models.
-func (a *Account) IsExcelBPSEnabledForModel(requestedModel string) bool {
-	if !a.IsExcelBPSEnabled() {
-		return false
-	}
-	return a.isExcelBPSUpstreamModelEnabled(a.GetMappedModel(requestedModel))
-}
-
-// IsExcelBPSImagesEnabledForModel routes image generation through BPS only
-// when the image model is listed explicitly. Legacy account-wide routing keeps
-// images on Codex so an upgrade does not silently change the image channel.
-func (a *Account) IsExcelBPSImagesEnabledForModel(requestedModel string) bool {
-	if !a.IsExcelBPSEnabled() || a.isExcelBPSAllModelsEnabled() {
-		return false
-	}
-	model := a.GetMappedModel(requestedModel)
-	return usesCodexDirectImages(model) && excelBPSImagesSupportedModel(model) && a.isExcelBPSUpstreamModelEnabled(model)
-}
-
-func (a *Account) isExcelBPSUpstreamModelEnabled(model string) bool {
-	if !a.IsExcelBPSEnabled() {
-		return false
-	}
-	raw, scoped := a.Extra["openai_excel_bps_models"]
-	if !scoped {
-		return true
-	}
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return false
-	}
-	switch models := raw.(type) {
-	case []string:
-		for _, selected := range models {
-			if strings.TrimSpace(selected) == model {
-				return true
-			}
-		}
-	case []any:
-		for _, selected := range models {
-			if name, ok := selected.(string); ok && strings.TrimSpace(name) == model {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // IsCopilotSDKEnabled selects the stateful Responses sidecar contract. The
 // endpoint and bearer key belong to the sidecar, not GitHub or ChatGPT OAuth.
 func (a *Account) IsCopilotSDKEnabled() bool {
@@ -2597,7 +2457,7 @@ func (a *Account) IsOpenAIResponsesWebSocketV2Enabled() bool {
 	if a.IsSIWCEnabled() {
 		return false
 	}
-	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
+	if a.IsCopilotSDKEnabled() || a.IsExcelOAuth() {
 		return false
 	}
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
@@ -2674,7 +2534,7 @@ func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) stri
 	if a.IsSIWCEnabled() {
 		return OpenAIWSIngressModeOff
 	}
-	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
+	if a.IsCopilotSDKEnabled() || a.IsExcelOAuth() {
 		return OpenAIWSIngressModeOff
 	}
 	resolvedDefault := normalizeOpenAIWSIngressDefaultMode(defaultMode)
@@ -2747,7 +2607,7 @@ func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) stri
 // IsOpenAIWSForceHTTPEnabled 返回账号级"强制 HTTP"开关。
 // 字段：accounts.extra.openai_ws_force_http。
 func (a *Account) IsOpenAIWSForceHTTPEnabled() bool {
-	if a.IsCopilotSDKEnabled() || a.isExcelBPSAllModelsEnabled() {
+	if a.IsCopilotSDKEnabled() || a.IsExcelOAuth() {
 		return true
 	}
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {

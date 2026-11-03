@@ -531,9 +531,7 @@ func pelicanGroupTestRetryable(result *ScheduledTestResult) bool {
 		"service temporarily unavailable", "service unavailable",
 		"stream ended before response.completed",
 		"generation stream ended before completion",
-		"chat completions stream from /v1/chat/completions ended before [done]",
-		"excel bps test response was interrupted",
-		"excel bps test response ended before completion":
+		"chat completions stream from /v1/chat/completions ended before [done]":
 		return true
 	}
 	return strings.HasPrefix(result.ErrorMessage, "Stream read error: ") ||

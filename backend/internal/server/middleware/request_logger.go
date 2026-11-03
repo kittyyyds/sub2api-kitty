@@ -14,6 +14,8 @@ import (
 const requestIDHeader = "X-Request-ID"
 
 func requestLogPath(path string) string {
+	// Old clients can still request retired capability URLs. Keep their tokens
+	// out of logs even though the corresponding feature is no longer served.
 	if strings.HasPrefix(path, "/api/bps-images/") {
 		return "/api/bps-images/[redacted]"
 	}

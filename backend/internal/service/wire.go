@@ -147,12 +147,9 @@ func ProvideOpenAIOAuthReauthService(
 	}
 	svc.SetSessionExportRepository(sessionExportRepo)
 	svc.settings = settings
-	if admin, ok := adminService.(*adminServiceImpl); ok {
-		admin.excelOAuthReauth = svc
-	}
 	svc.configureWorker(cfg, buildInfo)
 	if gateway, ok := runtimeBlocker.(*OpenAIGatewayService); ok {
-		gateway.excelOAuthReauth = svc
+		gateway.openAIOAuthReauth = svc
 	}
 	return svc
 }
@@ -342,9 +339,7 @@ func ProvideAccountTestService(
 			})
 		}
 	}
-	stopScheduling := service.startAstraAccountScheduling()
 	openAIGatewayService.stopAstraSetup = func() {
-		stopScheduling()
 		service.StopAstraAutomaticSetup()
 	}
 	return service
@@ -1051,7 +1046,6 @@ var ProviderSet = wire.NewSet(
 	ProvideOpenAIGatewayService,
 	NewSafetyPromptStore,
 	wire.Struct(new(OpenAIGatewayDependencies), "*"),
-	ProvideCodexHarvestService,
 	ProvideImageStorageSettingService,
 	ProvideImageTaskService,
 	ProvideBatchImageModelPricingResolver,
@@ -1147,8 +1141,6 @@ var ProviderSet = wire.NewSet(
 	ProvideIdempotencyCleanupService,
 	NewPelicanShowcaseService,
 	NewPelicanGroupTestService,
-	NewControlledExperimentGateway,
-	NewControlledExperimentService,
 	ProvideScheduledTestService,
 	ProvideScheduledTestRunnerService,
 	NewQualityJudgeService,
@@ -1161,7 +1153,6 @@ var ProviderSet = wire.NewSet(
 	ProvideContentModerationService,
 	wire.Bind(new(SecurityPolicyModelReviewer), new(*ContentModerationService)),
 	NewSecurityPolicyService,
-	NewTieredRoutingService,
 	NewBillingExportService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,

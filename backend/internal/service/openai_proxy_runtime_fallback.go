@@ -148,16 +148,12 @@ func (s *OpenAIGatewayService) doOpenAIProxyAttempt(req *http.Request, account *
 	if err := s.acquireOpenAIRPMForSend(req.Context(), account); err != nil {
 		return nil, err
 	}
-	if err := controlledSubmission(req.Context(), "native_http"); err != nil {
-		return nil, err
-	}
 	if err := s.priorityLatencyBeforeSend(req.Context(), account); err != nil {
 		return nil, err
 	}
 	observeAttempt := s.observePriorityAttempt(req, account)
 	defer func() { observeAttempt(resp, err) }()
 	defer func() { s.rateLimitService.observeQualityResponse(req.Context(), account, resp, err) }()
-	defer func() { controlledHTTPResponse(req.Context(), resp) }()
 	req, timingTrace := requesttiming.StartAttempt(req, account.ID, target.proxyID)
 	defer func() { timingTrace.Response(resp, err) }()
 	defer func() {
@@ -168,7 +164,7 @@ func (s *OpenAIGatewayService) doOpenAIProxyAttempt(req *http.Request, account *
 	if err = s.fenceAuthConnectionEgress(req.Context(), req, account); err != nil {
 		return nil, err
 	}
-	if s.pluginManager != nil && account.AuthConnectionID == "" && !s.codexTicketRequestBound(req, account) {
+	if s.pluginManager != nil && account.AuthConnectionID == "" {
 		resp, handled, err := s.pluginManager.RoundTripOpenAIOAuth(req.Context(), req, target.url, account)
 		if handled {
 			return markOpenAIResponseEgress(resp, req, target.proxyID), err
@@ -190,7 +186,7 @@ func (s *OpenAIGatewayService) doUpstreamWithProxyFallback(ctx context.Context, 
 		primary.proxyID = account.Proxy.ID
 		primary.proxyName = account.Proxy.Name
 	}
-	if s.strictAccountEgress(ctx, account) || isControlledExperiment(ctx) || s.codexTicketPinsEgress(req, account) || account.Proxy == nil || primaryProxyURL == "" ||
+	if s.strictAccountEgress(ctx, account) || account.Proxy == nil || primaryProxyURL == "" ||
 		primaryProxyURL != account.Proxy.URL() ||
 		(account.Proxy.FallbackMode != FallbackModeDirect && account.Proxy.FallbackMode != FallbackModeProxy) {
 		return s.doOpenAIProxyAttempt(req, account, primary)

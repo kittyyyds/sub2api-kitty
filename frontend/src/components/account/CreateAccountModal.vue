@@ -6,8 +6,6 @@
     @close="handleClose"
   >
     <div v-if="show" class="mb-4 space-y-2">
-      <UpstreamChannelSelector v-model="initialChannelId" @update:model-value="initialChannelConfirmed = false" />
-      <label v-if="initialChannelId > 0" class="flex gap-2 text-sm"><input v-model="initialChannelConfirmed" type="checkbox" data-testid="confirm-create-channel" />{{ t('upstreamEntities.confirmCreate') }}</label>
     </div>
     <!-- Step Indicator for OAuth accounts -->
     <div v-if="isOAuthFlow" class="mb-6 flex items-center justify-center">
@@ -71,7 +69,6 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
-      <AccountTierRoutingFields v-model:enabled="tierRoutingEnabled" v-model:pool="tierRoutingPool" />
 
       <!-- Platform Selection - Segmented Control Style -->
       <div>
@@ -413,10 +410,10 @@
         <div class="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-4" data-tour="account-form-type">
           <button
             type="button"
-            @click="accountCategory = 'oauth-based'; openaiTwoFA = false; openaiBPSOAuth = false"
+            @click="accountCategory = 'oauth-based'; openaiTwoFA = false"
             :class="[
               'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              accountCategory === 'oauth-based' && !openaiTwoFA && !openaiBPSOAuth
+              accountCategory === 'oauth-based' && !openaiTwoFA
                 ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                 : 'border-gray-200 hover:border-green-300 dark:border-dark-600 dark:hover:border-green-700'
             ]"
@@ -424,7 +421,7 @@
             <div
               :class="[
                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                accountCategory === 'oauth-based' && !openaiTwoFA && !openaiBPSOAuth
+                accountCategory === 'oauth-based' && !openaiTwoFA
                   ? 'bg-green-500 text-white'
                   : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
               ]"
@@ -463,7 +460,7 @@
             </div>
           </button>
 
-          <button type="button" data-testid="openai-two-fa" @click="accountCategory = 'oauth-based'; openaiTwoFA = true; openaiBPSOAuth = false"
+          <button type="button" data-testid="openai-two-fa" @click="accountCategory = 'oauth-based'; openaiTwoFA = true"
             :class="['flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
               isOpenAITwoFA ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-dark-600']">
             <Icon name="shield" size="sm" />
@@ -473,23 +470,8 @@
             </div>
           </button>
 
-          <button type="button" data-testid="openai-bps-oauth"
-            @click="accountCategory = 'oauth-based'; openaiTwoFA = false; openaiBPSOAuth = true"
-            :class="['flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
-              isOpenAIBPSOAuth ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 hover:border-green-300 dark:border-dark-600']">
-            <Icon name="link" size="sm" />
-            <div>
-              <span class="block text-sm font-medium text-gray-900 dark:text-white">BPS OAuth</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.oauth.openai.excelTypeDesc') }}</span>
-            </div>
-          </button>
         </div>
         <p v-if="isOpenAITwoFA" class="input-hint">{{ t('tokenGuard.twoFA.nameHint') }}</p>
-        <div v-if="isOpenAIBPSOAuth" class="mt-3 space-y-2" data-testid="bps-oauth-models">
-          <p class="input-hint">{{ t('admin.accounts.oauth.openai.excelLoginHint') }}</p>
-          <label class="input-label">{{ t('admin.accounts.openai.excelBPSModels') }}</label>
-          <ModelWhitelistSelector v-model="bpsOAuthModels" platform="openai" />
-        </div>
       </div>
 
       <!-- Account Type Selection (Grok) -->
@@ -3283,8 +3265,6 @@
         />
       </div>
 
-      <AccountAutoBPSSection v-if="autoBPSAvailable" v-model:draft="autoBPS.draft.value" :groups="groups" />
-
       <!-- OpenAI 自动透传开关（OAuth/API Key） -->
       <div
         v-if="form.platform === 'openai'"
@@ -3821,7 +3801,6 @@
         v-else
         ref="oauthFlowRef"
         :add-method="form.platform === 'anthropic' ? addMethod : 'oauth'"
-        :excel-oauth="isOpenAIBPSOAuth"
         :auth-url="currentAuthUrl"
         :session-id="currentSessionId"
         :loading="currentOAuthLoading"
@@ -3831,12 +3810,12 @@
         :allow-multiple="form.platform === 'anthropic'"
         :show-cookie-option="form.platform === 'anthropic'"
         :show-refresh-token-option="form.platform === 'openai' || form.platform === 'antigravity' || form.platform === 'grok'"
-        :show-mobile-refresh-token-option="form.platform === 'openai' && !isOpenAIBPSOAuth"
+        :show-mobile-refresh-token-option="form.platform === 'openai'"
         :show-session-token-option="false"
         :show-access-token-option="false"
-        :show-codex-session-import-option="form.platform === 'openai' && !isOpenAIBPSOAuth"
-        :show-agent-identity-option="form.platform === 'openai' && !isOpenAIBPSOAuth"
-        :show-codex-pat-option="form.platform === 'openai' && !isOpenAIBPSOAuth"
+        :show-codex-session-import-option="form.platform === 'openai'"
+        :show-agent-identity-option="form.platform === 'openai'"
+        :show-codex-pat-option="form.platform === 'openai'"
         :show-sso-option="form.platform === 'grok'"
         :show-email-password-option="false"
         :show-manual-option="true"
@@ -4170,8 +4149,6 @@
 
 <script setup lang="ts">
 import { usesImagePriceProbe } from "@/utils/modelPriceProbe"
-import AccountTierRoutingFields from './AccountTierRoutingFields.vue'
-import { withAccountTierRouting, type AccountTierPool } from '@/utils/accountTierRouting'
 import ExtraImageModelsField from '@/components/account/ExtraImageModelsField.vue'
 import { parseExtraImageModels } from '@/utils/extraImageModels'
 import { DEFAULT_ACCOUNT_COST_MULTIPLIER, isValidAccountCostMultiplier } from '@/utils/accountCost'
@@ -4196,13 +4173,12 @@ import {
 } from '@/composables/useModelWhitelist'
 import { adminAPI } from '@/api/admin'
 import { useQuotaNotifyState } from '@/composables/useQuotaNotifyState'
-import { useAccountAutoBPS } from '@/composables/useAccountAutoBPS'
 import {
   useAccountOAuth,
   type AddMethod,
   type AuthInputMethod
 } from '@/composables/useAccountOAuth'
-import { OPENAI_EXCEL_OAUTH_CLIENT_ID, useOpenAIOAuth } from '@/composables/useOpenAIOAuth'
+import { useOpenAIOAuth } from '@/composables/useOpenAIOAuth'
 import { useGeminiOAuth } from '@/composables/useGeminiOAuth'
 import { useAntigravityOAuth } from '@/composables/useAntigravityOAuth'
 import { useGrokOAuth } from '@/composables/useGrokOAuth'
@@ -4214,16 +4190,12 @@ import type {
   CheckMixedChannelResponse,
   CreateAccountRequest,
   CodexSessionImportMessage,
-  CodexSessionImportResult,
   OpenAICompactMode,
   OpenAIResponsesMode,
   OpenAIEndpointCapability,
   TempUnschedulableScope
 } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import UpstreamChannelSelector from './UpstreamChannelSelector.vue'
-import { readChannelBindings, bindChannelAccounts } from '@/api/admin/upstreamChannels'
-import type { CodexSessionImportRequest as UpstreamImportRequest, OpenAICodexPATCreateRequest as UpstreamPATRequest } from '@/types'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
@@ -4234,7 +4206,6 @@ import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
-import AccountAutoBPSSection from '@/components/account/AccountAutoBPSSection.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import AccountRpmSettings from '@/components/account/AccountRpmSettings.vue'
@@ -4284,7 +4255,7 @@ import {
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { supportsAccountQuota } from '@/utils/accountQuota'
 import { getAccountExpiryTimestamp } from '@/components/account/accountExpiry'
-import { DEFAULT_EXCEL_BPS_MODELS, VERTEX_LOCATION_OPTIONS } from '@/constants/account'
+import { VERTEX_LOCATION_OPTIONS } from '@/constants/account'
 import {
   OPENAI_WS_MODE_CTX_POOL,
   OPENAI_WS_MODE_OFF,
@@ -4317,7 +4288,6 @@ const browserTimeZone = getBrowserTimeZone()
 
 const oauthStepTitle = computed(() => {
   if (isOpenAITwoFA.value) return t('tokenGuard.twoFA.title')
-  if (isOpenAIBPSOAuth.value) return t('admin.accounts.oauth.openai.excelTitle')
   if (form.platform === 'openai') return t('admin.accounts.oauth.openai.title')
   if (form.platform === 'gemini') return t('admin.accounts.oauth.gemini.title')
   if (form.platform === 'antigravity') return t('admin.accounts.oauth.antigravity.title')
@@ -4334,7 +4304,7 @@ const withAccountExtraSettings = (extra?: Record<string, unknown>): Record<strin
     throw new Error(t('admin.accounts.costMultiplierInvalid'))
   }
   const name = upstreamRequestIdHeader.value.trim()
-  return { ...withAccountTierRouting(extra, tierRoutingEnabled.value, tierRoutingPool.value), cost_multiplier: costMultiplier.value, ...(name ? { upstream_request_id_header: name } : {}) }
+  return { ...extra, cost_multiplier: costMultiplier.value, ...(name ? { upstream_request_id_header: name } : {}) }
 }
 
 const baseUrlHint = computed(() => {
@@ -4479,15 +4449,8 @@ interface TempUnschedRuleForm {
 // State
 const step = ref(1)
 const openaiTwoFA = ref(false)
-const openaiBPSOAuth = ref(false)
-const bpsOAuthModels = ref<string[]>([...DEFAULT_EXCEL_BPS_MODELS])
-const isOpenAIBPSOAuth = computed(() => form.platform === 'openai' && accountCategory.value === 'oauth-based' && openaiBPSOAuth.value)
 const twoFABusy = ref(false)
 const isOpenAITwoFA = computed(() => form.platform === 'openai' && accountCategory.value === 'oauth-based' && openaiTwoFA.value)
-// 「降智后自动开启 BPS」：OpenAI OAuth / 2FA 添加时可选，账号建好后按这里的设置给每个新账号建一条质量运维规则。
-const autoBPS = useAccountAutoBPS()
-const globalBpsEnabled = computed(() => appStore.cachedPublicSettings?.excel_bps_enabled !== false)
-const autoBPSAvailable = computed(() => globalBpsEnabled.value && form.platform === 'openai' && accountCategory.value === 'oauth-based' && !isOpenAIBPSOAuth.value)
 const submitting = ref(false)
 const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account'>('oauth-based') // UI selection for account category
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
@@ -4736,8 +4699,6 @@ const upstreamModelsPreviewed = ref(false)
 const DEFAULT_POOL_MODE_RETRY_COUNT = 3
 const MAX_POOL_MODE_RETRY_COUNT = 10
 const DEFAULT_POOL_MODE_RETRY_STATUS_CODES = [401, 403, 429]
-const tierRoutingEnabled = ref(false)
-const tierRoutingPool = ref<AccountTierPool>('standard')
 
 const poolModeEnabled = ref(false)
 const explicitCacheUpstreamEnabled = ref(false)
@@ -5247,7 +5208,6 @@ watch(
   () => form.platform,
   (newPlatform) => {
     grokMediaProvider.value = ''
-    openaiBPSOAuth.value = false
     // Reset base URL based on platform
     if (isMultiProtocolApiKeyPlatform(newPlatform)) {
       const mode = newPlatform === 'opencode_go' ? openCodeAccountMode.value : accountMode.value
@@ -5677,65 +5637,22 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
   }
 }
 
-const createAccountWithTierRouting = async (payload: CreateAccountRequest) => {
+const createAccountWithReservation = async (payload: CreateAccountRequest) => {
  await ensureOAuthReservation()
  const reservation = oauthReservation.value
  const account=await adminAPI.accounts.create({
   ...payload,
-  ...(reservation ? {import_ticket:reservation.id,proxy_id:reservation.proxy_id} : {}),
-  extra: withAccountTierRouting(payload.extra, tierRoutingEnabled.value, tierRoutingPool.value)
+  ...(reservation ? {import_ticket:reservation.id,proxy_id:reservation.proxy_id} : {})
  })
  oauthReservation.value=null
  return account
 }
 
 
-const initialChannelId = ref(0), initialChannelConfirmed = ref(false)
-const pendingChannelCreations = new Map<string, unknown>()
-async function runChannelCreation<T>(kind: string, payload: unknown, operation: () => Promise<T>, ids: (value: T) => number[], atomic = false): Promise<T> {
- if (!initialChannelId.value) return operation()
- if (!initialChannelConfirmed.value) throw new Error(t('upstreamEntities.confirmCreate'))
- const target = initialChannelId.value, key = JSON.stringify([kind, target, payload])
- let result = pendingChannelCreations.get(key) as T | undefined
- if (!result) { result = await operation(); pendingChannelCreations.set(key, result) }
- const accounts = ids(result)
- for (let i = 0; i < accounts.length; i += 100) {
-  const batch = accounts.slice(i, i + 100)
-  const current = await readChannelBindings(batch)
-  if (current.length !== batch.length || current.some(b => b.channel_id !== target && (atomic || b.channel_id !== 0))) throw new Error(t('upstreamEntities.createReadbackFailed'))
-  const unbound = current.filter(b => b.channel_id === 0)
-  if (unbound.length) await bindChannelAccounts(target, unbound)
-  const readback = await readChannelBindings(batch)
-  if (readback.length !== batch.length || readback.some(b => b.channel_id !== target)) throw new Error(t('upstreamEntities.createReadbackFailed'))
- }
- pendingChannelCreations.delete(key)
- return result
-}
-function createAccountWithUpstream(payload: CreateAccountRequest) {
- const selected = initialChannelId.value > 0 ? { upstream_channel_id: initialChannelId.value, confirm_upstream_channel_binding: initialChannelConfirmed.value } : {}
- return runChannelCreation('account', payload, () => createAccountWithTierRouting({ ...payload, ...selected }), a => [a.id], true)
-}
-function importWithUpstream(payload: UpstreamImportRequest) {
- return runChannelCreation('import', payload, () => adminAPI.accounts.importCodexSession(payload), result => {
-  const ids = (result.items || []).filter(item => item.action === 'created' && item.account_id).map(item => item.account_id!)
-  if (initialChannelId.value && ids.length !== result.created) throw new Error(t('upstreamEntities.createReadbackFailed'))
-  return ids
- })
-}
-function createPATWithUpstream(payload: UpstreamPATRequest) { return runChannelCreation('pat', payload, () => adminAPI.accounts.createOpenAICodexPAT(payload), a => [a.id]) }
-function createGrokWithUpstream(payload: Parameters<typeof adminAPI.grok.createFromSSO>[0]) {
- return runChannelCreation('grok', payload, () => adminAPI.grok.createFromSSO(payload), result => result.created.map(item => {
-  const id = (item.account as { id?: number } | undefined)?.id
-  if (!id) throw new Error(t('upstreamEntities.createReadbackFailed'))
-  return id
- }))
-}
-
-
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
   submitting.value = true
   try {
-    const account = await createAccountWithUpstream(withAntigravityConfirmFlag(payload))
+    const account = await createAccountWithReservation(withAntigravityConfirmFlag(payload))
     const modelMapping = payload.credentials.model_mapping
     const hasConcreteMappedTarget = payload.type === 'apikey' &&
       typeof modelMapping === 'object' &&
@@ -5793,14 +5710,8 @@ const submitCreateAccount = async (payload: CreateAccountRequest) => {
 
 // Methods
 const resetForm = () => {
-  initialChannelId.value = 0
-  initialChannelConfirmed.value = false
-  pendingChannelCreations.clear()
   step.value = 1
   openaiTwoFA.value = false
-  openaiBPSOAuth.value = false
-  bpsOAuthModels.value = [...DEFAULT_EXCEL_BPS_MODELS]
-  autoBPS.reset()
   twoFABusy.value = false
   form.name = ''
   extraImageModels.value = ''
@@ -5848,8 +5759,6 @@ const resetForm = () => {
   fetchAntigravityDefaultMappings().then(mappings => {
     antigravityModelMappings.value = [...mappings]
   })
-  tierRoutingEnabled.value = false
-  tierRoutingPool.value = 'standard'
   poolModeEnabled.value = false
   poolModeRetryCount.value = DEFAULT_POOL_MODE_RETRY_COUNT
   poolModeRetryStatusCodesInput.value = ''
@@ -5947,10 +5856,6 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   if (form.type === 'apikey') {
     extra.extra_image_models = parseExtraImageModels(extraImageModels.value)
     extra.extra_image_model_prefixes = parseExtraImageModels(extraImageModelPrefixes.value)
-  }
-  if (isOpenAIBPSOAuth.value) {
-    extra.openai_excel_bps = true
-    extra.openai_excel_bps_models = [...new Set(bpsOAuthModels.value.map(m => m.trim()).filter(Boolean))]
   }
   if (accountCategory.value === 'oauth-based') {
     extra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
@@ -6171,19 +6076,10 @@ const handleVertexServiceAccountDrop = async (event: DragEvent) => {
 
 const handleSubmit = async () => {
   if(bindingLoading.value || bindingFailed.value){appStore.showError('请先成功读取 IP 规则后再添加账号');return}
-  if (isOpenAIBPSOAuth.value && !bpsOAuthModels.value.some(model => model.trim())) {
-    appStore.showError(t('admin.accounts.oauth.openai.excelModelsRequired'))
-    return
-  }
   // For OAuth-based type, handle OAuth flow (goes to step 2)
   if (isOAuthFlow.value) {
     if (!isGrokSSOInputMethod.value && !isOpenAITwoFA.value && !form.name.trim()) {
       appStore.showError(t('admin.accounts.pleaseEnterAccountName'))
-      return
-    }
-    const autoBPSError = autoBPSAvailable.value ? autoBPS.validate() : ''
-    if (autoBPSError) {
-      appStore.showError(t(autoBPSError))
       return
     }
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
@@ -6488,7 +6384,7 @@ const goBackToBasicInfo = () => {
 const handleGenerateUrl = async () => {
   try {await ensureOAuthReservation()} catch(e) {appStore.showError((e as Error).message);return}
   if (form.platform === 'openai') {
-    await openaiOAuth.generateAuthUrl(form.proxy_id, undefined, isOpenAIBPSOAuth.value ? 'excel' : 'codex')
+    await openaiOAuth.generateAuthUrl(form.proxy_id)
   } else if (form.platform === 'gemini') {
     await geminiOAuth.generateAuthUrl(
       form.proxy_id,
@@ -6654,7 +6550,7 @@ const handleGrokValidateRT = async (refreshTokenInput: string) => {
           return
         }
 
-        await createAccountWithUpstream({
+        await createAccountWithReservation({
           name: accountName,
           notes: form.notes,
           platform: 'grok',
@@ -6723,9 +6619,8 @@ const handleGrokImportSSO = async (ssoInput: string) => {
   }
 
   try {
-    const result = await createGrokWithUpstream({
+    const result = await adminAPI.grok.createFromSSO({
       sso_tokens: ssoTokens,
-      extra: withAccountTierRouting(undefined, tierRoutingEnabled.value, tierRoutingPool.value),
       name: form.name || undefined,
       notes: form.notes || undefined,
       proxy_id: form.proxy_id,
@@ -6833,7 +6728,7 @@ const handleGrokAuthorizePassword = async (emailPasswordInput: string) => {
           return
         }
 
-        await createAccountWithUpstream({
+        await createAccountWithReservation({
           name: accountName,
           notes: form.notes,
           platform: 'grok',
@@ -6883,23 +6778,6 @@ const handleGrokAuthorizePassword = async (emailPasswordInput: string) => {
   }
 }
 
-// 账号已建好后再建规则；规则失败只提示，不影响账号本身。
-const createAutoBPSRules = async (accountIds: number[]) => {
-  if (!autoBPSAvailable.value || accountIds.length === 0) return
-  const { failed, error } = await autoBPS.createFor(accountIds)
-  if (failed.length > 0) {
-    appStore.showWarning(t('admin.accounts.openai.autoBPSCreateFailed', { count: failed.length, error: error || t('common.error') }), 8000)
-  }
-}
-
-// Codex PAT、Agent Identity 账号不能开 BPS（后端 QualityBPSEligible），开关开着也不建规则。
-const skipAutoBPSRules = () => {
-  if (autoBPSAvailable.value && autoBPS.draft.value.enabled) appStore.showInfo(t('admin.accounts.openai.autoBPSUnsupportedSkipped'), 6000)
-}
-
-const createdImportAccountIds = (result: CodexSessionImportResult) =>
-  (result.items ?? []).flatMap(item => item.action === 'created' && item.account_id ? [item.account_id] : [])
-
 // OpenAI OAuth 授权码兑换
 const handleOpenAIExchange = async (authCode: string) => {
   const oauthClient = openaiOAuth
@@ -6924,9 +6802,6 @@ const handleOpenAIExchange = async (authCode: string) => {
     )
     if (!tokenInfo) return
 
-    if (isOpenAIBPSOAuth.value && tokenInfo.client_id !== OPENAI_EXCEL_OAUTH_CLIENT_ID) {
-      throw new Error(t('admin.accounts.oauth.openai.excelSessionMismatch'))
-    }
     const credentials = oauthClient.buildCredentials(tokenInfo)
     const oauthExtra = oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
     const extra = buildOpenAIExtra(oauthExtra)
@@ -6952,7 +6827,7 @@ const handleOpenAIExchange = async (authCode: string) => {
     }
 
     if (shouldCreateOpenAI) {
-      const account = await createAccountWithUpstream({
+      await createAccountWithReservation({
         name: form.name,
         notes: form.notes,
         platform: 'openai',
@@ -6969,7 +6844,6 @@ const handleOpenAIExchange = async (authCode: string) => {
         auto_pause_on_expired: autoPauseOnExpired.value
       })
       appStore.showSuccess(t('admin.accounts.accountCreated'))
-      await createAutoBPSRules([account.id])
     }
 
     emit('created')
@@ -7058,9 +6932,8 @@ watch(()=>props.show,show=>{if(show)void loadBindingRules()},{immediate:true})
 watch(autoProxyAssignment,active=>{if(active)form.proxy_id=null})
 type TwoFABatchSettings = Omit<Parameters<typeof adminAPI.accounts.importCodexSession>[0], 'content'>
 let twoFABatchSettings: TwoFABatchSettings | null = null
-let twoFABatchBPS: typeof autoBPS.draft.value | null = null
 const twoFACreated = new Map<string, number>()
-const resetTwoFABatch = () => { twoFABatchSettings = null; twoFABatchBPS = null; twoFACreated.clear() }
+const resetTwoFABatch = () => { twoFABatchSettings = null; twoFACreated.clear() }
 const prepareTwoFABatch = () => {
   const credentialExtras = buildOpenAICodexImportCredentialExtras()
   if (credentialExtras === null) throw new Error('invalid_account_settings')
@@ -7072,14 +6945,13 @@ const prepareTwoFABatch = () => {
     credential_extras: credentialExtras, extra: withAccountExtraSettings(buildOpenAICodexImportExtra()),
     update_existing: false, skip_existing: true
   }))
-  twoFABatchBPS = JSON.parse(JSON.stringify(autoBPS.draft.value))
 }
 const importTwoFACredential = async (credential: Record<string, unknown>, email: string, login: TokenGuardReloginAccount): Promise<'created' | 'skipped'> => {
   const settings = twoFABatchSettings
   if (!settings) throw new Error('batch_not_prepared')
   let accountId = twoFACreated.get(email)
   if (!accountId) {
-    const result = await importWithUpstream({
+    const result = await adminAPI.accounts.importCodexSession({
       ...settings, initialize_openai_two_fa: true, import_ticket: credential._import_ticket as string | undefined, proxy_id: credential._import_proxy_id as number | null, content: JSON.stringify(credential),
       name: settings.name ? `${settings.name} (${email})` : email
     })
@@ -7090,7 +6962,6 @@ const importTwoFACredential = async (credential: Record<string, unknown>, email:
     }
     accountId = created.account_id
     twoFACreated.set(email, accountId)
-    if (twoFABatchBPS) await autoBPS.createFor([accountId], twoFABatchBPS)
   }
   await createTokenGuardV2Account({
     account_id: accountId, login_email: login.email,
@@ -7124,8 +6995,8 @@ const handleOpenAIImportCodexSession = async (content: string) => {
   oauthClient.error.value = ''
 
   try {
-    const extra = withAccountTierRouting(buildOpenAICodexImportExtra(), tierRoutingEnabled.value, tierRoutingPool.value)
-    const result = await importWithUpstream({
+    const extra = buildOpenAICodexImportExtra()
+    const result = await adminAPI.accounts.importCodexSession({
       content: trimmed,
       name: form.name,
       notes: form.notes || null,
@@ -7142,10 +7013,6 @@ const handleOpenAIImportCodexSession = async (content: string) => {
       update_existing: true
     })
     // 只给这次新建的账号建规则；已有账号被更新时不动它原有的规则。
-    const createdIds = createdImportAccountIds(result)
-    if (createdIds.length > 0 && isAgentIdentityImportContent(trimmed)) skipAutoBPSRules()
-    else await createAutoBPSRules(createdIds)
-
     const successCount = result.created + result.updated
     const params = {
       created: result.created,
@@ -7206,8 +7073,8 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
   oauthClient.error.value = ''
 
   try {
-    const extra = withAccountTierRouting(buildOpenAICodexImportExtra(), tierRoutingEnabled.value, tierRoutingPool.value)
-    await createPATWithUpstream({
+    const extra = buildOpenAICodexImportExtra()
+    await adminAPI.accounts.createOpenAICodexPAT({
       access_token: trimmed,
       name: form.name,
       notes: form.notes || null,
@@ -7224,7 +7091,6 @@ const handleOpenAIImportCodexPAT = async (accessToken: string) => {
     })
 
     appStore.showSuccess(t('admin.accounts.accountCreated'))
-    skipAutoBPSRules()
     emit('created')
     handleClose()
   } catch (error: any) {
@@ -7305,7 +7171,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
         const accountName = refreshTokens.length > 1 ? `${baseName} #${i + 1}` : baseName
 
         if (shouldCreateOpenAI) {
-          const account = await createAccountWithUpstream({
+          const account = await createAccountWithReservation({
             name: accountName,
             notes: form.notes,
             platform: 'openai',
@@ -7332,7 +7198,6 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
       }
     }
 
-    await createAutoBPSRules(createdIds)
 
     // Show results
     if (successCount > 0 && failedCount === 0) {
@@ -7359,7 +7224,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
 }
 
 // Each login entry uses its issuing OAuth client; existing accounts retain theirs.
-const handleOpenAIValidateRT = (rt: string) => handleOpenAIBatchRT(rt, isOpenAIBPSOAuth.value ? OPENAI_EXCEL_OAUTH_CLIENT_ID : undefined)
+const handleOpenAIValidateRT = (rt: string) => handleOpenAIBatchRT(rt)
 
 // 手动输入 Mobile RT
 const handleOpenAIValidateMobileRT = (rt: string) => handleOpenAIBatchRT(rt, OPENAI_MOBILE_RT_CLIENT_ID)
@@ -7424,7 +7289,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
-        await createAccountWithUpstream(createPayload)
+        await createAccountWithReservation(createPayload)
         successCount++
       } catch (error: any) {
         failedCount++
@@ -7783,7 +7648,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           credentials.temp_unschedulable_rules = tempUnschedPayload
         }
 
-        await createAccountWithUpstream({
+        await createAccountWithReservation({
           name: accountName,
           notes: form.notes,
           platform: form.platform,

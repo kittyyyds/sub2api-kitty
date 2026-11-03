@@ -111,8 +111,6 @@ func TestIPRiskMachineCallbacksKeepOriginalAuthentication(t *testing.T) {
 	for _, route := range []struct{ method, path, url string }{
 		{"POST", "/api/v1/payment/webhook/stripe", "/api/v1/payment/webhook/stripe"},
 		{"GET", "/api/v1/payment/webhook/easypay", "/api/v1/payment/webhook/easypay"},
-		{"GET", "/api/bps-images/:token", "/api/bps-images/capability"},
-		{"HEAD", "/api/bps-images/:token", "/api/bps-images/capability"},
 		{"POST", "/api/v1/internal/openai-reauth/:task_id/callback", "/api/v1/internal/openai-reauth/task/callback"},
 	} {
 		r.Handle(route.method, route.path, guard)
@@ -122,7 +120,6 @@ func TestIPRiskMachineCallbacksKeepOriginalAuthentication(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
 		{"POST", "/api/v1/payment/webhook/stripe/extra"},
 		{"GET", "/api/v1/payment/webhook/stripe"},
-		{"POST", "/api/bps-images/:token"},
 		{"POST", "/api/v1/internal/openai-reauth/not-a-worker-route"},
 	} {
 		require.False(t, machineCallback(route.method, route.path))

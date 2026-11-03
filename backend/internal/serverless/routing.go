@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/netip"
@@ -268,63 +267,4 @@ func (m *Manager) forward(c *gin.Context, p Pod, clientIP string) {
 		},
 	}
 	proxy.ServeHTTP(c.Writer, c.Request)
-}
-
-// ImageOwnerURL keeps BPS capability downloads on the generating instance.
-func (m *Manager) ImageOwnerURL(raw string) string {
-	if m.runtime.ID == "" || len(m.runtime.Secret) < 32 {
-		return raw
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-	q := u.Query()
-	q.Set("sl_node", m.runtime.ID)
-	q.Set("sl_boot", m.boot)
-	q.Set("sl_proof", m.mac("image", m.runtime.ID, m.boot, u.Path))
-	u.RawQuery = q.Encode()
-	return u.String()
-}
-func (m *Manager) ImageRoute(c *gin.Context) {
-	id, boot, proof := c.Query("sl_node"), c.Query("sl_boot"), c.Query("sl_proof")
-	if id == "" && boot == "" && proof == "" {
-		c.Next()
-		return
-	}
-	if !identifier.MatchString(id) || len(boot) != 32 || !m.verify(proof, "image", id, boot, c.Request.URL.Path) {
-		c.AbortWithStatus(404)
-		return
-	}
-	if m.runtime.ID == id && m.boot == boot {
-		c.Next()
-		return
-	}
-	if m.runtime.Gateway {
-		c.AbortWithStatus(404)
-		return
-	}
-	cfg, err := m.Config(c.Request.Context())
-	if err != nil {
-		c.AbortWithStatus(503)
-		return
-	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 4*time.Second)
-	defer cancel()
-	pods, err := m.Pods(ctx)
-	if err != nil {
-		c.AbortWithStatus(503)
-		return
-	}
-	for _, p := range pods {
-		if p.ID == id && p.Boot == boot && approved(cfg, p, false) && m.Probe(ctx, p) {
-			clientIP, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
-			if _, err := netip.ParseAddr(clientIP); err != nil {
-				clientIP = "127.0.0.1"
-			}
-			m.forward(c, p, clientIP)
-			return
-		}
-	}
-	c.AbortWithStatus(503)
 }

@@ -119,7 +119,7 @@ func TestOpenAIConnectionCreationRejectsMixedCredentials(t *testing.T) {
 	for _, input := range []CreateOpenAIAuthConnectionInput{
 		{Kind: "api_key", Label: "Mixed", APIKey: "synthetic"},
 		{Kind: "codex", Label: "Mixed", APIKey: "synthetic"},
-		{Kind: "bps", Label: "Mixed", APIKey: "synthetic"},
+
 		{Kind: "siwc", Label: "Mixed", APIKey: "synthetic"},
 	} {
 		t.Run(input.Kind, func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestOpenAIConnectionCreationRejectsMixedCredentials(t *testing.T) {
 	}
 }
 func TestOpenAIConnectionOAuthKindsRemainAvailable(t *testing.T) {
-	for _, kind := range []string{"codex", "bps", "siwc"} {
+	for _, kind := range []string{"codex", "siwc"} {
 		t.Run(kind, func(t *testing.T) {
 			s, r := connectionTypeService(AccountTypeOAuth)
 			c, err := s.CreateAuthConnection(context.Background(), 42, CreateOpenAIAuthConnectionInput{Kind: kind, Label: "Synthetic OAuth"})
@@ -157,7 +157,7 @@ func TestOpenAIConnectionHistoricalAPIKeyRuntime(t *testing.T) {
 					r.rows = []*OpenAIAuthConnection{c}
 					a, err := s.accounts.GetAccount(context.Background(), 42)
 					require.NoError(t, err)
-					gateway := &OpenAIGatewayService{excelOAuthReauth: s, cfg: &config.Config{}}
+					gateway := &OpenAIGatewayService{openAIOAuthReauth: s, cfg: &config.Config{}}
 					for _, endpoint := range []string{"responses", "chat/completions", "embeddings"} {
 						ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 						ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/"+endpoint, strings.NewReader("{}"))
@@ -189,7 +189,7 @@ func TestOpenAIConnectionHistoricalAPIKeyRuntime(t *testing.T) {
 }
 func TestOpenAIConnectionOrdinaryAPIKeyRouteUnchanged(t *testing.T) {
 	s, _ := connectionTypeService(AccountTypeAPIKey)
-	gateway := &OpenAIGatewayService{excelOAuthReauth: s, cfg: &config.Config{}}
+	gateway := &OpenAIGatewayService{openAIOAuthReauth: s, cfg: &config.Config{}}
 	a, err := s.accounts.GetAccount(context.Background(), 42)
 	require.NoError(t, err)
 	out, err := gateway.prepareAuthConnection(context.Background(), nil, a, nil, "synthetic-model")

@@ -1,4 +1,4 @@
-// Package mihomo manages a private, unprivileged ticket-harvest proxy.
+// Package mihomo manages private outbound proxies through the Mihomo kernel.
 package mihomo
 
 import (
@@ -49,7 +49,6 @@ type Status struct {
 	EligibleNodes     int                      `json:"eligible_nodes"`
 	CountryExcluded   int                      `json:"country_excluded"`
 	UnknownCountries  int                      `json:"unknown_countries"`
-	UseOnce           bool                     `json:"use_once"`
 	Installed         bool                     `json:"installed"`
 	Running           bool                     `json:"running"`
 	Busy              bool                     `json:"busy"`
@@ -61,8 +60,6 @@ type Status struct {
 	Endpoint          string                   `json:"endpoint"`
 	Supported         bool                     `json:"supported"`
 	NodeStates        []NodeStatus             `json:"node_states"`
-	BPSWarmPool       BPSWarmStatus            `json:"bps_warm_pool"`
-	BPSIPWarmPool     BPSWarmStatus            `json:"bps_ip_warm_pool"`
 }
 
 type NodeStatus struct {
@@ -80,14 +77,12 @@ type NodeStatus struct {
 }
 
 type saved struct {
-	CollectionLastNode    string                        `json:"collection_last_node,omitempty"`
 	DownloadMode          SubscriptionDownloadMode      `json:"subscription_download_mode"`
 	SubscriptionCache     map[string]subscriptionCache  `json:"subscription_cache,omitempty"`
 	DisabledSubscriptions map[string]bool               `json:"disabled_subscriptions,omitempty"`
 	SubscriptionLabels    map[string]string             `json:"subscription_labels,omitempty"`
 	CountryFilter         CountryFilter                 `json:"country_filter"`
 	Countries             map[string]CountryObservation `json:"countries,omitempty"`
-	UseOnce               bool                          `json:"use_once,omitempty"`
 	URLs                  []string                      `json:"urls"`
 	DynamicProxies        []string                      `json:"dynamic_proxies,omitempty"`
 	Nodes                 []map[string]any              `json:"nodes"`
@@ -98,17 +93,6 @@ type saved struct {
 }
 
 type Manager struct {
-	bpsWarmMu     sync.Mutex
-	bpsWarmTarget int
-	bpsMu         sync.Mutex
-	bpsPorts      map[string]int
-	bpsSessions   map[string]*bpsSession
-	bpsHealth     map[string]*bpsNodeHealth
-	bpsDynamic    map[string]bool                     // configured dynamic outbound identities; protected by bpsMu
-	bpsProbe      func(context.Context, string) error // isolated tests only
-	bpsStaticMode bool                                // dedicated static (IP 管理) pool: no kernel, no listeners
-	bpsStatic     map[string]string                   // static node key -> upstream proxy URL; protected by bpsMu
-
 	astraGate            sync.RWMutex
 	astraLanes           chan int
 	countryLookupURL     string // test-only override; administrators cannot change the lookup target
@@ -146,10 +130,7 @@ func New(dir string) *Manager {
 }
 
 func (m *Manager) Status() Status {
-	s := m.baseStatus()
-	s.BPSWarmPool = m.BPSWarmStatus()
-	s.BPSIPWarmPool = bpsStaticManager.BPSWarmStatus()
-	return s
+	return m.baseStatus()
 }
 func (m *Manager) baseStatus() Status {
 	m.mu.Lock()
@@ -165,7 +146,6 @@ func (m *Manager) baseStatus() Status {
 	}
 	s.CountryFilter.Codes = append([]string{}, s.CountryFilter.Codes...)
 	s.CountryCodes = countryCodes()
-	s.UseOnce = m.saved.UseOnce
 	s.Subscriptions = len(m.saved.URLs)
 	s.SubscriptionItems = subscriptionStatuses(m.saved)
 	s.DynamicProxies = len(m.saved.DynamicProxies)
@@ -233,7 +213,7 @@ func (m *Manager) SubmitSourceManagement(action string, urls, dynamicProxies []s
 	if label != "" && op != "subscription_add" && op != "subscription_update" && op != "subscription_rename" {
 		return errors.New("subscription name is not supported for this operation")
 	}
-	if !sourceOperation(op) && op != "install" && op != "apply" && op != "apply_dynamic" && op != "start" && op != "disable" && op != "recover" && op != "probe" && op != "once_on" && op != "once_off" && op != "country_filter" && op != "country_scan" && op != "country_probe" {
+	if !sourceOperation(op) && op != "install" && op != "apply" && op != "apply_dynamic" && op != "start" && op != "disable" && op != "recover" && op != "probe" && op != "country_filter" && op != "country_scan" && op != "country_probe" {
 		return errors.New("unknown operation")
 	}
 	if (op == "disable" || op == "recover" || op == "probe" || op == "country_probe" || sourceTargetRequired(op)) != hasNode || (hasNode && (node == "" || strings.Contains(node, "/"))) {
@@ -330,11 +310,9 @@ func (m *Manager) SubmitSourceManagement(action string, urls, dynamicProxies []s
 		defer cancel()
 		err := m.acquire(ctx)
 		if err == nil {
-			// A queued operation must see any node retired by the preceding lease.
+			// A queued operation must use the latest manually disabled node state.
 			m.mu.Lock()
 			next.Disabled = m.saved.Disabled
-			next.UseOnce = m.saved.UseOnce
-			next.CollectionLastNode = m.saved.CollectionLastNode
 			m.mu.Unlock()
 			err = m.run(ctx, action, next)
 			m.release()
@@ -447,12 +425,6 @@ func (m *Manager) run(ctx context.Context, action string, next saved) error {
 			return err
 		}
 		next.Countries = observations
-	}
-	if action == "once_on" {
-		next.UseOnce = true
-	}
-	if action == "once_off" {
-		next.UseOnce = false
 	}
 	if op, name, ok := strings.Cut(action, "/"); ok && !sourceOperation(op) {
 		found := false
@@ -726,16 +698,6 @@ func (m *Manager) fetchNodes(ctx context.Context, urls []string) ([]map[string]a
 }
 
 func (m *Manager) config(s saved) ([]byte, error) {
-	return m.collectionConfig(s, nil)
-}
-
-func (m *Manager) collectionConfig(s saved, ports []int) ([]byte, error) {
-	if len(ports) == 0 {
-		ports = make([]int, defaultCollectLanes)
-		for lane := range ports {
-			ports[lane] = collectPort + lane
-		}
-	}
 	names := []string{}
 	for _, n := range s.Nodes {
 		name, ok := n["name"].(string)
@@ -751,25 +713,8 @@ func (m *Manager) collectionConfig(s saved, ports []int) ([]byte, error) {
 		names = []string{"REJECT"}
 	}
 	group := map[string]any{"name": "CODEX-ROTATE", "type": "load-balance", "strategy": "round-robin", "proxies": names, "url": "https://www.gstatic.com/generate_204", "interval": 300}
-	if s.UseOnce {
-		group["type"] = "select"
-		delete(group, "strategy")
-		delete(group, "url")
-		delete(group, "interval")
-	}
 	groups := []any{group}
-	laneNodes := []string{"REJECT"}
-	for _, n := range s.Nodes {
-		name, _ := n["name"].(string)
-		if countryAllowed(s, name) && (s.Disabled[name] == "" || s.Disabled[name] == "used") {
-			laneNodes = append(laneNodes, name)
-		}
-	}
-	listeners := make([]any, 0, len(ports))
-	for lane, port := range ports {
-		groups = append(groups, map[string]any{"name": collectionGroup(lane), "type": "select", "proxies": laneNodes})
-		listeners = append(listeners, map[string]any{"name": collectionGroup(lane), "type": "mixed", "listen": "127.0.0.1", "port": port, "proxy": collectionGroup(lane)})
-	}
+	listeners := make([]any, 0, len(s.StaticBindings)+AstraLanes)
 	staticNames := make([]string, 0, len(s.StaticBindings))
 	for name := range s.StaticBindings {
 		staticNames = append(staticNames, name)
@@ -796,11 +741,6 @@ func (m *Manager) collectionConfig(s saved, ports []int) ([]byte, error) {
 		}
 		listeners = append(listeners, map[string]any{"name": "STATIC-" + name, "type": "mixed", "listen": "127.0.0.1", "port": binding.Port, "proxy": target})
 	}
-	bpsListeners, err := m.bpsListeners(s)
-	if err != nil {
-		return nil, err
-	}
-	listeners = append(listeners, bpsListeners...)
 	astraNames := []string{"REJECT"}
 	for _, node := range astraNodes(s) {
 		astraNames = append(astraNames, node.ID)
@@ -854,14 +794,6 @@ func (m *Manager) reloadAstraLocked(ctx context.Context, b []byte, secret string
 
 func (m *Manager) start(ctx context.Context, path, secret string) error {
 	ports := []string{"127.0.0.1:3101", "127.0.0.1:9098"}
-	for lane := 0; lane < defaultCollectLanes; lane++ {
-		ports = append(ports, fmt.Sprintf("127.0.0.1:%d", collectPort+lane))
-	}
-	m.bpsMu.Lock()
-	for _, port := range m.bpsPorts {
-		ports = append(ports, fmt.Sprintf("127.0.0.1:%d", port))
-	}
-	m.bpsMu.Unlock()
 	for lane := 0; lane < AstraLanes; lane++ {
 		ports = append(ports, fmt.Sprintf("127.0.0.1:%d", astraPort+lane))
 	}

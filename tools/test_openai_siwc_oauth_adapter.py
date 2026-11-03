@@ -24,9 +24,9 @@ class SIWCAdapterTests(unittest.TestCase):
             self.assertEqual(original.read_text(), '// unrecognized dependency')
             self.assertFalse((target / 'siwc-runtime').exists())
 
-    @unittest.skipUnless(os.getenv('EXCEL_TEST_TOSUB2_ROOT'), 'pinned runtime is provided by packaging CI')
+    @unittest.skipUnless(os.getenv('TOSUB2_TEST_ROOT'), 'pinned runtime is provided by packaging CI')
     def test_pinned_runtime_exports_callback_without_exchanging_tokens(self):
-        root = Path(os.environ['EXCEL_TEST_TOSUB2_ROOT'])
+        root = Path(os.environ['TOSUB2_TEST_ROOT'])
         with tempfile.TemporaryDirectory() as directory:
             script = prepare_siwc_runtime(root, Path(directory))
             source = script.read_text()
@@ -38,9 +38,9 @@ class SIWCAdapterTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 siwc_source(source)
 
-    @unittest.skipUnless(os.getenv('EXCEL_TEST_TOSUB2_ROOT'), 'pinned runtime is provided by packaging CI')
+    @unittest.skipUnless(os.getenv('TOSUB2_TEST_ROOT'), 'pinned runtime is provided by packaging CI')
     def test_pinned_runner_password_totp_workspace_callback_and_consent(self):
-        root = Path(os.environ['EXCEL_TEST_TOSUB2_ROOT'])
+        root = Path(os.environ['TOSUB2_TEST_ROOT'])
         auth = 'https://auth.openai.com/api/accounts/authorize?' + urlencode({
             'state': 'synthetic-state', 'nonce': 'synthetic-nonce',
             'redirect_uri': 'http://127.0.0.1:1455/auth/callback',

@@ -1,5 +1,7 @@
 # BPS 403 自定义间隔恢复探测：界面对照
 
+> 历史文档：本地精简版已移除整套 Excel/BPS。以下内容仅用于追溯，不是当前操作指南。范围见 [功能移除记录](/docs/kitty-feature-removal-20261103.md)。
+
 > PR 截图已从当前源码中清理，以减小源码包体积。[查看固定提交中的历史截图](https://github.com/ranxi2001/sub2api/tree/297e9201a2f6d6fe70073b370a5b71f49579accf/docs/screenshots/bps403-recovery)；下列文件名与验证说明保留用于追溯。
 
 截图日期：2026-09-28。使用真实 `EditAccountModal.vue` 组件、项目样式和语言包，在独立 Vite 页面中挂载虚构的 OpenAI OAuth 账号；管理 API 使用本地 mock，不连接生产服务或真实 BPS。浏览器：Chrome 152.0.7977.75，浅色主题。

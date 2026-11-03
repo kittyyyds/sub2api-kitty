@@ -1,20 +1,12 @@
 import { apiClient } from '../client'
 
 export interface AstraGatewaySettings {
-  ticket_pool_scheduling?: boolean
-  account_scheduling?: boolean
-  scheduling_mode?: 'account' | 'model' | 'groups'
-  scheduling_group_ids?: number[]
   cookie_pool: { node_cooldown_seconds?: number; rotate_nodes?: boolean; max_node_attempts?: number; ip_affinity?: boolean; ttl_seconds?: number; enabled: boolean; source_account_ids: number[]; target_account_ids: number[] }
   ws_session: { ttl_seconds?: number; enabled: boolean; account_ids: number[] }
   revision: string
 }
 export function normalizeAstraGateway(value: AstraGatewaySettings): AstraGatewaySettings {
   return {
-    account_scheduling: value.account_scheduling ?? false,
-    ticket_pool_scheduling: value.ticket_pool_scheduling ?? false,
-    scheduling_mode: value.scheduling_mode || 'account',
-    scheduling_group_ids: [...(value.scheduling_group_ids || [])],
     cookie_pool: {
       enabled: value.cookie_pool.enabled,
       ip_affinity: value.cookie_pool.ip_affinity ?? false,
@@ -48,10 +40,9 @@ export interface AstraWSStatus {
 }
 export interface AstraTestResult {
   action: string; account_id: number; success: boolean; reason: string
-  duration_ms: number; checked_at: string; output_chars: number; test_kind?: string; answer?: string; expected?: string; html?: string
+  duration_ms: number; checked_at: string; output_chars: number; answer?: string; expected?: string; html?: string
 }
 export interface AstraGatewayRuntime {
-  scheduling_records?: { checked_at: string; account_id: number; schedulable: boolean; reason: string; mode?: string }[]
   cooldowns?: { account_id: number; gateway: string; retry_at: string; remaining_seconds: number }[]
   gateways?: AstraGatewayObservation[]; unknown_gateway_samples?: number
   setup?: { revision: string; state: string; phase: string; account_id: number; reason: string; started_at: string; finished_at?: string }
@@ -73,8 +64,8 @@ export async function getAstraGatewayHistory(host = '', passed = true, page = 1)
 export async function getAstraGatewayRuntime(): Promise<AstraGatewayRuntime> {
   return (await apiClient.get<AstraGatewayRuntime>('/admin/accounts/astra-gateway/status')).data
 }
-export async function testAstraGateway(action: 'prepare' | 'verify' | 'ws', account_id = 0, test_kind = 'state_probe'): Promise<AstraTestResult> {
-  return (await apiClient.post<AstraTestResult>('/admin/accounts/astra-gateway/test', { action, account_id, test_kind }, { timeout: 305000 })).data
+export async function testAstraGateway(action: 'prepare' | 'verify' | 'ws', account_id = 0): Promise<AstraTestResult> {
+  return (await apiClient.post<AstraTestResult>('/admin/accounts/astra-gateway/test', { action, account_id }, { timeout: 305000 })).data
 }
 
 export function resolveAstraDependencies(value: AstraGatewaySettings): AstraGatewaySettings {

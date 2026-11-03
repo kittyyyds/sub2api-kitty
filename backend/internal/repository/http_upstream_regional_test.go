@@ -127,7 +127,7 @@ func TestRegionalHTTPRedirectChangesEgressAndStripsCredentials(t *testing.T) {
 	require.NoError(t, resp.Body.Close())
 	require.EqualValues(t, 1, eu.Load())
 }
-func TestRegionalHTTPMissAndSpecialPathsRemainDirect(t *testing.T) {
+func TestRegionalHTTPMissIsDirectAndFreshConnectionsUseRegionalEgress(t *testing.T) {
 	var direct, egress atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { direct.Add(1); w.WriteHeader(204) }))
 	defer upstream.Close()
@@ -135,7 +135,7 @@ func TestRegionalHTTPMissAndSpecialPathsRemainDirect(t *testing.T) {
 	defer proxy.Close()
 	cfg := regionalHTTPConfig(t, proxy.URL, "127.0.0.1")
 	up := NewHTTPUpstream(cfg)
-	for _, profile := range []service.HTTPUpstreamProfile{service.HTTPUpstreamProfileOpenAIHarvest, service.HTTPUpstreamProfileExcelBPS} {
+	for _, profile := range []service.HTTPUpstreamProfile{service.HTTPUpstreamProfileOpenAIFreshConnection} {
 		req, err := http.NewRequestWithContext(service.WithHTTPUpstreamProfile(t.Context(), profile), "GET", upstream.URL, nil)
 		require.NoError(t, err)
 		resp, err := up.Do(req, "", 15, 2)
@@ -149,8 +149,8 @@ func TestRegionalHTTPMissAndSpecialPathsRemainDirect(t *testing.T) {
 	resp, err := up.Do(req, "", 15, 2)
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
-	require.EqualValues(t, 3, direct.Load())
-	require.Zero(t, egress.Load())
+	require.EqualValues(t, 1, direct.Load())
+	require.EqualValues(t, 1, egress.Load())
 }
 func TestRegionalHTTPFailureDoesNotReplayOrGoDirect(t *testing.T) {
 	var direct, received atomic.Int32

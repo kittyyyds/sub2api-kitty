@@ -45,7 +45,6 @@ type AstraRotationCooldown struct {
 	RemainingSeconds int64     `json:"remaining_seconds"`
 }
 type AstraGatewayRuntime struct {
-	SchedulingRecords     []AstraSchedulingRecord   `json:"scheduling_records"`
 	Cooldowns             []AstraRotationCooldown   `json:"cooldowns"`
 	Gateways              []AstraGatewayObservation `json:"gateways"`
 	UnknownGatewaySamples int64                     `json:"unknown_gateway_samples"`
@@ -73,7 +72,6 @@ type AstraGatewayObservation struct {
 	LastSeen         time.Time `json:"last_seen"`
 }
 type AstraGatewayTestResult struct {
-	TestKind    string    `json:"test_kind"`
 	Answer      string    `json:"answer,omitempty"`
 	Expected    string    `json:"expected,omitempty"`
 	HTML        string    `json:"html,omitempty"`
@@ -106,7 +104,6 @@ func (s *AccountTestService) AstraGatewayStatus(ctx context.Context) AstraGatewa
 	if provider, ok := s.httpUpstream.(AstraGatewayRuntimeProvider); ok {
 		result = provider.AstraGatewaySnapshot(ctx)
 	}
-	result.SchedulingRecords = astraRecentScheduling.snapshot()
 	existingTargets := result.Targets
 	result.Targets = []AstraRouteStatus{}
 	for _, id := range settings.CookiePool.TargetAccountIDs {
@@ -175,17 +172,15 @@ func (s *AccountTestService) AstraGatewayStatus(ctx context.Context) AstraGatewa
 	s.astraSetupMu.Unlock()
 	return result
 }
-func (s *AccountTestService) TestAstraGateway(ctx context.Context, action string, id int64, adminID int64, kinds ...string) (AstraGatewayTestResult, error) {
+func (s *AccountTestService) TestAstraGateway(ctx context.Context, action string, id int64, adminID int64) (AstraGatewayTestResult, error) {
 	if !s.astraGatewayActionMu.TryLock() {
 		return AstraGatewayTestResult{}, errors.New("test_already_running")
 	}
 	defer s.astraGatewayActionMu.Unlock()
-	// Borrowing always uses the state probe; legacy test_kind values cannot bypass it.
-	kind := "state_probe"
 	question := astraQuestion{Prompt: "Reply with OK only."}
 
 	settings := s.cfg.AstraRouting(ctx)
-	result := AstraGatewayTestResult{Action: action, AccountID: id, CheckedAt: time.Now(), TestKind: kind, Expected: question.Expected}
+	result := AstraGatewayTestResult{Action: action, AccountID: id, CheckedAt: time.Now(), Expected: question.Expected}
 	var output string
 	start := time.Now()
 	var err error
@@ -258,14 +253,6 @@ func (s *AccountTestService) verifyAstraGatewayTarget(ctx context.Context, id in
 	if err != nil || account == nil || !account.IsOpenAIOAuthLike() || account.Status != StatusActive {
 		return errors.New("account_unavailable")
 	}
-	if openAICodexStateProbeUnsupportedReason(account, "gpt-6-astra", false) != "" {
-		return errors.New("target_probe_unsupported")
-	}
-	release, ok := s.beginOpenAICodexStateProbe(id)
-	if !ok {
-		return errors.New("target_validation_in_progress")
-	}
-	defer release()
 	token, _, err := s.openaiGatewayService.GetAccessToken(ctx, account)
 	if err != nil || strings.TrimSpace(token) == "" {
 		return errors.New("account_unavailable")
@@ -278,8 +265,11 @@ func (s *AccountTestService) verifyAstraGatewayTarget(ctx context.Context, id in
 	if err = resolveAndSetOpenAIChatGPTAccountHeaders(ctx, s.accountRepo, req.Header, account); err != nil {
 		return errors.New("account_unavailable")
 	}
-	applyOpenAICodexTicketHarvestIdentity(req.Header, "gpt-6-astra")
-	return verifier.VerifyAstraGatewayTarget(ctx, req, openAIAccountProxyURL(account), id, account.Concurrency)
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+	return verifier.VerifyAstraGatewayTarget(ctx, req, proxyURL, id, account.Concurrency)
 }
 
 func (s *AccountTestService) testAstraWS(ctx context.Context, id, adminID int64, question astraQuestion) (string, error) {

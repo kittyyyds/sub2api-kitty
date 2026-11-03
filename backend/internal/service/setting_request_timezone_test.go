@@ -10,6 +10,15 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+type requestTimezoneSettingsStub struct {
+	SettingRepository
+	get func(context.Context, string) (string, error)
+}
+
+func (r *requestTimezoneSettingsStub) GetValue(ctx context.Context, key string) (string, error) {
+	return r.get(ctx, key)
+}
+
 type timezoneSettingsRepo struct{ SettingRepository }
 
 func (*timezoneSettingsRepo) GetValue(_ context.Context, key string) (string, error) {
@@ -44,7 +53,7 @@ func TestRequestTimezoneSwitch(t *testing.T) {
 		{name: "enabled", value: "true", enabled: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := &OpenAIGatewayService{settingService: NewSettingService(&codexTicketLifecycleSettings{get: func(_ context.Context, key string) (string, error) {
+			svc := &OpenAIGatewayService{settingService: NewSettingService(&requestTimezoneSettingsStub{get: func(_ context.Context, key string) (string, error) {
 				if key == SettingKeyOpenAIRequestTimezoneAuto {
 					return "false", nil
 				}
@@ -68,7 +77,7 @@ func TestRequestTimezoneSwitch(t *testing.T) {
 
 func TestRequestTimezoneSettingCacheInvalidation(t *testing.T) {
 	value := "true"
-	settings := NewSettingService(&codexTicketLifecycleSettings{get: func(context.Context, string) (string, error) { return value, nil }}, &config.Config{})
+	settings := NewSettingService(&requestTimezoneSettingsStub{get: func(context.Context, string) (string, error) { return value, nil }}, &config.Config{})
 	require.True(t, settings.GetOpenAIRequestTimezoneEnabled(context.Background(), false))
 	value = "false"
 	settings.InvalidateOpenAIRequestTimezoneEnabledCache()

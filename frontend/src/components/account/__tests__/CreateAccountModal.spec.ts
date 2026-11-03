@@ -3,9 +3,6 @@ vi.mock('@/api/admin/proxyBinding',async importOriginal=>({
  getProxyBindingPolicy:async()=>({enabled:false,only_twofa:true,platforms:['openai'],history_limit:5,auto_assign:false}),
  getProxyBindingSummaries:async()=>[],reserveOAuthImport:vi.fn(),releaseOAuthImport:vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('@/api/admin/upstreamChannels', () => ({ listUpstreamChannels: vi.fn(), readChannelBindings: vi.fn(), bindChannelAccounts: vi.fn() }))
-import { readChannelBindings, listUpstreamChannels } from '@/api/admin/upstreamChannels'
-import UpstreamChannelSelector from '../UpstreamChannelSelector.vue'
 
 vi.mock('@/api/admin/credentialEncryption', () => ({
   getCredentialEncryption: vi.fn().mockResolvedValue({ configured: true, source: 'server_config' }),
@@ -348,28 +345,6 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
-  it('creates BPS OAuth through the Excel client and enables only the selected BPS models', async () => {
-    const wrapper = await prepareWSAcceleration(0)
-    await wrapper.get('[data-testid="openai-bps-oauth"]').trigger('click')
-    expect(wrapper.find('[data-testid="bps-oauth-models"]').exists()).toBe(true)
-    await wrapper.get('form#create-account-form').trigger('submit.prevent')
-    const flow = wrapper.getComponent(OAuthAuthorizationFlowStub)
-    flow.vm.$emit('generate-url')
-    await flushPromises()
-    expect(generateAuthUrlMock).toHaveBeenLastCalledWith('/admin/openai/generate-auth-url', { oauth_client: 'excel' })
-    exchangeCodeMock.mockResolvedValueOnce({ access_token: 'excel-at', refresh_token: 'excel-rt', client_id: 'app_fnr0pYvVwwFDocDumLG3H2Bp', expires_at: 1900000000 })
-    flow.vm.authCode = 'code'
-    flow.vm.oauthState = 'state'
-    await flushPromises()
-    await selectButtonByText(wrapper, 'admin.accounts.oauth.completeAuth')
-    expect(createAccountMock).toHaveBeenCalledTimes(1)
-    expect(createAccountMock.mock.calls[0]?.[0]).toMatchObject({
-      type: 'oauth', platform: 'openai',
-      credentials: { access_token: 'excel-at', refresh_token: 'excel-rt', client_id: 'app_fnr0pYvVwwFDocDumLG3H2Bp' },
-      extra: { openai_excel_bps: true, openai_excel_bps_models: ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra'] }
-    })
-  })
-
   it.each([0, 1, 2].flatMap(clicks => [
     { event: 'validate-refresh-token', clientId: undefined, clicks },
     { event: 'validate-mobile-refresh-token', clientId: 'app_LlGpXReQgckcGGUo2JrYvtJK', clicks },
@@ -559,10 +534,6 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     await selectButtonByText(wrapper, 'OpenAI')
     expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
-    const tier = wrapper.getComponent({ name: 'AccountTierRoutingFields' })
-    tier.vm.$emit('update:enabled', true)
-    tier.vm.$emit('update:pool', 'premium')
-    await wrapper.vm.$nextTick()
     await wrapper.get('[data-testid="openai-two-fa"]').trigger('click')
     expect(wrapper.get('[data-tour="account-form-name"]').attributes('required')).toBeUndefined()
     await wrapper.get('form#create-account-form').trigger('submit.prevent')
@@ -576,9 +547,6 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(importCodexSessionMock).toHaveBeenCalledWith(expect.objectContaining({
       content: JSON.stringify(credential), name: 'user@example.com', update_existing: false, skip_existing: true,
       concurrency: 10, group_ids: [], proxy_id: null,
-      extra: expect.objectContaining({
-        tiered_routing_enabled: true, pool: 'premium',
-      }),
     }))
     expect(wrapper.emitted('created')).toHaveLength(1)
     expect(wrapper.emitted('close')).toBeUndefined()
@@ -1309,27 +1277,6 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     expect(probeUpstreamBillingMock).toHaveBeenCalledWith(42)
   })
 
-  it.each([
-    ['import-codex-session', importCodexSessionMock],
-    ['import-codex-pat', createOpenAICodexPATMock]
-  ] as const)('preserves the selected account pool without retired timezone settings on %s', async (event, request) => {
-    const wrapper = mountModal()
-    await selectButtonByText(wrapper, 'OpenAI')
-    expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="request-timezone-enabled"]').exists()).toBe(false)
-    const fields = wrapper.findComponent({ name: 'AccountTierRoutingFields' })
-    fields.vm.$emit('update:enabled', true)
-    fields.vm.$emit('update:pool', 'premium')
-    await wrapper.vm.$nextTick()
-    await wrapper.get('form#create-account-form input[type="text"]').setValue('Tiered import')
-    await wrapper.get('form#create-account-form').trigger('submit.prevent')
-    await wrapper.get(`[data-testid="${event}"]`).trigger('click')
-    await flushPromises()
-    expect(request.mock.calls[0]?.[0]?.extra).toMatchObject({
-      tiered_routing_enabled: true, pool: 'premium'
-    })
-  })
-
   it('leaves Codex session import billing ownership to the backend', async () => {
     const wrapper = await openCodexImportStep()
     await wrapper.get('[data-testid="import-codex-session"]').trigger('click')
@@ -1525,30 +1472,4 @@ describe('CreateAccountModal Vertex API key auth', () => {
     expect(wrapper.find('[data-testid="vertex-auth-mode-apikey"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="vertex-api-key-input"]').exists()).toBe(false)
   })
-})
-
-describe('explicit upstream channel on account creation', () => {
- it('confirms selected ownership, sends immutable entity ID and verifies binding without duplicating after a failed readback', async () => {
-  const w = mountModal(); await selectButtonByText(w, 'admin.accounts.claudeConsole')
-  await w.get('form#create-account-form input[type="text"]').setValue('owned account')
-  await w.get('form#create-account-form input[type="password"]').setValue('fixture-only-key')
-  createAccountMock.mockResolvedValue({ id: 700, name: 'owned account', platform: 'anthropic', type: 'apikey' })
-  w.getComponent(UpstreamChannelSelector).vm.$emit('update:modelValue', 7); await flushPromises()
-  await w.get('form#create-account-form').trigger('submit.prevent'); await flushPromises(); expect(createAccountMock).not.toHaveBeenCalled()
-  await w.get('[data-testid="confirm-create-channel"]').setValue(true)
-  vi.mocked(readChannelBindings).mockRejectedValueOnce(new Error('offline'))
-  await w.get('form#create-account-form').trigger('submit.prevent'); await flushPromises()
-  expect(createAccountMock).toHaveBeenCalledWith(expect.objectContaining({ upstream_channel_id: 7, confirm_upstream_channel_binding: true }))
-  expect(w.emitted('created')).toBeUndefined()
-  vi.mocked(readChannelBindings).mockResolvedValue([{ account_id: 700, account_name: 'owned account', channel_id: 7, revision: 1, deleted: false }])
-  await w.get('form#create-account-form').trigger('submit.prevent'); await flushPromises()
-  expect(createAccountMock).toHaveBeenCalledTimes(1); expect(w.emitted('created')).toHaveLength(1)
- })
- it('supports paging a channel catalog and selecting an entity regardless of account URL', async () => {
-  vi.mocked(listUpstreamChannels).mockResolvedValue({ items: [{ id: 7, code: 'supplier', name: '渠道', remark: '', revision: 1, members: 0 }], total: 21 })
-  const w = mountModal(); const selector = w.getComponent(UpstreamChannelSelector)
-  await selector.get('[data-testid="upstream-channel-select"]').trigger('focus'); await flushPromises()
-  await selector.get('[data-testid="upstream-channel-select"]').setValue('7')
-  expect(w.find('[data-testid="confirm-create-channel"]').exists()).toBe(true)
- })
 })

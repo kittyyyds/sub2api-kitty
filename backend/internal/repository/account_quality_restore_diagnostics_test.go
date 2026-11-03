@@ -231,7 +231,7 @@ func TestQualityRestoreDiagnosticsConcurrentRulesCannotTakeOwnership(t *testing.
 		expectQualityDiagnosticAccount(mock, plan, until, state, "active")
 		mock.ExpectRollback()
 	}
-	mock.ExpectQuery("SELECT EXISTS\\( SELECT 1 FROM account_quality_states").WithArgs(int64(8), int64(9), false).WillReturnRows(sqlmock.NewRows([]string{"owned"}).AddRow(true))
+	mock.ExpectQuery("SELECT EXISTS\\( SELECT 1 FROM account_quality_states").WithArgs(int64(8), int64(9)).WillReturnRows(sqlmock.NewRows([]string{"owned"}).AddRow(true))
 	mock.ExpectQuery("SELECT COALESCE\\(jsonb_agg").WithArgs(int64(8)).WillReturnRows(sqlmock.NewRows([]string{"groups"}).AddRow(`[]`))
 	expectKittyNoIQHold(mock, int64(8))
 	mock.ExpectQuery("SELECT EXISTS\\(SELECT 1 FROM groups").WithArgs(int64(21), int64(8)).WillReturnRows(sqlmock.NewRows([]string{"exists", "replaced"}).AddRow(true, true))
@@ -353,27 +353,6 @@ func TestQualityRestoreDiagnosticsNativeModelAndConcurrencyGuards(t *testing.T) 
 			}
 		})
 	}
-}
-
-func TestQualityRestoreDiagnosticsBPSOnlyListsChangedManagedKeys(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() {
-		mock.ExpectClose()
-		require.NoError(t, db.Close())
-	}()
-	plan := &service.ScheduledTestPlan{ID: 7, AccountID: 8, UpdatedAt: time.Now(), PelicanConfig: &service.PelicanTestConfig{Quality: &service.QualityPolicy{Action: service.QualityActionEnableBPS, AutoRestore: true}}}
-	until := plan.UpdatedAt.Add(time.Minute)
-	expectQualityDiagnosticAccount(mock, plan, until, `{"action":"enable_bps","pass_streak":1,"bps_applied":{"openai_excel_bps":true}}`, "active")
-	mock.ExpectQuery("SELECT platform, type, parent_account_id").WithArgs(plan.AccountID).WillReturnRows(sqlmock.NewRows([]string{"platform", "type", "parent", "credentials", "extra"}).AddRow("openai", "oauth", nil, `{}`, `{"openai_excel_bps":false,"unrelated":"synthetic-private-value"}`))
-	mock.ExpectCommit() // Existing BPS path may keep its pass streak, never touches the account.
-	action, err := NewScheduledTestPlanRepository(db).ApplyQualityOutcome(context.Background(), plan, until, "passed")
-	require.NoError(t, err)
-	require.Equal(t, "restore_conflict", action)
-	require.Equal(t, "bps_fields_changed", plan.QualityRestoreDiagnostic.Reason)
-	require.Equal(t, []string{"openai_excel_bps"}, plan.QualityRestoreDiagnostic.ChangedFields)
-	require.NotContains(t, string(mustJSON(t, plan.QualityRestoreDiagnostic)), "synthetic-private-value")
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // The Kitty admission/quarantine gate runs under the existing transaction locks.

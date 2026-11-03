@@ -29,7 +29,6 @@ var ProviderSet = wire.NewSet(
 	NewStepUpAuthMiddleware,
 )
 
-// Wire uses an explicit dependency while direct callers may omit tiered routing.
-func ProvideAPIKeyAuthMiddleware(apiKeys *service.APIKeyService, subscriptions *service.SubscriptionService, cfg *config.Config, tier *service.TieredRoutingService) APIKeyAuthMiddleware {
-	return NewAPIKeyAuthMiddleware(apiKeys, subscriptions, cfg, tier)
+func ProvideAPIKeyAuthMiddleware(apiKeys *service.APIKeyService, subscriptions *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
+	return NewAPIKeyAuthMiddleware(apiKeys, subscriptions, cfg)
 }

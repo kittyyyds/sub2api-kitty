@@ -58,14 +58,6 @@ func (d *passwordLoginDiagnostic) failure() *LoginError {
 		// copied error line, URL, response body or purported provider explanation.
 		if strings.HasPrefix(line, "[error] ") || strings.HasPrefix(line, "[proxy] 代理连接失败：") {
 			switch {
-			case strings.Contains(line, "BPS_INTERACTION_REQUIRED"):
-				if p.Code == "protocol_login_failed" {
-					p.Stage, p.Code = "authorization", "bps_interaction_required"
-				}
-			case strings.Contains(line, "BPS_CALLBACK_INVALID"), strings.Contains(line, "BPS_AUTH_URL_INVALID"):
-				p.Stage, p.Code = "authorization", "invalid_oauth_callback"
-			case strings.Contains(line, "BPS_WORKSPACE_MISMATCH"):
-				p.Stage, p.Code = "authorization", "account_identity_mismatch"
 			case strings.Contains(line, "PROXY_SECURITY_CHECK_REQUIRES_INTERACTION"):
 				p.Stage, p.Code = "security_verification", "protocol_security_verification_required"
 			case strings.Contains(line, "Python curl_cffi"), strings.Contains(line, "Cannot find module"), strings.Contains(line, "ERR_MODULE_NOT_FOUND"):

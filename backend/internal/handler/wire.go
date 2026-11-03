@@ -43,7 +43,6 @@ func ProvideAdminHandlers(
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
 	pelicanGroupTestHandler *admin.PelicanGroupTestHandler,
-	controlledExperimentHandler *admin.ControlledExperimentHandler,
 	accountOpsHandler *admin.AccountOpsHandler,
 	accountTokenGuardHandler *admin.AccountTokenGuardHandler,
 	accountTokenGuardV2Handler *admin.AccountTokenGuardV2Handler,
@@ -52,7 +51,6 @@ func ProvideAdminHandlers(
 	channelMonitorTemplateHandler *admin.ChannelMonitorRequestTemplateHandler,
 	contentModerationHandler *admin.ContentModerationHandler,
 	securityPolicyHandler *admin.SecurityPolicyHandler,
-	tieredRoutingHandler *admin.TieredRoutingHandler,
 	billingExportHandler *admin.BillingExportHandler,
 	promptAuditHandler *securityaudit.PromptAdminHandler,
 	paymentHandler *admin.PaymentHandler,
@@ -63,14 +61,11 @@ func ProvideAdminHandlers(
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	opencodeGoUsage *service.OpenCodeGoUsageService,
 	settingService *service.SettingService,
-	codexHarvest *service.CodexHarvestService,
 	openAIGatewayService *service.OpenAIGatewayService,
 	claudeResetCredits *service.ClaudeResetCreditService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
-	accountHandler.SetCodexTicketSettings(settingService)
-	accountHandler.SetCodexHarvestService(codexHarvest)
 	accountHandler.SetOpenAIGatewayService(openAIGatewayService)
 	accountHandler.SetOpenCodeGoUsageService(opencodeGoUsage)
 	accountHandler.SetClaudeResetCreditService(claudeResetCredits)
@@ -110,13 +105,11 @@ func ProvideAdminHandlers(
 		AccountTokenGuardV2:    accountTokenGuardV2Handler,
 		ScheduledTest:          scheduledTestHandler,
 		PelicanGroupTest:       pelicanGroupTestHandler,
-		ControlledExperiment:   controlledExperimentHandler,
 		Channel:                channelHandler,
 		ChannelMonitor:         channelMonitorHandler,
 		ChannelMonitorTemplate: channelMonitorTemplateHandler,
 		ContentModeration:      contentModerationHandler,
 		SecurityPolicy:         securityPolicyHandler,
-		TieredRouting:          tieredRoutingHandler,
 		BillingExport:          billingExportHandler,
 		PromptAudit:            promptAuditHandler,
 		Payment:                paymentHandler,
@@ -342,7 +335,6 @@ var ProviderSet = wire.NewSet(
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 	admin.NewPelicanGroupTestHandler,
-	admin.NewControlledExperimentHandler,
 	admin.NewAccountOpsHandler,
 	admin.NewAccountTokenGuardHandler,
 	admin.NewAccountTokenGuardV2Handler,
@@ -351,7 +343,6 @@ var ProviderSet = wire.NewSet(
 	admin.NewChannelMonitorRequestTemplateHandler,
 	admin.NewContentModerationHandlerWithSafetyPrompt,
 	admin.NewSecurityPolicyHandler,
-	admin.NewTieredRoutingHandler,
 	admin.NewBillingExportHandler,
 	admin.NewPaymentHandler,
 	admin.NewAffiliateHandler,

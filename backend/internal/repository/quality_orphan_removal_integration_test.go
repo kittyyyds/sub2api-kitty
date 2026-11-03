@@ -16,7 +16,7 @@ import (
 
 // Three independent models: sol has a live orphan marker, astra's same-owner
 // marker changed, and missing has a snapshot but no current marker.
-func orphanRemovalFixture(t *testing.T) *qualityBPSFixture {
+func orphanRemovalFixture(t *testing.T) *qualityIntegrationFixture {
 	t.Helper()
 	f, _, _ := newQualityIsolationFixture(t)
 	require.Equal(t, "groups_removed", isolationRound(f, "failed", "failed"))
@@ -37,13 +37,13 @@ func orphanRemovalFixture(t *testing.T) *qualityBPSFixture {
 	}
 	return f
 }
-func orphanPreview(t *testing.T, f *qualityBPSFixture) *service.QualityOwnershipPreview {
+func orphanPreview(t *testing.T, f *qualityIntegrationFixture) *service.QualityOwnershipPreview {
 	t.Helper()
 	p, err := f.plans.(service.QualityOwnershipRepository).QualityOwnership(context.Background(), f.plan.ID, nil)
 	require.NoError(t, err)
 	return p
 }
-func orphanConfirm(f *qualityBPSFixture, p *service.QualityOwnershipPreview, model string) error {
+func orphanConfirm(f *qualityIntegrationFixture, p *service.QualityOwnershipPreview, model string) error {
 	_, err := f.plans.(service.QualityOwnershipRepository).QualityOwnership(context.Background(), f.plan.ID, &service.QualityOwnershipRequest{Fence: p.Fence, Confirm: true, RemoveModel: true, Model: model, ReasonCode: "orphan_marker_recovery"})
 	return err
 }
@@ -57,7 +57,7 @@ func orphanEntry(t *testing.T, p *service.QualityOwnershipPreview, model string)
 	t.Fatalf("no model removal preview for %s", model)
 	return service.QualityModelRemoval{}
 }
-func orphanSnapshot(t *testing.T, f *qualityBPSFixture) string {
+func orphanSnapshot(t *testing.T, f *qualityIntegrationFixture) string {
 	t.Helper()
 	var data string
 	require.NoError(t, integrationDB.QueryRow(`SELECT jsonb_build_object('account',to_jsonb(a),'plan',to_jsonb(p),'state',s.state,

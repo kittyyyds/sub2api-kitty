@@ -16,11 +16,6 @@ func TestQualityIsolationValidationAndTargets(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, q.RemoveModels)
 	require.Equal(t, []string{"sol", "astra"}, QualityModels(plan))
-	plan.PelicanConfig.QuestionKind = OpenAICodexStateProbeQuestionKind
-	plan.PelicanConfig.ModelIDs = []string{"sol"}
-	_, err = nextPlanRun(plan, time.Now())
-	require.Error(t, err, "account-level state probes cannot decide per-model isolation")
-	plan.PelicanConfig.QuestionKind = "candy"
 	q.RemoveGroupIDs = nil
 	_, err = nextPlanRun(plan, time.Now())
 	require.Error(t, err, "the composite action requires explicit target groups")

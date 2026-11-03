@@ -30,95 +30,11 @@
           :class="testMode === mode ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-700 dark:text-primary-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
           @click="selectMode(mode)"
         >
-          {{ t(mode === 'modeltrace' ? 'modelTrace.tab' : mode === 'probe' ? 'admin.accounts.pelicanTest.modeProbe' : 'admin.accounts.pelicanTest.modeQuestion') }}
+          {{ t(mode === 'modeltrace' ? 'modelTrace.tab' : 'admin.accounts.pelicanTest.modeQuestion') }}
         </button>
       </div>
 
-      <div v-if="testMode === 'probe'" class="space-y-4" data-testid="probe-panel">
-        <p class="text-sm text-gray-600 dark:text-gray-300">{{ t('admin.accounts.pelicanTest.probe.intro') }}</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="probe-schedule-hint">{{ t('admin.accounts.pelicanTest.probe.scheduleHint') }}</p>
-        <div v-if="!probeSupported" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-200" data-testid="probe-unsupported">
-          {{ t('admin.accounts.pelicanTest.probe.unsupported') }}
-        </div>
-        <div class="max-w-sm">
-          <TestModelSelect
-            id="probe-model"
-            v-model="modelId"
-            :label="t('admin.accounts.pelicanTest.probe.model')"
-            :options="modelOptions"
-            :disabled="running"
-            :hint="t('admin.accounts.pelicanTest.probe.modelHint')"
-          />
-        </div>
-
-        <div v-if="probeError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-950/20 dark:text-red-300" data-testid="probe-error">
-          {{ t('admin.accounts.pelicanTest.probe.requestFailed') }}：{{ probeError }}
-        </div>
-        <div v-if="running" class="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50/60 px-3 py-3 text-sm text-primary-700 dark:border-primary-800/60 dark:bg-primary-900/20 dark:text-primary-300">
-          <Icon name="refresh" size="sm" class="animate-spin" />
-          {{ t('admin.accounts.pelicanTest.probe.running') }}
-        </div>
-        <div v-else-if="probeResults.length === 0 && !probeError" class="rounded-lg border border-dashed border-gray-300 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
-          {{ t('admin.accounts.pelicanTest.probe.empty') }}
-        </div>
-
-        <article
-          v-for="(result, index) in probeResults"
-          :key="`${result.started_at}-${index}`"
-          data-testid="probe-result"
-          class="rounded-xl border bg-white p-4 dark:bg-dark-800"
-          :class="index === 0 ? verdictStyle(result.verdict).border : 'border-gray-200 dark:border-dark-600'"
-        >
-          <header class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <span data-testid="probe-verdict" class="rounded-full px-3 py-1 text-sm font-semibold" :class="verdictStyle(result.verdict).badge">
-                {{ verdictLabel(result.verdict) }}
-              </span>
-              <span v-if="result.failure" data-testid="probe-failure" class="text-xs text-gray-500 dark:text-gray-400">{{ failureLabel(result.failure) }}</span>
-            </div>
-            <span class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.pelicanTest.probe.finishedAt') }}：{{ formatDate(result.finished_at) }} · {{ t('admin.accounts.pelicanTest.probe.latency') }} {{ (result.latency_ms / 1000).toFixed(1) }} s
-            </span>
-          </header>
-          <p class="mt-3 text-sm text-gray-800 dark:text-gray-100" data-testid="probe-reason">{{ result.reason }}</p>
-          <pre v-if="result.detail" class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-gray-50 p-2 text-xs text-gray-600 dark:bg-dark-900 dark:text-gray-300" data-testid="probe-detail">{{ t('admin.accounts.pelicanTest.probe.detail') }}：{{ result.detail }}</pre>
-          <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
-            <div>
-              <dt class="text-gray-500 dark:text-gray-400">{{ t('admin.accounts.pelicanTest.probe.mintStatus') }}</dt>
-              <dd class="font-medium text-gray-800 dark:text-gray-100">{{ httpStatusLabel(result.mint_status) }}</dd>
-            </div>
-            <div>
-              <dt class="text-gray-500 dark:text-gray-400">{{ t('admin.accounts.pelicanTest.probe.continueStatus') }}</dt>
-              <dd class="font-medium text-gray-800 dark:text-gray-100">{{ httpStatusLabel(result.continue_status) }}</dd>
-            </div>
-            <div>
-              <dt class="text-gray-500 dark:text-gray-400">{{ t('admin.accounts.pelicanTest.probe.ticketLength') }}</dt>
-              <dd class="font-medium text-gray-800 dark:text-gray-100">{{ ticketLengthLabel(result) }}</dd>
-            </div>
-            <div>
-              <dt class="text-gray-500 dark:text-gray-400">{{ t('admin.accounts.pelicanTest.probe.newTicket') }}</dt>
-              <dd class="font-medium text-gray-800 dark:text-gray-100" data-testid="probe-new-ticket">{{ newTicketLabel(result) }}</dd>
-            </div>
-            <div>
-              <dt class="text-gray-500 dark:text-gray-400">{{ t('admin.accounts.pelicanTest.probe.model') }}</dt>
-              <dd class="break-all font-medium text-gray-800 dark:text-gray-100">{{ result.model || '—' }}</dd>
-            </div>
-            <div>
-              <dt class="text-gray-500 dark:text-gray-400">{{ t('admin.accounts.pelicanTest.probe.reportedModel') }}</dt>
-              <dd class="break-all font-medium text-gray-800 dark:text-gray-100">{{ result.reported_model || '—' }}</dd>
-            </div>
-          </dl>
-        </article>
-
-        <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-dark-600 dark:bg-dark-800/70 dark:text-gray-300">
-          <div class="flex items-start gap-2">
-            <Icon name="shield" size="sm" class="mt-0.5 shrink-0 text-emerald-500" />
-            <span>{{ t('admin.accounts.pelicanTest.probe.limitation') }}</span>
-          </div>
-        </div>
-      </div>
-
-      <template v-else-if="testMode === 'modeltrace'">
+      <template v-if="testMode === 'modeltrace'">
         <ModelTracePanel v-if="show && account" :key="account.id" v-model:model-id="modelId" :account="account"
           :model-options="modelOptions" :reasoning-levels="reasoningLevels" @running="running = $event" />
       </template>
@@ -233,8 +149,7 @@
                 <span class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ t('admin.accounts.pelicanTest.output') }} {{ index + 1 }}</span>
               </div>
               <div class="flex items-center gap-1">
-                <span v-if="run.verdict" data-testid="run-verdict" class="rounded-full px-2 py-0.5 text-xs font-medium" :class="verdictStyle(run.verdict).badge">{{ verdictLabel(run.verdict) }}</span>
-                <span v-else-if="run.status === 'running'" class="text-xs text-amber-600 dark:text-amber-300">{{ t('admin.accounts.pelicanTest.runningShort') }}</span>
+                <span v-if="run.status === 'running'" class="text-xs text-amber-600 dark:text-amber-300">{{ t('admin.accounts.pelicanTest.runningShort') }}</span>
                 <span v-else-if="run.status === 'success'" class="text-xs text-emerald-600 dark:text-emerald-300">{{ t('admin.accounts.pelicanTest.success') }}</span>
                 <span v-else class="text-xs text-red-600 dark:text-red-300">{{ t('admin.accounts.pelicanTest.failed') }}</span>
                 <button v-if="run.output" type="button" class="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-300" :title="t('admin.accounts.pelicanTest.download')" @click="downloadHtml(run)">
@@ -266,12 +181,7 @@
         <span v-else />
         <div class="flex gap-3">
           <button type="button" class="btn btn-secondary" :disabled="running" @click="handleClose">{{ t('common.close') }}</button>
-          <button v-if="testMode === 'probe'" type="button" data-testid="probe-start" class="btn btn-primary flex items-center gap-2" :disabled="running || !canStartProbe" @click="startProbe">
-            <Icon v-if="running" name="refresh" size="sm" class="animate-spin" />
-            <Icon v-else name="play" size="sm" />
-            {{ running ? t('admin.accounts.pelicanTest.probe.probing') : t('admin.accounts.pelicanTest.probe.start') }}
-          </button>
-          <button v-else-if="testMode === 'question' && activeTab !== 'schedule'" type="button" class="btn btn-primary flex items-center gap-2" :disabled="running || !canStart" @click="startTest">
+          <button v-if="testMode === 'question' && activeTab !== 'schedule'" type="button" class="btn btn-primary flex items-center gap-2" :disabled="running || !canStart" @click="startTest">
             <Icon v-if="running" name="refresh" size="sm" class="animate-spin" />
             <Icon v-else name="play" size="sm" />
             {{ running ? t('admin.accounts.pelicanTest.generating') : t('admin.accounts.pelicanTest.start') }}
@@ -284,7 +194,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { questionPrompt, questionContract, isTextAnswerKind, stateProbeVerdict, STATE_PROBE_QUESTION, type IntelligenceQuestion, type StateProbeVerdict } from '@/utils/intelligenceTest'
+import { questionPrompt, questionContract, isTextAnswerKind, type IntelligenceQuestion } from '@/utils/intelligenceTest'
 import { useI18n } from 'vue-i18n'
 import { extractPelicanHtml as extractHtml } from '@/utils/pelicanHtml'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -294,7 +204,7 @@ import Select from '@/components/common/Select.vue'
 import { Icon } from '@/components/icons'
 import { buildApiUrl } from '@/api/client'
 import { ADMIN_UI_REQUEST_HEADER } from '@/api/adminUIRequest'
-import { getAvailableModels, getModelReasoning, probeOpenAICodexState, type OpenAICodexStateProbeResult, type OpenAICodexStateVerdict } from '@/api/admin/accounts'
+import { getAvailableModels, getModelReasoning } from '@/api/admin/accounts'
 import type { Account, AccountListItem, PelicanTestConfig, ScheduledTestResult } from '@/types'
 import IQIntervalPanel from './IQIntervalPanel.vue'
 import PelicanRecordsDashboard from './PelicanRecordsDashboard.vue'
@@ -304,18 +214,12 @@ import ModelTracePanel from './ModelTracePanel.vue'
 const { t } = useI18n()
 
 const STORAGE_PREFIX = 'sub2api-pelican-test:'
-const PROBE_CONTROLLER_KEY = 'state-probe'
-const PROBE_RESULT_LIMIT = 5
-const PROBE_FAILURE_KINDS = new Set(['unsupported', 'account_error', 'rate_limited', 'model_unsupported', 'upstream_error', 'network_error', 'stream_error', 'no_ticket', 'cancelled'])
-
-type TestMode = 'question' | 'probe' | 'modeltrace'
-const testModes: TestMode[] = ['question', 'probe', 'modeltrace']
+type TestMode = 'question' | 'modeltrace'
+const testModes: TestMode[] = ['question', 'modeltrace']
 
 type RunStatus = 'running' | 'success' | 'error'
 interface TestRun {
   questionKind?: PelicanTestConfig['question_kind']
-  // 定时探针结果的判定；手动题目测试没有。
-  verdict?: StateProbeVerdict
   id: string
   status: RunStatus
   output: string
@@ -372,8 +276,6 @@ const records = ref<TestRecord[]>([])
 const scheduledRecords = ref<ScheduledTestResult[]>([])
 const controllers = new Map<string, AbortController>()
 const testMode = ref<TestMode>('question')
-const probeResults = ref<OpenAICodexStateProbeResult[]>([])
-const probeError = ref('')
 
 const deliveryContract = computed(() => questionContract(questionKind.value))
 const questionOptions = computed(() => ['candy', 'pelican'].map(value => ({ value, label: t(`admin.accounts.pelicanTest.${value}Question`) })))
@@ -388,8 +290,6 @@ const reasoningOptions = computed(() => reasoningLevels.value.map((value) => ({
 })))
 const canStart = computed(() => Boolean(props.account && prompt.value.trim() && modelId.value.trim() && normalizeCount() > 0))
 const hasDownloadable = computed(() => runs.value.some((run) => Boolean(run.output)))
-const probeSupported = computed(() => props.account?.platform === 'openai' && (props.account.type === 'oauth' || props.account.type === 'setup-token'))
-const canStartProbe = computed(() => Boolean(props.account && probeSupported.value))
 
 let modelLoadToken = 0
 async function loadModels() {
@@ -429,44 +329,10 @@ function selectMode(mode: TestMode) {
   testMode.value = mode
 }
 
-function verdictLabel(verdict: OpenAICodexStateVerdict) {
-  if (verdict === 'healthy') return t('admin.accounts.pelicanTest.probe.verdictHealthy')
-  if (verdict === 'degraded') return t('admin.accounts.pelicanTest.probe.verdictDegraded')
-  return t('admin.accounts.pelicanTest.probe.verdictInconclusive')
-}
-
-function verdictStyle(verdict: OpenAICodexStateVerdict) {
-  if (verdict === 'healthy') return { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', border: 'border-emerald-300 dark:border-emerald-700' }
-  if (verdict === 'degraded') return { badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', border: 'border-red-300 dark:border-red-700' }
-  return { badge: 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300', border: 'border-gray-300 dark:border-dark-500' }
-}
-
 function scheduledStatus(result: ScheduledTestResult) {
-  const verdict = stateProbeVerdict(result)
-  if (verdict === 'healthy') return { label: verdictLabel(verdict), class: 'text-emerald-600' }
-  if (verdict === 'degraded') return { label: verdictLabel(verdict), class: 'text-red-500' }
-  if (verdict) return { label: verdictLabel(verdict), class: 'text-gray-500' }
   return result.status === 'success'
     ? { label: t('admin.accounts.pelicanTest.success'), class: 'text-emerald-600' }
     : { label: t('admin.accounts.pelicanTest.failed'), class: 'text-red-500' }
-}
-
-function failureLabel(failure: string) {
-  return PROBE_FAILURE_KINDS.has(failure) ? t(`admin.accounts.pelicanTest.probe.failures.${failure}`) : failure
-}
-
-function httpStatusLabel(status: number) {
-  return status > 0 ? `HTTP ${status}` : '—'
-}
-
-function ticketLengthLabel(result: OpenAICodexStateProbeResult) {
-  if (!result.ticket_length) return '—'
-  return result.continue_ticket_length ? `${result.ticket_length} → ${result.continue_ticket_length}` : `${result.ticket_length}`
-}
-
-function newTicketLabel(result: OpenAICodexStateProbeResult) {
-  if (result.verdict === 'inconclusive') return '—'
-  return t(result.new_ticket ? 'admin.accounts.pelicanTest.probe.yes' : 'admin.accounts.pelicanTest.probe.no')
 }
 
 const storageKey = computed(() => `${STORAGE_PREFIX}${props.account?.id ?? 'unknown'}`)
@@ -503,7 +369,7 @@ function editSchedule(config: PelicanTestConfig, model: string) {
   if (running.value) return
   modelId.value = model
   // Server-generated questions belong to quality rules, not manual test inputs.
-  if (config.question_kind === STATE_PROBE_QUESTION || config.question_kind === 'random_reasoning') return
+  if (config.question_kind === 'random_reasoning') return
   questionKind.value = config.question_kind || 'pelican'
   prompt.value = config.prompt
   modelId.value = model
@@ -523,7 +389,7 @@ function previewScheduled(result: ScheduledTestResult) {
   const config = result.pelican_config
   if (config) editSchedule(config, config.model_id || modelId.value)
   const html = isTextAnswerKind(config?.question_kind) ? '' : extractHtml(result.response_text)
-  runs.value = [{ id: `scheduled-${result.id}`, questionKind: config?.question_kind || 'pelican', verdict: stateProbeVerdict(result) ?? undefined, status: result.status === 'success' ? 'success' : 'error', output: result.response_text, html, error: result.error_message,
+  runs.value = [{ id: `scheduled-${result.id}`, questionKind: config?.question_kind || 'pelican', status: result.status === 'success' ? 'success' : 'error', output: result.response_text, html, error: result.error_message,
     source: 'scheduled', startedAt: result.started_at, finishedAt: result.finished_at,
     durationMs: result.latency_ms, modelId: config?.model_id, reasoningEffort: config?.reasoning_effort
   }]
@@ -654,27 +520,6 @@ async function startTest() {
   saveRecords()
 }
 
-async function startProbe() {
-  if (running.value || !props.account || !canStartProbe.value) return
-  const accountId = props.account.id
-  const controller = new AbortController()
-  controllers.set(PROBE_CONTROLLER_KEY, controller)
-  probeError.value = ''
-  running.value = true
-  try {
-    const result = await probeOpenAICodexState(accountId, modelId.value, { signal: controller.signal })
-    if (controller.signal.aborted || props.account?.id !== accountId) return
-    probeResults.value = [result, ...probeResults.value].slice(0, PROBE_RESULT_LIMIT)
-  } catch (error) {
-    if (controller.signal.aborted) return
-    const message = (error as { message?: unknown } | null)?.message
-    probeError.value = typeof message === 'string' && message ? message : t('admin.accounts.pelicanTest.failed')
-  } finally {
-    if (controllers.get(PROBE_CONTROLLER_KEY) === controller) controllers.delete(PROBE_CONTROLLER_KEY)
-    if (!controllers.has(PROBE_CONTROLLER_KEY)) running.value = false
-  }
-}
-
 function downloadHtml(run: TestRun) {
   const text = isTextAnswerKind(run.questionKind)
   const content = text ? run.output : run.html || extractHtml(run.output)
@@ -709,10 +554,7 @@ watch(() => [props.show, props.account?.id] as const, ([show]) => {
     reasoningEffort.value = 'medium'
     parallelCount.value = 1
     runs.value = []
-    controllers.get(PROBE_CONTROLLER_KEY)?.abort()
     testMode.value = 'question'
-    probeResults.value = []
-    probeError.value = ''
     void loadModels()
     void loadReasoning()
   } else {

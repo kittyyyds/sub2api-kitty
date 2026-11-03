@@ -733,9 +733,9 @@ func (s *AccountUsageService) getOpenAIUsage(ctx context.Context, account *Accou
 	applyExtraToUsage(usage, account.Extra, now)
 
 	if (force || shouldRefreshOpenAICodexSnapshot(account, usage, now)) && s.shouldProbeOpenAICodexSnapshot(account.ID, now, force) {
-		if account.IsShadow() || account.IsExcelBPSEnabled() {
-			// BPS queries reuse quota OAuth authentication, never a model probe
-			// or the independent BPS grant. Spark resolves parent credentials
+		if account.IsShadow() {
+			// Shadow queries reuse quota OAuth authentication, never a model probe
+			// Spark resolves parent credentials
 			// but persists only its own bengalfox windows on the shadow row.
 			if s.openAIQuotaService != nil {
 				if quotaUsage, err := s.openAIQuotaService.QueryUsage(ctx, account.ID); err == nil {
@@ -803,10 +803,10 @@ func isOpenAICodexSnapshotStale(account *Account, now time.Time) bool {
 	if account == nil || !account.IsOpenAIOAuth() {
 		return false
 	}
-	// Native probes retain their WSv2 eligibility. BPS and Spark use the quota
+	// Native probes retain their WSv2 eligibility. Spark use the quota
 	// endpoint independently of transport; their complete windows still expire.
 	// shouldProbeOpenAICodexSnapshot bounds concurrent/stale automatic reads.
-	if !account.IsShadow() && !account.IsExcelBPSEnabled() && !account.IsOpenAIResponsesWebSocketV2Enabled() {
+	if !account.IsShadow() && !account.IsOpenAIResponsesWebSocketV2Enabled() {
 		return false
 	}
 	if account.Extra == nil {

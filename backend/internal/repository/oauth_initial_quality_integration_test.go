@@ -22,7 +22,7 @@ func TestOAuthInitialQualityAtomicCreate(t *testing.T) {
 				now := time.Now()
 				name := fmt.Sprintf("initial-quality-%d", now.UnixNano())
 				a := &service.Account{Name: name, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Status: service.StatusActive, Concurrency: 3, Schedulable: true,
-					InitialQualityPlan: &service.ScheduledTestPlan{ModelID: "gpt-5.4", CronExpression: "*/5 * * * *", Enabled: true, MaxResults: 100, NextRunAt: &now, PelicanConfig: &service.PelicanTestConfig{QuestionKind: "state_probe", ParallelCount: 1, ReasoningEffort: "high", Quality: &service.QualityPolicy{Action: service.QualityActionObserveOnly}}}}
+					InitialQualityPlan: &service.ScheduledTestPlan{ModelID: "gpt-5.4", CronExpression: "*/5 * * * *", Enabled: true, MaxResults: 100, NextRunAt: &now, PelicanConfig: &service.PelicanTestConfig{QuestionKind: "candy", Prompt: service.CandyPrompt, ParallelCount: 1, ReasoningEffort: "high", Quality: &service.QualityPolicy{ExpectedAnswer: "21", Judge: &service.QualityJudgeConfig{GroupID: 1, ModelID: "judge", Prompt: "grade"}, Action: service.QualityActionObserveOnly}}}}
 				// Database varchar constraint fails only when inserting the rule, after account creation.
 				if invalid {
 					a.InitialQualityPlan.ModelID = strings.Repeat("x", 1000)

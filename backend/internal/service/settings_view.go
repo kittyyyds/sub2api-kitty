@@ -12,11 +12,6 @@ func firstNonEmpty(values ...string) string {
 }
 
 type SystemSettings struct {
-	OpenAICodexTicketHarvestScope       CodexTicketHarvestScope
-	OpenAICodexTicketStrictResponse     bool
-	OpenAICodexTicketCandyObservation   bool
-	OpenAICodexTicketFailClosed         bool
-	OpenAICodexTicketStrategy           string
 	RegistrationEnabled                 bool
 	LoginRateLimitEnabled               bool // 登录频率限制与失败 IP 封禁（默认开启）
 	RegistrationIPLimitEnabled          bool // 同一 IP 最多注册两个账号（默认开启）
@@ -207,8 +202,6 @@ type SystemSettings struct {
 	OpsQueryModeDefault          string
 	OpsMetricsIntervalSeconds    int
 
-	ExcelBPSEnabled bool `json:"excel_bps_enabled"`
-
 	// Channel Monitor feature
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`
 	ChannelMonitorMode                   string `json:"channel_monitor_mode"`
@@ -280,19 +273,15 @@ type SystemSettings struct {
 	OpenAICodexVersionAutoSyncEnabled      bool   // 是否启用 Codex 客户端版本号自动同步（默认 true）
 	OpenAIRequestTimezoneEnabled           bool   // Rewrite request timezones; enabled by default.
 	OpenAIRequestTimezoneAuto              bool   // Resolve timezone through actual egress by default; false retains manual mode.
-	OpenAICodexTicketEnabled               bool   // Codex 292 打票总开关；关闭则不打票不注入
-	OpenAICodexTicketHarvestProxyURL       string // Codex 292 打票代理 URL；空则回退 yaml/env
-	OpenAICodexTicketStaticProxyURL        string
-	OpenAICodexTicketModels                []string // Codex 292 打票模型列表；缺失时回退 yaml/env
-	MinCodexVersion                        string   // codex_cli_only 最低 Codex 引擎版本；空=不检查
-	MaxCodexVersion                        string   // codex_cli_only 最高 Codex 引擎版本；空=不检查
-	CodexCLIOnlyBlacklist                  string   // codex_cli_only 全局黑名单 JSON（[]AllowedClientEntry，OR deny）
-	CodexCLIOnlyWhitelist                  string   // codex_cli_only 全局白名单 JSON（[]AllowedClientEntry，AND allow）
-	CodexCLIOnlyAllowAppServerClients      bool     // codex_cli_only App Server 开关：对未列名客户端开闸（默认 false）
-	CodexCLIOnlyEngineFingerprintSignals   string   // codex_cli_only 引擎指纹门信号列表 JSON（[]EngineFingerprintSignal）
-	ClaudeCodeClientVersion                string   // 出站声明的 Claude Code CLI 客户端版本号（管理员覆写）；空值跟随自动同步值
-	ClaudeCodeClientVersionSynced          string   // 自动同步到的官方最新版本号（只读展示）
-	ClaudeCodeVersionAutoSyncEnabled       bool     // 是否启用 Claude Code 客户端版本号自动同步（默认 true）
+	MinCodexVersion                        string // codex_cli_only 最低 Codex 引擎版本；空=不检查
+	MaxCodexVersion                        string // codex_cli_only 最高 Codex 引擎版本；空=不检查
+	CodexCLIOnlyBlacklist                  string // codex_cli_only 全局黑名单 JSON（[]AllowedClientEntry，OR deny）
+	CodexCLIOnlyWhitelist                  string // codex_cli_only 全局白名单 JSON（[]AllowedClientEntry，AND allow）
+	CodexCLIOnlyAllowAppServerClients      bool   // codex_cli_only App Server 开关：对未列名客户端开闸（默认 false）
+	CodexCLIOnlyEngineFingerprintSignals   string // codex_cli_only 引擎指纹门信号列表 JSON（[]EngineFingerprintSignal）
+	ClaudeCodeClientVersion                string // 出站声明的 Claude Code CLI 客户端版本号（管理员覆写）；空值跟随自动同步值
+	ClaudeCodeClientVersionSynced          string // 自动同步到的官方最新版本号（只读展示）
+	ClaudeCodeVersionAutoSyncEnabled       bool   // 是否启用 Claude Code 客户端版本号自动同步（默认 true）
 
 	// Web Search Emulation
 	WebSearchEmulationEnabled bool // 是否启用 web search 模拟
@@ -356,25 +345,10 @@ type SystemSettings struct {
 	RequestCaptureQuotaMiB      int64
 	RequestCaptureRetentionDays int
 	// 使用详情中长上下文计费 x2 徽标的展示开关（默认开启）
-	ExcelBPSImageMode                     string
 	UsageShowLongContextBadge             bool
 	UsageShowCacheRate                    bool
 	UsageShowCacheRateToUsers             bool
 	UsageShowUpstreamResponseModelToUsers bool
-	ExcelBPSImageRelayEnabled             bool
-	ExcelBPSImageBaseURL                  string
-	ExcelBPSImageBodyLimitMiB             int
-	ExcelBPSImageBudgetMiB                int
-	ExcelBPSImageMaxRequests              int
-	ExcelBPSImageMaxImageMiB              int
-	ExcelBPSImageMaxImages                int
-	ExcelBPSImageLimitPolicy              string
-	ExcelBPSImageWarningRemaining         int
-	ExcelBPSImageCompactReserve           int
-	ExcelBPSImageMaxTotalMiB              int
-	ExcelBPSImageStorageMiB               int
-	ExcelBPSImageStorageEntries           int
-	ExcelBPSImageTTLMinutes               int
 }
 
 type DefaultSubscriptionSetting struct {
@@ -446,7 +420,6 @@ type PublicSettings struct {
 	BalanceLowNotifyRechargeURL string
 
 	// Protocol feature switches, exposed so account editors follow global controls.
-	ExcelBPSEnabled     bool `json:"excel_bps_enabled"`
 	PrismBrowserEnabled bool `json:"prism_browser_enabled"`
 
 	// Channel Monitor feature

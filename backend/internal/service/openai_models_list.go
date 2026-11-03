@@ -17,9 +17,6 @@ import (
 // API keys use the standard endpoint; OAuth reuses the authenticated, cached
 // Codex source. Account mappings and group policy are applied after this cache.
 func (s *OpenAIGatewayService) FetchOpenAIModelsList(ctx context.Context, account *Account) (*OpenAIModelsResponse, error) {
-	if account != nil && account.IsExcelBPSEnabled() {
-		return s.fetchExcelBPSAccountModels(ctx, account)
-	}
 	return s.fetchNativeOpenAIModelsList(ctx, account)
 }
 

@@ -361,7 +361,7 @@ func TestPrismBrowserAccountTestExplainsAdapterRefusal(t *testing.T) {
 
 // A WebSocket session placed on a Prism account is closed right after selection,
 // so the scheduler must keep such sessions on the other accounts, as it does for
-// Excel BPS models. HTTP requests still reach the Prism account.
+// ineligible accounts. HTTP requests still reach the Prism account.
 func TestPrismBrowserAccountsAreNotScheduledForWebSocketSessions(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(26001)

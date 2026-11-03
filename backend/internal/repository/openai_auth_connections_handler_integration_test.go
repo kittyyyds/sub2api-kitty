@@ -111,7 +111,6 @@ func TestIssue594ReviewRealHTTPSelectionSlotsOutputAndUsage(t *testing.T) {
 	require.Greater(t, fixturePricing.InputPricePerToken, 0.0)
 	require.Greater(t, fixturePricing.OutputPricePerToken, 0.0)
 	gateway := service.NewOpenAIGatewayService(f.accounts, nil, repository.NewUsageLogRepository(client, f.db), repository.NewUsageBillingRepository(client, f.db), users, nil, nil, repository.NewGatewayCache(redis), cfg, nil, concurrency, prices, nil, billing, transport, deferred, nil, nil, nil, nil, nil, nil, nil, service.WithOpenAIAuthConnections(f.svc))
-	t.Cleanup(gateway.StopOpenAICodexTicketHarvester)
 	t.Cleanup(gateway.CloseOpenAIWSPool)
 	keyService := service.NewAPIKeyService(keyRepo, users, groups, nil, nil, nil, cfg)
 	h := handler.NewOpenAIGatewayHandler(gateway, concurrency, billing, keyService, nil, nil, nil, nil, cfg)

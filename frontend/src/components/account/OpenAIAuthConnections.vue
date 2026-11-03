@@ -11,15 +11,13 @@
       <li v-for="connection in connections" :key="connection.id" class="rounded border border-gray-200 p-3 dark:border-dark-600" :data-connection-id="connection.id">
         <div class="flex flex-wrap items-center gap-2">
           <strong>{{ connection.legacy ? t('openaiAuth.legacy') : connection.label }}</strong>
-          <span>{{ connection.kind === 'bps' ? 'BPS' : connection.kind === 'siwc' ? 'SIWC' : connection.kind === 'codex' ? 'Codex' : t('openaiAuth.apiKey') }}</span>
+          <span>{{ connection.kind === 'siwc' ? 'SIWC' : connection.kind === 'codex' ? 'Codex' : t('openaiAuth.apiKey') }}</span>
           <span>{{ t(`openaiAuth.status.${connection.status}`) }}</span>
           <span v-if="connection.preferred" class="text-primary-600">{{ t('openaiAuth.selected') }}</span>
           <span v-if="connection.legacy">{{ t('openaiAuth.legacy') }}</span>
         </div>
         <p class="text-sm">{{ t('openaiAuth.capabilities') }}: {{ connection.capabilities.join(', ') || t('openaiAuth.identityOnly') }}</p>
         <p v-if="connection.refresh_state && connection.refresh_state !== 'idle'" role="status" class="input-hint">{{ t('openaiAuth.refreshUncertain') }}</p>
-        <p v-if="connection.kind === 'bps'" class="input-hint">{{ t('openaiAuth.bpsResponsesOnly') }}</p>
-        <p v-if="connection.kind === 'codex' && !connection.legacy" class="input-hint">{{ t('openaiAuth.codexTicketBoundary') }}</p>
         <p v-if="connection.cooldown_until" class="text-sm">{{ t('openaiAuth.cooldown') }}: {{ connection.cooldown_until }}</p>
         <details class="text-sm">
           <summary>{{ t('openaiAuth.registration') }}</summary>
@@ -46,7 +44,7 @@
     <div class="space-y-2" data-testid="add-connection-fields">
       <label :for="`connection-kind-${accountId}`" class="input-label">{{ t('openaiAuth.kind') }}</label>
       <select :id="`connection-kind-${accountId}`" v-model="kind" class="input" :disabled="busy">
-        <option value="codex">Codex</option><option value="bps">BPS</option><option value="siwc">SIWC</option>
+        <option value="codex">Codex</option><option value="siwc">SIWC</option>
       </select>
       <label :for="`connection-label-${accountId}`" class="input-label">{{ t('openaiAuth.label') }}</label>
       <input :id="`connection-label-${accountId}`" v-model="label" class="input" maxlength="120" autocomplete="off" :disabled="busy" data-testid="connection-label" />
@@ -113,7 +111,7 @@ async function run(action: (id: number, current: number) => Promise<void>) {
 }
 async function refresh() { await run(async () => { await reload() }) }
 async function add() {
-  if (!['codex', 'bps', 'siwc'].includes(kind.value)) return
+  if (!['codex', 'siwc'].includes(kind.value)) return
   const input = { kind: kind.value, label: label.value.trim() }
   await run(async (id, current) => { await createAuthConnection(id, input); if (current === generation) { label.value = ''; await reload() } })
 }

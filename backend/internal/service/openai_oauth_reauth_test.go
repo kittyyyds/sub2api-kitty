@@ -485,82 +485,6 @@ func TestOpenAIOAuthReauthUsesManagedProxyOverrideForWorkerAndTokenExchange(t *t
 	require.Equal(t, claim.ProxyURL, oauthClient.proxyURL)
 }
 
-func TestOpenAIOAuthReauthUsesMihomoProxyForWorkerAndTokenExchange(t *testing.T) {
-	svc, _, _, _, oauthClient, _ := newReauthTestService("acct-1")
-	ctx := context.Background()
-	released := false
-	svc.acquireMihomoProxy = func(context.Context, string) (string, func(), error) {
-		return "http://127.0.0.1:19017", func() { released = true }, nil
-	}
-
-	config, err := svc.SaveCredentialConfig(ctx, 42, OpenAIOAuthReauthConfigInput{
-		LoginEmail: "user@example.com", CredentialMode: OpenAIOAuthReauthModeEmailOTPURL,
-		ProxySource: OpenAIOAuthReauthProxySourceMihomo, OTPURL: "https://mail.example.com/code",
-	})
-	require.NoError(t, err)
-	require.Equal(t, OpenAIOAuthReauthProxySourceMihomo, config.ProxySource)
-	require.Nil(t, config.ProxyID)
-
-	_, err = svc.CreateTask(ctx, 42)
-	require.NoError(t, err)
-	claim, err := svc.ClaimTask(ctx, "worker-a")
-	require.NoError(t, err)
-	require.Equal(t, "http://127.0.0.1:19017", claim.ProxyURL)
-	require.False(t, released)
-	oauthClient.onExchange = func() { require.False(t, released) }
-
-	state := reauthStateFromURL(t, claim.AuthURL)
-	_, err = svc.SubmitCallback(ctx, claim.TaskID, "worker-a", "http://localhost:1455/auth/callback?code=test-code&state="+url.QueryEscape(state))
-	require.NoError(t, err)
-	require.True(t, released)
-	require.Equal(t, claim.ProxyURL, oauthClient.proxyURL)
-}
-
-func TestOpenAIOAuthReauthKeepsMihomoProxyUntilDirectCredentialsComplete(t *testing.T) {
-	svc, _, _, _, _, _ := newReauthTestService("acct-1")
-	ctx := context.Background()
-	released := false
-	svc.acquireMihomoProxy = func(context.Context, string) (string, func(), error) {
-		return "http://127.0.0.1:19018", func() { released = true }, nil
-	}
-	_, err := svc.SaveCredentialConfig(ctx, 42, OpenAIOAuthReauthConfigInput{
-		LoginEmail: "user@example.com", CredentialMode: OpenAIOAuthReauthModePasswordTOTP,
-		ProxySource: OpenAIOAuthReauthProxySourceMihomo, Password: "password-secret", TOTPSecret: "totp-secret",
-	})
-	require.NoError(t, err)
-	_, err = svc.CreateTask(ctx, 42)
-	require.NoError(t, err)
-	claim, err := svc.ClaimTask(ctx, "worker-a")
-	require.NoError(t, err)
-	require.False(t, released)
-
-	_, err = svc.SubmitCredentials(ctx, claim.TaskID, "worker-a", directReauthCredentials("acct-1", "user-1", "user@example.com"), nil)
-	require.NoError(t, err)
-	require.True(t, released)
-}
-
-func TestOpenAIOAuthReauthReleasesMihomoProxyWhenWorkerFails(t *testing.T) {
-	svc, _, _, _, _, _ := newReauthTestService("acct-1")
-	ctx := context.Background()
-	released := false
-	svc.acquireMihomoProxy = func(context.Context, string) (string, func(), error) {
-		return "http://127.0.0.1:19019", func() { released = true }, nil
-	}
-	_, err := svc.SaveCredentialConfig(ctx, 42, OpenAIOAuthReauthConfigInput{
-		LoginEmail: "user@example.com", CredentialMode: OpenAIOAuthReauthModePasswordTOTP,
-		ProxySource: OpenAIOAuthReauthProxySourceMihomo, Password: "password-secret", TOTPSecret: "totp-secret",
-	})
-	require.NoError(t, err)
-	_, err = svc.CreateTask(ctx, 42)
-	require.NoError(t, err)
-	claim, err := svc.ClaimTask(ctx, "worker-a")
-	require.NoError(t, err)
-	require.False(t, released)
-
-	require.NoError(t, svc.FailTask(ctx, claim.TaskID, "worker-a", "worker timeout"))
-	require.True(t, released)
-}
-
 func TestOpenAIOAuthReauthRejectsInvalidProxySourceCombinations(t *testing.T) {
 	proxyID := int64(9)
 	for _, tt := range []struct {
@@ -569,7 +493,7 @@ func TestOpenAIOAuthReauthRejectsInvalidProxySourceCombinations(t *testing.T) {
 		id     *int64
 	}{
 		{name: "account with proxy id", source: OpenAIOAuthReauthProxySourceAccount, id: &proxyID},
-		{name: "mihomo with proxy id", source: OpenAIOAuthReauthProxySourceMihomo, id: &proxyID},
+		{name: "unknown source with proxy id", source: "other", id: &proxyID},
 		{name: "managed proxy without id", source: OpenAIOAuthReauthProxySourceManagedProxy},
 		{name: "unknown source", source: "other"},
 	} {

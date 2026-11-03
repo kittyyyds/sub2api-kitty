@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func cooldownDeleteSnapshot(t *testing.T, f *qualityBPSFixture) string {
+func cooldownDeleteSnapshot(t *testing.T, f *qualityIntegrationFixture) string {
 	t.Helper()
 	var snapshot string
 	require.NoError(t, integrationDB.QueryRow(`SELECT jsonb_build_object(
@@ -25,7 +25,7 @@ func cooldownDeleteSnapshot(t *testing.T, f *qualityBPSFixture) string {
 	return snapshot
 }
 
-func requireCooldownDeleteConflictPreserves(t *testing.T, f *qualityBPSFixture) {
+func requireCooldownDeleteConflictPreserves(t *testing.T, f *qualityIntegrationFixture) {
 	t.Helper()
 	before := cooldownDeleteSnapshot(t, f)
 	err := f.plans.Delete(context.Background(), f.plan.ID)

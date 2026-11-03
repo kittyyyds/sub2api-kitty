@@ -119,7 +119,7 @@ func nextPlanRun(plan *ScheduledTestPlan, now time.Time) (time.Time, error) {
 			if cfg.ScheduleMode != IQCompletionInterval || cfg.IntervalSeconds < 1 || cfg.IntervalSeconds > 86400 {
 				return time.Time{}, fmt.Errorf("定时间隔须为 1–86400 秒")
 			}
-			if cfg.Quality != nil || cfg.TestChannel == "bps" {
+			if cfg.Quality != nil {
 				return time.Time{}, fmt.Errorf("定时智商测试仅观察账号，不执行账号处置策略")
 			}
 			cfg.TestChannel = "account"
@@ -147,11 +147,8 @@ func nextPlanRun(plan *ScheduledTestPlan, now time.Time) (time.Time, error) {
 			cfg.Prompt = ""
 			cfg.Quality.ExpectedAnswer = ""
 		}
-		if cfg.TestChannel != "" && cfg.TestChannel != "account" && cfg.TestChannel != "bps" {
+		if cfg.TestChannel != "" && cfg.TestChannel != "account" {
 			return time.Time{}, fmt.Errorf("invalid test channel")
-		}
-		if cfg.TestChannel == "bps" && (!isQualityAnswerQuestion(cfg.QuestionKind) || cfg.Quality == nil || cfg.Quality.Action != QualityActionObserveOnly) {
-			return time.Time{}, fmt.Errorf("BPS channel tests require an answer question and observation-only policy")
 		}
 		if len(cfg.ModelIDs) > 0 {
 			if cfg.Quality == nil {
@@ -172,19 +169,15 @@ func nextPlanRun(plan *ScheduledTestPlan, now time.Time) (time.Time, error) {
 					seen[model] = true
 				}
 			}
-			if isOpenAICodexStateProbePlan(cfg) && len(models) > 1 {
-				return time.Time{}, fmt.Errorf("state probe supports only one model")
-			}
 			if len(models)*cfg.ParallelCount > 100 {
 				return time.Time{}, fmt.Errorf("quality round supports at most 100 samples")
 			}
 			cfg.ModelIDs = models
 			plan.ModelID = models[0]
 		}
-		// 探针题型不需要题目文本；其余题型题目必填。
-		if isOpenAICodexStateProbePlan(cfg) || cfg.QuestionKind == QualityRandomQuestionKind {
+		if cfg.QuestionKind == QualityRandomQuestionKind {
 			if len(cfg.Prompt) > 32000 || strings.TrimSpace(plan.ModelID) == "" || len(plan.ModelID) > 100 {
-				return time.Time{}, fmt.Errorf("probe model is required (maximum 32000/100 bytes)")
+				return time.Time{}, fmt.Errorf("random question model is required (maximum 32000/100 bytes)")
 			}
 		} else if strings.TrimSpace(cfg.Prompt) == "" || len(cfg.Prompt) > 32000 || strings.TrimSpace(plan.ModelID) == "" || len(plan.ModelID) > 100 {
 			return time.Time{}, fmt.Errorf("pelican prompt and model are required (maximum 32000/100 bytes)")
@@ -192,12 +185,8 @@ func nextPlanRun(plan *ScheduledTestPlan, now time.Time) (time.Time, error) {
 		if err := validateQualityPolicy(plan); err != nil {
 			return time.Time{}, err
 		}
-		if cfg.QuestionKind != "" && cfg.QuestionKind != "pelican" && !isQualityAnswerQuestion(cfg.QuestionKind) && cfg.QuestionKind != OpenAICodexStateProbeQuestionKind {
+		if cfg.QuestionKind != "" && cfg.QuestionKind != "pelican" && !isQualityAnswerQuestion(cfg.QuestionKind) {
 			return time.Time{}, fmt.Errorf("invalid question kind")
-		}
-		// 同一账号同一时刻只允许一次探针，并行只会互相挤掉，直接禁止。
-		if isOpenAICodexStateProbePlan(cfg) && cfg.ParallelCount != 1 {
-			return time.Time{}, fmt.Errorf("state probe does not support parallel runs")
 		}
 		if cfg.ParallelCount < 1 || cfg.ParallelCount > 8 {
 			return time.Time{}, fmt.Errorf("parallel count must be 1–8")

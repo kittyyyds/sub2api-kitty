@@ -11,7 +11,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/mihomo"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
@@ -106,15 +105,11 @@ func TestAstraConcurrentPreparationWaiterCancellation(t *testing.T) {
 	close(release)
 	require.NoError(t, receiveAdmission(t, leader))
 }
-func TestAstraConcurrentBusinessRequestsSkipTargetProbe(t *testing.T) {
+func TestAstraConcurrentBusinessRequestsAreForwardedOnce(t *testing.T) {
 	s := concurrentAstraWrapper()
-	var probes, business atomic.Int32
+	var calls atomic.Int32
 	s.delegate = gatewayPinDelegate{call: func(r *http.Request, _ string, _ int64, _ int, _ *tlsfingerprint.Profile) (*http.Response, error) {
-		if service.IsOpenAICodexStateProbeRequest(r.Context()) {
-			probes.Add(1)
-		} else {
-			business.Add(1)
-		}
+		calls.Add(1)
 		return pinResponse(""), nil
 	}}
 	seedConcurrentAstraRoute(t, s, "shared")
@@ -132,8 +127,7 @@ func TestAstraConcurrentBusinessRequestsSkipTargetProbe(t *testing.T) {
 	for range 5 {
 		require.NoError(t, receiveAdmission(t, results))
 	}
-	require.Zero(t, probes.Load(), "business requests must not run target probes")
-	require.EqualValues(t, 5, business.Load(), "each business request is sent exactly once")
+	require.EqualValues(t, 5, calls.Load(), "each business request is sent exactly once")
 }
 func TestAstraTargetWaitCancellationAndRouteChange(t *testing.T) {
 	for _, change := range []string{"cancel", "route", "config", "expiry"} {
@@ -195,7 +189,7 @@ func TestAstraTargetWaitCancellationAndRouteChange(t *testing.T) {
 				require.EqualError(t, receiveAdmission(t, leader), "configuration_changed")
 				require.EqualError(t, receiveAdmission(t, follower), "configuration_changed")
 			}
-			require.EqualValues(t, 2, probes.Load(), "waiter must not probe a stale route")
+			require.EqualValues(t, 1, probes.Load(), "waiter must not probe a stale route")
 		})
 	}
 }

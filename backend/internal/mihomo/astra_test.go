@@ -27,9 +27,9 @@ func TestAstraNodesRespectCountryStateAndDynamicBoundaries(t *testing.T) {
 	defer m.Close()
 	m.state.Running = true
 	m.saved = s
-	m.saved.UseOnce = true
-	_, err := AstraNodes()
-	require.ErrorContains(t, err, "use_once")
+	available, err := AstraNodes()
+	require.NoError(t, err)
+	require.Equal(t, astraNodes(s), available)
 }
 func TestAstraNodeLeasesIsolateTrafficAndFenceReload(t *testing.T) {
 	var mu sync.Mutex
@@ -99,13 +99,14 @@ func TestAstraListenersArePrivateAndInitiallyReject(t *testing.T) {
 		} `json:"proxy-groups"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &cfg))
-	require.Len(t, cfg.Listeners, defaultCollectLanes+len(m.bpsPorts)+AstraLanes)
+	require.NotContains(t, string(raw), "CODEX-COLLECT")
+	require.Len(t, cfg.Listeners, AstraLanes)
 	for i := 0; i < AstraLanes; i++ {
-		l := cfg.Listeners[defaultCollectLanes+len(m.bpsPorts)+i]
+		l := cfg.Listeners[i]
 		require.Equal(t, "127.0.0.1", l.Listen)
 		require.Equal(t, astraPort+i, l.Port)
 		require.Equal(t, astraGroup(i), l.Proxy)
-		g := cfg.Groups[1+defaultCollectLanes+i]
+		g := cfg.Groups[1+i]
 		require.Equal(t, []string{"REJECT", "fixed", "DYNAMIC-one"}, g.Proxies)
 	}
 }

@@ -1,5 +1,5 @@
 [Unit]
-Description=Mihomo dynamic proxy pool for Codex ticket harvesting
+Description=Mihomo proxy pool for account egress
 After=network-online.target
 Wants=network-online.target
 

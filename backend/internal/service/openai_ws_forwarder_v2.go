@@ -216,18 +216,11 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 
 	acquireCtx, acquireCancel := context.WithTimeout(ctx, s.openAIWSAcquireTimeout())
 	defer acquireCancel()
-	if s.boundCodexTicketFromHeader(ctx, wsHeaders, account) != nil {
-		defer s.holdCodexTicketChat(account)()
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
 	}
-
-	proxyURL, releaseHarvest, pinErr := s.pinCodexTicketWSAcquire(acquireCtx, wsHeaders, account)
-	if pinErr != nil {
-		return nil, wrapOpenAIWSFallback("codex_ticket_unavailable", pinErr)
-	}
-	defer releaseHarvest()
-	// A bound ticket already supplied the complete Cookie pair and pinned exit.
-	// Do not acquire a second lease or overlay a gateway cookie on that bundle.
-	if anchor != nil && anchor.connID == "" && (!s.UnifiedAstraTicketsEnabled(ctx) || s.boundCodexTicketFromHeader(ctx, wsHeaders, account) == nil) {
+	if anchor != nil && anchor.connID == "" {
 		if pool, ok := s.httpUpstream.(interface {
 			CodexGatewayPinWSRequest(context.Context, http.Header, string, int64, int) (string, string, func(), error)
 		}); ok {
@@ -262,19 +255,8 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		WSURL:       wsURL,
 		Headers:     wsHeaders,
 		HeadersFactory: func(factoryCtx context.Context, headers http.Header) (http.Header, error) {
-			latest, err := s.admitOpenAITurnForGroup(factoryCtx, groupID, enforceGroup, account, mappedModel)
+			_, err := s.admitOpenAITurnForGroup(factoryCtx, groupID, enforceGroup, account, mappedModel)
 			if err != nil {
-				s.invalidateOpenAIWSTurnStateAfterAdmissionFailure(
-					factoryCtx,
-					groupID,
-					sessionHash,
-					previousResponseID,
-					account.ID,
-					err,
-				)
-				return nil, err
-			}
-			if err := s.applyOpenAICodexTicket(factoryCtx, latest, mappedModel, headers, "websocket"); err != nil {
 				s.invalidateOpenAIWSTurnStateAfterAdmissionFailure(
 					factoryCtx,
 					groupID,
@@ -480,11 +462,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			return nil, err
 		}
 	}
-	if !isControlledExperiment(ctx) {
-		if err := s.performOpenAIWSGeneratePrewarm(ctx, lease, decision, payload, previousResponseID, reqBody, account, stateStore, groupID); err != nil {
-			cleanExit = errors.Is(err, errOpenAIWSSSEPayloadTooLarge)
-			return nil, err
-		}
+	if err := s.performOpenAIWSGeneratePrewarm(ctx, lease, decision, payload, previousResponseID, reqBody, account, stateStore, groupID); err != nil {
+		cleanExit = errors.Is(err, errOpenAIWSSSEPayloadTooLarge)
+		return nil, err
 	}
 	if err := checkBeforeWrite(); err != nil {
 		return nil, err
@@ -503,9 +483,6 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			return err
 		}
 		if err := s.acquireOpenAIRPMForSend(ctx, account); err != nil {
-			return err
-		}
-		if err := controlledSubmission(ctx, "native_ws"); err != nil {
 			return err
 		}
 		if err := s.priorityLatencyBeforeSend(ctx, account); err != nil {

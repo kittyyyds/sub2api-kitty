@@ -128,10 +128,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	// 实际请求因头差异落进不同的连接池兼容分桶。
 	applyOpenAICodexBetaFeatures(c, account, headers)
 	// OAuth 账号：将 apiKeyID 混入 session 标识符，防止跨用户会话碰撞。
-	harvestSession := s.harvestPinnedSessionForModel(ctx, account, routingModel)
-	if harvestSession != "" {
-		headers.Set("session_id", harvestSession)
-	} else if account != nil && account.UsesOpenAICodexProtocol() {
+	if account != nil && account.UsesOpenAICodexProtocol() {
 		apiKeyID := getAPIKeyIDFromContext(c)
 		if sessionResolution.SessionID != "" {
 			headers.Set("session_id", isolateOpenAIUpstreamSessionID(apiKeyID, codexAccountIdentitySource(c, account), sessionResolution.SessionID))
@@ -150,16 +147,11 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	if state := strings.TrimSpace(turnState); state != "" {
 		headers.Set(openAIWSTurnStateHeader, state)
 	}
-	if err := s.applyOpenAICodexTicket(ctx, account, routingModel, headers, "websocket"); err != nil {
-		return nil, sessionResolution, err
-	}
 	if metadata := strings.TrimSpace(turnMetadata); metadata != "" {
 		headers.Set(openAIWSTurnMetadataHeader, metadata)
 	}
-	if harvestSession == "" {
-		applyCodexAccountIdentityHeaders(headers, codexAccountIdentitySource(c, account), getAPIKeyIDFromContext(c))
-		applyStagedCodexFingerprintHeaders(c, account, headers)
-	}
+	applyCodexAccountIdentityHeaders(headers, codexAccountIdentitySource(c, account), getAPIKeyIDFromContext(c))
+	applyStagedCodexFingerprintHeaders(c, account, headers)
 
 	if account != nil && account.UsesOpenAICodexProtocol() {
 		if err := resolveAndSetOpenAIChatGPTAccountHeaders(ctx, s.accountRepo, headers, account); err != nil {
@@ -211,8 +203,6 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	if c != nil && c.Request != nil {
 		s.requestTimezoneHeaders(ctx, account, c.Request.Header, headers)
 	}
-	s.restoreBoundCodexTicketHarvestIdentity(ctx, headers, account)
-
 	return headers, sessionResolution, nil
 }
 

@@ -15,9 +15,9 @@ import (
 
 // Exercise persisted, deadline-expired quality ownership, not a synthetic scope
 // snapshot. The native deadline must not turn an edit into implicit recovery.
-func newQualityCooldownScopeFixture(t *testing.T) *qualityBPSFixture {
+func newQualityCooldownScopeFixture(t *testing.T) *qualityIntegrationFixture {
 	t.Helper()
-	f := newQualityBPSFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{
+	f := newQualityIntegrationFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{
 		Action: service.QualityActionRemoveModel, RemoveModels: []string{"sol", "astra"}, AutoRestore: true,
 	})
 	f.exec(`UPDATE accounts SET concurrency=20 WHERE id=$1`)
@@ -43,14 +43,14 @@ func newQualityCooldownScopeFixture(t *testing.T) *qualityBPSFixture {
 	return f
 }
 
-func cooldownScopeState(t *testing.T, f *qualityBPSFixture) string {
+func cooldownScopeState(t *testing.T, f *qualityIntegrationFixture) string {
 	t.Helper()
 	var raw string
 	require.NoError(t, integrationDB.QueryRow(`SELECT state::text FROM account_quality_states WHERE plan_id=$1`, f.plan.ID).Scan(&raw))
 	return raw
 }
 
-func requireCooldownScopeBlocked(t *testing.T, f *qualityBPSFixture) {
+func requireCooldownScopeBlocked(t *testing.T, f *qualityIntegrationFixture) {
 	t.Helper()
 	account := &service.Account{Platform: service.PlatformOpenAI, Status: "active", Schedulable: true, Extra: f.extra()}
 	require.False(t, account.IsSchedulableForModel("sol"))
@@ -207,7 +207,7 @@ func TestQualityCooldownMappingChangeCannotStrandOwnedTarget(t *testing.T) {
 func TestQualityCooldownChangedActionOutcomeRetainsOwnership(t *testing.T) {
 	// Old binaries could already have saved these incompatible policies. A new
 	// probe must fail closed rather than delete ownership or invent a recovery.
-	for _, action := range []string{service.QualityActionObserveOnly, "disable_scheduling", service.QualityActionEnableBPS, service.QualityActionIsolateModels} {
+	for _, action := range []string{service.QualityActionObserveOnly, "disable_scheduling", service.QualityActionIsolateModels} {
 		t.Run(action, func(t *testing.T) {
 			f := newQualityCooldownScopeFixture(t)
 			beforeState, beforeExtra := cooldownScopeState(t, f), f.extra()

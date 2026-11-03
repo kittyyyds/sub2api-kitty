@@ -55,9 +55,8 @@ type QualityPolicy struct {
 	RemoveModels         []string                    `json:"remove_models,omitempty"`
 	// RecoveryConcurrency is the temporary OAuth concurrency cap applied when
 	// this rule quarantines an account. Zero keeps the safe default of five.
-	RecoveryConcurrency int               `json:"recovery_concurrency,omitempty"`
-	AutoRestore         bool              `json:"auto_restore"`
-	BPS                 *QualityBPSPolicy `json:"bps,omitempty"`
+	RecoveryConcurrency int  `json:"recovery_concurrency,omitempty"`
+	AutoRestore         bool `json:"auto_restore"`
 }
 
 func validateQualityPolicy(plan *ScheduledTestPlan) error {
@@ -66,7 +65,7 @@ func validateQualityPolicy(plan *ScheduledTestPlan) error {
 		return nil
 	}
 	if q.Action == QualityActionOpenAITwoFAAdmission {
-		if q.Admission == nil || !q.Admission.Enabled || q.Admission.Validate() != nil || plan.PelicanConfig.QuestionKind != "candy" || plan.PelicanConfig.ParallelCount != 1 || plan.ModelID != q.Admission.ModelID || plan.PelicanConfig.ReasoningEffort != q.Admission.ReasoningEffort || plan.PelicanConfig.TestChannel == "bps" || q.AutoRestore || plan.AutoRecover || plan.PelicanConfig.Prompt != CandyPrompt {
+		if q.Admission == nil || !q.Admission.Enabled || q.Admission.Validate() != nil || plan.PelicanConfig.QuestionKind != "candy" || plan.PelicanConfig.ParallelCount != 1 || plan.ModelID != q.Admission.ModelID || plan.PelicanConfig.ReasoningEffort != q.Admission.ReasoningEffort || (plan.PelicanConfig.TestChannel != "" && plan.PelicanConfig.TestChannel != "account") || q.AutoRestore || plan.AutoRecover || plan.PelicanConfig.Prompt != CandyPrompt {
 			return fmt.Errorf("invalid OpenAI 2FA admission plan")
 		}
 		return nil
@@ -92,36 +91,23 @@ func validateQualityPolicy(plan *ScheduledTestPlan) error {
 	if plan.AutoRecover {
 		return fmt.Errorf("quality plans use auto_restore, not connectivity auto_recover")
 	}
-	if !isQualityAnswerQuestion(plan.PelicanConfig.QuestionKind) && plan.PelicanConfig.QuestionKind != OpenAICodexStateProbeQuestionKind {
+	if !isQualityAnswerQuestion(plan.PelicanConfig.QuestionKind) {
 		return fmt.Errorf("quality plans require a text answer question")
 	}
-	// 探针自带判定；随机题的参考答案由执行器生成，其他答题规则必须配置答案。
-	if plan.PelicanConfig.QuestionKind != OpenAICodexStateProbeQuestionKind && plan.PelicanConfig.QuestionKind != QualityRandomQuestionKind {
+	// Random questions receive their reference answer from the question generator.
+	if plan.PelicanConfig.QuestionKind != QualityRandomQuestionKind {
 		if strings.TrimSpace(q.ExpectedAnswer) == "" || len(q.ExpectedAnswer) > 4000 {
 			return fmt.Errorf("expected answer must be 1–4000 bytes")
 		}
 	} else if len(q.ExpectedAnswer) > 4000 {
 		return fmt.Errorf("expected answer must be 1–4000 bytes")
 	}
-	if q.Action != "remove_groups" && q.Action != "disable_scheduling" && q.Action != QualityActionRemoveModel && q.Action != QualityActionEnableBPS && q.Action != QualityActionObserveOnly && q.Action != QualityActionIsolateModels {
+	if q.Action != "remove_groups" && q.Action != "disable_scheduling" && q.Action != QualityActionRemoveModel && q.Action != QualityActionObserveOnly && q.Action != QualityActionIsolateModels {
 		return fmt.Errorf("invalid quality action")
 	}
 	if q.Action == QualityActionObserveOnly {
 		q.AutoRestore = false
 		q.RemoveGroupIDs = nil
-		q.BPS = nil
-	}
-	if q.Action == QualityActionEnableBPS {
-		// BPS 开启后糖果题会走 BPS 通道，判不出直连是否恢复；只有探针能绕开 BPS 继续探直连。
-		if plan.PelicanConfig.QuestionKind != OpenAICodexStateProbeQuestionKind {
-			return fmt.Errorf("the enable_bps action requires the state probe question")
-		}
-		if err := validateQualityBPSPolicy(q.BPS); err != nil {
-			return err
-		}
-		q.RemoveGroupIDs = nil
-	} else {
-		q.BPS = nil
 	}
 	if q.Action == QualityActionRemoveModel {
 		if len(q.RemoveModels) == 0 || len(q.RemoveModels) > 50 {
@@ -166,22 +152,7 @@ func validateQualityPolicy(plan *ScheduledTestPlan) error {
 // Transport errors alone are inconclusive, never evidence of degradation.
 // Multi-model rules pass only when every selected model/sample passed.
 func qualityPlanModelOutcomes(plan *ScheduledTestPlan, results []*ScheduledTestResult) map[string]string {
-	targets := QualityModels(plan)
-	if plan.PelicanConfig.Quality.Action != QualityActionRemoveModel || !isOpenAICodexStateProbePlan(plan.PelicanConfig) {
-		return qualityModelOutcomes(results, targets)
-	}
-	// A state probe measures the account, not the individual probe model. Apply
-	// its verdict to every configured cooldown target without running concurrent
-	// state probes. Unknown/partial rounds cannot restore existing restrictions.
-	outcome := "skipped"
-	if qualityRoundHasResults(results) {
-		outcome = qualityOutcome(results)
-	}
-	outcomes := make(map[string]string, len(targets))
-	for _, model := range targets {
-		outcomes[model] = outcome
-	}
-	return outcomes
+	return qualityModelOutcomes(results, QualityModels(plan))
 }
 
 func qualityModelOutcomes(results []*ScheduledTestResult, targets []string) map[string]string {
@@ -244,7 +215,7 @@ func qualityOutcome(results []*ScheduledTestResult) string {
 	allPassed := len(results) > 0
 	for _, r := range results {
 		if r != nil && r.QualityJudgment != nil && r.QualityJudgment.Verdict == "incorrect" && r.Status == "failed" &&
-			(r.ErrorMessage == "answer_mismatch" || r.ErrorMessage == openAICodexStateDegradedError) {
+			r.ErrorMessage == "answer_mismatch" {
 			return "failed"
 		}
 		if r == nil || r.Status != "success" || r.QualityJudgment == nil || r.QualityJudgment.Verdict != "correct" {

@@ -9,7 +9,7 @@ import (
 
 func initialQualityRuleFixture() *OAuthInitialQualityRule {
 	return &OAuthInitialQualityRule{ModelID: "gpt-5.4", CronExpression: "*/5 * * * *", Enabled: true, MaxResults: 100,
-		PelicanConfig: &PelicanTestConfig{QuestionKind: "state_probe", ParallelCount: 1, ReasoningEffort: "high", Quality: &QualityPolicy{Action: QualityActionObserveOnly}}}
+		PelicanConfig: &PelicanTestConfig{QuestionKind: "candy", Prompt: CandyPrompt, ParallelCount: 1, ReasoningEffort: "high", Quality: &QualityPolicy{ExpectedAnswer: "21", Judge: &QualityJudgeConfig{GroupID: 1, ModelID: "judge", Prompt: "grade"}, Action: QualityActionObserveOnly}}}
 }
 
 func TestOAuthAutoConfigQualityScopeAndCopies(t *testing.T) {
@@ -63,7 +63,7 @@ func TestOAuthAutoConfigQualityValidation(t *testing.T) {
 	c.QualityRule = initialQualityRuleFixture()
 	require.NoError(t, ValidateOAuthAutoConfig(c))
 	c.Platform = PlatformAnthropic
-	require.Error(t, ValidateOAuthAutoConfig(c))
+	require.NoError(t, ValidateOAuthAutoConfig(c), "ordinary answer checks support Anthropic accounts")
 	c.Platform = PlatformOpenAI
 	c.QualityRule.CronExpression = "invalid"
 	require.Error(t, ValidateOAuthAutoConfig(c))

@@ -9,17 +9,19 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
 type initialAdmissionRepo struct {
-	excelBPSFailoverAccountRepo
+	openAIImagesFailoverAccountRepo
 	changed      map[int64]bool
 	readErr      error
 	onRead       func()
@@ -38,9 +40,51 @@ func (r *initialAdmissionRepo) GetOpenAITurnAdmission(ctx context.Context, id in
 	a, err := r.GetByID(ctx, id)
 	if a != nil && r.changed[id] {
 		a.Extra = maps.Clone(a.Extra)
-		a.Extra["openai_excel_bps"] = false
+		a.Extra["openai_passthrough"] = false
 	}
 	return a, nil, err
+}
+
+func (r *initialAdmissionRepo) ListModelAvailabilityCandidates(_ context.Context, _ *int64, platforms []string, _ bool) ([]service.Account, error) {
+	var accounts []service.Account
+	for _, platform := range platforms {
+		accounts = append(accounts, r.accountsForPlatform(platform)...)
+	}
+	return accounts, nil
+}
+
+type initialAdmissionUpstream struct {
+	service.HTTPUpstream
+	answer     func(int) *http.Response
+	accountIDs []int64
+}
+
+func (u *initialAdmissionUpstream) Do(_ *http.Request, _ string, accountID int64, _ int) (*http.Response, error) {
+	call := len(u.accountIDs)
+	u.accountIDs = append(u.accountIDs, accountID)
+	return u.answer(call), nil
+}
+
+func (u *initialAdmissionUpstream) calls() []int64 {
+	return append([]int64(nil), u.accountIDs...)
+}
+
+func initialAdmissionCompleted() *http.Response {
+	wire := "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_admission\",\"status\":\"completed\",\"model\":\"gpt-6-astra\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\"}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}}\n\n"
+	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(wire))}
+}
+
+func newInitialAdmissionTestContext(ctx context.Context, stream bool) (*gin.Context, *httptest.ResponseRecorder) {
+	groupID := int64(3131)
+	body := fmt.Sprintf(`{"model":"gpt-6-astra","stream":%t,"input":"hello"}`, stream)
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+	c.Set(string(middleware2.ContextKeyAPIKey), &service.APIKey{ID: 99, GroupID: &groupID, Group: &service.Group{ID: groupID, Platform: service.PlatformOpenAI}, User: &service.User{ID: 100}})
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 100, Concurrency: 0})
+	return c, rec
 }
 
 func newInitialAdmissionHandler(t *testing.T, repo *initialAdmissionRepo, upstream service.HTTPUpstream) *OpenAIGatewayHandler {
@@ -50,7 +94,7 @@ func newInitialAdmissionHandler(t *testing.T, repo *initialAdmissionRepo, upstre
 			ID: id, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth,
 			Status: service.StatusActive, Schedulable: true, GroupIDs: []int64{3131}, Priority: int(id), Concurrency: 1,
 			Credentials: map[string]any{"access_token": fmt.Sprintf("test-token-%d", id), "chatgpt_account_id": fmt.Sprintf("test-account-%d", id)},
-			Extra:       map[string]any{"openai_excel_bps": true},
+			Extra:       map[string]any{"openai_passthrough": true},
 		})
 	}
 	cfg := &config.Config{RunMode: config.RunModeSimple}
@@ -72,8 +116,8 @@ func TestOpenAIInitialAdmissionReselectsBeforeSending(t *testing.T) {
 		for _, stream := range []bool{false, true} {
 			t.Run(fmt.Sprintf("chat=%t/stream=%t", chat, stream), func(t *testing.T) {
 				repo := &initialAdmissionRepo{changed: map[int64]bool{1: true}}
-				upstream := &excelBPSFailoverUpstream{answer: func(int) *http.Response {
-					resp := excelBPSCompleted()
+				upstream := &initialAdmissionUpstream{answer: func(int) *http.Response {
+					resp := initialAdmissionCompleted()
 					wire, _ := io.ReadAll(resp.Body)
 					_ = resp.Body.Close()
 					delta := "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"done\",\"output_index\":0,\"content_index\":0}\n\n"
@@ -81,7 +125,7 @@ func TestOpenAIInitialAdmissionReselectsBeforeSending(t *testing.T) {
 					return resp
 				}}
 				h := newInitialAdmissionHandler(t, repo, upstream)
-				c, rec := newExcelBPSFailoverTestContext(context.Background(), stream)
+				c, rec := newInitialAdmissionTestContext(context.Background(), stream)
 				if chat {
 					// Exercise the same Chat Completions messages shape as model tests.
 					body := fmt.Sprintf(`{"model":"gpt-6-astra","stream":%t,"messages":[{"role":"user","content":"hello"}]}`, stream)
@@ -117,9 +161,9 @@ func TestOpenAIInitialAdmissionRetryBoundaries(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 				repo := &initialAdmissionRepo{changed: map[int64]bool{1: true}}
-				upstream := &excelBPSFailoverUpstream{answer: func(int) *http.Response { return excelBPSCompleted() }}
+				upstream := &initialAdmissionUpstream{answer: func(int) *http.Response { return initialAdmissionCompleted() }}
 				h := newInitialAdmissionHandler(t, repo, upstream)
-				c, rec := newExcelBPSFailoverTestContext(ctx, false)
+				c, rec := newInitialAdmissionTestContext(ctx, false)
 				switch kind {
 				case "budget":
 					h.maxAccountSwitches = 0
@@ -164,9 +208,9 @@ func TestOpenAIInitialAdmissionCannotReplayContinuationOrOutput(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			repo := &initialAdmissionRepo{changed: map[int64]bool{1: true}}
-			upstream := &excelBPSFailoverUpstream{answer: func(int) *http.Response { t.Fatal("unexpected upstream call"); return nil }}
+			upstream := &initialAdmissionUpstream{answer: func(int) *http.Response { t.Fatal("unexpected upstream call"); return nil }}
 			h := newInitialAdmissionHandler(t, repo, upstream)
-			c, _ := newExcelBPSFailoverTestContext(ctx, false)
+			c, _ := newInitialAdmissionTestContext(ctx, false)
 			account, err := repo.GetByID(ctx, 1)
 			require.NoError(t, err)
 			_, admissionErr := h.gatewayService.Forward(ctx, c, account, []byte(`{"model":"gpt-6-astra"}`))

@@ -426,9 +426,6 @@ type UpdateGroupInput struct {
 }
 
 type CreateAccountInput struct {
-	// Set only by the native BPS batch authorization flow, never bound from JSON.
-	ExplicitBPSImport bool `json:"-"`
-
 	ProxyMode            string             // 受限写入在验权后选择代理。
 	InitialOpenAITwoFA   bool               `json:"-"`
 	InitialAdmissionPlan *ScheduledTestPlan `json:"-"`
@@ -736,7 +733,6 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
 	mihomoProxyMu        sync.Mutex
-	excelOAuthReauth     *OpenAIOAuthReauthService
 	cfg                  *config.Config
 	userRepo             UserRepository
 	groupRepo            GroupRepository

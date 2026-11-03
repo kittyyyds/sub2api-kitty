@@ -1,6 +1,6 @@
 import { apiClient } from '../client'
 
-export type OAuthConnectionKind = 'codex' | 'bps' | 'siwc'
+export type OAuthConnectionKind = 'codex' | 'siwc'
 export type ConnectionKind = OAuthConnectionKind | 'api_key'
 export interface OpenAIAuthConnection {
   id: string
@@ -27,7 +27,7 @@ export interface OpenAIAuthConnection {
 const path = (id: number) => `/admin/accounts/${id}/auth-connections`
 export const listAuthConnections = async (id: number): Promise<OpenAIAuthConnection[]> => (await apiClient.get(path(id))).data
 export const createAuthConnection = async (id: number, input: { kind: OAuthConnectionKind; label: string }): Promise<OpenAIAuthConnection> => {
-  if (!['codex', 'bps', 'siwc'].includes(input.kind) || 'api_key' in input) {
+  if (!['codex', 'siwc'].includes(input.kind) || 'api_key' in input) {
     throw new Error('OAuth connections cannot register API keys')
   }
   return (await apiClient.post(path(id), input)).data

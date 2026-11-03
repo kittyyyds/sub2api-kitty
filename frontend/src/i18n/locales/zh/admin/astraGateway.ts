@@ -1,10 +1,10 @@
 export default {
   astraGateway: {
-    probeHint: '复用门票探针：两次短请求均完整成功，续接不换票才可借用；换票、请求失败或路由改变均不计为可用。探针只反映本次门票状态。',
+    probeHint: '验证来源和目标账号的路由可用性。结果仅反映本次检查；路由不可用时，业务请求按账号原配置转发。',
     borrowTitle: 'Astra 快速复用',
-    borrowDescription: '优先复用已入库来源票；缺票时回退到自采。目标账号复验通过后，将完整票据写入统一门票库。',
-    borrowSummary: '来源账号 {sources} 个 · 目标账号 {targets} 个 · 与后台打票共用票库',
-    expand: '配置与运行状态', collapse: '收起', configuration: '复用与自采配置',
+    borrowDescription: '复用通过验证的来源路由；没有可用路由时，使用目标账号自己的配置。',
+    borrowSummary: '来源账号 {sources} 个 · 目标账号 {targets} 个',
+    expand: '配置与运行状态', collapse: '收起', configuration: '路由复用配置',
     schedulingLog: '最近 3 条调度记录',
     schedulingLogHint: '仅记录实际调度或分组变更，每 5 秒刷新；当前实例保存，重启后清空。',
     schedulingLogEmpty: '暂无调度变更记录',
@@ -17,7 +17,6 @@ export default {
     groupsRemoved: '已移出分组',
     chooseSchedulingGroups: '请选择至少一个分组',
     accountScheduling: '号池调度',
-    ticketPoolSchedulingHint: '对自动打票范围内的账号生效，普通打票和快速复用共用同一门票库。有有效票据时加入勾选分组或恢复状态，无有效票据时移出分组或禁用；模型模式只判断 Astra 票据。其他分组不变，人工修改不覆盖。每秒同步，不额外发起探测。关闭后停止接管并保留当前状态。',
     accountSchedulingHint: '路由探针仅用于观测。失败、冷却、未验证和路由过期均不影响生产请求，也不修改账号、模型或分组调度。没有可用借用路由时，按账号原配置转发。',
     nodeCooldown: "失败节点 / host 冷却",
     nodeCooldownHint: "默认 3600 秒是避让策略，不是已测得的上游缓存寿命。同一目标在冷却期内跳过失败节点及已知指向该 host 的节点；保存配置不会清除冷却，进程重启会清除。全部冷却时停止测试，不自动退回直连。",

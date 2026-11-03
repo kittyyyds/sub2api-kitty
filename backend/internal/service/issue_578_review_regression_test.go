@@ -51,7 +51,7 @@ func TestIssue578ReviewQueryDownstreamCannotRestampWindows(t *testing.T) {
 				}
 				s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(30 * time.Millisecond)}
 				t.Cleanup(s.CloseOpenAIWSPool)
-				s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("100", "20"))
+				s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("100", "20"))
 				issue578WaitUsage(t, r, a.ID, 100)
 				unblock()
 				got := <-done
@@ -98,7 +98,7 @@ func TestIssue578ReviewWorkerPermanentErrorAndShutdown(t *testing.T) {
 				return errors.New("transient synthetic failure; must not log opaque upstream text")
 			}}
 			s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(40 * time.Millisecond)}
-			s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), 300, excelBPSQuotaHeaders("100", "20"))
+			s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), 300, issue578QuotaHeaders("100", "20"))
 			select {
 			case <-entered:
 			case <-time.After(time.Second):
@@ -192,7 +192,7 @@ func TestIssue578ReviewActualAutoResetAndPostResetWorkflow(t *testing.T) {
 				if stage != "missing usage" {
 					s := &OpenAIGatewayService{accountRepo: r, codexSnapshotThrottle: newAccountWriteThrottle(30 * time.Millisecond)}
 					t.Cleanup(s.CloseOpenAIWSPool)
-					s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, excelBPSQuotaHeaders("100", "20"))
+					s.UpdateCodexUsageSnapshotFromHeaders(context.Background(), a.ID, issue578QuotaHeaders("100", "20"))
 					issue578WaitUsage(t, r, a.ID, 100)
 				}
 				unblock()

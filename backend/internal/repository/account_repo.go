@@ -61,10 +61,6 @@ var schedulerNeutralExtraKeyPrefixes = []string{
 	"codex_5h_",
 	"codex_7d_",
 	"codex_reset_credit_",
-	// 292 门票是纯运行态凭据：它不在 filterSchedulerExtra 的投影白名单里，
-	// 因此 bucket 重建事件永远搬不动门票状态，续期时开事务+发 outbox 是白干。
-	// 归为观测型后仍会同步单账号快照（见 UpdateExtra），不丢任何新鲜度。
-	"codex_turn_ticket:",
 	"passive_usage_",
 	"upstream_billing_probe",
 	"upstream_billing_rate_sync",
@@ -140,7 +136,7 @@ func (r *accountRepository) Create(ctx context.Context, account *service.Account
 	}
 	client := r.client
 	var tx *dbent.Tx
-	if account != nil && (account.InitialQualityPlan != nil || account.InitialAdmissionPlan != nil || account.InitialIQBootstrap != nil || account.ImportTicket != "" || service.InitialUpstreamChannel(ctx) > 0) {
+	if account != nil && (account.InitialQualityPlan != nil || account.InitialAdmissionPlan != nil || account.InitialIQBootstrap != nil || account.ImportTicket != "") {
 		var err error
 		tx, err = r.client.Tx(ctx)
 		if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
@@ -233,27 +229,6 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		return translatePersistenceError(err, service.ErrAccountNotFound, nil)
 	}
 
-	if channelID := service.InitialUpstreamChannel(ctx); channelID > 0 {
-		rows, err := client.QueryContext(ctx, `SELECT id FROM upstream_channels WHERE id=$1 FOR UPDATE`, channelID)
-		if err != nil {
-			return err
-		}
-		exists := rows.Next()
-		err = rows.Err()
-		_ = rows.Close()
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return service.ErrUpstreamChannelNotFound
-		}
-		if _, err = client.ExecContext(ctx, `INSERT INTO upstream_channel_bindings(account_id,channel_id,revision) VALUES($1,$2,1)`, created.ID, channelID); err != nil {
-			return err
-		}
-		if _, err = client.ExecContext(ctx, `UPDATE upstream_channels SET revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=$1`, channelID); err != nil {
-			return err
-		}
-	}
 	for _, p := range []*service.ScheduledTestPlan{account.InitialQualityPlan, account.InitialAdmissionPlan} {
 		if p == nil {
 			continue
@@ -869,13 +844,12 @@ func lockAndMergeAccountProbeExtra(
 
 	// extra 理论上恒为 JSON 对象，但历史数据若存成非对象（数组/标量），在此硬失败
 	// 会让该账号的任何编辑都保存不了——而这条路径覆盖所有平台的账号更新。
-	// 门票是 1 小时 TTL 的临时凭据，下个打票周期会自动补回，因此解析失败时降级为
-	// 「无门票可保留」继续完成编辑，不要把整个账号更新拖垮。
+	// A malformed legacy extra value must not block unrelated account edits.
 	var currentExtra map[string]any
 	if len(currentExtraJSON) > 0 {
 		if err := json.Unmarshal(currentExtraJSON, &currentExtra); err != nil {
 			logger.LegacyPrintf("repository.account",
-				"[Account] current extra unmarshal failed, codex ticket preservation skipped: id=%d err=%v",
+				"[Account] current extra unmarshal failed; unrelated edit will skip legacy extra preservation: id=%d err=%v",
 				account.ID, err)
 			currentExtra = nil
 		}
@@ -907,11 +881,10 @@ func lockAndMergeAccountProbeExtra(
 			}
 		}
 	}
-	extra := service.MergeOpenAICodexTicketExtra(copyJSONMap(normalizeJSONMap(account.Extra)), currentExtra)
+	extra := copyJSONMap(normalizeJSONMap(account.Extra))
 	if identityUnchanged {
 		extra = preserveCommittedCodexUsage(extra, currentExtra)
 	}
-	extra = service.MergeExcelBPS403Marker(extra, currentExtra)
 	// Isolation is server-owned. A normal save must use the latest value read
 	// under this row lock, including absence after a legitimate restoration.
 	// Never revive, erase or replace it from a client/service snapshot.
@@ -3663,7 +3636,7 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 				" AND COALESCE(btrim("+credentialPlaceholder+"::jsonb ->> 'account_mode') <> 'zen', true) IS NOT TRUE")
 	}
 
-	if len(updates.Extra) > 0 || len(updates.ExcelBPSAuthorizationPending) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed {
+	if len(updates.Extra) > 0 || len(ollamaGroupIdentityChanges) > 0 || len(opencodeGroupIdentityChanges) > 0 || ollamaProxyIdentityChanged != "" || updates.EnsureCodexFingerprintSeed {
 		extraExpression := "COALESCE(extra, '{}'::jsonb)"
 		if len(updates.Extra) > 0 {
 			payload, err := json.Marshal(updates.Extra)
@@ -3673,34 +3646,6 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 			extraExpression += " || $" + itoa(idx) + "::jsonb"
 			args = append(args, payload)
 			idx++
-			if enabled, exists := updates.Extra["openai_excel_bps"].(bool); exists && !enabled {
-				extraExpression = "(" + extraExpression + ") - 'openai_excel_bps' - 'openai_excel_bps_models' - 'openai_excel_bps_cache_creation_as_input' - 'openai_excel_bps_auto_disable_on_403' - 'openai_excel_bps_auto_recover_on_403' - 'openai_excel_bps_auto_move_on_403' - 'openai_excel_bps_403_target_group_id' - 'openai_excel_bps_mihomo'"
-			} else {
-				// Turning the protocol back on acknowledges an automatic 403 shutdown.
-				if enabled {
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_403_disabled_at'"
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_403_last_probe_at'"
-				}
-				// JSON null is a present scope and would disable every model.
-				// Remove the key to restore the all-models routing contract.
-				if scope, exists := updates.Extra["openai_excel_bps_models"]; exists && scope == nil {
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_models'"
-				}
-				if enabled, exists := updates.Extra["openai_excel_bps_cache_creation_as_input"].(bool); exists && !enabled {
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_cache_creation_as_input'"
-				}
-				if enabled, exists := updates.Extra["openai_excel_bps_auto_disable_on_403"].(bool); exists && !enabled {
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_auto_disable_on_403'"
-				}
-				if enabled, exists := updates.Extra[service.ExcelBPSAutoRecoverOn403Key].(bool); exists && !enabled {
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_auto_recover_on_403'"
-				}
-				if enabled, exists := updates.Extra[service.ExcelBPSAutoMoveOn403Key].(bool); exists && !enabled {
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_auto_move_on_403' - 'openai_excel_bps_403_target_group_id'"
-				} else if target, exists := updates.Extra[service.ExcelBPS403TargetGroupIDKey]; exists && target == nil {
-					extraExpression = "(" + extraExpression + ") - 'openai_excel_bps_403_target_group_id'"
-				}
-			}
 			if upstreamBillingProbeExplicitlyDisabled(updates.Extra) || upstreamBillingProbeSnapshotClearRequested(updates.Extra) {
 				extraExpression = "(" + extraExpression + ") - 'upstream_billing_probe'"
 			}
@@ -3773,17 +3718,6 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		}
 		if updates.EnsureCodexFingerprintSeed {
 			extraExpression = ensureCodexFingerprintSeedSQL(extraExpression)
-		}
-		if len(updates.ExcelBPSAuthorizationPending) > 0 {
-			pendingIDs := make([]int64, 0)
-			for id, pending := range updates.ExcelBPSAuthorizationPending {
-				if pending {
-					pendingIDs = append(pendingIDs, id)
-				}
-			}
-			extraExpression = "CASE WHEN id=ANY($" + itoa(idx) + "::bigint[]) THEN (" + extraExpression + ") || '{\"openai_excel_bps_authorization_pending\":true}'::jsonb ELSE (" + extraExpression + ") - 'openai_excel_bps_authorization_pending' END"
-			args = append(args, pq.Array(pendingIDs))
-			idx++
 		}
 		setClauses = append(setClauses, "extra = "+extraExpression)
 	}

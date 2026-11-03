@@ -253,9 +253,6 @@ func (s *pluginHostServiceServer) KVList(ctx context.Context, req *pluginv1.KVLi
 }
 
 func (s *pluginHostServiceServer) ListAccounts(ctx context.Context, req *pluginv1.ListAccountsRequest) (*pluginv1.ListAccountsResponse, error) {
-	if !managedPluginHostAccess(s.pluginKey) {
-		return nil, status.Error(codes.Unavailable, "实例未持有插件后台任务租约")
-	}
 	if s == nil || s.directory == nil || s.scope.Empty() {
 		return nil, status.Error(codes.Unavailable, "账号目录不可用")
 	}
@@ -278,9 +275,6 @@ func (s *pluginHostServiceServer) ListAccounts(ctx context.Context, req *pluginv
 }
 
 func (s *pluginHostServiceServer) ResolveOutboundIdentity(ctx context.Context, req *pluginv1.ResolveOutboundIdentityRequest) (*pluginv1.ResolveOutboundIdentityResponse, error) {
-	if !managedPluginHostAccess(s.pluginKey) {
-		return nil, status.Error(codes.Unavailable, "实例未持有插件后台任务租约")
-	}
 	if s == nil || s.directory == nil || s.scope.Empty() {
 		return nil, status.Error(codes.Unavailable, "账号目录不可用")
 	}

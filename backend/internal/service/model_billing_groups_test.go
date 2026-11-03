@@ -16,7 +16,6 @@ func TestModelBillingGroupOpenAIRecordUsage(t *testing.T) {
 			users := &openAIRecordUsageUserRepoStub{}
 			subs := &modelBillingSubscriptionRepo{}
 			svc := newOpenAIRecordUsageServiceForTest(logs, users, subs, nil)
-			svc.StopOpenAICodexTicketHarvester()
 			svc.settingService = modelBillingSettings(t, ModelBillingConfig{SchemaVersion: 2, Enabled: true, Rules: []ModelBillingRule{{Model: "gpt-6-luna*", Multiplier: 10, GroupID: 5, Enabled: true, Mode: ModelBillingAlways}}})
 			accountRate, accountGroupRate := .3, 2.0
 			group := &Group{ID: groupID, RateMultiplier: .2}
@@ -130,7 +129,6 @@ func TestModelBillingGroupGenericRecordUsageCostsAndIdempotency(t *testing.T) {
 
 func TestModelBillingGroupOpenAIPricedFallbackAndPerRequest(t *testing.T) {
 	svc := newOpenAIRecordUsageServiceForTest(nil, nil, nil, nil)
-	svc.StopOpenAICodexTicketHarvester()
 	svc.settingService = modelBillingSettings(t, ModelBillingConfig{SchemaVersion: 2, Enabled: true, Rules: []ModelBillingRule{{Model: "gpt-6-luna*", Multiplier: 10, GroupID: 5, Enabled: true, Mode: ModelBillingAlways}}})
 	for _, groupID := range []int64{5, 6} {
 		key := &APIKey{ID: 1, GroupID: &groupID, Group: &Group{ID: groupID, Hydrated: true}}

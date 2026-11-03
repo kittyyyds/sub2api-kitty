@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Wei-Shaw/sub2api/internal/service/basispoints"
 	"log/slog"
 	"math"
 	"sort"
@@ -199,9 +198,6 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpsQueryModeDefault:          "auto",
 		SettingKeyOpsMetricsIntervalSeconds:    "60",
 
-		// Protocol feature defaults
-		SettingKeyExcelBPSEnabled: "true",
-
 		// Channel monitor defaults (enabled, 60s)
 		SettingKeyChannelMonitorEnabled:                "true",
 		SettingKeyChannelMonitorMode:                   ChannelMonitorModeV1,
@@ -280,7 +276,6 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpenAICodexVersionAutoSyncEnabled:                  "true",
 		SettingKeyOpenAIRequestTimezoneEnabled:                       "true",
 		SettingKeyOpenAIRequestTimezoneAuto:                          "true",
-		SettingKeyOpenAICodexTicketHarvestProxyURL:                   "",
 		SettingKeyClaudeCodeClientVersion:                            "",
 		SettingKeyClaudeCodeClientVersionSynced:                      "",
 		SettingKeyClaudeCodeVersionAutoSyncEnabled:                   "true",
@@ -304,26 +299,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpenAIAdvancedSchedulerWeightSessionSticky:         "",
 
 		SettingKeyAllowUserViewErrorRequests: "false",
-		SettingKeyExcelBPSImageMode:          ExcelBPSImageModeNative,
-		SettingKeyExcelBPSImageRelayEnabled:  "true",
-		SettingKeyExcelBPSImageBaseURL:       "",
 
 		SettingKeyUsageShowLongContextBadge:             "true",
 		SettingKeyUsageShowCacheRate:                    "true",
 		SettingKeyUsageShowCacheRateToUsers:             "false",
 		SettingKeyUsageShowUpstreamResponseModelToUsers: "false",
-		SettingKeyExcelBPSImageBodyLimitMiB:             strconv.Itoa(DefaultExcelBPSImageBodyLimitMiB),
-		SettingKeyExcelBPSImageBudgetMiB:                strconv.Itoa(DefaultExcelBPSImageBudgetMiB),
-		SettingKeyExcelBPSImageMaxRequests:              strconv.Itoa(DefaultExcelBPSImageMaxRequests),
-		SettingKeyExcelBPSImageMaxImageMiB:              "20",
-		SettingKeyExcelBPSImageLimitPolicy:              "off",
-		SettingKeyExcelBPSImageWarningRemaining:         "8",
-		SettingKeyExcelBPSImageCompactReserve:           "3",
-		SettingKeyExcelBPSImageMaxImages:                "20",
-		SettingKeyExcelBPSImageMaxTotalMiB:              "32",
-		SettingKeyExcelBPSImageStorageMiB:               "1024",
-		SettingKeyExcelBPSImageStorageEntries:           "512",
-		SettingKeyExcelBPSImageTTLMinutes:               "30",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
@@ -859,7 +839,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	// Channel monitor feature (default: enabled, 60s)
-	result.ExcelBPSEnabled = !isFalseSettingValue(settings[SettingKeyExcelBPSEnabled])
 	result.ChannelMonitorEnabled = !isFalseSettingValue(settings[SettingKeyChannelMonitorEnabled])
 	result.ChannelMonitorMode = normalizeChannelMonitorMode(settings[SettingKeyChannelMonitorMode])
 	result.ChannelMonitorDefaultIntervalSeconds = parseChannelMonitorInterval(
@@ -983,38 +962,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 	result.OpenAIRequestTimezoneEnabled = strings.TrimSpace(settings[SettingKeyOpenAIRequestTimezoneEnabled]) == "" || settings[SettingKeyOpenAIRequestTimezoneEnabled] == "true"
 	result.OpenAIRequestTimezoneAuto = strings.TrimSpace(settings[SettingKeyOpenAIRequestTimezoneAuto]) == "" || settings[SettingKeyOpenAIRequestTimezoneAuto] == "true"
-	if v, ok := settings[SettingKeyOpenAICodexTicketEnabled]; ok && v != "" {
-		result.OpenAICodexTicketEnabled = v == "true"
-	} else if s != nil && s.cfg != nil {
-		result.OpenAICodexTicketEnabled = s.cfg.Gateway.OpenAICodexTicket.Enabled
-	}
-	// Missing values intentionally stay false. Ticket harvesting remains active,
-	// while scheduling is fail-open unless an administrator explicitly opts in.
-	result.OpenAICodexTicketFailClosed = settings[SettingKeyOpenAICodexTicketFailClosed] == "true"
-	result.OpenAICodexTicketHarvestProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicketHarvestProxyURL])
-	harvestScope, harvestScopeErr := parseCodexTicketHarvestScope(settings[SettingKeyOpenAICodexTicketHarvestScope])
-	result.OpenAICodexTicketHarvestScope = harvestScope
-	if harvestScopeErr != nil {
-		result.OpenAICodexTicketHarvestScope = CodexTicketHarvestScope{Mode: "selected", GroupIDs: []int64{}}
-	}
-	result.OpenAICodexTicketStrategy = NormalizeCodexTicketStrategy(settings[SettingKeyOpenAICodexTicketStrategy])
-	result.OpenAICodexTicketStrictResponse = settings[SettingKeyOpenAICodexTicketStrict] == "true"
-	result.OpenAICodexTicketCandyObservation = settings[SettingKeyOpenAICodexTicketCandyObservation] == "true"
-	result.OpenAICodexTicketStaticProxyURL = strings.TrimSpace(settings[SettingKeyOpenAICodexTicketStaticProxyURL])
-	if raw, ok := settings[SettingKeyOpenAICodexTicketModels]; ok && strings.TrimSpace(raw) != "" {
-		var models []string
-		if err := json.Unmarshal([]byte(raw), &models); err == nil {
-			result.OpenAICodexTicketModels = NormalizeOpenAICodexTicketModels(models)
-		}
-	}
-	if result.OpenAICodexTicketModels == nil && s != nil && s.cfg != nil {
-		if len(s.cfg.Gateway.OpenAICodexTicket.Models) > 0 {
-			result.OpenAICodexTicketModels = NormalizeOpenAICodexTicketModels(s.cfg.Gateway.OpenAICodexTicket.Models)
-		}
-	}
-	if result.OpenAICodexTicketModels == nil {
-		result.OpenAICodexTicketModels = []string{openAICodexTicketDefaultModel, openAICodexTicketDefaultSolModel}
-	}
 	result.ClaudeCodeClientVersion = NormalizeClaudeCodeClientVersion(settings[SettingKeyClaudeCodeClientVersion])
 	result.ClaudeCodeClientVersionSynced = NormalizeClaudeCodeClientVersion(settings[SettingKeyClaudeCodeClientVersionSynced])
 	// 自动同步默认开启：缺失/空值一律视为开启，与 openai_codex_version_auto_sync_enabled 同一惯例。
@@ -1124,38 +1071,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	if result.RequestCaptureRetentionDays < 1 || result.RequestCaptureRetentionDays > 30 {
 		result.RequestCaptureRetentionDays = 7
 	}
-	result.ExcelBPSImageMode = settings[SettingKeyExcelBPSImageMode]
-	if result.ExcelBPSImageMode == "" {
-		result.ExcelBPSImageMode = ExcelBPSImageModeNative
-	}
-	result.ExcelBPSImageRelayEnabled = settings[SettingKeyExcelBPSImageRelayEnabled] == "" || settings[SettingKeyExcelBPSImageRelayEnabled] == "true"
-	result.ExcelBPSImageBaseURL = settings[SettingKeyExcelBPSImageBaseURL]
-	result.ExcelBPSImageBodyLimitMiB, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageBodyLimitMiB], DefaultExcelBPSImageBodyLimitMiB)
-	result.ExcelBPSImageBudgetMiB, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageBudgetMiB], DefaultExcelBPSImageBudgetMiB)
-	result.ExcelBPSImageMaxRequests, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageMaxRequests], DefaultExcelBPSImageMaxRequests)
-	if validateExcelBPSImageCapacity(result.ExcelBPSImageBodyLimitMiB, result.ExcelBPSImageBudgetMiB, result.ExcelBPSImageMaxRequests) != nil {
-		result.ExcelBPSImageBodyLimitMiB = DefaultExcelBPSImageBodyLimitMiB
-		result.ExcelBPSImageBudgetMiB = DefaultExcelBPSImageBudgetMiB
-		result.ExcelBPSImageMaxRequests = DefaultExcelBPSImageMaxRequests
-	}
-
-	imageLimits, imageLimitsErr := parseExcelBPSImageLimits(settings)
-	if imageLimitsErr != nil {
-		imageLimits = basispoints.DefaultImageRelayLimits()
-	}
-	result.ExcelBPSImageMaxImageMiB = imageLimits.MaxImageMiB
-	result.ExcelBPSImageMaxImages = imageLimits.MaxImages
-	result.ExcelBPSImageLimitPolicy = settings[SettingKeyExcelBPSImageLimitPolicy]
-	if result.ExcelBPSImageLimitPolicy == "" {
-		result.ExcelBPSImageLimitPolicy = "off"
-	}
-	result.ExcelBPSImageWarningRemaining, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageWarningRemaining], 8)
-	result.ExcelBPSImageCompactReserve, _ = parseExcelBPSImageCapacity(settings[SettingKeyExcelBPSImageCompactReserve], 3)
-	result.ExcelBPSImageMaxTotalMiB = imageLimits.MaxTotalMiB
-	result.ExcelBPSImageStorageMiB = imageLimits.StorageMiB
-	result.ExcelBPSImageStorageEntries = imageLimits.StorageEntries
-	result.ExcelBPSImageTTLMinutes = imageLimits.TTLMinutes
-
 	// Publish Grok default model_mapping options for accounts with empty mapping.
 	xai.SetRuntimeModelMappingOptions(xai.ModelMappingOptions{
 		DefaultText:          result.GrokDefaultTextModel,

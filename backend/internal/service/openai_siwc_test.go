@@ -187,12 +187,10 @@ func TestSIWCRequestUsesOfficialEndpointWithoutCodexSecrets(t *testing.T) {
 	require.Error(t, err)
 }
 func TestSIWCSelectionDisablesOtherProtocolCapabilities(t *testing.T) {
-	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{OpenAISIWCEnabledKey: true, "openai_excel_bps": true, "openai_oauth_responses_websockets_v2_enabled": true}}
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{OpenAISIWCEnabledKey: true, "openai_oauth_responses_websockets_v2_enabled": true}}
 	require.True(t, account.IsSIWCEnabled())
 	require.False(t, account.UsesOpenAICodexProtocol())
-	require.False(t, account.IsExcelBPSEnabled())
 	require.False(t, account.IsOpenAIResponsesWebSocketV2Enabled())
-	require.False(t, isOpenAICodexTicketAccount(account))
 	require.True(t, shouldEstimateOpenAIInputTokensLocally(account))
 	active := openAITurnRouteFingerprint(account)
 	account.Extra[OpenAISIWCEnabledKey] = false
@@ -282,7 +280,7 @@ func TestSIWCAllHTTPEntryPointsReachDirectRouteWithIndependentToken(t *testing.T
 			reader.account.Extra = map[string]any{OpenAISIWCEnabledKey: true}
 			upstream := &httpUpstreamRecorder{err: errors.New("synthetic transport failure")}
 			gateway := openAIClientToolsTestService(upstream)
-			gateway.excelOAuthReauth = reauth
+			gateway.openAIOAuthReauth = reauth
 			body := []byte(`{"model":"gpt-5.4","input":"hello","stream":false}`)
 			if path != "/v1/responses" {
 				body = []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hello"}],"max_tokens":64,"stream":false}`)

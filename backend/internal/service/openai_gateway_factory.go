@@ -5,8 +5,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
-// The production composition root attaches optional services before starting
-// the harvest loop; no post-construction setter races with startup.
+// The production composition root attaches optional services before startup.
 type OpenAIGatewayDependencies struct {
 	Accounts         AccountRepository
 	Proxies          ProxyRepository
@@ -33,7 +32,6 @@ type OpenAIGatewayDependencies struct {
 	Settings         *SettingService
 	Quotas           UserPlatformQuotaRepository
 	RPMCache         RPMCache
-	Harvest          *CodexHarvestService
 	RegionalMetering *RegionalMetering
 
 	SafetyPromptStore *SafetyPromptStore
@@ -54,7 +52,6 @@ func ProvideOpenAIGatewayService(d OpenAIGatewayDependencies) *OpenAIGatewayServ
 		},
 		WithRegionalMetering(d.RegionalMetering),
 		func(s *OpenAIGatewayService) {
-			s.codexHarvest = d.Harvest
 			s.safetyPromptStore = d.SafetyPromptStore
 		})
 }

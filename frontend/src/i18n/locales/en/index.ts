@@ -1,7 +1,6 @@
 import { homeMessages } from '../../homeOverview'
 import accountTestTiming from './accountTestTiming'
 import openaiAuth from './openaiAuth'
-import upstreamEntities from './upstreamEntities'
 import profitOps from './profitOps'
 import upstreamOps from './upstreamOps'
 import channelOps from './channelOps'
@@ -12,7 +11,6 @@ import securityRecords from './securityRecords'
 import siwc from './siwc'
 import priorityScheduling from './priorityScheduling'
 import qualityOps from './qualityOps'
-import controlledExperiments from './controlledExperiments'
 import accountOps from './accountOps'
 import tokenGuard from './tokenGuard'
 import pelicanTests from './pelicanTests'
@@ -40,7 +38,6 @@ export default {
   homeOverview: homeMessages.en,
   accountTestTiming,
   openaiAuth,
-  upstreamEntities,
   traffic,
   ipAudit,
   connections,
@@ -52,7 +49,6 @@ export default {
   channelOps,
   upstreamOps,
   profitOps,
-  controlledExperiments,
   accountOps,
   tokenGuard,
   pelicanTests,

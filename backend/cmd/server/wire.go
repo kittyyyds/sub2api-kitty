@@ -14,7 +14,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
-	"github.com/Wei-Shaw/sub2api/internal/managedinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
@@ -126,7 +125,6 @@ func provideCleanup(
 	grokOAuth *service.GrokOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
 	scheduledTestRunner *service.ScheduledTestRunnerService,
-	controlledExperiment *service.ControlledExperimentService,
 	accountOps *service.AccountOpsService,
 	accountTokenGuard *service.AccountTokenGuardService,
 	accountTokenGuardV2 *service.AccountTokenGuardV2Service,
@@ -146,12 +144,6 @@ func provideCleanup(
 	pluginManager *service.PluginManager,
 	cyberModeration *service.ContentModerationService,
 ) func() {
-	if openAIGateway != nil {
-		managedinstance.Register("BPSWarmPool", openAIGateway.StartBPSWarmPool, openAIGateway.StopBPSWarmPool)
-		if cfg.RunsBackgroundJobs() {
-			managedinstance.Register("BPS403Recovery", openAIGateway.StartBPS403Recovery, openAIGateway.StopBPS403Recovery)
-		}
-	}
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -176,13 +168,6 @@ func provideCleanup(
 			{"RetainedMedia", func() error {
 				if retainedMedia != nil {
 					retainedMedia.Stop()
-				}
-				return nil
-			}},
-			{"BPSWarmPool", func() error {
-				if openAIGateway != nil {
-					openAIGateway.StopBPS403Recovery()
-					openAIGateway.StopBPSWarmPool()
 				}
 				return nil
 			}},
@@ -408,18 +393,9 @@ func provideCleanup(
 				}
 				return nil
 			}},
-			{"ExcelBPSImages", func() error {
-				return openAIGateway.CloseExcelBPSImages()
-			}},
 			{"OpenAIWSPool", func() error {
 				if openAIGateway != nil {
 					openAIGateway.CloseOpenAIWSPool()
-				}
-				return nil
-			}},
-			{"OpenAICodexTicketHarvester", func() error {
-				if openAIGateway != nil {
-					openAIGateway.StopOpenAICodexTicketHarvester()
 				}
 				return nil
 			}},
@@ -436,9 +412,6 @@ func provideCleanup(
 				return nil
 			}},
 			{"ScheduledTestRunnerService", func() error {
-				if controlledExperiment != nil {
-					controlledExperiment.Stop()
-				}
 				if scheduledTestRunner != nil {
 					scheduledTestRunner.Stop()
 				}

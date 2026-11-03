@@ -21,8 +21,8 @@ func isPrismBrowserModel(model string) bool {
 	return false
 }
 
-// IsPrismBrowserEnabledForModel follows the same account-mapping order as BPS.
-// Models outside this scope retain their ordinary native/BPS routing.
+// IsPrismBrowserEnabledForModel follows the account mapping order.
+// Models outside this scope retain their ordinary native routing.
 func (a *Account) IsPrismBrowserEnabledForModel(requestedModel string) bool {
 	if a.IsSIWCEnabled() {
 		return false

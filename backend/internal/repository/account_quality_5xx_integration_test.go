@@ -33,7 +33,7 @@ func TestQuality5xxImmediateDuringRunningProbe(t *testing.T) {
 	})
 	_, err = integrationDB.ExecContext(ctx, `INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, service.SettingKeyOAuthAutoConfig, string(raw))
 	require.NoError(t, err)
-	f := newQualityBPSFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, TriggerOnUpstream5xx: true, RemoveModels: []string{"gpt-6-astra"}, RecoveryConcurrency: 4, AutoRestore: true})
+	f := newQualityIntegrationFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, TriggerOnUpstream5xx: true, RemoveModels: []string{"gpt-6-astra"}, RecoveryConcurrency: 4, AutoRestore: true})
 	f.exec(`UPDATE accounts SET concurrency=17 WHERE id=$1`)
 	repo := &accountRepository{sql: integrationDB}
 	// f already owns a running probe lease; protection must not wait for it.
@@ -67,7 +67,7 @@ func TestQuality5xxImmediateDuringRunningProbe(t *testing.T) {
 }
 
 func TestQualityModelResultsRemainIndependentInTransaction(t *testing.T) {
-	f := newQualityBPSFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: []string{"gpt-6-astra", "gpt-6.1-sol"}, AutoRestore: true, RecoveryConcurrency: 4})
+	f := newQualityIntegrationFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: []string{"gpt-6-astra", "gpt-6.1-sol"}, AutoRestore: true, RecoveryConcurrency: 4})
 	f.exec(`UPDATE accounts SET concurrency=20 WHERE id=$1`)
 	f.plan.QualityModelOutcomes = map[string]string{"gpt-6-astra": "failed", "gpt-6.1-sol": "passed"}
 	require.Equal(t, "models_cooled", f.apply("failed"))
@@ -88,7 +88,7 @@ func TestQualityModelResultsRemainIndependentInTransaction(t *testing.T) {
 }
 
 func TestQualitySkippedRoundHistoryCountsOnlyTestedModels(t *testing.T) {
-	f := newQualityBPSFixture(t, `{}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: []string{"gpt-6-astra"}, AutoRestore: true})
+	f := newQualityIntegrationFixture(t, `{}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: []string{"gpt-6-astra"}, AutoRestore: true})
 	results := NewScheduledTestResultRepository(integrationDB)
 	svc := service.NewScheduledTestService(f.plans, results)
 	cfg := *f.plan.PelicanConfig
@@ -111,7 +111,7 @@ func TestQualitySkippedRoundHistoryCountsOnlyTestedModels(t *testing.T) {
 func TestQualityLegacyModelOwnershipDoesNotBlockCurrentRound(t *testing.T) {
 	for _, peerVerdict := range []string{"passed", "skipped", "failed"} {
 		t.Run(peerVerdict, func(t *testing.T) {
-			f := newQualityBPSFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: []string{"gpt-6-astra", "gpt-5.6-sol", "gpt-6.1-sol"}, AutoRestore: true})
+			f := newQualityIntegrationFixture(t, `{"unrelated":"kept"}`, &service.QualityPolicy{Action: service.QualityActionRemoveModel, RemoveModels: []string{"gpt-6-astra", "gpt-5.6-sol", "gpt-6.1-sol"}, AutoRestore: true})
 			f.exec(`UPDATE accounts SET type='apikey',concurrency=15 WHERE id=$1`)
 			require.Equal(t, "models_cooled", f.apply("failed"))
 			var raw []byte

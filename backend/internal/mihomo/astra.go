@@ -2,6 +2,8 @@ package mihomo
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,9 +12,11 @@ import (
 	"time"
 )
 
-// These listeners never participate in ticket collection or CODEX-ROTATE.
+// These private listeners are separate from the regular CODEX-ROTATE proxy.
 const AstraLanes = 8
-const astraPort = collectPort + defaultCollectLanes
+
+// Keep existing Astra listener ports stable after retiring collection listeners.
+const astraPort = 17925
 
 func astraGroup(lane int) string { return fmt.Sprintf("ASTRA-PIN-%d", lane) }
 
@@ -21,6 +25,12 @@ type AstraNode struct {
 	Identity string
 	Name     string
 	Country  string
+}
+
+func astraNodeDigest(node map[string]any) string {
+	raw, _ := json.Marshal(node)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func astraNodes(s saved) []AstraNode {
@@ -34,7 +44,7 @@ func astraNodes(s saved) []AstraNode {
 		if name == "" {
 			name = id
 		}
-		result = append(result, AstraNode{ID: id, Identity: harvestDigest(node), Name: name, Country: s.Countries[id].Code})
+		result = append(result, AstraNode{ID: id, Identity: astraNodeDigest(node), Name: name, Country: s.Countries[id].Code})
 	}
 	return result
 }
@@ -46,10 +56,6 @@ func AstraNodes() ([]AstraNode, error) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Never bypass the harvest pool's persisted use-once reservation policy.
-	if m.saved.UseOnce {
-		return nil, errors.New("astra_rotation_use_once")
-	}
 	nodes := astraNodes(m.saved)
 	if len(nodes) == 0 {
 		return nil, errors.New("astra_rotation_no_nodes")
@@ -74,7 +80,7 @@ func waitAstraLock(ctx context.Context, attempt func() bool) error {
 }
 
 // PinAstraNode holds a private listener through validation and response closure.
-// Management reloads wait for leases; ticket collection uses different listeners.
+// Management reloads wait for leases.
 // Callers must use fresh HTTP CONNECTs and release after WS handshake/first turn.
 func PinAstraNode(ctx context.Context, node AstraNode) (string, func(), error) {
 	m := managedManager()
@@ -119,7 +125,7 @@ func (m *Manager) pinAstraNode(ctx context.Context, node AstraNode) (string, fun
 		})
 	}
 	m.mu.Lock()
-	available := m.state.Running && !m.closed && !m.saved.UseOnce
+	available := m.state.Running && !m.closed
 	nodes := astraNodes(m.saved)
 	secret := m.saved.Secret
 	m.mu.Unlock()

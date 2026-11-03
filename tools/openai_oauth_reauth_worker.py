@@ -1275,11 +1275,11 @@ def _siwc_password_failure(output: str, exit_code: int) -> str:
 
 def process_password_claim(api: WorkerAPI, claim: dict[str, Any]) -> None:
     oauth_profile = str(claim.get("oauth_profile") or "codex")
-    if oauth_profile not in {"codex", "excel", "siwc"}:
+    if oauth_profile not in {"codex", "siwc"}:
         raise WorkerError("unsupported OAuth login profile")
     engine = str(claim.get("engine") or "local_worker")
-    if oauth_profile in {"excel", "siwc"} and engine != "local_worker":
-        raise WorkerError("Excel OAuth requires the local password/TOTP worker")
+    if oauth_profile == "siwc" and engine != "local_worker":
+        raise WorkerError("SIWC authorization requires the local password/TOTP worker")
     if engine == "session_studio":
         process_session_studio_claim(api, claim)
         return
@@ -1325,15 +1325,6 @@ def process_password_claim(api: WorkerAPI, claim: dict[str, Any]) -> None:
                     return read_protocol_diagnostic(diagnostic_path, task_id)
                 except ValueError:
                     raise WorkerError(protocol_failure(None, 1, 0, "diagnostic_invalid")) from None
-        if oauth_profile == "excel":
-            try:
-                from .openai_excel_oauth_adapter import prepare_excel_runtime
-            except ImportError:
-                from openai_excel_oauth_adapter import prepare_excel_runtime
-            try:
-                script = prepare_excel_runtime(root.resolve(), Path(temp_dir))
-            except ValueError as exc:
-                raise WorkerError(str(exc)) from None
         if oauth_profile == "siwc":
             try:
                 from .openai_siwc_oauth_adapter import prepare_siwc_runtime
@@ -1371,15 +1362,6 @@ def process_password_claim(api: WorkerAPI, claim: dict[str, Any]) -> None:
                 child_env.pop(key, None)
             if claim.get("expected_workspace"):
                 child_env["OPENAI_CODEX_EXPECTED_WORKSPACE"] = str(claim["expected_workspace"])
-        if oauth_profile == "excel":
-            # One bounded fixed-exit attempt. Never rotate proxies to retry a rejected login.
-            child_env["CHATGPT_PROXY_MAX_ATTEMPTS"] = "1"
-            child_env.pop("CHATGPT_BASE", None)
-            child_env.pop("AUTH_BASE", None)
-            child_env.pop("CHATGPT_PROXY_URL", None)
-            child_env.pop("OPENAI_EXCEL_EXPECTED_WORKSPACE", None)
-            if claim.get("expected_workspace"):
-                child_env["OPENAI_EXCEL_EXPECTED_WORKSPACE"] = str(claim["expected_workspace"])
         # Ambient credentials and alternate endpoints never select the SIWC flow.
         child_env.pop("OPENAI_SIWC_AUTH_URL", None)
         child_env.pop("OPENAI_SIWC_EXPECTED_WORKSPACE", None)
@@ -1406,7 +1388,7 @@ def process_password_claim(api: WorkerAPI, claim: dict[str, Any]) -> None:
                 stdout=subprocess.DEVNULL if oauth_profile == "codex" else subprocess.PIPE,
                 stderr=subprocess.DEVNULL if oauth_profile == "codex" else subprocess.PIPE,
                 text=True,
-                timeout=10 * 60 if oauth_profile in {"excel", "siwc"} else 25 * 60,
+                timeout=10 * 60 if oauth_profile == "siwc" else 25 * 60,
                 check=False,
             )
         except subprocess.TimeoutExpired:
@@ -1423,30 +1405,10 @@ def process_password_claim(api: WorkerAPI, claim: dict[str, Any]) -> None:
         if oauth_profile == "codex" and diagnostic and (result.returncode != 0 or diagnostic["reason"] != "none"):
             raise WorkerError(protocol_failure(diagnostic, result.returncode,
                               (time.monotonic() - protocol_started) * 1000))
-        if oauth_profile == "excel" and callable(getattr(api, "private_protocol_diagnostics", None)):
-            # Only the explicit isolated CLI implements this hook. The queue API
-            # cannot select a path or persist raw external-runner output.
-            api.private_protocol_diagnostics(result.stdout, result.stderr)
         if result.returncode != 0:
             if oauth_profile == "siwc":
                 raise WorkerError(_siwc_password_failure(result.stdout + "\n" + result.stderr, result.returncode))
             # The external runner may echo unlabeled secrets that regexes cannot redact.
-            if oauth_profile == "excel":
-                private_output = result.stdout + "\n" + result.stderr
-                stage = "web_login"
-                for marker, label in (("Password accepted", "password_accepted"), ("TOTP 2FA challenge reached", "mfa_challenge"),
-                                      ("2FA verification accepted", "mfa_accepted"), ("Start Codex OAuth flow", "excel_authorize"),
-                                      ("Convert OAuth callback", "excel_token_exchange")):
-                    if marker in private_output:
-                        stage = label
-                reasons = [label for marker, label in (("security-check", "security_check"), ("PROXY_RISK_CONTROL", "security_check"),
-                           ("EXCEL_ADDITIONAL_VERIFICATION_REQUIRED", "additional_verification"),
-                           ("EXCEL_CALLBACK_STATE_MISMATCH", "callback_state_mismatch"),
-                           ("EXCEL_EXPECTED_WORKSPACE_NOT_LISTED", "workspace_not_listed"),
-                           ("Password was rejected", "password_rejected"), ("2FA key was rejected", "totp_rejected"),
-                           ("SESSION_SELECTION_INVALID", "session_selection"), ("CLIENT_ID", "client_id")) if marker in private_output]
-                reason = ",".join(sorted(set(reasons))) or "protocol_error"
-                raise WorkerError(f"Excel password/TOTP login failed (stage={stage}, reason={reason}, exit={result.returncode})")
             private_output = (result.stdout or "") + "\n" + (result.stderr or "")
             if proxy_url and any(marker in private_output.lower() for marker in (
                 "econnrefused", "connection refused", "proxy connect", "proxy error",
@@ -1487,15 +1449,6 @@ def process_password_claim(api: WorkerAPI, claim: dict[str, Any]) -> None:
         for key in ("access_token", "refresh_token", "id_token")
     ):
         raise WorkerError("password/TOTP protocol returned incomplete OAuth credentials")
-    if oauth_profile == "excel":
-        try:
-            from .openai_excel_oauth_adapter import validate_excel_credentials
-        except ImportError:
-            from openai_excel_oauth_adapter import validate_excel_credentials
-        try:
-            validate_excel_credentials(credentials, email, claim.get("expected_workspace"))
-        except ValueError as exc:
-            raise WorkerError(str(exc)) from None
     _best_effort_progress(api, task_id, "applying_credentials")
     result = api.credentials(task_id, credentials, extra if isinstance(extra, dict) else {})
     if not result or result.get("status") != "succeeded":

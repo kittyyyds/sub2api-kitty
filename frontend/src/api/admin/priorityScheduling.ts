@@ -5,7 +5,6 @@ export interface PrioritySchedulingConfig {
   error_rate_prior_samples?: number
   oauth_quota_priority?: boolean
   oauth_quota_threshold?: number
-  balance_protocols?: boolean
   enabled: boolean
   mode: 'experience' | 'balanced' | 'profit' | 'custom'
   group_ids: number[]

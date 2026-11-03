@@ -39,14 +39,7 @@ class MultiHostPreflightTests(unittest.TestCase):
             for node in http_only["nodes"]:
                 node["capabilities"] = ["http-responses"]
                 node["runtime"].pop("ws_node_owner")
-                node["runtime"].pop("image_relay_owner_origin")
             self.assertEqual(preflight.validate(http_only), [])
-
-    def test_owner_origins_match_application_shared_contract(self):
-        cases = Path(__file__).parents[2] / "backend/internal/util/urlvalidator/testdata/https-origin-contract.json"
-        for case in json.loads(cases.read_text()):
-            with self.subTest(name=case["name"]):
-                self.assertEqual(preflight.https_origin(case["url"]) is not None, case["valid"])
 
     def test_writer_and_bucket_contracts(self):
         changes = [
@@ -65,21 +58,18 @@ class MultiHostPreflightTests(unittest.TestCase):
                 mutate(document)
                 self.assertIn(code, self.codes(document))
 
-    def test_duplicate_identities_and_origin_aliases(self):
+    def test_duplicate_identities(self):
         self.document["nodes"][1]["id"] = "node-a"
-        runtime = self.document["nodes"][1]["runtime"]
-        runtime["ws_node_owner"]["node_id"] = "node-a"
-        runtime["image_relay_owner_origin"] = "https://NODE-A.example.invalid:443/"
-        self.assertTrue({"duplicate_node_id", "duplicate_ws_identity", "duplicate_owner_origin"} <= self.codes(self.document))
+        self.document["nodes"][1]["runtime"]["ws_node_owner"]["node_id"] = "node-a"
+        self.assertTrue({"duplicate_node_id", "duplicate_ws_identity"} <= self.codes(self.document))
 
-    def test_native_ws_and_relay_require_explicit_opt_in(self):
-        runtime = self.document["nodes"][1]["runtime"]
-        runtime["ws_node_owner"]["enabled"] = False
-        runtime["image_relay_owner_origin"] = ""
-        self.assertTrue({"native_ws_gate_required", "relay_owner_origin_required"} <= self.codes(self.document))
-        for origin in ("http://node.example.invalid", "https://private:credential@node.example.invalid", "https://node.example.invalid/path", "https://node.example.invalid?private", "https://node.example.invalid/#private", "https://node.example.invalid:", "https://node.example.invalid\\path"):
-            runtime["image_relay_owner_origin"] = origin
-            self.assertIn("https_origin_required", self.codes(self.document))
+    def test_native_ws_requires_explicit_opt_in(self):
+        self.document["nodes"][1]["runtime"]["ws_node_owner"]["enabled"] = False
+        self.assertIn("native_ws_gate_required", self.codes(self.document))
+
+    def test_retired_relay_capability_is_rejected(self):
+        self.document["nodes"][1]["capabilities"].append("bps-relay")
+        self.assertIn("known_capabilities_required", self.codes(self.document))
 
     def test_strict_schema_types_and_credential_diagnostics(self):
         self.document["nodes"][0]["runtime"]["private-secret-field"] = "fixture-private-secret-value"

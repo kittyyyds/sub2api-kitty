@@ -36,14 +36,6 @@ func priorityCapacityBand(item openAIAccountCandidateScore) int {
 	return band
 }
 
-func (s *OpenAIGatewayService) balancesPriorityProtocols(req OpenAIAccountScheduleRequest) bool {
-	if s == nil || req.Platform != PlatformOpenAI || !req.UseUpstreamTokenCost || req.RequiredImageCapability != "" {
-		return false
-	}
-	cfg := s.prioritySchedulingRuntimeConfig()
-	return cfg.BalanceProtocols && priorityApplies(cfg, req)
-}
-
 // Count distinct bindings, not group price/name or an inferred account class.
 // AccountGroups supports older snapshots that do not populate GroupIDs.
 func priorityAccountGroupCount(account *Account) int {
@@ -116,12 +108,11 @@ func (s *defaultOpenAIAccountScheduler) shouldRebalancePrioritySticky(ctx contex
 	if !priorityApplies(cfg, req) {
 		return false
 	}
-	balanceProtocols := cfg.BalanceProtocols
 	quotaSticky := cfg.OAuthQuotaPriority && sticky.IsOpenAIApiKey()
 	// Optional balancing must not hold a healthy sticky turn behind slow dependencies.
 	ctx, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
 	defer cancel()
-	accounts, err := s.service.listSchedulableAccountsForRequest(ctx, req.GroupID, req.Platform, req.RequestedModel, req.RequireCompact, req.ExcludedIDs)
+	accounts, err := s.service.listSchedulableAccounts(ctx, req.GroupID, req.Platform)
 	if err != nil || len(accounts) < 2 {
 		return false
 	}
@@ -132,14 +123,10 @@ func (s *defaultOpenAIAccountScheduler) shouldRebalancePrioritySticky(ctx contex
 		account := &accounts[i]
 		if account.ID == sticky.ID || !account.IsSchedulable() || (!quotaSticky && account.Priority > sticky.Priority) ||
 			!s.service.openAIAccountMatchesSchedulingGroup(account, req.GroupID) ||
-			!s.isAccountRequestCompatible(ctx, account, req) || !s.isAccountTransportCompatible(account, req.RequiredTransport, req.RequestedModel) ||
-			s.service.isExcelBPSCoolingDown(account, req.RequestedModel) {
+			!s.isAccountRequestCompatible(ctx, account, req) || !s.isAccountTransportCompatible(account, req.RequiredTransport, req.RequestedModel) {
 			continue
 		}
 		if _, excluded := req.ExcludedIDs[account.ID]; excluded {
-			continue
-		}
-		if !balanceProtocols && sticky.IsExcelBPSEnabledForModel(req.RequestedModel) && !account.IsExcelBPSEnabledForModel(req.RequestedModel) {
 			continue
 		}
 		if req.RequireCompact && openAICompactSupportTier(account) < openAICompactSupportTier(sticky) {

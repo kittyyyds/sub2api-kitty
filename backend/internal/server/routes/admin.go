@@ -153,7 +153,6 @@ func RegisterAdminRoutes(
 
 		// 定时测试计划
 		registerScheduledTestRoutes(admin, h)
-		registerControlledExperimentRoutes(admin, h)
 
 		// 鹈鹕测智用户展示
 		registerPelicanShowcaseRoutes(admin, h)
@@ -175,9 +174,6 @@ func RegisterAdminRoutes(
 		// 账号健康分
 
 		// 毛利看板与熔断
-
-		// 分级路由
-		registerTieredRoutingRoutes(admin, h)
 
 		// 工单系统
 
@@ -453,10 +449,6 @@ func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 }
 
 func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
-	admin.POST("/accounts/bps-imports", h.Admin.Account.StartBPSImport)
-	admin.GET("/accounts/bps-imports", h.Admin.Account.ListBPSImports)
-	admin.GET("/accounts/bps-imports/:batch_id", h.Admin.Account.GetBPSImport)
-	admin.POST("/accounts/bps-imports/:batch_id/cancel", h.Admin.Account.CancelBPSImport)
 	accounts := admin.Group("/accounts")
 	{
 		accounts.GET("", h.Admin.Account.List)
@@ -474,13 +466,6 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.GET("/astra-gateway/status", h.Admin.Account.AstraGatewayStatus)
 		accounts.GET("/astra-gateway/history", h.Admin.Account.AstraGatewayHistory)
 		accounts.POST("/astra-gateway/test", h.Admin.Account.AstraGatewayTest)
-		accounts.GET("/codex-harvest-flow", h.Admin.Account.GetCodexHarvestFlow)
-		accounts.GET("/codex-harvest-controls", h.Admin.Account.GetCodexHarvestControls)
-		accounts.PUT("/codex-harvest-controls", h.Admin.Account.UpdateCodexHarvestControls)
-		accounts.GET("/codex-harvest-nodes", h.Admin.Account.GetCodexHarvestNodes)
-		accounts.POST("/codex-harvest-nodes/reset", h.Admin.Account.ResetCodexHarvestNodes)
-		accounts.PUT("/:id/codex-skip-harvest", h.Admin.Account.SetCodexSkipHarvest)
-		accounts.POST("/:id/manual-harvest", h.Admin.Account.ManualCodexHarvest)
 		accounts.GET("/opencode-go-usage/settings", h.Admin.Account.GetOpenCodeGoUsageSettings)
 		accounts.PUT("/opencode-go-usage/settings", h.Admin.Account.UpdateOpenCodeGoUsageSettings)
 		accounts.GET("/:id", h.Admin.Account.GetByID)
@@ -534,7 +519,6 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/:id/test", h.Admin.Account.Test)
 		accounts.POST("/:id/pelican-test", h.Admin.Account.PelicanTest)
 		accounts.POST("/:id/modeltrace-test", h.Admin.Account.ModelTraceTest)
-		accounts.POST("/:id/state-probe", h.Admin.Account.StateProbe)
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
 		accounts.POST("/:id/refresh", h.Admin.Account.Refresh)
 		accounts.POST("/:id/apply-oauth-credentials", h.Admin.Account.ApplyOAuthCredentials)
@@ -1030,19 +1014,6 @@ func registerScheduledTestRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.GET("/accounts/:id/scheduled-test-plans", h.Admin.ScheduledTest.ListByAccount)
 }
 
-// Admins browse the gallery through the user page. The Smart Ops page edits the gallery
-// settings and the group tests that feed it.
-func registerControlledExperimentRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	experiments := admin.Group("/controlled-experiments")
-	experiments.Use(h.Admin.ControlledExperiment.FullAdmin)
-	experiments.GET("/catalog", h.Admin.ControlledExperiment.Catalog)
-	experiments.GET("", h.Admin.ControlledExperiment.List)
-	experiments.POST("", h.Admin.ControlledExperiment.Create)
-	experiments.GET("/:id", h.Admin.ControlledExperiment.Report)
-	experiments.POST("/:id/start", h.Admin.ControlledExperiment.Start)
-	experiments.POST("/:id/stop", h.Admin.ControlledExperiment.Stop)
-}
-
 func registerPelicanShowcaseRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.GET("/pelican-showcase/settings", h.PelicanShowcase.GetSettings)
 	admin.PUT("/pelican-showcase/settings", h.PelicanShowcase.UpdateSettings)
@@ -1095,14 +1066,6 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 	}
 }
 
-func registerTieredRoutingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	routing := admin.Group("/tiered-routing")
-	{
-		routing.GET("/settings", h.Admin.TieredRouting.GetSettings)
-		routing.PUT("/settings", h.Admin.TieredRouting.UpdateSettings)
-	}
-}
-
 func registerBillingExportAdminRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	billing := admin.Group("/billing/users/:userId")
 	{
@@ -1112,17 +1075,6 @@ func registerBillingExportAdminRoutes(admin *gin.RouterGroup, h *handler.Handler
 }
 
 func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	if h.Admin.Account != nil && h.Admin.Channel != nil {
-		h.Admin.Account.SetUpstreamChannelService(h.Admin.Channel.UpstreamChannelService())
-	}
-	admin.GET("/upstream-channels", h.Admin.Channel.ListUpstreamChannels)
-	admin.POST("/upstream-channels", h.Admin.Channel.MutateUpstreamChannel)
-	admin.GET("/upstream-channels/:id", h.Admin.Channel.GetUpstreamChannel)
-	admin.PUT("/upstream-channels/:id", h.Admin.Channel.MutateUpstreamChannel)
-	admin.DELETE("/upstream-channels/:id", h.Admin.Channel.MutateUpstreamChannel)
-	admin.GET("/upstream-channels/:id/members", h.Admin.Channel.UpstreamChannelMembers)
-	admin.GET("/upstream-channel-bindings", h.Admin.Channel.ReadUpstreamChannelBindings)
-	admin.PUT("/upstream-channel-bindings", h.Admin.Channel.BindUpstreamChannelAccounts)
 	admin.GET("/profit-operations/snapshot", h.Admin.Channel.ProfitOperations)
 	admin.GET("/upstream-operations/snapshot", h.Admin.Channel.UpstreamOperations)
 	channels := admin.Group("/channels")

@@ -8,12 +8,12 @@ import SmartOpsNav from '../SmartOpsNav.vue'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 
 const smartOpsPaths = ['/admin/auto-config', '/admin/priority-scheduling',
-  '/admin/channel-operations', '/admin/profit-operations', '/admin/account-quality', '/admin/controlled-experiments', '/admin/account-ops', '/admin/token-guard', '/admin/token-guard-v2', '/admin/pelican-tests', '/admin/group-cache-tests']
+  '/admin/channel-operations', '/admin/profit-operations', '/admin/account-quality', '/admin/account-ops', '/admin/token-guard', '/admin/token-guard-v2', '/admin/pelican-tests', '/admin/group-cache-tests']
 
 async function mountAt(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [...smartOpsPaths, '/admin/request-captures', '/admin/harvest-flow'].map(route => ({ path: route, component: { template: '<div />' } }))
+    routes: [...smartOpsPaths, '/admin/request-captures'].map(route => ({ path: route, component: { template: '<div />' } }))
   })
   await router.push(path)
   await router.isReady()
@@ -26,16 +26,16 @@ const hrefs = (wrapper: Awaited<ReturnType<typeof mountAt>>) => wrapper.findAll(
 describe('SmartOpsNav', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('ends with the ticket harvest flow and hides request capture while the feature is off', async () => {
-    const wrapper = await mountAt('/admin/harvest-flow')
-    expect(hrefs(wrapper)).toEqual([...smartOpsPaths, '/admin/harvest-flow'])
-    expect(wrapper.find('[aria-current="page"]').text()).toBe('nav.harvestFlow')
+  it('omits the removed ticket-harvest flow', async () => {
+    const wrapper = await mountAt('/admin/pelican-tests')
+    expect(hrefs(wrapper)).toEqual(smartOpsPaths)
+    expect(hrefs(wrapper)).not.toContain('/admin/harvest-flow')
   })
 
-  it('lists request capture before the ticket harvest flow when the feature is on', async () => {
+  it('lists request capture when its feature is on without restoring ticket harvesting', async () => {
     useAdminSettingsStore().setRequestCaptureEnabledLocal(true)
     const wrapper = await mountAt('/admin/request-captures')
-    expect(hrefs(wrapper)).toEqual([...smartOpsPaths, '/admin/request-captures', '/admin/harvest-flow'])
+    expect(hrefs(wrapper)).toEqual([...smartOpsPaths, '/admin/request-captures'])
     expect(wrapper.find('[aria-current="page"]').text()).toBe('admin.requestCapture.title')
   })
 

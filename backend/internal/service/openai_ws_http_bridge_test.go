@@ -130,7 +130,7 @@ func TestOpenAIWSHTTPBridgeAdmissionFailureClearsStickyState(t *testing.T) {
 		sessionHash       = "bridge-admission-session"
 		responseID        = "resp_bridge_rejected"
 	)
-	selected := ticketTestAccount(accountID)
+	selected := openAIOAuthFixture(accountID)
 	latest := *selected
 	latest.Schedulable = false
 

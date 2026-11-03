@@ -32,7 +32,7 @@ func (p *egressTimezoneProber) ProbeProxy(ctx context.Context, proxy string) (*P
 	return p.probe(ctx, proxy)
 }
 func timezoneAutoService(enabled, auto bool, probe *egressTimezoneProber) *OpenAIGatewayService {
-	return &OpenAIGatewayService{requestTimezoneProber: probe, settingService: NewSettingService(&codexTicketLifecycleSettings{get: func(_ context.Context, key string) (string, error) {
+	return &OpenAIGatewayService{requestTimezoneProber: probe, settingService: NewSettingService(&requestTimezoneSettingsStub{get: func(_ context.Context, key string) (string, error) {
 		if key == SettingKeyOpenAIRequestTimezoneEnabled && enabled || key == SettingKeyOpenAIRequestTimezoneAuto && auto {
 			return "true", nil
 		}
@@ -114,7 +114,7 @@ func TestRequestTimezoneEgressDefaultSettings(t *testing.T) {
 			probe := &egressTimezoneProber{probe: func(context.Context, string) (*ProxyExitInfo, int64, error) {
 				return &ProxyExitInfo{IP: "203.0.113.10", Timezone: "Asia/Tokyo"}, 0, nil
 			}}
-			settings := NewSettingService(&codexTicketLifecycleSettings{get: func(_ context.Context, key string) (string, error) {
+			settings := NewSettingService(&requestTimezoneSettingsStub{get: func(_ context.Context, key string) (string, error) {
 				if tc.readErr != nil {
 					return "", tc.readErr
 				}

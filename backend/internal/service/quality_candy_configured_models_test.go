@@ -94,18 +94,12 @@ func TestCandyConfiguredModelsRetainDiscoveryForOtherModels(t *testing.T) {
 }
 
 func TestCandyConfiguredModelsDoNotOverrideOtherRoutes(t *testing.T) {
-	for _, route := range []string{"state_probe", "bps_observation", "bps_account", "passthrough", "unmapped"} {
+	for _, route := range []string{"passthrough", "unmapped"} {
 		t.Run(route, func(t *testing.T) {
 			account := &Account{ID: 42, Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 				Credentials: map[string]any{"model_mapping": map[string]any{"gpt-6.1-sol": "gpt-6.1-sol"}}, Extra: map[string]any{}}
 			plan := multiModelQualityPlan(t, `["gpt-6.1-sol"]`)
 			switch route {
-			case "state_probe":
-				plan.PelicanConfig.QuestionKind = OpenAICodexStateProbeQuestionKind
-			case "bps_observation":
-				plan.PelicanConfig.TestChannel = "bps"
-			case "bps_account":
-				account.Extra["openai_excel_bps"] = true
 			case "passthrough":
 				account.Extra["openai_passthrough"] = true
 			case "unmapped":

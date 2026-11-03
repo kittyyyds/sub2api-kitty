@@ -1,5 +1,7 @@
 # Excel / BPS 协议（OpenAI OAuth）
 
+> 历史文档：本地精简版已移除整套 Excel/BPS。以下内容仅用于追溯，不是当前操作指南。范围见 [功能移除记录](/docs/kitty-feature-removal-20261103.md)。
+
 在账号管理 → 编辑现有 OpenAI OAuth 账号 → 打开“Excel / BPS 协议”并保存。使用该账号的 ChatGPT access token/account ID；遇到旧 Codex 凭据的 BPS 403 时，可通过下方 BPS OAuth 入口取得 Excel 会话。无需 GitHub 登录、sidecar 或新建 API Key 上游账号。原有凭据刷新逻辑继续生效。默认关闭；切换后新开 Codex 会话。
 
 `credentials.plan_type` 为 `free` 的账号禁止开启 BPS（忽略大小写与首尾空格）。创建、编辑和批量编辑会拒绝保存开启配置；质量规则和 403 自动恢复也会跳过 free 账号。旧数据即使保留 BPS 开关，运行时也不会走 BPS，可通过编辑或批量编辑关闭旧开关。套餐未知的账号沿用原有规则；该限制不代表原生 Codex 通道支持相同模型。

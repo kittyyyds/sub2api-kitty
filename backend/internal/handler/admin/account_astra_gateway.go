@@ -28,7 +28,6 @@ func (h *AccountHandler) AstraGatewayHistory(c *gin.Context) {
 }
 func (h *AccountHandler) AstraGatewayTest(c *gin.Context) {
 	var req struct {
-		TestKind  string `json:"test_kind"`
 		Action    string `json:"action"`
 		AccountID int64  `json:"account_id"`
 	}
@@ -39,7 +38,7 @@ func (h *AccountHandler) AstraGatewayTest(c *gin.Context) {
 	subject, _ := middleware.GetAuthSubjectFromContext(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 300*time.Second)
 	defer cancel()
-	result, err := h.accountTestService.TestAstraGateway(ctx, req.Action, req.AccountID, subject.UserID, req.TestKind)
+	result, err := h.accountTestService.TestAstraGateway(ctx, req.Action, req.AccountID, subject.UserID)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

@@ -176,7 +176,7 @@ func TestStaticNodeBindingsWithOfficialKernel(t *testing.T) {
 		require.NoError(t, err)
 		nodes = append(nodes, map[string]any{"name": name, "type": "http", "server": address.Hostname(), "port": port})
 	}
-	require.NoError(t, m.run(ctx, "start", saved{Nodes: nodes, UseOnce: true}))
+	require.NoError(t, m.run(ctx, "start", saved{Nodes: nodes}))
 	bindings, err := m.BindStaticNodes(ctx, []string{"node-selected", "DYNAMIC-selected"})
 	require.NoError(t, err)
 	read := func(binding StaticNodeBinding) (int, string, error) {

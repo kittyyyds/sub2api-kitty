@@ -26,9 +26,6 @@ func (r *OAuthInitialQualityRule) plan(platform string) (*ScheduledTestPlan, err
 	if r.PelicanConfig == nil || r.PelicanConfig.Quality == nil || r.PelicanConfig.Quality.Action == QualityActionOpenAITwoFAAdmission {
 		return bad("select a quality operations rule")
 	}
-	if isOpenAICodexStateProbePlan(r.PelicanConfig) && platform != PlatformOpenAI {
-		return bad("state probe rules require OpenAI OAuth accounts")
-	}
 	p := &ScheduledTestPlan{ModelID: r.ModelID, CronExpression: r.CronExpression,
 		Enabled: r.Enabled, MaxResults: r.MaxResults, PelicanConfig: cloneQualityPelicanConfig(r.PelicanConfig)}
 	p.PelicanConfig.TriggerSource = ""

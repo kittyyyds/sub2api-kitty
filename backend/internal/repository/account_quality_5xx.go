@@ -84,7 +84,7 @@ func (r *scheduledTestPlanRepository) applyImmediateQuality5xx(ctx context.Conte
 		return false, nil
 	}
 	var otherOwner bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_quality_states s JOIN scheduled_test_plans p ON p.id=s.plan_id WHERE p.account_id=$1 AND p.id<>$2 AND COALESCE(s.state->>'action','') NOT IN ('','enable_bps'))`, accountID, planID).Scan(&otherOwner); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_quality_states s JOIN scheduled_test_plans p ON p.id=s.plan_id WHERE p.account_id=$1 AND p.id<>$2 AND COALESCE(s.state->>'action','')<>'')`, accountID, planID).Scan(&otherOwner); err != nil {
 		return false, err
 	}
 	if otherOwner {

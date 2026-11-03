@@ -39,10 +39,6 @@ func (s *AccountTestService) RunPelicanBackground(ctx context.Context, accountID
 	admission := &testAdmissionObservation{}
 	ctx = context.WithValue(ctx, testAdmissionContextKey{}, admission)
 	ctx = context.WithValue(ctx, qualityProbeContextKey{}, true)
-	// 探针题型不下发题目，直接走门票探针。
-	if isOpenAICodexStateProbePlan(cfg) {
-		return s.runOpenAICodexStateProbeScheduled(ctx, accountID, model, cfg)
-	}
 	// Recognize the exact built-in question in legacy HTML plans as well.
 	if isBuiltinCandyPlan(cfg) {
 		copy := *cfg
@@ -135,25 +131,9 @@ func (s *ScheduledTestRunnerService) runPelicanPlan(ctx context.Context, plan *S
 	}
 	applyTriggeredQuality := true
 	if triggeredAccount != nil {
-		snapshot, applyTriggeredQuality = quality5xxTestConfig(triggeredAccount, plan.ModelID, snapshot)
+		snapshot, applyTriggeredQuality = quality5xxTestConfig(snapshot)
 	}
 	plan.PelicanConfig = &snapshot
-	// Legacy rules can target API-key accounts, or an account can change type
-	// after a rule is saved. Advance the claimed schedule without running a
-	// probe or recording a misleading inconclusive quality round.
-	if isOpenAICodexStateProbePlan(plan.PelicanConfig) && s.accountTestSvc != nil {
-		account, lookupErr := s.accountTestSvc.accountRepo.GetByID(ctx, plan.AccountID)
-		ignoreBPS := plan.PelicanConfig.Quality != nil && (plan.PelicanConfig.Quality.Action == QualityActionEnableBPS || plan.PelicanConfig.BPSRecoveryPending)
-		if lookupErr != nil || openAICodexStateProbeUnsupportedReason(account, plan.ModelID, ignoreBPS) != "" {
-			logger.LegacyPrintf("service.scheduled_test_runner", "state probe plan=%d account=%d skipped: account unavailable or unsupported", plan.ID, plan.AccountID)
-			finishCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
-			defer stop()
-			if finishErr := s.finishIQOrPelican(finishCtx, plan, until, time.Now()); finishErr != nil {
-				logger.LegacyPrintf("service.scheduled_test_runner", "pelican plan=%d finish failed: %v", plan.ID, finishErr)
-			}
-			return false
-		}
-	}
 	// Fallback for queued legacy signals without an immediately applied episode.
 	// A 5xx triggers protection; it is not itself a quality verdict.
 	if plan.TriggerSource == quality5xxSource && plan.PelicanConfig.Quality != nil &&
@@ -298,13 +278,13 @@ func (s *ScheduledTestRunnerService) runPelicanPlan(ctx context.Context, plan *S
 			logger.LegacyPrintf("service.scheduled_test_runner", "pelican plan=%d save failed: %v", plan.ID, err)
 		}
 	}
-	if succeeded && plan.AutoRecover && plan.PelicanConfig.Quality == nil && !isBuiltinCandyPlan(plan.PelicanConfig) && !isOpenAICodexStateProbePlan(plan.PelicanConfig) {
+	if succeeded && plan.AutoRecover && plan.PelicanConfig.Quality == nil && !isBuiltinCandyPlan(plan.PelicanConfig) {
 		s.tryRecoverAccount(saveCtx, plan.AccountID, plan.ID)
 	}
 	finished := time.Now()
 	if plan.TriggerSource == quality5xxSource {
-		// The stored rule was validated before claiming. The execution-only
-		// question may now be candy even for a state-probe BPS recovery rule.
+		// The stored rule was validated before claiming. A 5xx-triggered run may
+		// use a bounded execution-only question without rewriting the saved rule.
 		following, nextErr := computeNextRun(plan.CronExpression, finished)
 		if nextErr != nil {
 			return false
@@ -347,8 +327,7 @@ func (s *ScheduledTestRunnerService) runPelicanSample(ctx context.Context, plan 
 		return failure("scheduled_test_empty_result: background sample returned no result")
 	}
 	result.PelicanConfig = plan.PelicanConfig
-	// 探针题型的结果自带 correct/incorrect/unknown 判定，不经过判题模型。
-	if plan.PelicanConfig.Quality != nil && result.Status == "success" && !isOpenAICodexStateProbePlan(plan.PelicanConfig) {
+	if plan.PelicanConfig.Quality != nil && result.Status == "success" {
 		var judgment *QualityJudgment
 		if plan.PelicanConfig.Quality.Action == QualityActionOpenAITwoFAAdmission {
 			judgment = &QualityJudgment{Verdict: "incorrect", Reason: "builtin_admission", AccountID: plan.AccountID}

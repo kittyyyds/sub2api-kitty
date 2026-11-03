@@ -149,7 +149,6 @@ func TestQualityAnswerDoesNotReplayOtherFailures(t *testing.T) {
 		{name: "judged_incorrect", result: &ScheduledTestResult{Status: "failed", ErrorMessage: "answer_mismatch", QualityJudgment: &QualityJudgment{Verdict: "incorrect"}}},
 		{name: "judged_unknown", result: &ScheduledTestResult{Status: "failed", ErrorMessage: "judge_inconclusive", QualityJudgment: &QualityJudgment{Verdict: "unknown"}}},
 		{name: "ordinary_pelican", change: func(p *ScheduledTestPlan) { p.PelicanConfig = pelicanPlan().PelicanConfig }, result: &ScheduledTestResult{Status: "failed", ErrorMessage: "API returned 503: busy"}},
-		{name: "state_probe", change: func(p *ScheduledTestPlan) { p.PelicanConfig.QuestionKind = OpenAICodexStateProbeQuestionKind }, result: &ScheduledTestResult{Status: "failed", ErrorMessage: "API returned 503: busy"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			plan := qualityAnswerRetryPlan()

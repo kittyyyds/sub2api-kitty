@@ -160,7 +160,7 @@ func (s *OpenAIOAuthReauthService) CreateAuthConnection(ctx context.Context, id 
 	}
 	c := &OpenAIAuthConnection{ID: uuid.NewString(), AccountID: id, Kind: input.Kind, Label: input.Label, Status: "pending", RefreshState: "idle", Revision: 1, Scopes: []string{}, Capabilities: []string{}}
 	switch input.Kind {
-	case "codex", "bps", "siwc":
+	case "codex", "siwc":
 		if input.APIKey != "" {
 			return nil, infraerrors.BadRequest("OPENAI_CONNECTION_CREDENTIAL_MISMATCH", "An OAuth connection cannot accept an API key")
 		}
@@ -283,11 +283,11 @@ func validateOpenAIConnectionKind(a *Account) error {
 	if kind != "" && a.AuthConnectionID == "" {
 		return infraerrors.BadRequest("OPENAI_CONNECTION_NOT_CAPABLE", "Explicit connections require a bound authorization record")
 	}
-	if kind == "codex" && a.GetCredential("client_id") != openai.ClientID || kind == "bps" && a.GetCredential("client_id") != openai.ExcelClientID || kind == "siwc" && (!a.IsSIWCEnabled() || a.GetCredential("client_id") == "" || a.GetCredential("client_id") == openai.SIWCDynamicClientID) || kind == "api_key" && a.Type != AccountTypeAPIKey {
+	if kind == "codex" && a.GetCredential("client_id") != openai.ClientID || kind == "siwc" && (!a.IsSIWCEnabled() || a.GetCredential("client_id") == "" || a.GetCredential("client_id") == openai.SIWCDynamicClientID) || kind == "api_key" && a.Type != AccountTypeAPIKey {
 		return infraerrors.BadRequest("OPENAI_CONNECTION_CLIENT_MISMATCH", "Connection credentials do not match the authorization client")
 	}
 	switch kind {
-	case "", "codex", "bps", "siwc", "api_key":
+	case "", "codex", "siwc", "api_key":
 		return nil
 	default:
 		return infraerrors.BadRequest("OPENAI_CONNECTION_NOT_CAPABLE", "Unknown or identity-only authorization cannot be used for inference")

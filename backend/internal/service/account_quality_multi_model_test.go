@@ -26,10 +26,6 @@ func TestQualityModelsRejectInvalidSelections(t *testing.T) {
 		_, err := nextPlanRun(multiModelQualityPlan(t, models), time.Now())
 		require.Error(t, err)
 	}
-	probe := multiModelQualityPlan(t, `["gpt-6-astra", "gpt-6-sol"]`)
-	probe.PelicanConfig.QuestionKind = OpenAICodexStateProbeQuestionKind
-	_, err := nextPlanRun(probe, time.Now())
-	require.Error(t, err, "state probes must keep the account-level single-probe guard")
 }
 
 func TestQualityModelsWaitForSlowModelBeforeOutcome(t *testing.T) {
@@ -100,8 +96,7 @@ func TestQualityModelsWaitForSlowModelBeforeOutcome(t *testing.T) {
 
 func TestQualityMultiModel5xxUsesCandyInsteadOfConcurrentStateProbes(t *testing.T) {
 	plan := multiModelQualityPlan(t, `["gpt-6-astra", "gpt-6-sol"]`)
-	account := &Account{ID: 42, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
-	cfg, apply := quality5xxTestConfig(account, plan.ModelID, *plan.PelicanConfig)
+	cfg, apply := quality5xxTestConfig(*plan.PelicanConfig)
 	require.Equal(t, "candy", cfg.QuestionKind)
 	require.True(t, apply)
 	require.Equal(t, CandyPrompt, cfg.Prompt)

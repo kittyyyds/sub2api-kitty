@@ -109,14 +109,6 @@ func (s *OpenAIOAuthReauthService) BeginConnectionAuthorization(ctx context.Cont
 		if clientID != openai.ClientID {
 			return nil, errors.New("codex client registration mismatch")
 		}
-	case "bps":
-		if clientID == "" {
-			clientID = openai.ExcelClientID
-		}
-		if clientID != openai.ExcelClientID {
-			return nil, errors.New("BPS client registration mismatch")
-		}
-		redirect = openai.ExcelRedirectURI
 	case "siwc":
 		redirect = openai.SIWCRedirectURI
 	default:
@@ -133,9 +125,6 @@ func (s *OpenAIOAuthReauthService) BeginConnectionAuthorization(ctx context.Cont
 		authURL = openai.BuildSIWCAuthorizationURL(state, challenge, nonce, c.HostID, clientID, "", "")
 	} else {
 		authURL = openai.BuildAuthorizationURLForPlatform(state, challenge, redirect, PlatformOpenAI)
-		if c.Kind == "bps" {
-			authURL = openai.BuildExcelAuthorizationURL(state, challenge)
-		}
 		parsed, _ := url.Parse(authURL)
 		q := parsed.Query()
 		q.Set("nonce", nonce)
@@ -286,8 +275,6 @@ func connectionCapabilities(kind, scope string) []string {
 		}
 	case "codex":
 		return []string{"responses", "chat_completions", "responses_compact"}
-	case "bps":
-		return []string{"responses"}
 	}
 	return []string{}
 }
@@ -297,7 +284,7 @@ func (s *OpenAIOAuthReauthService) ConnectionAccessToken(ctx context.Context, ac
 	if err != nil {
 		return "", err
 	}
-	if c.Legacy || c.Status != "active" || len(c.Capabilities) == 0 {
+	if (c.Kind != "codex" && c.Kind != "siwc" && c.Kind != "api_key") || c.Legacy || c.Status != "active" || len(c.Capabilities) == 0 {
 		return "", connectionRefreshUnavailable()
 	}
 	if c.RefreshState != "idle" && c.RefreshState != "" && c.RefreshCandidateCiphertext == "" {

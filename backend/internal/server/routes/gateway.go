@@ -39,8 +39,6 @@ func RegisterGatewayRoutes(
 	r.GET("/media/video-references/:id", videoReferences.Content)
 	r.HEAD("/media/video-references/:id", videoReferences.Content)
 	h.Gateway.ConfigureAPIKeyGroupRouting(apiKeyService)
-	// BPS fetches these capability URLs without the client's API key. There is
-	// no public upload route; only authenticated BPS requests can create them.
 	podRoute := func(c *gin.Context) {
 		if settingService != nil && settingService.Serverless != nil {
 			if key, ok := middleware.GetAPIKeyFromContext(c); ok {
@@ -50,15 +48,6 @@ func RegisterGatewayRoutes(
 		}
 		c.Next()
 	}
-	imageOwner := func(c *gin.Context) {
-		if settingService != nil && settingService.Serverless != nil {
-			settingService.Serverless.ImageRoute(c)
-			return
-		}
-		c.Next()
-	}
-	r.GET("/api/bps-images/:token", imageOwner, h.OpenAIGateway.ExcelBPSImage)
-	r.HEAD("/api/bps-images/:token", imageOwner, h.OpenAIGateway.ExcelBPSImage)
 	var trafficRecorder middleware.TrafficRecorder
 	if h.Admin != nil && h.Admin.Usage != nil {
 		trafficRecorder = h.Admin.Usage
@@ -66,7 +55,6 @@ func RegisterGatewayRoutes(
 	traffic := middleware.UserTraffic(trafficRecorder)
 	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize)
 	textBodyLimit := middleware.RequestBodyLimit(cfg.Gateway.TextMaxBodySize)
-	imageAdmission := middleware.ExcelBPSImageAdmission()
 	clientRequestID := middleware.ClientRequestID()
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
 	var captureTraffic gin.HandlerFunc
@@ -257,7 +245,6 @@ func RegisterGatewayRoutes(
 	gateway.Use(endpointNorm)
 	gateway.Use(gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard)
 	gateway.Use(captureTraffic)
-	gateway.Use(imageAdmission)
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
 	gateway.Use(groupModelAllowlist)
 	gateway.Use(groupCodexCLIOnly, groupBlockSubagents)
@@ -459,7 +446,7 @@ func RegisterGatewayRoutes(
 	// 根路径别名共用中间件链：白名单准入在 apiKeyAuth 之后、compositeTarget
 	// 之前，避免逐条路由手工维护链导致漏挂。
 	rootRoute := func(method, path string, limit gin.HandlerFunc, handler gin.HandlerFunc) {
-		r.Handle(method, path, traffic, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, imageAdmission, groupModelAllowlist, groupCodexCLIOnly, groupBlockSubagents, groupStreamOnly, podRoute, promptTransform, compositeTarget, requireGroupAnthropic, handler)
+		r.Handle(method, path, traffic, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, groupModelAllowlist, groupCodexCLIOnly, groupBlockSubagents, groupStreamOnly, podRoute, promptTransform, compositeTarget, requireGroupAnthropic, handler)
 	}
 	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
 		rootRoute(http.MethodPost, prefix+"/contents/generations/tasks", bodyLimit, h.OpenAIGateway.SeedanceTasks)
@@ -476,7 +463,7 @@ func RegisterGatewayRoutes(
 	rootRoute(http.MethodGet, "/models/:model", bodyLimit, h.Gateway.Models)
 	rootRoute(http.MethodPost, "/messages/count_tokens", bodyLimit, countTokensHandler)
 	codexDirect := r.Group("/backend-api/codex")
-	codexDirect.Use(traffic, bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, imageAdmission, groupModelAllowlist, groupCodexCLIOnly, groupBlockSubagents, groupStreamOnly, podRoute, promptTransform, compositeTarget, requireGroupAnthropic)
+	codexDirect.Use(traffic, bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), videoPlatformEndpointGuard, captureTraffic, groupModelAllowlist, groupCodexCLIOnly, groupBlockSubagents, groupStreamOnly, podRoute, promptTransform, compositeTarget, requireGroupAnthropic)
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)

@@ -30,7 +30,7 @@ func (r *turnAdmissionRepo) GetOpenAITurnAdmission(context.Context, int64) (*Acc
 func TestOpenAITurnAdmissionLatestState(t *testing.T) {
 	for _, change := range []string{"disabled", "paused", "expired", "removed_group", "deleted", "db_error", "binding", "credentials", "credential_route", "platform", "cooldown", "model_block", "persisted_model_limit", "quality_isolation", "fingerprint", "ws_mode", "proxy_endpoint"} {
 		t.Run(change, func(t *testing.T) {
-			selected := ticketTestAccount(901)
+			selected := openAIOAuthFixture(901)
 			selected.GroupIDs = []int64{9}
 			latest := *selected
 			latest.Extra = maps.Clone(selected.Extra)
@@ -107,7 +107,7 @@ func TestOpenAITurnAdmissionLatestState(t *testing.T) {
 }
 
 func TestOpenAITurnAdmissionLocalCache(t *testing.T) {
-	selected := ticketTestAccount(980)
+	selected := openAIOAuthFixture(980)
 	selected.GroupIDs = []int64{9}
 	latest := *selected
 	latest.Credentials = maps.Clone(selected.Credentials)
@@ -132,7 +132,7 @@ func TestOpenAITurnAdmissionLocalCache(t *testing.T) {
 }
 
 func TestOpenAITurnAdmissionExplicitGroupRejectsRemovedMembership(t *testing.T) {
-	selected := ticketTestAccount(905)
+	selected := openAIOAuthFixture(905)
 	selected.GroupIDs = []int64{9}
 	latest := *selected
 	latest.GroupIDs = []int64{10}
@@ -149,7 +149,7 @@ func TestOpenAITurnAdmissionExplicitGroupRejectsRemovedMembership(t *testing.T) 
 }
 
 func TestOpenAITurnAdmissionSimpleModeDoesNotRequireGroupMembership(t *testing.T) {
-	selected := ticketTestAccount(906)
+	selected := openAIOAuthFixture(906)
 	selected.GroupIDs = []int64{9}
 	latest := *selected
 	latest.GroupIDs = nil
@@ -177,7 +177,7 @@ func (f turnAdmissionDialerFunc) Dial(ctx context.Context, url string, headers h
 }
 
 func TestOpenAITurnAdmissionAfterDialBeforeLease(t *testing.T) {
-	selected := ticketTestAccount(7)
+	selected := openAIOAuthFixture(7)
 	latest := *selected
 	repo := &turnAdmissionRepo{account: &latest}
 	s := &OpenAIGatewayService{accountRepo: repo}
@@ -218,21 +218,21 @@ func TestOpenAITurnAdmissionAfterDialBeforeLease(t *testing.T) {
 
 func TestOpenAITurnAdmissionRequiresPrimaryReader(t *testing.T) {
 	s := &OpenAIGatewayService{requireLatestTurnAdmission: true}
-	_, err := s.admitOpenAITurn(context.Background(), nil, ticketTestAccount(1), "gpt-5.5")
+	_, err := s.admitOpenAITurn(context.Background(), nil, openAIOAuthFixture(1), "gpt-5.5")
 	require.True(t, IsOpenAITurnAdmissionError(err))
-	s.accountRepo = &turnAdmissionRepo{account: ticketTestAccount(1)}
-	_, err = s.admitOpenAITurn(context.Background(), nil, ticketTestAccount(1), "gpt-5.5")
+	s.accountRepo = &turnAdmissionRepo{account: openAIOAuthFixture(1)}
+	_, err = s.admitOpenAITurn(context.Background(), nil, openAIOAuthFixture(1), "gpt-5.5")
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = s.admitOpenAITurn(ctx, nil, ticketTestAccount(1), "gpt-5.5")
+	_, err = s.admitOpenAITurn(ctx, nil, openAIOAuthFixture(1), "gpt-5.5")
 	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestOpenAITurnAdmissionReaderChecksLifecycle(t *testing.T) {
 	for _, name := range []string{"disabled", "paused", "expired", "cooldown"} {
 		t.Run(name, func(t *testing.T) {
-			account := ticketTestAccount(17)
+			account := openAIOAuthFixture(17)
 			switch name {
 			case "disabled":
 				account.Status = StatusDisabled
@@ -366,8 +366,8 @@ func TestOpenAITurnAdmissionFailureCleanupUnwrapsClientCloseError(t *testing.T) 
 }
 
 func TestOpenAITurnAdmissionShadowParent(t *testing.T) {
-	a := ticketTestAccount(1)
-	parent := ticketTestAccount(2)
+	a := openAIOAuthFixture(1)
+	parent := openAIOAuthFixture(2)
 	a.ParentAccountID = &parent.ID
 	parent.Schedulable = false
 	future := time.Now().Add(time.Hour)
@@ -382,57 +382,11 @@ func TestOpenAITurnAdmissionShadowParent(t *testing.T) {
 	require.True(t, IsOpenAITurnAdmissionError(err))
 }
 
-func TestOpenAITurnAdmissionModelAndHandshakeBinding(t *testing.T) {
-	a := ticketTestAccount(1)
-	attachReadyCodexTicket(a, "gpt-5.6-sol")
-	s := ticketTestService(t, config.OpenAICodexTicketConfig{Enabled: true, FailClosed: true}, nil)
-	h := http.Header{}
-	require.NoError(t, s.applyOpenAICodexTicket(context.Background(), a, "gpt-5.6-sol", h))
-	b := s.bindOpenAIWSHandshake(a, "gpt-5.6-sol", h)
-	_, err := s.admitOpenAITurn(context.Background(), nil, a, "gpt-6-astra")
-	require.ErrorIs(t, err, ErrOpenAICodexTicketUnavailable)
-	_, err = s.admitOpenAITurn(context.Background(), nil, a, "gpt-5.6-sol")
-	require.NoError(t, err)
-	require.NoError(t, s.checkOpenAIWSBinding(a, "gpt-5.6-sol", b))
-	primary := *s.lookupOpenAICodexTicket(a, "gpt-5.6-sol")
-	standby := primary
-	standby.State = fakeCodexTicketState(292)[:291] + "A"
-	primary.Standby = &standby
-	s.openaiCodexTickets.Store(openAICodexTicketKey(a.ID, "gpt-5.6-sol"), &primary)
-	require.NoError(t, s.checkOpenAIWSBinding(a, "gpt-5.6-sol", b), "standby refresh must not force reconnection")
-	// A valid inventory does not extend a connection's original handshake.
-	b.ticket.ExpiresAt = time.Now().Add(-time.Second)
-	require.Error(t, s.checkOpenAIWSBinding(a, "gpt-5.6-sol", b))
-	require.True(t, a.Schedulable)
-	require.Nil(t, a.TempUnschedulableUntil)
-}
-
-func TestOpenAITurnAdmissionMissingHandshakeTicketFailsClosed(t *testing.T) {
-	a := ticketTestAccount(2)
-	s := ticketTestService(t, config.OpenAICodexTicketConfig{
-		Enabled:    true,
-		FailClosed: true,
-		Models:     []string{"gpt-6-astra"},
-	}, nil)
-	binding := &openAIWSTurnBinding{
-		model:       "gpt-6-astra",
-		fingerprint: openAITurnRouteFingerprint(a),
-		createdAt:   time.Now(),
-	}
-
-	err := s.checkOpenAIWSBinding(a, "gpt-6-astra", binding)
-
-	var denied *OpenAITurnAdmissionError
-	require.ErrorAs(t, err, &denied)
-	require.Equal(t, "connection_ticket_missing", denied.Reason)
-}
-
 func TestOpenAITurnAdmissionBindingUsesFinalHeaders(t *testing.T) {
-	a := ticketTestAccount(1)
-	attachReadyCodexTicket(a, "gpt-6-astra")
+	a := openAIOAuthFixture(1)
 	a.Extra[codexFingerprintSeedExtraKey] = testCodexFingerprintSeed
 	a.Extra[codexFingerprintModeExtraKey] = string(codexFingerprintFull)
-	s := ticketTestService(t, config.OpenAICodexTicketConfig{Enabled: true, FailClosed: true}, nil)
+	s := &OpenAIGatewayService{}
 	pool := newOpenAIWSConnPool(&config.Config{})
 	defer pool.Close()
 	upstream := newStagedPassthroughConn()
@@ -441,7 +395,7 @@ func TestOpenAITurnAdmissionBindingUsesFinalHeaders(t *testing.T) {
 		Account: a, WSURL: "ws://loopback.invalid/responses", Headers: http.Header{},
 		HeadersFactory: func(ctx context.Context, h http.Header) (http.Header, error) {
 			h.Set("session_id", "factory-session")
-			return h, s.applyOpenAICodexTicket(ctx, a, "gpt-6-astra", h)
+			return h, nil
 		},
 		BindHandshake: func(h http.Header) *openAIWSTurnBinding {
 			return s.bindOpenAIWSHandshake(a, "gpt-6-astra", h)
@@ -450,13 +404,13 @@ func TestOpenAITurnAdmissionBindingUsesFinalHeaders(t *testing.T) {
 	conn, err := pool.dialConn(context.Background(), req)
 	require.NoError(t, err)
 	defer conn.close()
-	require.NotNil(t, conn.turnBinding.ticket)
+	require.NotNil(t, conn.turnBinding)
 	require.Equal(t, "factory-session", conn.handshakeCompatibility.sessionIDUnderscore)
 	require.NoError(t, s.checkOpenAIWSBinding(a, "gpt-6-astra", conn.turnBinding))
 }
 
 func TestQualityIsolationAllowsOnlyInternalRecoveryProbeAdmission(t *testing.T) {
-	selected := ticketTestAccount(901)
+	selected := openAIOAuthFixture(901)
 	latest := *selected
 	latest.Extra = maps.Clone(selected.Extra)
 	if latest.Extra == nil {

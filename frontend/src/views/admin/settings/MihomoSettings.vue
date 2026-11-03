@@ -7,16 +7,6 @@
       </div>
       <button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="refresh">{{ text('检测状态', 'Check status') }}</button>
     </div>
-    <div v-if="warmPools.length" class="grid gap-3 sm:grid-cols-2">
-      <div v-for="pool in warmPools" :key="pool.source" class="rounded-xl border border-gray-200 p-3 text-xs dark:border-dark-600" data-testid="bps-warm-pool">
-        <p class="font-medium">{{ pool.source }} · Warm IP pool</p>
-        <p class="mt-2">{{ text('就绪', 'Ready') }} {{ pool.ready }} / {{ text('目标', 'Target') }} {{ pool.target }} · {{ text('探测中', 'Checking') }} {{ pool.checking }} · {{ text('冷却中', 'Cooling') }} {{ pool.cooling }}</p>
-        <p v-if="pool.source === 'Mihomo' && pool.ready_subscription !== undefined" class="mt-1">{{ text('订阅就绪', 'Ready subscription exits') }} {{ pool.ready_subscription }} · {{ text('动态就绪', 'Ready dynamic exits') }} {{ pool.ready_dynamic || 0 }}</p>
-        <p class="mt-1 text-gray-500">{{ text('目标按已启用账号的并发数汇总；不足时复用就绪出口，用户请求不探测冷节点。', 'Targets follow enabled account concurrency. Ready exits are reused when scarce; requests never probe cold nodes.') }}</p>
-        <p v-for="(count, reason) in pool.failure_reasons" :key="reason">{{ reason }}: {{ count }}</p>
-        <p v-if="pool.target > 0 && pool.ready === 0" class="mt-1 text-amber-700">{{ text('后台正在预热；不会退回直连。', 'Background warming continues; direct fallback is disabled.') }}</p>
-      </div>
-    </div>
     <p v-if="error || status?.error" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20">{{ error || status?.error }}</p>
     <p v-if="success" role="status" class="text-sm text-green-700 dark:text-green-400">{{ success }}</p>
     <p v-if="busy" role="status" class="text-sm text-primary-600">{{ text('正在应用，请等待完成…', 'Applying changes. Please wait…') }}</p>
@@ -36,7 +26,7 @@
           </select>
           <button type="button" class="btn btn-secondary btn-sm" :disabled="busy || !downloadModeDirty" @click="saveDownloadMode">{{ text('保存下载模式', 'Save download mode') }}</button>
         </div>
-        <p class="mt-2 text-xs text-gray-500">{{ text('仅影响订阅文件下载，不改变打票或账号业务出口。自动模式在代理下载失败或内容无效时尝试直连；仅代理模式不会回退直连。', 'Only affects subscription downloads, not ticket or account traffic. Auto retries direct after a failed or invalid proxy response; proxy-only never falls back to direct.') }}</p>
+        <p class="mt-2 text-xs text-gray-500">{{ text('仅影响订阅文件下载，不改变账号业务出口。自动模式在代理下载失败或内容无效时尝试直连；仅代理模式不会回退直连。', 'Only affects subscription downloads, not account traffic. Auto retries direct after a failed or invalid proxy response; proxy-only never falls back to direct.') }}</p>
       </div>
       <div class="flex flex-wrap gap-3">
         <input v-model="search" type="search" class="input sm:max-w-xs" :placeholder="text('搜索订阅名称', 'Search subscription names')" :aria-label="text('搜索订阅', 'Search subscriptions')" />
@@ -129,9 +119,7 @@
         <button v-if="status && !status.installed" type="button" class="btn btn-primary" :disabled="busy || !status.supported" @click="operate('install')">{{ text('检测并安装', 'Install kernel') }}</button>
         <button v-else-if="!status?.running" type="button" class="btn btn-secondary" :disabled="busy || !status?.nodes" @click="operate('start')">{{ text('启动内核', 'Start kernel') }}</button>
       </div>
-      <label v-if="status?.installed" class="flex items-center gap-2 text-sm"><input type="checkbox" :checked="status.use_once" :disabled="busy" @change="operate(status.use_once ? 'once_off' : 'once_on')" />{{ text('打票节点用后移出（需手动恢复）', 'Retire harvest nodes after use (manual recovery)') }}</label>
       <MihomoCountryFilter v-if="status?.installed" :filter="status.country_filter" :codes="status.country_codes || []" :nodes="status.node_states || []" :busy="busy" @save="operate('country_filter', { country_filter: $event })" @scan="operate('country_scan')" />
-      <p class="text-xs text-gray-500">{{ text('这里的配置独立保存。采票出口在本页「采票出口」中选择，账号业务代理在账号设置中选择。', 'Configuration is saved here independently. Select the harvest exit in the Harvest Exit tab and account proxies in account settings.') }}</p>
     </template>
     <p v-if="status && !status.installed && section !== 'kernel'" class="text-sm text-amber-700">{{ text('请先在“内核与规则”中安装内核。', 'Install the kernel in Kernel and rules first.') }}</p>
 
@@ -206,13 +194,12 @@ const { locale, t } = useI18n()
 const appStore = useAppStore()
 const text = (zh: string, en: string) => locale.value.startsWith('zh') ? zh : en
 type SubscriptionDownloadMode = 'auto' | 'proxy' | 'direct'
-interface WarmPoolStatus { ready_subscription?: number; ready_dynamic?: number; target: number; ready: number; checking: number; cooling: number; failure_reasons?: Record<string, number> }
 interface Subscription { id: string; label: string; enabled: boolean; nodes: number; cached: boolean; updated_at?: string }
 // Latest isolated-kernel check of a node, shaped like the static proxy list's latency fields.
 interface NodeCheck { checked_at: number; latency_status?: 'success' | 'failed'; latency_ms?: number; latency_message?: string; ip_address?: string; country?: string; country_code?: string; region?: string; city?: string; quality_status?: string; quality_score?: number; quality_grade?: string; quality_summary?: string; quality_checked?: number }
 interface NodeTestResult { success: boolean; message: string; latency_ms?: number; ip_address?: string; country?: string; country_code?: string; region?: string; city?: string }
 interface ManagedNode extends CountryNode { subscription_ids?: string[]; check?: NodeCheck; static_proxy?: boolean }
-interface Status { subscription_download_mode?: SubscriptionDownloadMode; bps_warm_pool?: WarmPoolStatus; bps_ip_warm_pool?: WarmPoolStatus; installed: boolean; running: boolean; busy: boolean; supported: boolean; phase: string; error?: string; nodes: number; subscriptions: number; subscription_items?: Subscription[]; dynamic_proxies?: number; endpoint: string; use_once?: boolean; node_states?: ManagedNode[]; country_filter?: CountryFilter; country_codes?: string[] }
+interface Status { subscription_download_mode?: SubscriptionDownloadMode; installed: boolean; running: boolean; busy: boolean; supported: boolean; phase: string; error?: string; nodes: number; subscriptions: number; subscription_items?: Subscription[]; dynamic_proxies?: number; endpoint: string; node_states?: ManagedNode[]; country_filter?: CountryFilter; country_codes?: string[] }
 interface Payload { subscriptions?: string[]; dynamic_proxies?: string[]; country_filter?: CountryFilter; name?: string }
 const status = ref<Status>()
 const loading = ref(true)
@@ -254,10 +241,6 @@ const page = ref(1)
 const nodeStates = ['enabled', 'disabled', 'failed', 'used', 'country_excluded']
 const confirmation = ref<{ actions: string[]; message: string; payload?: Payload }>()
 const stateLabel = (state: string) => ({ enabled: text('启用', 'Enabled'), disabled: text('停用', 'Disabled'), failed: text('检测失败', 'Failed'), used: text('已使用', 'Used'), country_excluded: text('地区已排除', 'Region excluded') }[state] || state)
-const warmPools = computed(() => [
-  { source: 'Mihomo', pool: status.value?.bps_warm_pool },
-  { source: text('IP 管理', 'IP Management'), pool: status.value?.bps_ip_warm_pool }
-].flatMap(item => item.pool ? [{ source: item.source, ...item.pool }] : []))
 const subscriptionColumns = computed(() => [
   { key: 'label', label: text('名称', 'Name'), sortable: true }, { key: 'enabled', label: text('状态', 'Status') },
   { key: 'nodes', label: text('节点数', 'Nodes') }, { key: 'updated_at', label: text('最后更新', 'Last refreshed') }, { key: 'actions', label: text('操作', 'Actions') }
@@ -470,7 +453,7 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 function scheduleRefresh() {
   if (timer) clearTimeout(timer)
-  if (!disposed && !pending.value && (status.value?.busy || warmPools.value.some(p => p.target > 0))) timer = setTimeout(refresh, status.value?.busy ? 1500 : 5000)
+  if (!disposed && !pending.value && status.value?.busy) timer = setTimeout(refresh, 1500)
 }
 async function refresh() {
   if (timer) clearTimeout(timer)

@@ -604,19 +604,6 @@ const routes: RouteRecordRaw[] = [
   },
 
   {
-    path: '/admin/tiered-routing',
-    name: 'AdminTieredRouting',
-    component: () => import('@/views/admin/TieredRoutingView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Tiered Routing',
-      titleKey: 'admin.tieredRouting.title',
-      descriptionKey: 'admin.tieredRouting.description'
-    }
-  },
-
-  {
     path: '/admin/channels/monitor',
     name: 'AdminChannelMonitor',
     component: () => import('@/views/admin/ChannelMonitorView.vue'),
@@ -668,10 +655,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/admin/auto-config', name: 'AdminAutoConfig', component: () => import('@/views/admin/AutoConfigView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Auto Configuration', titleKey: 'autoConfig.title' } },
   { path: '/admin/group-cache-tests', name: 'AdminGroupCacheTests', component: () => import('@/views/admin/GroupCacheTestView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Group cache test', titleKey: 'admin.groupCacheTest.title', descriptionKey: 'admin.groupCacheTest.description' } },
   { path: '/admin/channel-operations', name: 'AdminChannelOperations', component: () => import('@/views/admin/UpstreamChannelOperationsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'channelOps.title', descriptionKey: 'channelOps.description' } },
-  { path: '/admin/upstream-channels', name: 'AdminUpstreamChannels', component: () => import('@/views/admin/UpstreamChannelsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'upstreamEntities.title', descriptionKey: 'upstreamEntities.history' } },
   { path: '/admin/profit-operations', name: 'AdminProfitOperations', component: () => import('@/views/admin/ProfitOperationsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'profitOps.title', descriptionKey: 'profitOps.description' } },
   { path: '/admin/smart-ops', redirect: '/admin/account-quality', meta: { requiresAuth: true, requiresAdmin: true } },
-  { path: '/admin/controlled-experiments', name: 'AdminControlledExperiments', component: () => import('@/views/admin/ControlledExperimentsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Controlled experiments', titleKey: 'controlledExperiments.title', descriptionKey: 'controlledExperiments.description' } },
   { path: '/admin/token-guard', name: 'AdminTokenGuard', component: () => import('@/views/admin/ops/TokenGuardView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Credential Guard', titleKey: 'tokenGuard.title', descriptionKey: 'tokenGuard.description' } },
   { path: '/admin/pelican-tests', name: 'AdminPelicanTests', component: () => import('@/views/admin/PelicanTestsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Pelican Showcase', titleKey: 'pelicanTests.title', descriptionKey: 'pelicanTests.description' } },
   { path: '/admin/token-guard-v2', name: 'AdminTokenGuardV2', component: () => import('@/views/admin/ops/TokenGuardV2View.vue'), meta: { requiresAuth: true, requiresAdmin: true, title: 'Credential Operations', titleKey: 'tokenGuardV2.title', descriptionKey: 'tokenGuardV2.description' } },
@@ -692,19 +677,6 @@ const routes: RouteRecordRaw[] = [
       title: 'Account Management',
       titleKey: 'admin.accounts.title',
       descriptionKey: 'admin.accounts.description'
-    }
-  },
-  { path: '/admin/astra-gateway', redirect: '/admin/harvest-flow' },
-  {
-    path: '/admin/harvest-flow',
-    name: 'AdminHarvestFlow',
-    component: () => import('@/views/admin/HarvestFlowView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Ticket Harvest Flow',
-      titleKey: 'admin.harvestFlow.title',
-      descriptionKey: 'admin.harvestFlow.description'
     }
   },
   {

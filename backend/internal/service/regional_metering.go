@@ -275,9 +275,6 @@ func (s *OpenAIGatewayService) beginRegionalMeter(ctx context.Context, c *gin.Co
 	if err != nil {
 		return ctx, nil, err
 	}
-	if account.IsExcelBPSEnabledForModel(model) && s.excelBPSGloballyEnabled(ctx) {
-		return ctx, nil, errors.New("BPS adapter has no certified regional cost bound")
-	}
 	r, p, err := m.Admit(ctx, key, account, body)
 	if err != nil {
 		return ctx, nil, err

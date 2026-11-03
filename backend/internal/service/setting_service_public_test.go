@@ -118,22 +118,18 @@ func TestSettingService_ChannelMonitorHideThroughputDefaultsToPrivate(t *testing
 	}
 }
 
-func TestSettingService_PublicProtocolSwitchesAreAvailableAtBoot(t *testing.T) {
+func TestSettingService_PublicPrismSwitchIsAvailableAtBoot(t *testing.T) {
 	public, err := NewSettingService(&settingPublicRepoStub{values: map[string]string{
-		SettingKeyExcelBPSEnabled:     "false",
 		SettingKeyPrismBrowserEnabled: "true",
 	}}, &config.Config{}).GetPublicSettings(context.Background())
 	require.NoError(t, err)
-	require.False(t, public.ExcelBPSEnabled)
 	require.True(t, public.PrismBrowserEnabled)
 
-	injected, err := NewSettingService(&settingPublicRepoStub{values: map[string]string{
-		SettingKeyExcelBPSEnabled: "false",
-	}}, &config.Config{}).GetPublicSettingsForInjection(context.Background())
+	injected, err := NewSettingService(&settingPublicRepoStub{values: map[string]string{}}, &config.Config{}).GetPublicSettingsForInjection(context.Background())
 	require.NoError(t, err)
 	raw, err := json.Marshal(injected)
 	require.NoError(t, err)
-	require.Equal(t, false, gjson.GetBytes(raw, "excel_bps_enabled").Bool())
+	require.False(t, gjson.GetBytes(raw, "excel_bps_enabled").Exists())
 	require.True(t, gjson.GetBytes(raw, "prism_browser_enabled").Exists())
 }
 

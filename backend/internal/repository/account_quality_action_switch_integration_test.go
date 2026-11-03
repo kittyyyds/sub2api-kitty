@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func legacyQualityActionFixture(t *testing.T, action string) (*qualityBPSFixture, int64, int64) {
+func legacyQualityActionFixture(t *testing.T, action string) (*qualityIntegrationFixture, int64, int64) {
 	t.Helper()
 	f, group, other := newQualityIsolationFixture(t)
 	f.plan.PelicanConfig.Quality.Action = action
@@ -32,7 +32,7 @@ func TestQualityIsolationSwitchRestoresLegacyAccountActionAtomically(t *testing.
 		t.Run(action, func(t *testing.T) {
 			f, group, other := legacyQualityActionFixture(t, action)
 			// Independent restrictions and settings must survive the policy change.
-			f.exec(`UPDATE accounts SET extra='{"openai_excel_bps":true,"model_rate_limits":{"native":{"reason":"native"}}}'::jsonb WHERE id=$1`)
+			f.exec(`UPDATE accounts SET extra='{"unrelated":"preserved","model_rate_limits":{"native":{"reason":"native"}}}'::jsonb WHERE id=$1`)
 			f.exec(`DELETE FROM scheduler_outbox WHERE account_id=$1`)
 			var originalCreated string
 			if action == "remove_groups" {
@@ -66,7 +66,7 @@ func TestQualityIsolationSwitchRestoresLegacyAccountActionAtomically(t *testing.
 			require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT schedulable,concurrency FROM accounts WHERE id=$1`, f.account).Scan(&schedulable, &concurrency))
 			require.True(t, schedulable)
 			require.Equal(t, 20, concurrency)
-			require.Equal(t, true, f.extra()["openai_excel_bps"])
+			require.Equal(t, "preserved", f.extra()["unrelated"])
 			require.Contains(t, f.extra()["model_rate_limits"], "native")
 			require.NotContains(t, f.extra(), service.QualityModelIsolationKey, "saving must not replay historical failures")
 			require.Positive(t, f.count(`SELECT count(*) FROM scheduler_outbox WHERE account_id=$1 AND payload->'group_ids' @> '[`+qualityIsolationID(group)+`]'::jsonb`))

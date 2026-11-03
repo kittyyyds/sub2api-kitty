@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -79,7 +78,6 @@ func registeredNode(t *testing.T, cache *redis.Client, store *memoryStore, handl
 	router.GET("/internal/serverless/probe", node.ProbeHandler)
 	router.POST("/v1/responses", handler)
 	router.GET("/v1/responses", handler)
-	router.GET("/api/bps-images/:token", node.ImageRoute, handler)
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)
 	node.runtime.Endpoint = srv.URL
@@ -94,7 +92,6 @@ func ingressRouter(m *Manager, key int64, ip string) http.Handler {
 	r := gin.New()
 	r.POST("/v1/responses", func(c *gin.Context) { m.Route(c, key, ip) }, func(c *gin.Context) { c.String(200, "primary") })
 	r.GET("/v1/responses", func(c *gin.Context) { m.Route(c, key, ip) }, func(c *gin.Context) { c.String(200, "primary") })
-	r.GET("/api/bps-images/:token", m.ImageRoute, func(c *gin.Context) { c.String(404, "not here") })
 	return r
 }
 func request(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
@@ -204,24 +201,6 @@ func TestServerlessRegistrationRejectsDuplicateBootAndInvalidSignature(t *testin
 	pods, err = node.Pods(context.Background())
 	require.NoError(t, err)
 	require.Empty(t, pods)
-}
-func TestServerlessImageCapabilityReturnsToOwner(t *testing.T) {
-	cache := cacheFor(t)
-	store := &memoryStore{}
-	node, srv := registeredNode(t, cache, store, func(c *gin.Context) { c.String(200, "image") })
-	store.config = routeConfig(srv.URL)
-	m := managerFor(t, "", cache, store)
-	raw := node.ImageOwnerURL("https://public.example/api/bps-images/capability")
-	u, err := url.Parse(raw)
-	require.NoError(t, err)
-	w := httptest.NewRecorder()
-	ingressRouter(m, 1, "203.0.113.1").ServeHTTP(w, testRequest("GET", u.RequestURI(), nil))
-	require.Equal(t, 200, w.Code)
-	require.Equal(t, "image", w.Body.String())
-	u.Path = "/api/bps-images/forged"
-	w = httptest.NewRecorder()
-	ingressRouter(m, 1, "203.0.113.1").ServeHTTP(w, testRequest("GET", u.RequestURI(), nil))
-	require.Equal(t, 404, w.Code)
 }
 func TestServerlessSSEFlushAndCancellationReachPod(t *testing.T) {
 	cache := cacheFor(t)

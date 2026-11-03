@@ -725,22 +725,6 @@ export default {
 
     // Ops Monitoring
 
-  tieredRouting: {
-      title: '分级路由',
-      description: '高级用户优先使用优选池账号，其他用户使用全部账号。请先在账号编辑页标记账号池。',
-      enable: '启用分级路由',
-      premiumUserIds: '高级用户编号',
-      premiumUserIdsPlaceholder: '如 12, 34, 56',
-      premiumUserIdsHint: '逗号或空格分隔的用户编号，这些用户优先使用优选池。',
-      minBalance: '高级用户最低余额（美元）',
-      minBalanceHint: '余额达到该值的用户视为高级用户，0 表示关闭余额规则。',
-      poolHint: '在账号编辑页（代理区域）把账号标记为 优选池；优选池无可用时回退全部账号。',
-      loadFailed: '加载分级路由设置失败',
-      saveFailed: '保存分级路由设置失败',
-      saveSuccess: '分级路由设置已保存',
-      invalidBalance: '最低余额必须是非负数字',
-    },
-
   tickets: {
       title: '工单管理',
       description: '回复用户问题，关闭已解决的工单。',

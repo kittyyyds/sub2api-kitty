@@ -25,7 +25,7 @@ type QualityRulePreset struct {
 }
 
 // Rebuild the editable inputs rather than retaining result snapshots. The
-// typed BPS and judge structs contain business options only, no credentials.
+// typed judge structs contain business options only, no credentials.
 func reusableQualityConfig(source *PelicanTestConfig) (*PelicanTestConfig, error) {
 	if source == nil || source.Quality != nil && source.Quality.Action == QualityActionOpenAITwoFAAdmission {
 		return nil, fmt.Errorf("presets require a configurable quality rule")
@@ -50,15 +50,6 @@ func reusableQualityConfig(source *PelicanTestConfig) (*PelicanTestConfig, error
 		judge := *q.Judge
 		policy.Judge = &judge
 	}
-	if q.BPS != nil {
-		bps := *q.BPS
-		bps.Models = append([]string(nil), q.BPS.Models...)
-		if q.BPS.RecoveryIntervalMinutes != nil {
-			interval := *q.BPS.RecoveryIntervalMinutes
-			bps.RecoveryIntervalMinutes = &interval
-		}
-		policy.BPS = &bps
-	}
 	if action != "remove_groups" && action != QualityActionIsolateModels {
 		policy.RemoveGroupIDs = nil
 	}
@@ -66,15 +57,8 @@ func reusableQualityConfig(source *PelicanTestConfig) (*PelicanTestConfig, error
 		policy.RemoveModels = nil
 		policy.RecoveryConcurrency = 0
 	}
-	if action != QualityActionEnableBPS {
-		policy.BPS = nil
-	}
 	if action == QualityActionObserveOnly {
 		policy.AutoRestore = false
-	}
-	if source.QuestionKind == OpenAICodexStateProbeQuestionKind {
-		policy.Judge = nil
-		policy.ExpectedAnswer = ""
 	}
 	return &PelicanTestConfig{
 		Quality: policy, QuestionKind: source.QuestionKind, TestChannel: source.TestChannel,

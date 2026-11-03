@@ -21,10 +21,7 @@ func (s *SettingService) GetProtocolFeatureEnabled(ctx context.Context, key stri
 	if err != nil {
 		return false, err
 	}
-	value, exists := values[key]
-	if key == SettingKeyExcelBPSEnabled && (!exists || value == "") {
-		return true, nil
-	}
+	value := values[key]
 	return value == "true", nil
 }
 

@@ -187,7 +187,6 @@
           <label class="field-label">{{ t('tokenGuardV2.loginProxy') }}
             <select id="token-guard-v2-proxy" v-model="proxyChoice" :disabled="editorEngine === 'session_studio'" class="input w-full">
               <option value="account">{{ t('tokenGuardV2.accountProxyDefault') }}</option>
-              <option value="mihomo">{{ t('tokenGuardV2.mihomoManagedPool') }}</option>
               <option v-for="proxy in proxies" :key="proxy.id" :value="`proxy:${proxy.id}`">{{ proxyOptionLabel(proxy) }}</option>
             </select>
             <small class="field-hint">{{ t('tokenGuardV2.loginProxyHint') }}</small>
@@ -395,8 +394,9 @@ const engineLabel = (engine?: TokenGuardV2Engine) => engine === 'session_studio'
 const effectiveEngine = (config?: TokenGuardV2Account['login_config']) => config?.credential_mode === 'email_otp_url' ? 'local_worker' : runtimeDraft.engine || config?.engine || 'local_worker'
 const editorEngine = computed(() => draft.credential_mode === 'email_otp_url' ? 'local_worker' : runtimeDraft.engine || editing.value?.login_config?.engine || 'local_worker')
 const proxyChoice = computed({
-  get: () => draft.proxy_source === 'managed_proxy' && draft.proxy_id ? `proxy:${draft.proxy_id}` : draft.proxy_source,
+  get: () => draft.proxy_source === 'managed_proxy' && draft.proxy_id ? `proxy:${draft.proxy_id}` : draft.proxy_source === 'mihomo' ? 'account' : draft.proxy_source,
   set: (value: string) => {
+    if (typeof value !== 'string') return
     if (value.startsWith('proxy:')) {
       draft.proxy_source = 'managed_proxy'
       draft.proxy_id = Number(value.slice(6))
@@ -408,7 +408,6 @@ const proxyChoice = computed({
 })
 const proxyOptionLabel = (proxy: Proxy) => `${proxy.protocol.toUpperCase()} · ${proxy.name} · ${proxy.host}:${proxy.port}`
 const proxyLabel = (source: TokenGuardV2ProxySource = 'account', proxyId?: number) => {
-  if (source === 'mihomo') return t('tokenGuardV2.mihomoManagedPool')
   if (source !== 'managed_proxy' || !proxyId) return t('tokenGuardV2.accountProxyDefault')
   const proxy = proxies.value.find(item => item.id === proxyId)
   return proxy ? proxyOptionLabel(proxy) : `#${proxyId}`

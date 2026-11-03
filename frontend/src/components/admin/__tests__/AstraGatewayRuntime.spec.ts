@@ -20,14 +20,14 @@ describe('Astra gateway runtime', () => {
     const w = mount(AstraGatewayRuntime, { props: { settings, dirty: false } }); await flushPromises()
     expect(w.get('[data-testid="setup-status"]').text()).toContain('#300'); expect(w.get('[data-testid="prepare"]').attributes('disabled')).toBeDefined(); w.unmount()
   })
-  it('verifies targets with the shared state probe and exposes no candy selector', async () => {
-    mocks.test.mockResolvedValue({ action: 'verify', account_id: 300, test_kind: 'state_probe', success: false, reason: 'target_probe_degraded', duration_ms: 2000 })
+  it('verifies target routing and exposes no question selector', async () => {
+    mocks.test.mockResolvedValue({ action: 'verify', account_id: 300, success: false, reason: 'target_probe_failed', duration_ms: 2000 })
     const w = mount(AstraGatewayRuntime, { props: { settings, dirty: false } }); await flushPromises()
     expect(w.find('[data-testid="test-kind"]').exists()).toBe(false)
     expect(w.get('[data-testid="probe-hint"]').text()).toContain('admin.astraGateway.probeHint')
     await w.findAll('button').find(b => b.text() === 'admin.astraGateway.verifyTarget')!.trigger('click'); await flushPromises()
-    expect(mocks.test).toHaveBeenCalledWith('verify', 300, 'state_probe')
-    expect(w.find('[role="status"]').text()).toContain('target_probe_degraded'); w.unmount()
+    expect(mocks.test).toHaveBeenCalledWith('verify', 300)
+    expect(w.find('[role="status"]').text()).toContain('target_probe_failed'); w.unmount()
   })
   it('shows route lifetime, blocks invalid WS and refreshes status', async () => {
     const w = mount(AstraGatewayRuntime, { props: { settings, dirty: false } }); await flushPromises()
@@ -40,7 +40,7 @@ describe('Astra gateway runtime', () => {
   it('prepares a route and shows the result', async () => {
     const w = mount(AstraGatewayRuntime, { props: { settings, dirty: false } }); await flushPromises()
     await w.get('[data-testid="prepare"]').trigger('click'); await flushPromises()
-    expect(mocks.test).toHaveBeenCalledWith('prepare', 0, 'state_probe'); expect(w.find('[role="status"]').exists()).toBe(true)
+    expect(mocks.test).toHaveBeenCalledWith('prepare', 0); expect(w.find('[role="status"]').exists()).toBe(true)
     await w.setProps({ dirty: true }); expect(w.get('[data-testid="prepare"]').attributes('disabled')).toBeDefined(); w.unmount()
   })
 })

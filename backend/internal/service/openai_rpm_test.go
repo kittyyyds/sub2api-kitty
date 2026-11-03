@@ -21,7 +21,7 @@ func TestOpenAIRPMInternalAttemptsConsumeAdmissionOnce(t *testing.T) {
 	account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{"base_rpm": 2}}
 	cache := &openAIRPMTestCache{counts: map[int64]int{}}
 	calls := 0
-	s := &OpenAIGatewayService{rpmCache: cache, httpUpstream: &codexTicketFuncUpstream{do: func(*http.Request) (*http.Response, error) {
+	s := &OpenAIGatewayService{rpmCache: cache, httpUpstream: &openAIFuncUpstream{do: func(*http.Request) (*http.Response, error) {
 		calls++
 		return &http.Response{StatusCode: http.StatusBadRequest, Header: http.Header{}, Body: http.NoBody}, nil
 	}}}

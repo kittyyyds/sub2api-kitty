@@ -13,9 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func (s *httpUpstreamService) useRegionalEgress(proxy string, accountID int64, profile service.HTTPUpstreamProfile) bool {
-	return (s.upstreamRoutes != nil || s.upstreamRoutesErr != nil) && strings.TrimSpace(proxy) == "" && accountID > 0 &&
-		profile != service.HTTPUpstreamProfileOpenAIHarvest && profile != service.HTTPUpstreamProfileExcelBPS
+func (s *httpUpstreamService) useRegionalEgress(proxy string, accountID int64) bool {
+	return (s.upstreamRoutes != nil || s.upstreamRoutesErr != nil) && strings.TrimSpace(proxy) == "" && accountID > 0
 }
 
 // Use one outer Client.Do to retain net/http's redirect credential policy.

@@ -80,7 +80,7 @@ func TestCountryFilterPersistsAndCannotBeBypassedByRecovery(t *testing.T) {
 	m.state.Installed = true
 	m.state.Running = true
 	m.state.Supported = true
-	m.saved = saved{UseOnce: true, Secret: "test", Nodes: []map[string]any{{"name": "node-hk", "type": "http", "server": "127.0.0.1", "port": 1}}, Countries: map[string]CountryObservation{"node-hk": {Code: "HK", CheckedAt: time.Now()}}, Disabled: map[string]string{"node-hk": "used"}}
+	m.saved = saved{Secret: "test", Nodes: []map[string]any{{"name": "node-hk", "type": "http", "server": "127.0.0.1", "port": 1}}, Countries: map[string]CountryObservation{"node-hk": {Code: "HK", CheckedAt: time.Now()}}, Disabled: map[string]string{"node-hk": "used"}}
 	require.NoError(t, os.WriteFile(filepath.Join(m.dir, "mihomo"), []byte("#!/bin/sh\nexit 0\n"), 0700))
 	filter := CountryFilter{Mode: "exclude", Codes: []string{"HK"}}
 	require.NoError(t, m.Submit("country_filter", nil, false, &filter))
@@ -90,7 +90,7 @@ func TestCountryFilterPersistsAndCannotBeBypassedByRecovery(t *testing.T) {
 	require.Equal(t, "country_excluded", m.Status().NodeStates[0].State)
 	require.Zero(t, m.Status().EligibleNodes)
 	require.Equal(t, 1, m.Status().CountryExcluded)
-	_, err := Lease(context.Background(), Endpoint)
+	_, err := AstraNodes()
 	require.Error(t, err)
 	config, err := m.config(m.saved)
 	require.NoError(t, err)

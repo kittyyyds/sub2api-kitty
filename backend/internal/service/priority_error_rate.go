@@ -225,11 +225,7 @@ func (s *OpenAIGatewayService) observePriorityAttempt(req *http.Request, account
 		if resp == nil || resp.Body == nil {
 			return
 		}
-		bps := req.URL != nil && req.URL.Host == "bps.openai.com"
-		if bps {
-			s.guardExcelBPSProgress(req.Context(), resp)
-		}
-		b := newPriorityAttemptBody(resp.Body, stats, key, scope.ctx, resp.StatusCode, bps || strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream"))
+		b := newPriorityAttemptBody(resp.Body, stats, key, scope.ctx, resp.StatusCode, strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream"))
 		b.started = started
 		// Delay the final sample until Forward knows whether downstream writing
 		// failed. Starting a retry flushes the preceding attempt independently.
@@ -243,16 +239,16 @@ func (s *OpenAIGatewayService) observePriorityAttempt(req *http.Request, account
 
 // Used by HTTP adapters whose physical sends bypass the native proxy pipeline.
 func (s *OpenAIGatewayService) doPriorityObservedHTTP(req *http.Request, proxy string, account *Account) (*http.Response, error) {
-	if s.excelOAuthReauth != nil {
-		if err := s.excelOAuthReauth.validateAuthConnectionPolicy(req.Context(), account); err != nil {
+	if s.openAIOAuthReauth != nil {
+		if err := s.openAIOAuthReauth.validateAuthConnectionPolicy(req.Context(), account); err != nil {
 			return nil, err
 		}
 	}
 	if account != nil && account.AuthConnectionID != "" {
-		if s.excelOAuthReauth == nil {
+		if s.openAIOAuthReauth == nil {
 			return nil, errors.New("authorization connection service unavailable")
 		}
-		if err := s.excelOAuthReauth.ValidateAuthConnectionSend(req.Context(), account); err != nil {
+		if err := s.openAIOAuthReauth.ValidateAuthConnectionSend(req.Context(), account); err != nil {
 			return nil, err
 		}
 	}
@@ -263,11 +259,6 @@ func (s *OpenAIGatewayService) doPriorityObservedHTTP(req *http.Request, proxy s
 	observe := s.observePriorityAttempt(req, account)
 	if err := s.fenceAuthConnectionEgress(req.Context(), req, account); err != nil {
 		return nil, err
-	}
-	if route := excelBPSPluginFromContext(req.Context()); route != nil && req.URL != nil && req.URL.Scheme == "https" && req.URL.Host == "bps.openai.com" && req.URL.Path == "/basispoints/api/responses" {
-		resp, err := route.roundTrip(req, proxy, account)
-		observe(resp, err)
-		return resp, err
 	}
 	resp, err := s.httpUpstream.Do(req, proxy, account.ID, account.Concurrency)
 	observe(resp, err)

@@ -543,10 +543,6 @@ const GlobeIcon = {
     )
 }
 
-const FlowIcon = {
-  render: () => h(Icon, { name: 'swap', size: 'sm' })
-}
-
 const ServerIcon = {
   render: () =>
     h(
@@ -979,14 +975,12 @@ const adminNavItems = computed((): NavItem[] => {
       { path: '/admin/channel-operations', label: t('channelOps.title'), icon: ChannelIcon },
       { path: '/admin/profit-operations', label: t('profitOps.title'), icon: PriceTagIcon },
       { path: '/admin/account-quality', label: t('qualityOps.title'), icon: QualityOpsIcon },
-      { path: '/admin/controlled-experiments', label: t('controlledExperiments.title'), icon: QualityOpsIcon },
       { path: '/admin/account-ops', label: t('accountOps.title'), icon: AccountOpsIcon },
       { path: '/admin/token-guard', label: t('tokenGuard.title'), icon: TokenGuardIcon },
       { path: '/admin/token-guard-v2', label: t('tokenGuardV2.title'), icon: CredentialOpsIcon },
       { path: '/admin/pelican-tests', label: t('pelicanTests.title'), icon: PelicanTestsIcon },
       { path: '/admin/group-cache-tests', label: t('admin.groupCacheTest.title'), icon: QualityOpsIcon },
       { path: '/admin/request-captures', label: t('admin.requestCapture.title'), icon: RequestCaptureIcon, featureFlag: () => adminSettingsStore.requestCaptureEnabled },
-      { path: '/admin/harvest-flow', label: t('nav.harvestFlow'), icon: FlowIcon },
     ] },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
@@ -1036,7 +1030,6 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/video-tasks', label: '视频任务', icon: OrderIcon },
     { path: '/admin/video-upstream', label: '上游与自动跟价', icon: PriceTagIcon },
-    { path: '/admin/tiered-routing', label: t('nav.tieredRouting'), icon: SignalIcon },
     { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
   ]
 

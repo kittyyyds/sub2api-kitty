@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newQualityIsolationFixture(t *testing.T) (*qualityBPSFixture, int64, int64) {
+func newQualityIsolationFixture(t *testing.T) (*qualityIntegrationFixture, int64, int64) {
 	t.Helper()
 	ctx := context.Background()
-	f := &qualityBPSFixture{t: t, plans: NewScheduledTestPlanRepository(integrationDB)}
+	f := &qualityIntegrationFixture{t: t, plans: NewScheduledTestPlanRepository(integrationDB)}
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO accounts(name,platform,type,status,schedulable,concurrency) VALUES('isolation-test','openai','oauth','active',true,20) RETURNING id`).Scan(&f.account))
 	var group, other int64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `INSERT INTO groups(name,platform) VALUES('isolation-target','openai') RETURNING id`).Scan(&group))
@@ -36,7 +36,7 @@ func newQualityIsolationFixture(t *testing.T) (*qualityBPSFixture, int64, int64)
 	return f, group, other
 }
 
-func isolationRound(f *qualityBPSFixture, sol, astra string) string {
+func isolationRound(f *qualityIntegrationFixture, sol, astra string) string {
 	f.t.Helper()
 	f.plan.QualityModelOutcomes = map[string]string{"sol": sol, "astra": astra}
 	return f.apply("failed") // The aggregate failure must never override per-model evidence.

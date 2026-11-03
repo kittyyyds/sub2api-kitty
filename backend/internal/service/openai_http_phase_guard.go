@@ -144,7 +144,7 @@ type openAIHTTPPhaseGuard struct {
 // around the actual egress path. It also covers physical TLS/proxy retries.
 func (s *OpenAIGatewayService) guardOpenAIHTTPRequest(req *http.Request, account *Account) (*http.Request, *openAIHTTPPhaseGuard) {
 	budget, _ := req.Context().Value(openAIHTTPBudgetKey{}).(*openAIHTTPBudget)
-	if budget == nil || account == nil || account.Platform != PlatformOpenAI || isControlledExperiment(req.Context()) {
+	if budget == nil || account == nil || account.Platform != PlatformOpenAI {
 		return req, nil
 	}
 	uploadLimit := s.openAIUploadTimeout(account)

@@ -34,10 +34,10 @@ describe('independent OpenAI connection management through actual API client', (
     expect(adapter).toHaveBeenCalledTimes(1)
     w.unmount()
   })
-  it('offers only Codex BPS SIWC and sends no API key in OAuth creation', async () => {
+  it('offers only Codex and SIWC and sends no API key in OAuth creation', async () => {
     const w = mount(OpenAIAuthConnections, { props: { accountId: 42, accountType: 'oauth', active: true } })
     await flushPromises()
-    expect(w.findAll('option').map(o => o.attributes('value'))).toEqual(['codex', 'bps', 'siwc'])
+    expect(w.findAll('option').map(o => o.attributes('value'))).toEqual(['codex', 'siwc'])
     expect(w.find('input[type="password"]').exists()).toBe(false)
     w.unmount()
   })

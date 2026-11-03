@@ -1,10 +1,10 @@
 export default {
   astraGateway: {
-    probeHint: 'Reuses the two-shot ticket probe. Both short requests must complete without issuing a different continuation ticket. A new ticket, failed request, or changed route is not usable. Results describe this probe only.',
+    probeHint: 'Check source and target route availability. Results describe this check only; unavailable routes leave business requests on the account configuration.',
     borrowTitle: 'Astra fast reuse',
-    borrowDescription: 'Reuse a stored source ticket first and fall back to self-harvesting when none is available. Store the complete bundle after target verification.',
-    borrowSummary: '{sources} source accounts · {targets} target accounts · shared with background harvest',
-    expand: 'Configuration and status', collapse: 'Collapse', configuration: 'Reuse and harvest configuration',
+    borrowDescription: 'Reuse verified source routes; use the target account configuration when no route is available.',
+    borrowSummary: '{sources} source accounts · {targets} target accounts',
+    expand: 'Configuration and status', collapse: 'Collapse', configuration: 'Route reuse configuration',
     schedulingLog: 'Last 3 scheduling changes',
     schedulingLogHint: 'Actual changes only; refreshes every 5 seconds. Cleared on instance restart.',
     schedulingLogEmpty: 'No scheduling changes yet',
@@ -17,7 +17,6 @@ export default {
     groupsRemoved: 'Left groups',
     chooseSchedulingGroups: 'Select at least one group',
     accountScheduling: 'Account pool scheduling',
-    ticketPoolSchedulingHint: 'Applies to accounts in the automatic harvest scope. Normal harvesting and quick reuse share the same ticket store. Valid tickets join selected groups or restore state; missing or expired tickets remove membership or disable state. Model mode checks Astra tickets only. Other groups and manual changes are preserved. Syncs every second without extra probes. Turning this off leaves current state unchanged.',
     accountSchedulingHint: 'Route probes are observational only. Failure, cooldown, unverified or expired routes do not gate production requests or change account, model or group scheduling. Without an available borrowed route, requests use the account’s original configuration.',
     nodeCooldown: "Failed node / host cooldown",
     nodeCooldownHint: "The 3600-second default is a retry policy, not a measured upstream cache lifetime. Skip failed nodes and nodes known to share that host for the same target. Settings saves preserve cooldowns; process restarts clear them. Stop testing when all nodes are cooling; never fall back to direct access.",

@@ -11,7 +11,7 @@ vi.mock('vue-i18n', () => ({ useI18n: () => ({
   t: (key: string, params?: Record<string, unknown>) => [key, ...Object.values(params ?? {})].join(' '),
 }) }))
 vi.mock('@/api/admin/priorityScheduling', () => ({ getPriorityConfig: vi.fn(), getPrioritySnapshot: vi.fn(), savePriorityConfig: vi.fn(), getPriorityLatency: vi.fn(), recomputePriorityScheduling: vi.fn(), getPriorityStickyBindings: vi.fn(), clearPriorityStickyBindings: vi.fn() }))
-const config: PrioritySchedulingConfig = { error_rate_weight: 25, error_rate_window_minutes: 10, error_rate_prior_samples: 5, latency_percentile: 90, latency_measurement: 'legacy_forward', recovery_exploration_percent: 0, oauth_quota_priority: false, oauth_quota_threshold: 90, balance_protocols: true, enabled: false, mode: 'balanced', group_ids: [], models: [], window_minutes: 60, min_samples: 5, target_ttft_ms: 3000, latency_penalty_mode: 'deprioritize', latency_penalty_minutes: 10, max_load_percent: 80, min_quality_percent: 90, quality_max_age_hours: 24, quality_weight: 30, latency_weight: 25, load_weight: 25, cost_weight: 20 }
+const config: PrioritySchedulingConfig = { error_rate_weight: 25, error_rate_window_minutes: 10, error_rate_prior_samples: 5, latency_percentile: 90, latency_measurement: 'legacy_forward', recovery_exploration_percent: 0, oauth_quota_priority: false, oauth_quota_threshold: 90, enabled: false, mode: 'balanced', group_ids: [], models: [], window_minutes: 60, min_samples: 5, target_ttft_ms: 3000, latency_penalty_mode: 'deprioritize', latency_penalty_minutes: 10, max_load_percent: 80, min_quality_percent: 90, quality_max_age_hours: 24, quality_weight: 30, latency_weight: 25, load_weight: 25, cost_weight: 20 }
 beforeEach(() => {
   vi.resetAllMocks()
   state.auth = reactive({ user: { id: 1, role: 'admin' } })
@@ -128,13 +128,6 @@ describe('priority scheduling', () => {
     wrapper.unmount()
   })
 
-  it('can retain strict BPS preference explicitly', async () => {
-    const wrapper = mount(PrioritySchedulingView); await flushPromises()
-    await wrapper.get('[data-testid="balance-protocols"]').setValue(false)
-    await wrapper.get('form').trigger('submit'); await flushPromises()
-    expect(savePriorityConfig).toHaveBeenCalledWith({ ...config, balance_protocols: false })
-    wrapper.unmount()
-  })
   it('shows capacity weights, group bindings and exploration without treating scores as selections', async () => {
     const candidate: PriorityCandidate = { account_id: 1, account_name: 'Mock OAuth', oauth_quota_role: 'standby', score: 75, tier: 'insufficient', reasons: [], priority: 1, concurrency: 20, load_factor: 10000, load_percent: 0, waiting: 0, rate: 0.1, revenue: 0, theoretical_cost: 0, profit: null, margin: null, economics_source: 'unknown', profit_samples: 0, samples: 0, p90_ttft_ms: 0, quality_passed: 0, quality_samples: 0, bound_groups: 2, selection_weight: 12.345, exploration_eligible: true }
     vi.mocked(getPrioritySnapshot).mockResolvedValue({ at: '2026-09-29T12:00:00Z', model: 'gpt-test', group_id: 11, mode: 'profit', selection_policy: 'capacity_first', history_ready: true, candidates: [candidate] })

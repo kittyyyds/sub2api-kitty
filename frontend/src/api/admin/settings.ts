@@ -404,7 +404,6 @@ export function deriveWeChatConnectStoredMode(
  * System settings interface
  */
 export interface SystemSettings {
-	excel_bps_enabled: boolean;
 	prism_browser_enabled: boolean;
 	prism_browser_base_url: string;
 	prism_browser_api_key_configured: boolean;
@@ -657,16 +656,6 @@ export interface SystemSettings {
   openai_codex_version_auto_sync_enabled: boolean;
   openai_request_timezone_enabled: boolean;
   openai_request_timezone_auto: boolean;
-  openai_codex_ticket_enabled: boolean;
-  openai_codex_ticket_fail_closed: boolean;
-  openai_codex_ticket_strategy?: 'fixed' | 'standby';
-  openai_codex_ticket_harvest_scope?: { mode: 'all' | 'selected' | 'selected_accounts'; group_ids: number[]; account_policy: 'schedulable_only' | 'prioritize_schedulable' };
-  openai_codex_ticket_strict_response?: boolean;
-  openai_codex_ticket_candy_observation?: boolean;
-  openai_codex_ticket_harvest_proxy_url: string;
-  openai_codex_ticket_static_proxy_url?: string;
-  openai_codex_ticket_harvest_proxy_configured: boolean;
-  openai_codex_ticket_models: string[];
   claude_code_client_version: string;
   claude_code_client_version_synced: string;
   claude_code_version_auto_sync_enabled: boolean;
@@ -796,26 +785,9 @@ export interface SystemSettings {
   request_capture_enabled: boolean;
   request_capture_quota_mib: number;
   request_capture_retention_days: number;
-  excel_bps_image_mode: 'relay' | 'native'
-  excel_bps_image_relay_enabled: boolean;
-  excel_bps_image_base_url: string;
-  excel_bps_image_body_limit_mib: number;
-  excel_bps_image_budget_mib: number;
-  excel_bps_image_max_requests: number;
-  excel_bps_image_max_image_mib: number;
-  excel_bps_image_max_images: number;
-  excel_bps_image_limit_policy: "off" | "auto_compact" | "warn";
-  excel_bps_image_warning_remaining: number;
-  excel_bps_image_compact_reserve: number;
-
-  excel_bps_image_max_total_mib: number;
-  excel_bps_image_storage_mib: number;
-  excel_bps_image_storage_entries: number;
-  excel_bps_image_ttl_minutes: number;
 }
 
 export interface UpdateSettingsRequest {
-	excel_bps_enabled?: boolean;
 	prism_browser_enabled?: boolean;
 	prism_browser_base_url?: string;
 	prism_browser_api_key?: string;
@@ -1036,15 +1008,6 @@ export interface UpdateSettingsRequest {
   openai_codex_version_auto_sync_enabled?: boolean;
   openai_request_timezone_enabled?: boolean;
   openai_request_timezone_auto?: boolean;
-  openai_codex_ticket_enabled?: boolean;
-  openai_codex_ticket_fail_closed?: boolean;
-  openai_codex_ticket_strategy?: 'fixed' | 'standby';
-  openai_codex_ticket_harvest_scope?: { mode: 'all' | 'selected' | 'selected_accounts'; group_ids: number[]; account_policy: 'schedulable_only' | 'prioritize_schedulable' };
-  openai_codex_ticket_harvest_proxy_url?: string;
-  openai_codex_ticket_use_saved_static_proxy?: boolean;
-  openai_codex_ticket_strict_response?: boolean;
-  openai_codex_ticket_candy_observation?: boolean;
-  openai_codex_ticket_models?: string[];
   claude_code_client_version?: string;
   claude_code_version_auto_sync_enabled?: boolean;
   // codex_cli_only 加固
@@ -1156,22 +1119,6 @@ export interface UpdateSettingsRequest {
   request_capture_enabled?: boolean;
   request_capture_quota_mib?: number;
   request_capture_retention_days?: number;
-  excel_bps_image_mode?: 'relay' | 'native'
-  excel_bps_image_relay_enabled?: boolean;
-  excel_bps_image_base_url?: string;
-  excel_bps_image_body_limit_mib?: number;
-  excel_bps_image_budget_mib?: number;
-  excel_bps_image_max_requests?: number;
-  excel_bps_image_max_image_mib?: number;
-  excel_bps_image_max_images?: number;
-  excel_bps_image_limit_policy?: "off" | "auto_compact" | "warn";
-  excel_bps_image_warning_remaining?: number;
-  excel_bps_image_compact_reserve?: number;
-
-  excel_bps_image_max_total_mib?: number;
-  excel_bps_image_storage_mib?: number;
-  excel_bps_image_storage_entries?: number;
-  excel_bps_image_ttl_minutes?: number;
 }
 
 /**

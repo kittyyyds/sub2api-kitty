@@ -126,12 +126,6 @@ func (s *OpenAIGatewayService) handleOpenAIUpstreamTransportError(ctx context.Co
 	if IsOpenAITurnAdmissionError(err) || IsOpenAIRPMError(err) {
 		return err
 	}
-	if errors.Is(err, ErrCodexTicketResponseRejected) {
-		if c != nil && !c.Writer.Written() {
-			c.AbortWithStatusJSON(http.StatusBadGateway, gin.H{"error": gin.H{"type": "ticket_response_rejected", "message": err.Error()}})
-		}
-		return err // terminal: never convert an already-sent request into failover
-	}
 	if isClientCanceledTransportError(ctx, err) {
 		return err
 	}

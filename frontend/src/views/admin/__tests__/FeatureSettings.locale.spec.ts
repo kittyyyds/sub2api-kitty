@@ -4,7 +4,6 @@ import { createI18n } from 'vue-i18n'
 import type { Component } from 'vue'
 import zh from '@/i18n/locales/zh'
 import en from '@/i18n/locales/en'
-import TieredRoutingView from '../TieredRoutingView.vue'
 import BillingView from '@/views/user/BillingView.vue'
 import RiskControlView from '../RiskControlView.vue'
 
@@ -14,7 +13,6 @@ const { showError } = vi.hoisted(() => ({
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError, showSuccess: vi.fn() }) }))
 vi.mock('@/components/layout/AppLayout.vue', () => ({ default: { template: '<main><slot /></main>' } }))
 vi.mock('@/api/admin', () => ({ adminAPI: {
-  tieredRouting: { getSettings: vi.fn().mockResolvedValue({}) },
   tickets: { list: vi.fn().mockResolvedValue({ items: [] }), stats: vi.fn().mockResolvedValue({ open: 3 }) },
   riskControl: { getConfig: vi.fn().mockResolvedValue({ mode: 'off', enabled: false }), getStatus: vi.fn().mockResolvedValue({ mode: 'off' }), listLogs: vi.fn().mockResolvedValue({ items: [], total: 0 }) },
   groups: { getAll: vi.fn().mockResolvedValue([]) },
@@ -46,7 +44,6 @@ describe('new feature settings in Chinese', () => {
 
 
   it.each([
-    { view: TieredRoutingView, title: '分级路由', fields: ['启用分级路由', '高级用户编号', '高级用户最低余额（美元）', '优选池'] },
     { view: BillingView, title: '账单', fields: ['请求数', '总费用', '开始日期', '结束日期', '导出 CSV'] },
   ])('renders $title with Chinese labels', async ({ view, title, fields }) => {
     const { wrapper, missing } = render(view)

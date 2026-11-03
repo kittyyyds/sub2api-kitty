@@ -145,7 +145,7 @@ func (d *coderOpenAIWSClientDialer) Dial(
 		return nil, 0, nil, errors.New("ws url is empty")
 	}
 	region := ""
-	regionalEligible := strings.TrimSpace(proxyURL) == "" && HTTPUpstreamProfileFromContext(ctx) != HTTPUpstreamProfileOpenAIHarvest
+	regionalEligible := strings.TrimSpace(proxyURL) == ""
 	if regionalEligible {
 		if d.upstreamRoutesErr != nil {
 			return nil, 0, nil, d.upstreamRoutesErr

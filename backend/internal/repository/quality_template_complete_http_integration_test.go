@@ -233,7 +233,7 @@ func TestQualityTemplateCompleteLegacyReadAndRevalidation(t *testing.T) {
 }
 
 func TestQualityTemplateCompleteDetectionModesAndProviders(t *testing.T) {
-	for _, kind := range []string{"candy-llm", "random-jev", "probe", "bps-observation"} {
+	for _, kind := range []string{"candy-llm", "random-jev"} {
 		t.Run(kind, func(t *testing.T) {
 			f, group, _ := repository.NewQualityLiveFixture(t)
 			r := completeTemplateRouter(t, false)
@@ -247,15 +247,6 @@ func TestQualityTemplateCompleteDetectionModesAndProviders(t *testing.T) {
 				cfg["question_kind"] = "random_reasoning"
 				cfg["prompt"] = ""
 				q["expected_answer"] = ""
-			case "probe":
-				cfg["question_kind"] = "state_probe"
-				cfg["parallel_count"] = 1
-				cfg["model_ids"] = []string{"test-model"}
-				cfg["prompt"] = ""
-				delete(q, "judge")
-				q["expected_answer"] = ""
-			case "bps-observation":
-				cfg["test_channel"] = "bps"
 			}
 			before := completeUnchangedBusiness(t)
 			w := qualityLiveRequest(r, "POST", "/presets", body)

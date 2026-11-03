@@ -57,8 +57,8 @@ func TestQualityRuleTemplateFollowsGroupAccounts(t *testing.T) {
 		ModelID:        "gpt-test",
 		CronExpression: "*/30 * * * *",
 		Enabled:        true,
-		PelicanConfig: &service.PelicanTestConfig{QuestionKind: service.OpenAICodexStateProbeQuestionKind, ReasoningEffort: "medium", ParallelCount: 1,
-			Quality: &service.QualityPolicy{Action: "disable_scheduling", AutoRestore: true}},
+		PelicanConfig: &service.PelicanTestConfig{QuestionKind: "candy", Prompt: service.CandyPrompt, ReasoningEffort: "medium", ParallelCount: 1,
+			Quality: &service.QualityPolicy{ExpectedAnswer: "21", Judge: &service.QualityJudgeConfig{GroupID: 1, ModelID: "judge", Prompt: "grade"}, Action: "disable_scheduling", AutoRestore: true}},
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, created)

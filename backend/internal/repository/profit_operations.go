@@ -66,39 +66,12 @@ func profitOperationsAccounts(ctx context.Context, tx *sql.Tx, f service.Upstrea
 	if err = rows.Close(); err != nil {
 		return nil, err
 	}
-	bindings, err := tx.QueryContext(ctx, `SELECT b.account_id,c.id,c.name,c.code,c.remark,c.revision FROM upstream_channel_bindings b JOIN upstream_channels c ON c.id=b.channel_id WHERE b.account_id IN (SELECT id FROM jsonb_to_recordset($1::jsonb) a(id bigint))`, string(raw))
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = bindings.Close() }()
-	channels := map[int64]service.UpstreamChannel{}
-	for bindings.Next() {
-		var id int64
-		var c service.UpstreamChannel
-		if err = bindings.Scan(&id, &c.ID, &c.Name, &c.Code, &c.Remark, &c.Revision); err != nil {
-			return nil, err
-		}
-		channels[id] = c
-	}
-	if err = bindings.Err(); err != nil {
-		return nil, err
-	}
 	for i := range accounts {
 		a := &accounts[i]
 		a.URLKey = a.Key
 		a.Assignment = "unbound_url"
 		if strings.HasPrefix(a.Key, "unknown:") {
 			a.Assignment = "unbound_unknown"
-		}
-		if c, ok := channels[a.ID]; ok {
-			a.Key = fmt.Sprintf("channel:%d", c.ID)
-			a.ChannelID = c.ID
-			a.ChannelName = c.Name
-			a.ChannelCode = c.Code
-			a.ChannelRemark = c.Remark
-			a.ChannelRevision = c.Revision
-			a.Assignment = "explicit"
-			a.Attribution = "current_explicit_channel"
 		}
 	}
 	return json.Marshal(accounts)

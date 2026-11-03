@@ -514,30 +514,6 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.OpenAIRequestTimezoneAuto != after.OpenAIRequestTimezoneAuto {
 		changed = append(changed, "openai_request_timezone_auto")
 	}
-	if before.OpenAICodexTicketEnabled != after.OpenAICodexTicketEnabled {
-		changed = append(changed, "openai_codex_ticket_enabled")
-	}
-	if before.OpenAICodexTicketHarvestProxyURL != after.OpenAICodexTicketHarvestProxyURL {
-		changed = append(changed, "openai_codex_ticket_harvest_proxy_url")
-	}
-	if !reflect.DeepEqual(before.OpenAICodexTicketHarvestScope, after.OpenAICodexTicketHarvestScope) {
-		changed = append(changed, "openai_codex_ticket_harvest_scope")
-	}
-	if before.OpenAICodexTicketStrategy != after.OpenAICodexTicketStrategy {
-		changed = append(changed, "openai_codex_ticket_strategy")
-	}
-	if before.OpenAICodexTicketStrictResponse != after.OpenAICodexTicketStrictResponse {
-		changed = append(changed, "openai_codex_ticket_strict_response")
-	}
-	if before.OpenAICodexTicketCandyObservation != after.OpenAICodexTicketCandyObservation {
-		changed = append(changed, "openai_codex_ticket_candy_observation")
-	}
-	if before.OpenAICodexTicketFailClosed != after.OpenAICodexTicketFailClosed {
-		changed = append(changed, "openai_codex_ticket_fail_closed")
-	}
-	if !reflect.DeepEqual(before.OpenAICodexTicketModels, after.OpenAICodexTicketModels) {
-		changed = append(changed, "openai_codex_ticket_models")
-	}
 	if before.OpenAICodexUserAgent != after.OpenAICodexUserAgent {
 		changed = append(changed, "openai_codex_user_agent")
 	}

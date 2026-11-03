@@ -6,10 +6,10 @@ this temporary worker copy; no runtime globals or original dependency change.
 import shutil
 from pathlib import Path
 
-try:
-    from .openai_excel_oauth_adapter import replace_exact
-except ImportError:
-    from openai_excel_oauth_adapter import replace_exact
+def replace_exact(source, old, new, count=1):
+    if source.count(old) != count:
+        raise ValueError("unsupported_toSub2_runtime_layout")
+    return source.replace(old, new)
 
 
 def siwc_source(source):

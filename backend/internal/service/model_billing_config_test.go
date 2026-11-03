@@ -170,7 +170,6 @@ func TestModelBillingOpenAIRecordUsageBalanceAndSubscription(t *testing.T) {
 			userRepo := &openAIRecordUsageUserRepoStub{}
 			subRepo := &modelBillingSubscriptionRepo{}
 			svc := newOpenAIRecordUsageServiceForTest(logRepo, userRepo, subRepo, nil)
-			svc.StopOpenAICodexTicketHarvester() // Billing fixtures must not run background ticket work.
 			cfg := scopedBillingFixture("gpt-6-luna*", 10, 2)
 			cfg.Enabled = true
 			svc.settingService = modelBillingSettings(t, cfg)
@@ -218,7 +217,6 @@ func TestModelBillingGenericTokenAndSearchCharges(t *testing.T) {
 
 func TestModelBillingUsesPricedFallbackAndPreservesSearchSurcharge(t *testing.T) {
 	svc := newOpenAIRecordUsageServiceForTest(nil, nil, nil, nil)
-	svc.StopOpenAICodexTicketHarvester() // Billing fixtures must not run background ticket work.
 	cfg := scopedBillingFixture("gpt-6-luna*", 10, 2)
 	cfg.Enabled = true
 	svc.settingService = modelBillingSettings(t, cfg)
@@ -242,7 +240,6 @@ func TestModelBillingFreeFastChargesOnceAndBillsAtomicCommand(t *testing.T) {
 		logs := &openAIRecordUsageLogRepoStub{inserted: true}
 		billing := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: false}}
 		svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(logs, billing, nil, nil, nil)
-		svc.StopOpenAICodexTicketHarvester() // Billing fixtures must not run background ticket work.
 		cfg := scopedBillingFixture("gpt-6-luna*", 10, 77)
 		cfg.Enabled = true
 		svc.settingService = modelBillingSettings(t, cfg)

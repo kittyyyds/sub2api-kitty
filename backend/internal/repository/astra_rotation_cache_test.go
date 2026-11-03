@@ -27,13 +27,13 @@ func TestAstraRotationCacheSurvivesSaveAndSuppressesNetwork(t *testing.T) {
 	s, calls, leases := rotationFixture(t, 3, "never")
 	_, err := s.Do(rotationTarget(t), "target", 300, 1)
 	require.ErrorContains(t, err, "astra_rotation_exhausted")
-	require.Len(t, *calls, 9)
+	require.Len(t, *calls, 6)
 	require.Zero(t, *leases)
 	// Target failure cache is intentionally not persisted; a new revision retries the route.
 	s.cfg.Gateway.CodexGatewayPin.TTLSeconds = 200
 	_, err = s.Do(rotationTarget(t), "target", 300, 1)
 	require.ErrorContains(t, err, "astra_rotation_exhausted")
-	require.Len(t, *calls, 18)
+	require.Len(t, *calls, 12)
 	require.Zero(t, *leases)
 }
 func TestAstraRotationCacheFiltersWithoutSpendingAttemptBudget(t *testing.T) {
@@ -42,7 +42,7 @@ func TestAstraRotationCacheFiltersWithoutSpendingAttemptBudget(t *testing.T) {
 	s.rotationCache.reject(300, "bad", "", now.Add(time.Hour), now)
 	resp, err := s.Do(rotationTarget(t), "target", 300, 1)
 	consumeAffinityResponse(t, resp, err)
-	require.Equal(t, []string{"good:299", "good:300", "good:300", "good:300"}, *calls)
+	require.Equal(t, []string{"good:299", "good:300", "good:300"}, *calls)
 	require.Zero(t, *leases)
 }
 func TestAstraRotationCacheRejectsMappedHostBeforeTargetProbe(t *testing.T) {

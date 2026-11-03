@@ -10,21 +10,19 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/google/uuid"
 )
 
 const SettingKeyOAuthAutoConfig = "smart_ops_oauth_auto_config"
 const AutoConfigConcurrencyExtraKey = "auto_config_concurrency"
 
-// Initial account fields, BPS defaults, model billing and concurrency upgrades are independent.
+// Initial account fields, model billing and concurrency upgrades are independent.
 type OAuthAutoConfig struct {
 	OpenAITwoFAAdmission OpenAITwoFAAdmissionConfig `json:"openai_two_fa_admission"`
 	IQBootstrap          IQBootstrap                `json:"iq_bootstrap"`
 	QualityRule          *OAuthInitialQualityRule   `json:"quality_rule,omitempty"`
 	ModelMappings        []OAuthModelMappingRule    `json:"model_mappings"`
 	ModelBilling         ModelBillingConfig         `json:"model_billing"`
-	ExcelBPS             ExcelBPSDefaults           `json:"excel_bps"`
 	UpdatedAt            time.Time                  `json:"updated_at"`
 	Enabled              bool                       `json:"enabled"`
 	Platform             string                     `json:"platform"`
@@ -43,7 +41,7 @@ type OAuthAutoConfig struct {
 }
 
 func DefaultOAuthAutoConfig() OAuthAutoConfig {
-	return OAuthAutoConfig{OpenAITwoFAAdmission: DefaultOpenAITwoFAAdmissionConfig(), IQBootstrap: DefaultIQBootstrap(), ModelMappings: defaultOAuthModelMappings(PlatformOpenAI), ModelBilling: DefaultModelBillingConfig(), ExcelBPS: DefaultExcelBPSDefaults(), Platform: PlatformOpenAI, Priority: 50, LoadFactor: 1, Concurrency: 3, CostMultiplier: 0.07, GroupIDs: []int64{}, UpgradeGroupIDs: []int64{}, SuccessesPerStep: 20, UpgradeStep: 1, MaxConcurrency: 100, CooldownSeconds: 60}
+	return OAuthAutoConfig{OpenAITwoFAAdmission: DefaultOpenAITwoFAAdmissionConfig(), IQBootstrap: DefaultIQBootstrap(), ModelMappings: defaultOAuthModelMappings(PlatformOpenAI), ModelBilling: DefaultModelBillingConfig(), Platform: PlatformOpenAI, Priority: 50, LoadFactor: 1, Concurrency: 3, CostMultiplier: 0.07, GroupIDs: []int64{}, UpgradeGroupIDs: []int64{}, SuccessesPerStep: 20, UpgradeStep: 1, MaxConcurrency: 100, CooldownSeconds: 60}
 }
 func ValidateOAuthAutoConfig(c OAuthAutoConfig) error {
 	if c.IQBootstrap.Enabled && c.OpenAITwoFAAdmission.Enabled {
@@ -65,9 +63,6 @@ func ValidateOAuthAutoConfig(c OAuthAutoConfig) error {
 		return err
 	}
 	if err := validateModelBillingConfig(c.ModelBilling); err != nil {
-		return err
-	}
-	if err := validateExcelBPSDefaults(c.ExcelBPS); err != nil {
 		return err
 	}
 	bad := func(s string) error { return infraerrors.BadRequest("AUTO_CONFIG_INVALID", s) }
@@ -156,11 +151,6 @@ func (s *adminServiceImpl) ApplyOAuthAutoConfig(ctx context.Context, input *Crea
 	// choose their own groups and must not inherit global groups or field overrides.
 	if _, observer := ObserverGroupIDs(ctx); observer {
 		return ValidateObserverGroupBindings(ctx, input.GroupIDs)
-	}
-	// A dedicated BPS import captures explicit group/model/proxy settings.
-	// Keep generic Codex bootstrap policy from replacing those selections.
-	if input.ExplicitBPSImport && input.Platform == PlatformOpenAI && input.Type == AccountTypeOAuth && input.Credentials["client_id"] == openai.ExcelClientID {
-		return nil
 	}
 	if input.Type != AccountTypeOAuth || s.settingService == nil {
 		return nil
@@ -289,13 +279,6 @@ func (s *AccountOpsService) SaveOAuthAutoConfig(ctx context.Context, c OAuthAuto
 		}
 		if g.Status != StatusActive || g.Platform != PlatformOpenAI {
 			return c, infraerrors.BadRequest("AUTO_CONFIG_ADMISSION_GROUP_INVALID", "select an active OpenAI isolation group")
-		}
-	}
-	if c.ExcelBPS.AutoMoveOn403 {
-		// Existing Excel policy remains independent of account bootstrap.
-		validator := &adminServiceImpl{groupRepo: s.autoGroups}
-		if err := validator.validateExcelBPS403GroupSettings(ctx, &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: c.ExcelBPS.extra()}); err != nil {
-			return c, err
 		}
 	}
 	c.Revision = uuid.NewString()

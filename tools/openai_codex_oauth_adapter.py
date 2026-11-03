@@ -11,9 +11,9 @@ import stat
 from pathlib import Path
 
 try:
-    from .openai_excel_oauth_adapter import replace_exact
+    from .openai_siwc_oauth_adapter import replace_exact
 except ImportError:
-    from openai_excel_oauth_adapter import replace_exact
+    from openai_siwc_oauth_adapter import replace_exact
 
 PINNED_PROTOCOL_BLOB = 'ff2db2507e401c29fa78705e44f5b40a3108a8c6'
 STAGES = frozenset(('starting', 'web_login', 'password_accepted', 'mfa_challenge',

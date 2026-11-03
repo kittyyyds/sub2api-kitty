@@ -41,13 +41,11 @@ type AdminHandlers struct {
 	APIKey                 *admin.AdminAPIKeyHandler
 	ScheduledTest          *admin.ScheduledTestHandler
 	PelicanGroupTest       *admin.PelicanGroupTestHandler
-	ControlledExperiment   *admin.ControlledExperimentHandler
 	Channel                *admin.ChannelHandler
 	ChannelMonitor         *admin.ChannelMonitorHandler
 	ChannelMonitorTemplate *admin.ChannelMonitorRequestTemplateHandler
 	ContentModeration      *admin.ContentModerationHandler
 	SecurityPolicy         *admin.SecurityPolicyHandler
-	TieredRouting          *admin.TieredRoutingHandler
 	BillingExport          *admin.BillingExportHandler
 	PromptAudit            *securityaudit.PromptAdminHandler
 	Payment                *admin.PaymentHandler

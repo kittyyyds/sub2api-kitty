@@ -68,31 +68,13 @@ func TestQualityPresetValidatesNameAndPlanConfiguration(t *testing.T) {
 	}
 }
 
-func TestQualityPresetKeepsBPSOptionsAndDropsGeneratedQuestionData(t *testing.T) {
+func TestQualityPresetDropsGeneratedQuestionData(t *testing.T) {
 	repo := newFakeTemplateRepo(newTemplatePlanRepo())
 	svc := ProvideScheduledTestService(nil, nil, repo, nil)
 	input := presetInput()
-	input.Name = strings.Repeat("模", 100)
-	input.PelicanConfig.QuestionKind = OpenAICodexStateProbeQuestionKind
-	input.PelicanConfig.ParallelCount = 1
-	interval := 95
-	input.PelicanConfig.Quality.Action = QualityActionEnableBPS
-	input.PelicanConfig.Quality.BPS = &QualityBPSPolicy{FailureThreshold: 4, UsagePercent: 85, RequireAll: true,
-		Models: []string{"bps-model"}, PassThreshold: 6, HoldOnUsage: true, AutoDisableOn403: true,
-		AutoRecoverOn403: true, RecoveryIntervalMinutes: &interval, AutoMoveOn403: true, TargetGroupID: 21,
-		SessionProxy: true, ProxySource: "ip_pool", CacheCreationAsInput: true}
-	saved, err := svc.CreateQualityPreset(context.Background(), input)
-	require.NoError(t, err)
-	require.Equal(t, input.PelicanConfig.Quality.BPS, saved.PelicanConfig.Quality.BPS)
-	saved.PelicanConfig.Quality.BPS.Models[0] = "changed-model"
-	*saved.PelicanConfig.Quality.BPS.RecoveryIntervalMinutes = 60
-	require.Equal(t, "bps-model", input.PelicanConfig.Quality.BPS.Models[0])
-	require.Equal(t, 95, interval)
-
-	input = presetInput()
 	input.PelicanConfig.QuestionKind = QualityRandomQuestionKind
 	input.PelicanConfig.RandomQuestion = &QualityRandomQuestion{}
-	saved, err = svc.CreateQualityPreset(context.Background(), input)
+	saved, err := svc.CreateQualityPreset(context.Background(), input)
 	require.NoError(t, err)
 	require.Nil(t, saved.PelicanConfig.RandomQuestion)
 	require.Empty(t, saved.PelicanConfig.Prompt)
@@ -125,7 +107,7 @@ func TestQualityTemplateCompleteLegacyPresetDefaultsToObservation(t *testing.T) 
 }
 
 func TestQualityTemplateCompletePolicyWhitelistAndDependencies(t *testing.T) {
-	for _, action := range []string{QualityActionObserveOnly, "remove_groups", QualityActionIsolateModels, "disable_scheduling", QualityActionRemoveModel, QualityActionEnableBPS} {
+	for _, action := range []string{QualityActionObserveOnly, "remove_groups", QualityActionIsolateModels, "disable_scheduling", QualityActionRemoveModel} {
 		t.Run(action, func(t *testing.T) {
 			input := presetInput()
 			q := input.PelicanConfig.Quality
@@ -135,11 +117,6 @@ func TestQualityTemplateCompletePolicyWhitelistAndDependencies(t *testing.T) {
 			q.RecoveryConcurrency = 9
 			q.TriggerOnUpstream5xx = true
 			q.Judge = &QualityJudgeConfig{Kind: "jev", Prompt: "Grade", GroupID: 0}
-			if action == QualityActionEnableBPS {
-				input.PelicanConfig.QuestionKind = OpenAICodexStateProbeQuestionKind
-				input.PelicanConfig.ParallelCount = 1
-				q.BPS = &QualityBPSPolicy{FailureThreshold: 2, AllModels: true, PassThreshold: 3}
-			}
 			input.PelicanConfig.ModelIDs = []string{"test-model"}
 			input.PelicanConfig.TriggerSource = "must-not-copy"
 			input.PelicanConfig.QualityModelOutcomes = map[string]string{"test-model": "failed"}
@@ -161,11 +138,7 @@ func TestQualityTemplateCompletePolicyWhitelistAndDependencies(t *testing.T) {
 				require.Empty(t, cfg.Quality.RemoveModels)
 				require.Zero(t, cfg.Quality.RecoveryConcurrency)
 			}
-			if action == QualityActionEnableBPS {
-				require.Nil(t, cfg.Quality.Judge)
-			} else {
-				require.Equal(t, "jev", cfg.Quality.Judge.Kind)
-			}
+			require.Equal(t, "jev", cfg.Quality.Judge.Kind)
 		})
 	}
 }

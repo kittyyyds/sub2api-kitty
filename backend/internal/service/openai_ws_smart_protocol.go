@@ -53,7 +53,7 @@ func smartProtocolHTTPSupported(a *Account) bool {
 	if a == nil || a.Platform != PlatformOpenAI || validateOpenAIConnectionKind(a) != nil {
 		return false
 	}
-	if a.HasManagedOpenAIConnections() || a.AuthConnectionID != "" || a.IsSIWCEnabled() || a.IsExcelBPSEnabled() || a.IsCopilotSDKEnabled() || a.Extra["openai_prism_browser"] == true {
+	if a.HasManagedOpenAIConnections() || a.AuthConnectionID != "" || a.IsSIWCEnabled() || a.IsCopilotSDKEnabled() || a.Extra["openai_prism_browser"] == true {
 		return false
 	}
 	if a.Type == AccountTypeAPIKey {

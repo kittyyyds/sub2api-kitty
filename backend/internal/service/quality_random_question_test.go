@@ -123,7 +123,7 @@ func TestRandomQualityValidationAnd5xxKeepExternalJudge(t *testing.T) {
 	require.Empty(t, cfg.Prompt)
 	require.Empty(t, cfg.Quality.ExpectedAnswer)
 	require.Nil(t, cfg.RandomQuestion)
-	triggered, apply := quality5xxTestConfig(&Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}, plan.ModelID, *cfg)
+	triggered, apply := quality5xxTestConfig(*cfg)
 	require.True(t, apply)
 	require.Equal(t, QualityRandomQuestionKind, triggered.QuestionKind)
 	require.Equal(t, cfg.Quality.Judge, triggered.Quality.Judge)

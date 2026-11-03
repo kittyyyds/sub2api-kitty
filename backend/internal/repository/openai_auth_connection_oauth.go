@@ -24,7 +24,7 @@ func (s *openaiOAuthService) ConnectionToken(ctx context.Context, form url.Value
 	}
 	clientID := form.Get("client_id")
 
-	endpoint := s.tokenURLForClient(clientID)
+	endpoint := s.tokenURL
 	switch kind {
 	case "siwc":
 		if clientID == "" || clientID == openai.SIWCDynamicClientID {
@@ -32,11 +32,8 @@ func (s *openaiOAuthService) ConnectionToken(ctx context.Context, form url.Value
 		}
 		form.Set("resource", openai.SIWCResource)
 		endpoint = openai.SIWCTokenURL
-	case "codex", "bps":
+	case "codex":
 		expected := openai.ClientID
-		if kind == "bps" {
-			expected = openai.ExcelClientID
-		}
 		if clientID != expected {
 			return nil, nil, &service.OpenAIConnectionTokenError{Outcome: "not_sent"}
 		}

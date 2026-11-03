@@ -37,7 +37,7 @@ SERVICE_NAME="sub2api"
 SERVICE_USER="sub2api"
 CONFIG_DIR="/etc/sub2api"
 
-# Optional Codex ticket exit pool. The kernel can be installed automatically
+# Optional account proxy exit pool. The kernel can be installed automatically
 # when a provider subscription URL is supplied; the provider itself is never
 # created or purchased by this installer.
 MIHOMO_CODEX_SUBSCRIPTION_URL="${MIHOMO_CODEX_SUBSCRIPTION_URL:-}"
@@ -676,8 +676,7 @@ download_and_extract() {
     print_success "$(msg 'binary_installed') $INSTALL_DIR/sub2api"
 }
 
-# Install or reuse the optional Mihomo sidecar used only for Codex ticket
-# harvesting. A subscription URL is required for a first install; without it
+# Install or reuse the optional Mihomo sidecar for account proxy exits. A subscription URL is required for a first install; without it
 # an existing healthy sidecar is left untouched and the normal app install
 # continues.
 configure_mihomo_codex() {
@@ -706,7 +705,7 @@ configure_mihomo_codex() {
         return 1
     fi
 
-    print_info "Configuring Mihomo Codex ticket sidecar..."
+    print_info "Configuring Mihomo account proxy sidecar..."
     MIHOMO_CODEX_SUBSCRIPTION_URL="$MIHOMO_CODEX_SUBSCRIPTION_URL" \
         MIHOMO_CODEX_USER_AGENT="$MIHOMO_CODEX_USER_AGENT" \
         MIHOMO_CODEX_PORT="$MIHOMO_CODEX_PORT" \

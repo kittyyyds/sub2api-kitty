@@ -13,13 +13,13 @@ func (s *OpenAIGatewayService) fenceAuthConnectionEgress(ctx context.Context, re
 	if a == nil || a.AuthConnectionID == "" {
 		return nil
 	}
-	if s.excelOAuthReauth == nil {
+	if s.openAIOAuthReauth == nil {
 		return errors.New("authorization connection fence unavailable")
 	}
-	if err := s.excelOAuthReauth.validateAuthConnectionPolicy(ctx, a); err != nil {
+	if err := s.openAIOAuthReauth.validateAuthConnectionPolicy(ctx, a); err != nil {
 		return err
 	}
-	if err := s.excelOAuthReauth.ValidateAuthConnectionSend(ctx, a); err != nil {
+	if err := s.openAIOAuthReauth.ValidateAuthConnectionSend(ctx, a); err != nil {
 		return err
 	}
 	if req != nil {

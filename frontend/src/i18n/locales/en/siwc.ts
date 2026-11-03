@@ -1,6 +1,6 @@
 export default {
   "protocol": "OpenAI request protocol",
-  "codex": "Codex (keep existing BPS / Prism settings)",
+  "codex": "Codex (keep existing Prism settings)",
   "siwc": "SIWC API (Sign in with ChatGPT)",
   "protocolHint": "Switch after authorization and save the account to apply. SIWC uses your ChatGPT plan through the official Responses API. Codex credentials are retained separately.",
   "bound": "SIWC bound (credentials present; availability not verified)",

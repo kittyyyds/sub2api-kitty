@@ -15,7 +15,6 @@ const (
 // Empty remains equivalent to full for programmatically constructed configs.
 type RuntimeConfig struct {
 	NodeID                  string                   `mapstructure:"node_id"`
-	ImageRelayOwnerOrigin   string                   `mapstructure:"image_relay_owner_origin"`
 	WSNodeOwner             WSNodeOwnerConfig        `mapstructure:"ws_node_owner"`
 	SchedulerReadiness      SchedulerReadinessConfig `mapstructure:"scheduler_readiness"`
 	SchedulerSnapshotMode   string                   `mapstructure:"scheduler_snapshot_mode"`
@@ -42,9 +41,6 @@ func (c *Config) validateRuntime() error {
 		if c.Runtime.WSNodeOwner.Enabled && c.Runtime.WSNodeOwner.NodeID != c.Runtime.NodeID {
 			return fmt.Errorf("runtime.node_id must match the enabled WS node owner identity")
 		}
-	}
-	if err := ValidateImageRelayOwnerOrigin(c.Runtime.ImageRelayOwnerOrigin); err != nil {
-		return err
 	}
 	if err := c.Runtime.WSNodeOwner.Validate(); err != nil {
 		return err

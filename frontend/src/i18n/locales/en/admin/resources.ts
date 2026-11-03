@@ -728,22 +728,6 @@ export default {
 
     // Ops Monitoring
 
-  tieredRouting: {
-      title: 'Tiered Routing',
-      description: 'Premium users prefer premium-pool accounts; everyone else uses all accounts. Mark accounts in the account editor.',
-      enable: 'Enable tiered routing',
-      premiumUserIds: 'Premium user IDs',
-      premiumUserIdsPlaceholder: 'e.g. 12, 34, 56',
-      premiumUserIdsHint: 'Comma/space separated user IDs. These users always route premium.',
-      minBalance: 'Min balance for premium ($)',
-      minBalanceHint: 'Users with balance at or above this are premium. 0 disables the balance rule.',
-      poolHint: 'Set an account pool to premium in the account editor (proxy section). Unmatched premium users fall back to all accounts.',
-      loadFailed: 'Failed to load tiered routing settings',
-      saveFailed: 'Failed to save tiered routing settings',
-      saveSuccess: 'Tiered routing settings saved',
-      invalidBalance: 'Min balance must be a non-negative number',
-    },
-
   tickets: {
       title: 'Support Tickets',
       description: 'Reply to user questions and close resolved tickets.',

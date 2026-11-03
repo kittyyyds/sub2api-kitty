@@ -113,25 +113,6 @@ func lockAccountImport(ctx context.Context, client *dbent.Client, a *service.Acc
 	if _, err := client.ExecContext(ctx, `SELECT pg_advisory_xact_lock(71942021)`); err != nil {
 		return err
 	}
-	// Close the race with another import while holding the normal transaction lock.
-	if batch, _ := a.Extra["openai_bps_batch_import"].(bool); batch {
-		rows, err := client.QueryContext(ctx, `SELECT id FROM accounts WHERE deleted_at IS NULL AND platform='openai' AND type='oauth' AND lower(trim(credentials->>'email'))=lower(trim($1)) LIMIT 1`, a.GetCredential("email"))
-		if err != nil {
-			return err
-		}
-		exists := rows.Next()
-		readErr := rows.Err()
-		rows.Close()
-		if readErr != nil {
-			return readErr
-		}
-		if exists {
-			return errors.New("该邮箱已有账号，请刷新账号列表")
-		}
-	}
-	if _, err := client.ExecContext(ctx, `SELECT set_config('kitty.import_ticket',$1,true)`, a.ImportTicket); err != nil {
-		return err
-	}
 	rows, err := client.QueryContext(ctx, `SELECT state,expires_at,platform,proxy_id,fingerprint FROM account_import_tickets WHERE id=$1 FOR UPDATE`, a.ImportTicket)
 	if err != nil {
 		return err
@@ -171,17 +152,4 @@ func (r *accountRepository) FinalizeOAuthImport(ctx context.Context, id, fp, ide
 	}
 	_, err := r.sql.ExecContext(ctx, `UPDATE account_import_tickets SET fingerprint=$2,identity_key=md5(platform||'|'||$3),state='ready',updated_at=NOW() WHERE id=$1 AND source='oauth' AND state='pending' AND expires_at>NOW()`, id, fp, identity)
 	return err
-}
-
-func (r *accountRepository) FindBPSImportAccount(ctx context.Context, email string) (int64, error) {
-	db, ok := r.sql.(planRowQuerier)
-	if !ok {
-		return 0, errors.New("identity lookup unavailable")
-	}
-	var id int64
-	err := db.QueryRowContext(ctx, `SELECT id FROM accounts WHERE deleted_at IS NULL AND platform='openai' AND type='oauth' AND lower(trim(credentials->>'email'))=lower(trim($1)) ORDER BY id LIMIT 1`, email).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	return id, err
 }

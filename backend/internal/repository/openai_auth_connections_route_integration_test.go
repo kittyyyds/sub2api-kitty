@@ -30,7 +30,7 @@ func (u *issue594OfflineInference) Do(r *http.Request, _ string, _ int64, _ int)
 	u.mu.Lock()
 	u.calls = append(u.calls, r.Header.Get("Authorization")+" "+r.URL.String())
 	u.mu.Unlock()
-	require.Contains(u.t, []string{"api.openai.com", "chatgpt.com", "bps.openai.com"}, r.URL.Host)
+	require.Contains(u.t, []string{"api.openai.com", "chatgpt.com"}, r.URL.Host)
 	clone := r.Clone(r.Context())
 	target := *clone.URL
 	target.Scheme = "http"

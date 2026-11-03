@@ -157,10 +157,10 @@ func TestQuality5xxTriggeredPlanDoesNotProbeDuringTempUnschedulableWindow(t *tes
 	plan := pelicanPlan()
 	plan.AccountID = account.ID
 	plan.TriggerSource = quality5xxSource
-	plan.PelicanConfig.QuestionKind = OpenAICodexStateProbeQuestionKind
-	plan.PelicanConfig.Quality = &QualityPolicy{TriggerOnUpstream5xx: true, Action: "disable_scheduling"}
+	plan.PelicanConfig = quality5xxFixtureConfig()
+	plan.PelicanConfig.Quality.TriggerOnUpstream5xx = true
 	repo := &qualityClaimFailureRepo{plan: plan}
-	accountRepo := &stateProbeAccountRepo{account: account}
+	accountRepo := &qualitySupportAccounts{account: account}
 	limiter := &RateLimitService{accountRepo: &quality5xxTempUnschedRepo{account: account}}
 	runner := &ScheduledTestRunnerService{
 		planRepo:       repo,

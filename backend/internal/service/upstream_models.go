@@ -825,18 +825,6 @@ func (s *AccountTestService) fetchUpstreamModelListRequest(ctx context.Context, 
 		models, body, err := s.fetchAntigravityOAuthUpstreamModels(ctx, account)
 		return models, body, nil, err
 	}
-	if account.IsExcelBPSEnabled() && s.openaiGatewayService != nil {
-		response, err := s.openaiGatewayService.FetchOpenAIModelsList(ctx, account)
-		if err != nil {
-			return nil, nil, nil, newUpstreamModelSyncUpstreamError("Excel BPS model discovery failed", err)
-		}
-		models, _, err := extractUpstreamModelCatalog(response.Body, false)
-		if err != nil {
-			return nil, nil, nil, newUpstreamModelSyncUpstreamError("Invalid Excel BPS model catalog", err)
-		}
-		return models, response.Body, nil, nil
-	}
-
 	if s.httpUpstream == nil {
 		return nil, nil, nil, newUpstreamModelSyncConfigError("Upstream HTTP client is not configured", nil)
 	}

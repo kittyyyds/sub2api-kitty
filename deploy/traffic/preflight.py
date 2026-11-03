@@ -6,31 +6,12 @@ import json
 from pathlib import Path
 import re
 import sys
-from urllib.parse import urlsplit
 
 
 MAX_BYTES = 256 * 1024
 IDENTIFIER = re.compile(r"[a-z0-9_-]{1,64}\Z")
 BUCKET = re.compile(r"(0|[1-9][0-9]*):([a-z0-9_-]{1,64}):(single|forced|mixed)\Z")
-CAPABILITIES = {"http-responses", "native-ws", "bps-relay"}
-
-
-def https_origin(value):
-    if (not isinstance(value, str) or not value or "\\" in value
-            or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in value)):
-        return None
-    try:
-        u = urlsplit(value)
-        port = u.port
-        if (u.scheme != "https" or not u.hostname or u.username is not None
-                or u.password is not None or u.path not in ("", "/")
-                or "?" in value or "#" in value or "%" in u.netloc or u.netloc.endswith(":")
-                or (port is not None and not 1 <= port <= 65535)):
-            return None
-        # Collapse explicit default ports/case when detecting duplicate owners.
-        return u.hostname.lower(), port or 443
-    except ValueError:
-        return None
+CAPABILITIES = {"http-responses", "native-ws"}
 
 
 def validate(document):
@@ -56,7 +37,7 @@ def validate(document):
     if not isinstance(nodes, list) or not 2 <= len(nodes) <= 16:
         fail("$.nodes", "requires_2_to_16_nodes")
         return errors
-    identities, ws_ids, origins = set(), set(), set()
+    identities, ws_ids = set(), set()
     writers = 0
     published, required = set(), set()
     for index, node in enumerate(nodes):
@@ -79,7 +60,7 @@ def validate(document):
             fail(path + ".capabilities", "duplicate_capability")
         runtime = node.get("runtime")
         rp = path + ".runtime"
-        if not object_fields(runtime, {"role", "scheduler_snapshot_mode", "scheduler_readiness", "ws_node_owner", "image_relay_owner_origin"}, rp):
+        if not object_fields(runtime, {"role", "scheduler_snapshot_mode", "scheduler_readiness", "ws_node_owner"}, rp):
             continue
         role, mode = runtime.get("role", "full"), runtime.get("scheduler_snapshot_mode", "auto")
         if role not in ("full", "gateway") or mode not in ("auto", "writer", "reader"):
@@ -138,17 +119,6 @@ def validate(document):
                     fail(rp + ".ws_node_owner.node_id", "duplicate_ws_identity")
                 else:
                     ws_ids.add(node_id)
-        origin = runtime.get("image_relay_owner_origin", "")
-        if "bps-relay" in caps and not origin:
-            fail(rp + ".image_relay_owner_origin", "relay_owner_origin_required")
-        if origin != "":
-            normalized = https_origin(origin)
-            if normalized is None:
-                fail(rp + ".image_relay_owner_origin", "https_origin_required")
-            elif normalized in origins:
-                fail(rp + ".image_relay_owner_origin", "duplicate_owner_origin")
-            else:
-                origins.add(normalized)
     if writers != 1:
         fail("$.nodes", "exactly_one_writer_required")
     if not required <= published:

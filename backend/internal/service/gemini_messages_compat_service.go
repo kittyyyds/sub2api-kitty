@@ -483,7 +483,7 @@ func (s *GeminiMessagesCompatService) listSchedulableAccountsOnce(ctx context.Co
 		// account-wide priority, even when group-priority scheduling is enabled.
 		enabled := groupID != nil && s.settingService != nil && s.settingService.IsAccountGroupPriorityEnabled(ctx)
 		ApplyAccountGroupPriorities(accounts, groupID, enabled)
-		return FilterTierPoolAccounts(accounts, TierPoolFromContext(ctx))
+		return accounts
 	}
 
 	if s.schedulerSnapshot != nil {
