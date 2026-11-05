@@ -3,6 +3,7 @@ import { homeMessages } from '../../homeOverview'
 import accountTestTiming from './accountTestTiming'
 import openaiAuth from './openaiAuth'
 import profitOps from './profitOps'
+import financeHub from './financeHub'
 import upstreamOps from './upstreamOps'
 import channelOps from './channelOps'
 import ipAudit from './ipAudit'
@@ -50,6 +51,7 @@ export default {
   channelOps,
   upstreamOps,
   profitOps,
+  financeHub,
   accountOps,
   tokenGuard,
   pelicanTests,

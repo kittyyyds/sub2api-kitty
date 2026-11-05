@@ -1076,6 +1076,11 @@ func registerBillingExportAdminRoutes(admin *gin.RouterGroup, h *handler.Handler
 
 func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.GET("/channels/pricing-audit", h.Admin.Channel.PricingAudit)
+	admin.GET("/supplier-balances", h.Admin.Channel.SupplierBalances)
+	admin.GET("/finance-overview", h.Admin.Channel.FinanceOverview)
+	admin.GET("/permanent-usage", h.Admin.Channel.PermanentUsage)
+	admin.POST("/permanent-usage/backfill", h.Admin.Channel.BackfillPermanentUsage)
+	admin.PUT("/supplier-balances/thresholds", h.Admin.Channel.SaveSupplierBalanceThresholds)
 	admin.GET("/profit-operations/snapshot", h.Admin.Channel.ProfitOperations)
 	admin.GET("/upstream-operations/snapshot", h.Admin.Channel.UpstreamOperations)
 	channels := admin.Group("/channels")

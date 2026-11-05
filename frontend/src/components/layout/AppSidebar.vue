@@ -974,6 +974,8 @@ const adminNavItems = computed((): NavItem[] => {
       { path: '/admin/priority-scheduling', label: t('priorityScheduling.title'), icon: AccountOpsIcon },
       { path: '/admin/channel-operations', label: t('channelOps.title'), icon: ChannelIcon },
       { path: '/admin/profit-operations', label: t('profitOps.title'), icon: PriceTagIcon },
+      { path: '/admin/supplier-balances', label: t('financeHub.supplierTitle'), icon: PriceTagIcon },
+      { path: '/admin/finance-overview', label: t('financeHub.businessTitle'), icon: PriceTagIcon },
       { path: '/admin/account-quality', label: t('qualityOps.title'), icon: QualityOpsIcon },
       { path: '/admin/account-ops', label: t('accountOps.title'), icon: AccountOpsIcon },
       { path: '/admin/token-guard', label: t('tokenGuard.title'), icon: TokenGuardIcon },

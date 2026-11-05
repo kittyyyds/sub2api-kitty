@@ -35,3 +35,13 @@ func TestRetiredBPSPluginsCannotBeReenabled(t *testing.T) {
 		require.Equal(t, "incompatible", result.Status)
 	}
 }
+
+func TestKittyV219FinancePinnedPluginCompatibility(t *testing.T) {
+	var manifest PluginManifest
+	require.NoError(t, json.Unmarshal([]byte(gatewayPromptPinnedManifest), &manifest))
+	require.True(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: "2.19.0-kitty.6"}).Compatible)
+	manifest.Name += " modified"
+	require.False(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: "2.19.0-kitty.6"}).Compatible)
+	manifest.ID = "local.oai-basispoints"
+	require.False(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: "2.19.0-kitty.6"}).Compatible)
+}
