@@ -225,7 +225,13 @@ func (h *UsageHandler) List(c *gin.Context) {
 	}
 
 	h.usageService.EnrichContentTiming(c.Request.Context(), records)
-	response.Paginated(c, adminUsageLogResponses(c, records), result.Total, page, pageSize)
+	response.Success(c, struct {
+		response.PaginatedData
+		TotalExact bool `json:"total_exact"`
+	}{
+		PaginatedData: response.PaginatedData{Items: adminUsageLogResponses(c, records), Total: result.Total, Page: page, PageSize: pageSize, Pages: result.Pages},
+		TotalExact:    !result.TotalLowerBound,
+	})
 }
 
 // Stats handles getting usage statistics with filters

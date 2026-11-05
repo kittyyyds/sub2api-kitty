@@ -19,9 +19,10 @@
           : 'flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 text-3xl font-bold text-white shadow-lg shadow-primary-500/20'"
       >
         <img
-          v-if="avatarPreviewUrl"
+          v-if="avatarPreviewUrl && !avatarBroken"
           data-testid="profile-avatar-preview"
           :src="avatarPreviewUrl"
+          @error="avatarBroken = true"
           :alt="displayName"
           class="h-full w-full object-cover"
         >
@@ -38,6 +39,7 @@
           </p>
           <p class="text-sm text-gray-500 dark:text-gray-400">
             {{ t('profile.avatar.uploadHint') }}
+            {{ t('optimizations.autoSave') }}
           </p>
         </div>
 
@@ -47,21 +49,14 @@
               data-testid="profile-avatar-file-input"
               type="file"
               accept="image/*"
+              :disabled="avatarSaving"
               class="hidden"
               @change="handleAvatarFileChange"
             >
             {{ t('profile.avatar.uploadAction') }}
           </label>
 
-          <button
-            data-testid="profile-avatar-save"
-            type="button"
-            class="btn btn-primary btn-sm"
-            :disabled="avatarSaving || !avatarDraft"
-            @click="handleAvatarSave"
-          >
-            {{ t('common.save') }}
-          </button>
+          <span v-if="avatarSaving" role="status" class="text-sm text-gray-500">{{ t('common.saving') }}</span>
 
           <button
             data-testid="profile-avatar-delete"
@@ -79,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { userAPI } from '@/api'
 import { useAppStore } from '@/stores/app'
@@ -103,15 +98,23 @@ const avatarScaleSteps = [1, 0.92, 0.84, 0.76, 0.68, 0.6, 0.52, 0.44, 0.36]
 const avatarQualitySteps = [0.92, 0.84, 0.76, 0.68, 0.6, 0.52, 0.44, 0.36]
 const avatarDraft = ref('')
 const avatarSaving = ref(false)
+const avatarBroken = ref(false)
+const savedAvatar = ref(props.user?.avatar_url?.trim() || '')
+let operation = 0
+let disposed = false
+onBeforeUnmount(() => { disposed = true; operation++ })
+watch(() => props.user?.id, () => { operation++; avatarSaving.value = false; avatarDraft.value = ''; savedAvatar.value = props.user?.avatar_url?.trim() || '' })
 
 const displayName = computed(() => props.user?.username?.trim() || props.user?.email?.trim() || t('profile.user'))
 const avatarInitial = computed(() => displayName.value.charAt(0).toUpperCase() || 'U')
-const avatarPreviewUrl = computed(() => avatarDraft.value.trim() || props.user?.avatar_url?.trim() || '')
+const avatarPreviewUrl = computed(() => avatarDraft.value.trim() || savedAvatar.value)
+
+watch(avatarPreviewUrl, () => { avatarBroken.value = false })
 
 watch(
   () => props.user?.avatar_url,
   () => {
-    avatarDraft.value = ''
+    savedAvatar.value = props.user?.avatar_url?.trim() || ''
   }
 )
 
@@ -169,18 +172,28 @@ async function compressAvatarFile(file: File): Promise<File> {
   }
 
   for (const scale of avatarScaleSteps) {
-    const width = Math.max(1, Math.round(image.naturalWidth * scale))
-    const height = Math.max(1, Math.round(image.naturalHeight * scale))
+    const width = Math.max(1, Math.round(Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight)) * image.naturalWidth * scale))
+    const height = Math.max(1, Math.round(Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight)) * image.naturalHeight * scale))
     canvas.width = width
     canvas.height = height
     ctx.clearRect(0, 0, width, height)
     ctx.drawImage(image, 0, 0, width, height)
 
     for (const quality of avatarQualitySteps) {
-      const blob = await canvasToBlob(canvas, 'image/webp', quality)
+      let blob = await canvasToBlob(canvas, 'image/webp', quality)
+      // Safari may silently encode PNG for an unsupported WebP request.
+      // Use the actual MIME, never label PNG bytes as WebP.
+      if (blob.type !== 'image/webp') {
+        ctx.save()
+        ctx.globalCompositeOperation = 'destination-over'
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, width, height)
+        ctx.restore()
+        blob = await canvasToBlob(canvas, 'image/jpeg', quality)
+      }
       if (blob.size <= targetAvatarUploadBytes) {
         const fileName = file.name.replace(/\.[^.]+$/, '') || 'avatar'
-        return new File([blob], `${fileName}.webp`, { type: 'image/webp' })
+        return new File([blob], `${fileName}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, { type: blob.type })
       }
     }
   }
@@ -207,64 +220,48 @@ async function prepareAvatarUpload(file: File): Promise<File> {
 async function handleAvatarFileChange(event: Event) {
   const input = event.target as HTMLInputElement | null
   const file = input?.files?.[0]
-  if (input) {
-    input.value = ''
-  }
-  if (!file) {
-    return
-  }
-
-  try {
-    const preparedFile = await prepareAvatarUpload(file)
-    const dataURL = await readFileAsDataURL(preparedFile)
-    const normalized = normalizeUploadedAvatar(dataURL)
-    if (!normalized) {
-      return
-    }
-    avatarDraft.value = normalized
-  } catch (error: unknown) {
-    appStore.showError(extractApiErrorMessage(error, t('common.error')))
-  }
-}
-
-async function handleAvatarSave() {
-  const normalized = normalizeUploadedAvatar(avatarDraft.value)
-  if (!normalized) {
-    return
-  }
-
+  if (input) input.value = ''
+  if (!file || avatarSaving.value || !props.user) return
+  const id = props.user.id
+  const seq = ++operation
+  const current = () => !disposed && operation === seq && props.user?.id === id && authStore.user?.id === id
   avatarSaving.value = true
   try {
+    const prepared = await prepareAvatarUpload(file)
+    const normalized = normalizeUploadedAvatar(await readFileAsDataURL(prepared))
+    if (!normalized || !current()) return
+    avatarDraft.value = normalized
     const updated = await userAPI.updateProfile({ avatar_url: normalized })
-    authStore.user = updated
-    avatarDraft.value = updated.avatar_url?.trim() || ''
+    if (!current()) return
+    savedAvatar.value = updated.avatar_url?.trim() || ''
+    // Do not replace a concurrently refreshed balance or other profile fields.
+    authStore.user = { ...authStore.user!, avatar_url: updated.avatar_url }
     appStore.showSuccess(t('profile.avatar.saveSuccess'))
   } catch (error: unknown) {
-    appStore.showError(extractApiErrorMessage(error, t('common.error')))
+    if (current()) appStore.showError(extractApiErrorMessage(error, t('common.error')))
   } finally {
-    avatarSaving.value = false
+    if (current()) { avatarDraft.value = ''; avatarSaving.value = false }
   }
 }
 
 async function handleAvatarDelete() {
-  if (avatarSaving.value) {
-    return
-  }
-  if (!avatarDraft.value.trim() && !props.user?.avatar_url?.trim()) {
-    appStore.showError(t('profile.avatar.emptyDeleteHint'))
-    return
-  }
-
+  if (avatarSaving.value || !props.user) return
+  if (!savedAvatar.value) { appStore.showError(t('profile.avatar.emptyDeleteHint')); return }
+  const id = props.user.id
+  const seq = ++operation
+  const current = () => !disposed && operation === seq && props.user?.id === id && authStore.user?.id === id
   avatarSaving.value = true
   try {
     const updated = await userAPI.updateProfile({ avatar_url: '' })
-    authStore.user = updated
+    if (!current()) return
+    authStore.user = { ...authStore.user!, avatar_url: updated.avatar_url }
+    savedAvatar.value = ''
     avatarDraft.value = ''
     appStore.showSuccess(t('profile.avatar.deleteSuccess'))
   } catch (error: unknown) {
-    appStore.showError(extractApiErrorMessage(error, t('common.error')))
+    if (current()) appStore.showError(extractApiErrorMessage(error, t('common.error')))
   } finally {
-    avatarSaving.value = false
+    if (current()) avatarSaving.value = false
   }
 }
 </script>

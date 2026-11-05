@@ -357,4 +357,16 @@ describe('DataTable', () => {
 
     expect(wrapper.emitted('update:selectedKeys')?.at(-1)?.[0]).toEqual([99, 1, 2])
   })
+  it('uses the same columns, actions and selection when desktop cards are chosen', async () => {
+    const w = mount(DataTable, { props: { layout: 'cards', columns: [{key:'name',label:'Name',sortable:true},{key:'actions',label:'Actions'}], data:[{id:1,name:'First'},{id:2,name:'Second'}], selectable:true, serverSideSort:true }, slots:{'cell-actions':'<button data-test="card-action">Edit</button>'} })
+    expect(w.find('table').exists()).toBe(false)
+    expect(w.findAll('[data-test="card-action"]')).toHaveLength(2)
+    await w.get('[data-test="select-all-mobile"]').setValue(true)
+    expect(w.emitted('update:selectedKeys')?.at(-1)).toEqual([[1,2]])
+    await w.setProps({ layout: 'responsive', selectedKeys: [1,2] })
+    expect(w.find('table').exists()).toBe(true)
+    expect((w.get('[data-test="select-all"]').element as HTMLInputElement).checked).toBe(true)
+    w.unmount()
+  })
+
 })

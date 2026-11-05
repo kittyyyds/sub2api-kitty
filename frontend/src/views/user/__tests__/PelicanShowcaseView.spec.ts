@@ -1,6 +1,8 @@
 import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PelicanShowcaseView from '../PelicanShowcaseView.vue'
+import PelicanPoster from '@/components/user/pelican/PelicanPoster.vue'
+vi.mock('@/utils/pelicanPoster', () => ({ getPelicanPoster: vi.fn().mockResolvedValue(null) }))
 import type { PelicanShowcaseItem, PelicanShowcaseView as ShowcaseData } from '@/api/pelicanShowcase'
 
 const { getShowcase, getShowcaseItem, removeShowcaseItem, showError, showSuccess, auth } = vi.hoisted(() => ({
@@ -170,8 +172,9 @@ describe('PelicanShowcaseView', () => {
 
     // Every item of a group sits in its row, in the order received (newest first); no paging.
     const firstRow = wrapper.get('[data-testid="showcase-group-1"] [data-testid="pelican-showcase-row"]')
-    expect(firstRow.findAll('iframe').map((frame) => frame.attributes('srcdoc').match(/data-item="(\d+)"/)?.[1]))
+    expect(wrapper.findAllComponents(PelicanPoster).slice(0, 10).map(p => p.props('html').match(/data-item="(\d+)"/)?.[1]))
       .toEqual(Array.from({ length: 10 }, (_, i) => String(100 + i)))
+    expect(firstRow.find('iframe').exists()).toBe(false)
     expect(wrapper.find('[data-testid="showcase-group-3"] [data-testid="pelican-showcase-row"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="showcase-group-1"] [role="scrollbar"]').attributes('aria-label'))
       .toBe('pelicanShowcase.scrollLabel {"group":"Claude Max"}')
@@ -180,11 +183,8 @@ describe('PelicanShowcaseView', () => {
     expect(cards).toHaveLength(11)
     expect(cards[0].classes()).toContain('shrink-0')
     expect(getShowcaseItem).toHaveBeenCalledTimes(11)
-    const frame = cards[0].get('iframe')
-    expect(frame.attributes('sandbox')).toBe('allow-scripts')
-    expect(frame.attributes('referrerpolicy')).toBe('no-referrer')
-    expect(frame.attributes('srcdoc')).toContain('Content-Security-Policy')
-    expect(frame.attributes('srcdoc')).toContain('data-item="100"')
+    expect(cards[0].find('iframe').exists()).toBe(false)
+    expect(wrapper.findAllComponents(PelicanPoster)[0].props('html')).toContain('data-item="100"')
     expect(cards[0].text()).toContain('gpt-6-astra')
     expect(cards[0].text()).toContain('"seconds":"42.3"')
     expect(cards[0].text()).toContain('pelicanShowcase.efforts.high')
@@ -223,7 +223,7 @@ describe('PelicanShowcaseView', () => {
     await wrapper.get('button[aria-label="common.refresh"]').trigger('click')
     await flushPromises()
     expect(getShowcaseItem).toHaveBeenCalledTimes(3)
-    expect(wrapper.findAll('[data-testid="pelican-showcase-card"]')[1].get('iframe').attributes('srcdoc')).toContain('data-item="202"')
+    expect(wrapper.findAllComponents(PelicanPoster)[0].props('html')).toContain('data-item="202"')
   })
 
   it('previews a card, and only admins can take it down', async () => {

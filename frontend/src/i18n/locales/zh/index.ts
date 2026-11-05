@@ -1,3 +1,4 @@
+import optimizations from './optimizations'
 import { homeMessages } from '../../homeOverview'
 import accountTestTiming from './accountTestTiming'
 import openaiAuth from './openaiAuth'
@@ -68,4 +69,5 @@ export default {
   ...misc,
   ...native,
   videoModule,
+  optimizations,
 }

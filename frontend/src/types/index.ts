@@ -516,6 +516,7 @@ export interface PaginatedResponse<T> {
   page: number
   page_size: number
   pages: number
+  total_exact?: boolean
 }
 
 // ==================== UI State Types ====================

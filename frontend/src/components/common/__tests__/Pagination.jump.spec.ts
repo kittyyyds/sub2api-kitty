@@ -13,26 +13,28 @@ function mountPagination() {
 }
 
 describe('pagination jump input', () => {
-  it.each(['click', 'enter'])('jumps to the entered numeric page using %s', async (action) => {
+  it('jumps using the virtual page picker on mobile and desktop', async () => {
     const wrapper = mountPagination()
+    await wrapper.get('.btn').trigger('click')
     const input = wrapper.get('input[type="number"]')
     await input.setValue('3')
-    if (action === 'click') await wrapper.get('.btn').trigger('click')
-    else await input.trigger('keyup', { key: 'Enter' })
+    await wrapper.get('form').trigger('submit')
     expect(wrapper.emitted('update:page')).toEqual([[3]])
-    expect((input.element as HTMLInputElement).value).toBe('')
+    expect(wrapper.find('form').exists()).toBe(false)
   })
 
-  it('clamps an entered page to the last page', async () => {
+  it('rejects a jump beyond the known page range', async () => {
     const wrapper = mountPagination()
-    await wrapper.get('input').setValue('99')
     await wrapper.get('.btn').trigger('click')
-    expect(wrapper.emitted('update:page')).toEqual([[10]])
+    await wrapper.get('input').setValue('99')
+    await wrapper.get('form').trigger('submit')
+    expect(wrapper.emitted('update:page')).toBeUndefined()
   })
 
   it('ignores an empty jump input', async () => {
     const wrapper = mountPagination()
     await wrapper.get('.btn').trigger('click')
+    await wrapper.get('form').trigger('submit')
     expect(wrapper.emitted('update:page')).toBeUndefined()
   })
 })

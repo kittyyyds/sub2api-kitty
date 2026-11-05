@@ -39,6 +39,7 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
+            <button class="btn btn-secondary" @click="showPricingAudit = true">{{ t('optimizations.auditTitle') }}</button>
             <button @click="openCreateDialog" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.channels.createChannel', 'Create Channel') }}
@@ -625,10 +626,12 @@
       @confirm="confirmDelete"
       @cancel="showDeleteDialog = false"
     />
+  <ReadonlyPricingAudit :show="showPricingAudit" @close="showPricingAudit = false" />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
+import ReadonlyPricingAudit from '@/components/admin/ReadonlyPricingAudit.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -658,6 +661,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useKeyedDebouncedSearch } from '@/composables/useKeyedDebouncedSearch'
 
 const operationsRoute = useRoute()
+const showPricingAudit = ref(false)
 const { t } = useI18n()
 const appStore = useAppStore()
 

@@ -221,7 +221,10 @@ func (r *usageLogRepository) listUsageLogsWithFastPagination(ctx context.Context
 		total = int64(offset) + int64(limit) + 1
 	}
 
-	return logs, paginationResultFromTotal(total, params), nil
+	result := paginationResultFromTotal(total, params)
+	// Even an empty out-of-range page does not prove the exact total.
+	result.TotalLowerBound = true
+	return logs, result, nil
 }
 
 func usageLogOrderBy(params pagination.PaginationParams) string {

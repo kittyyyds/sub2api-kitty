@@ -140,7 +140,7 @@
             @userClick="handleUserClick"
             @ipGeoBatchFailed="handleIpGeoBatchFailed"
           />
-          <Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" />
+          <Pagination show-jump :total-exact="usageTotalExact" v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" />
         </div>
         <div v-if="auditMounted" v-show="activeTab === 'audit'" class="overflow-hidden rounded-b-2xl">
           <UsageAuditPanel
@@ -150,7 +150,7 @@
             :loading="auditLoading"
             @user-click="handleUserClick"
           />
-          <Pagination v-if="auditPagination.total > 0" :page="auditPagination.page" :total="auditPagination.total" :page-size="auditPagination.page_size" @update:page="handleAuditPageChange" @update:pageSize="handleAuditPageSizeChange" />
+          <Pagination show-jump v-if="auditPagination.total > 0" :page="auditPagination.page" :total="auditPagination.total" :page-size="auditPagination.page_size" @update:page="handleAuditPageChange" @update:pageSize="handleAuditPageSizeChange" />
         </div>
         <div v-show="activeTab === 'errors'" class="overflow-hidden rounded-b-2xl">
           <OpsErrorLogTable
@@ -455,6 +455,7 @@ const buildAuditQueryParams = (): UsageAuditQueryParams => {
   return auditParams
 }
 
+const usageTotalExact = ref(false)
 const loadLogs = async () => {
   abortController?.abort(); const c = new AbortController(); abortController = c; loading.value = true
   try {
@@ -462,7 +463,7 @@ const loadLogs = async () => {
       buildUsageListParams(pagination.page, pagination.page_size, false),
       { signal: c.signal }
     )
-    if(!c.signal.aborted) { usageLogs.value = res.items; pagination.total = res.total }
+    if(!c.signal.aborted) { usageLogs.value = res.items; pagination.total = res.total; usageTotalExact.value = res.total_exact === true }
   } catch (error: any) { if(error?.name !== 'AbortError') console.error('Failed to load usage logs:', error) } finally { if(abortController === c) loading.value = false }
 }
 

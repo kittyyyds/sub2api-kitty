@@ -1075,6 +1075,7 @@ func registerBillingExportAdminRoutes(admin *gin.RouterGroup, h *handler.Handler
 }
 
 func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	admin.GET("/channels/pricing-audit", h.Admin.Channel.PricingAudit)
 	admin.GET("/profit-operations/snapshot", h.Admin.Channel.ProfitOperations)
 	admin.GET("/upstream-operations/snapshot", h.Admin.Channel.UpstreamOperations)
 	channels := admin.Group("/channels")

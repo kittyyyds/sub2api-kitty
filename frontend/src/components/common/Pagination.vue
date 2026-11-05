@@ -6,33 +6,32 @@
       <!-- Mobile pagination -->
       <button
         @click="goToPage(page - 1)"
-        :disabled="page === 1"
+        :disabled="page <= 1"
         class="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
       >
         {{ t('pagination.previous') }}
       </button>
-      <span class="text-sm text-gray-700 dark:text-gray-300">
-        {{ t('pagination.pageOf', { page, total: totalPages }) }}
-      </span>
+      <PagePicker v-if="showJump" :page="page" :pages="totalPages" :exact="totalExact" @select="goToPage" />
+      <span v-else class="text-sm text-gray-700 dark:text-gray-300">{{ t(totalExact ? 'pagination.pageOf' : 'optimizations.pagesAtLeast', { page, total: totalPages }) }}</span>
       <button
         @click="goToPage(page + 1)"
-        :disabled="page === totalPages"
+        :disabled="page >= totalPages"
         class="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600"
       >
         {{ t('pagination.next') }}
       </button>
     </div>
 
-    <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+    <div class="hidden gap-3 sm:flex sm:flex-1 sm:flex-wrap sm:items-center sm:justify-between">
       <!-- Desktop pagination info -->
-      <div class="flex items-center space-x-4">
+      <div class="flex flex-wrap items-center gap-4">
         <p class="text-sm text-gray-700 dark:text-gray-300">
           {{ t('pagination.showing') }}
           <span class="font-medium">{{ fromItem }}</span>
           {{ t('pagination.to') }}
           <span class="font-medium">{{ toItem }}</span>
           {{ t('pagination.of') }}
-          <span class="font-medium">{{ total }}</span>
+          <span v-if="!totalExact">{{ t('optimizations.atLeast') }} </span><span class="font-medium">{{ total }}</span>
           {{ t('pagination.results') }}
         </p>
 
@@ -50,21 +49,7 @@
           </div>
         </div>
 
-        <div v-if="showJump" class="flex items-center space-x-2">
-          <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('pagination.jumpTo') }}</span>
-          <input
-            v-model="jumpPage"
-            type="number"
-            min="1"
-            :max="totalPages"
-            class="input w-20 text-sm"
-            :placeholder="t('pagination.jumpPlaceholder')"
-            @keyup.enter="submitJump"
-          />
-          <button type="button" class="btn btn-ghost btn-sm" @click="submitJump">
-            {{ t('pagination.jumpAction') }}
-          </button>
-        </div>
+        <PagePicker v-if="showJump" :page="page" :pages="totalPages" :exact="totalExact" @select="goToPage" />
       </div>
 
       <!-- Desktop pagination buttons -->
@@ -75,7 +60,7 @@
         <!-- Previous button -->
         <button
           @click="goToPage(page - 1)"
-          :disabled="page === 1"
+          :disabled="page <= 1"
           class="relative inline-flex items-center rounded-l-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600"
           :aria-label="t('pagination.previous')"
         >
@@ -106,7 +91,7 @@
         <!-- Next button -->
         <button
           @click="goToPage(page + 1)"
-          :disabled="page === totalPages"
+          :disabled="page >= totalPages"
           class="relative inline-flex items-center rounded-r-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-400 dark:hover:bg-dark-600"
           :aria-label="t('pagination.next')"
         >
@@ -118,10 +103,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import Select from './Select.vue'
+import PagePicker from './PagePicker.vue'
 import { getConfiguredTablePageSizeOptions, normalizeTablePageSize } from '@/utils/tablePreferences'
 import { setPersistedPageSize } from '@/composables/usePersistedPageSize'
 
@@ -129,6 +115,7 @@ const { t } = useI18n()
 
 interface Props {
   total: number
+  totalExact?: boolean
   page: number
   pageSize: number
   pageSizeOptions?: number[]
@@ -144,12 +131,13 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   pageSizeOptions: () => getConfiguredTablePageSizeOptions(),
   showPageSizeSelector: true,
-  showJump: false
+  showJump: false,
+  totalExact: true
 })
 
 const emit = defineEmits<Emits>()
 
-const totalPages = computed(() => Math.ceil(props.total / props.pageSize))
+const totalPages = computed(() => Math.max(1, Math.ceil(Math.max(0, props.total) / Math.max(1, props.pageSize))))
 
 const fromItem = computed(() => {
   if (props.total === 0) return 0
@@ -175,7 +163,6 @@ const pageSizeSelectOptions = computed(() => {
   }))
 })
 
-const jumpPage = ref('')
 
 const visiblePages = computed(() => {
   const pages: (number | string)[] = []
@@ -217,7 +204,7 @@ const visiblePages = computed(() => {
 })
 
 const goToPage = (newPage: number) => {
-  if (newPage >= 1 && newPage <= totalPages.value && newPage !== props.page) {
+  if (Number.isSafeInteger(newPage) && newPage >= 1 && newPage <= totalPages.value && newPage !== props.page) {
     emit('update:page', newPage)
   }
 }
@@ -229,15 +216,6 @@ const handlePageSizeChange = (value: string | number | boolean | null) => {
   emit('update:pageSize', newPageSize)
 }
 
-const submitJump = () => {
-  const value = String(jumpPage.value).trim()
-  if (!value) return
-  const pageNum = Number.parseInt(value, 10)
-  if (Number.isNaN(pageNum)) return
-  const nextPage = Math.min(Math.max(pageNum, 1), totalPages.value)
-  jumpPage.value = ''
-  goToPage(nextPage)
-}
 </script>
 
 <style scoped>

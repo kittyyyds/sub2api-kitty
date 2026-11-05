@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ProfileAvatarCard from '@/components/user/profile/ProfileAvatarCard.vue'
 import type { User } from '@/types'
@@ -85,18 +85,13 @@ function createUser(overrides: Partial<User> = {}): User {
   }
 }
 
-async function flushAsyncWork(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
-}
+async function flushAsyncWork(): Promise<void> { await flushPromises() }
 
 const originalFileReader = globalThis.FileReader
 const originalImage = globalThis.Image
 const originalCreateElement = document.createElement.bind(document)
 
-function installAvatarCompressionMocks(blobSize = 8 * 1024) {
+function installAvatarCompressionMocks(blobSize = 8 * 1024, safari = false) {
   class MockFileReader {
     result: string | ArrayBuffer | null = null
     onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => any) | null = null
@@ -106,6 +101,8 @@ function installAvatarCompressionMocks(blobSize = 8 * 1024) {
     readAsDataURL(blob: Blob) {
       if (blob.type === 'image/webp') {
         this.result = 'data:image/webp;base64,' + Buffer.from('compressed-avatar').toString('base64')
+      } else if (blob.type === 'image/jpeg') {
+        this.result = 'data:image/jpeg;base64,' + Buffer.from('jpeg-avatar').toString('base64')
       } else {
         this.result = 'data:image/png;base64,' + Buffer.from('original-avatar').toString('base64')
       }
@@ -132,11 +129,12 @@ function installAvatarCompressionMocks(blobSize = 8 * 1024) {
         width: 0,
         height: 0,
         getContext: () => ({
+          save: vi.fn(), restore: vi.fn(), fillRect: vi.fn(),
           clearRect: vi.fn(),
           drawImage: vi.fn()
         }),
-        toBlob: (callback: BlobCallback) => {
-          callback(new Blob([new Uint8Array(blobSize)], { type: 'image/webp' }))
+        toBlob: (callback: BlobCallback, type: string) => {
+          callback(new Blob([new Uint8Array(blobSize)], { type: safari ? (type === 'image/webp' ? 'image/png' : 'image/jpeg') : 'image/webp' }))
         }
       } as unknown as HTMLCanvasElement
     }
@@ -200,7 +198,7 @@ describe('ProfileAvatarCard', () => {
 
     await fileInput.trigger('change')
     await flushAsyncWork()
-    await wrapper.get('[data-testid="profile-avatar-save"]').trigger('click')
+    expect(wrapper.find('[data-testid="profile-avatar-save"]').exists()).toBe(false)
 
     expect(updateProfileMock).toHaveBeenCalledWith({
       avatar_url: 'data:image/webp;base64,Y29tcHJlc3NlZC1hdmF0YXI='
@@ -211,6 +209,7 @@ describe('ProfileAvatarCard', () => {
   it('shows a preview after selecting an avatar in embedded mode', async () => {
     installAvatarCompressionMocks()
     authStoreState.user = createUser()
+    updateProfileMock.mockResolvedValue(createUser({ avatar_url: 'data:image/webp;base64,Y29tcHJlc3NlZC1hdmF0YXI=' }))
 
     const wrapper = mount(ProfileAvatarCard, {
       props: {
@@ -259,4 +258,53 @@ describe('ProfileAvatarCard', () => {
     expect(authStoreState.user?.avatar_url).toBeNull()
     expect(showSuccessMock).toHaveBeenCalledWith('Avatar removed')
   })
+  async function choose(wrapper: ReturnType<typeof mount>, size = 220 * 1024) {
+    const input = wrapper.get('[data-testid="profile-avatar-file-input"]')
+    Object.defineProperty(input.element, 'files', { value: [new File([new Uint8Array(size)], 'avatar.png', { type: 'image/png' })], configurable: true })
+    await input.trigger('change'); await flushPromises()
+  }
+
+  it('falls back to actual JPEG bytes if WebP encoding is unsupported', async () => {
+    installAvatarCompressionMocks(8192, true)
+    authStoreState.user = createUser()
+    updateProfileMock.mockResolvedValue(createUser({ avatar_url: 'data:image/jpeg;base64,anBlZy1hdmF0YXI=' }))
+    const wrapper = mount(ProfileAvatarCard, { props: { user: authStoreState.user } })
+    await choose(wrapper)
+    expect(updateProfileMock).toHaveBeenCalledWith({ avatar_url: 'data:image/jpeg;base64,anBlZy1hdmF0YXI=' })
+  })
+
+  it('keeps the old avatar when saving fails', async () => {
+    installAvatarCompressionMocks()
+    authStoreState.user = createUser({ avatar_url: 'https://example.test/old.png' })
+    updateProfileMock.mockRejectedValue(new Error('offline'))
+    const wrapper = mount(ProfileAvatarCard, { props: { user: authStoreState.user } })
+    await choose(wrapper)
+    expect(wrapper.get('[data-testid="profile-avatar-preview"]').attributes('src')).toBe('https://example.test/old.png')
+    expect(authStoreState.user.avatar_url).toBe('https://example.test/old.png')
+  })
+
+  it('rejects overlapping saves and does not overwrite a different signed-in user', async () => {
+    installAvatarCompressionMocks()
+    authStoreState.user = createUser()
+    let resolve!: (value: User) => void
+    updateProfileMock.mockReturnValue(new Promise<User>(r => { resolve = r }))
+    const wrapper = mount(ProfileAvatarCard, { props: { user: authStoreState.user } })
+    await choose(wrapper); await choose(wrapper)
+    expect(updateProfileMock).toHaveBeenCalledTimes(1)
+    authStoreState.user = createUser({ id: 99, avatar_url: 'other.png' })
+    await wrapper.setProps({ user: authStoreState.user })
+    resolve(createUser({ avatar_url: 'stale.png' })); await flushPromises()
+    expect(authStoreState.user.id).toBe(99)
+    expect(authStoreState.user.avatar_url).toBe('other.png')
+    expect(showSuccessMock).not.toHaveBeenCalled()
+  })
+
+  it('uses initials after an image error', async () => {
+    authStoreState.user = createUser({ avatar_url: 'broken.png' })
+    const wrapper = mount(ProfileAvatarCard, { props: { user: authStoreState.user } })
+    await wrapper.get('img').trigger('error')
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.text()).toContain('A')
+  })
+
 })

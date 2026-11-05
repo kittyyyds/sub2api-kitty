@@ -1,5 +1,5 @@
 <template>
-  <div v-if="!isDesktopViewport" class="space-y-3">
+  <div v-if="showCards" :class="layout === 'cards' ? 'grid grid-cols-1 items-start gap-4 overflow-y-auto p-1 lg:grid-cols-2 2xl:grid-cols-3' : 'space-y-3'" data-testid="data-table-cards">
     <template v-if="loading">
       <div v-for="i in 5" :key="i" class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
         <div class="space-y-3">
@@ -15,7 +15,7 @@
     </template>
 
     <template v-else-if="!data || data.length === 0">
-      <div class="rounded-lg border border-gray-200 bg-white p-12 text-center dark:border-dark-700 dark:bg-dark-900">
+      <div class="col-span-full rounded-lg border border-gray-200 bg-white p-12 text-center dark:border-dark-700 dark:bg-dark-900">
         <slot name="empty">
           <div class="flex flex-col items-center">
             <Icon
@@ -34,7 +34,7 @@
     <template v-else>
       <div
         v-if="serverSideSort && sortableColumns.length > 0"
-        class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-dark-700 dark:bg-dark-900"
+        class="col-span-full flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-dark-700 dark:bg-dark-900"
         data-test="mobile-sort-controls"
       >
         <label class="shrink-0 text-xs font-medium text-gray-500 dark:text-dark-400" :for="mobileSortId">
@@ -60,7 +60,7 @@
           <span aria-hidden="true">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
         </button>
       </div>
-      <div v-if="selectable" class="flex items-center justify-end gap-2 px-1">
+      <div v-if="selectable" class="col-span-full flex items-center justify-end gap-2 px-1">
         <label class="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300">
           <input
             type="checkbox"
@@ -458,6 +458,7 @@ onUnmounted(() => {
 })
 
 interface Props {
+  layout?: 'responsive' | 'cards'
   columns: Column[]
   data: any[]
   loading?: boolean
@@ -502,6 +503,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  layout: 'responsive',
   loading: false,
   stickyFirstColumn: true,
   stickyActionsColumn: true,
@@ -662,6 +664,8 @@ const resolveStableRowKey = (row: any): string | number | undefined => {
 
 const resolveRowKey = (row: any, index: number) => resolveStableRowKey(row) ?? index
 
+const showCards = computed(() => props.layout === 'cards' || !isDesktopViewport.value)
+
 const dataColumns = computed(() => props.columns.filter((column) => column.key !== 'actions'))
 const sortableColumns = computed(() => props.columns.filter((column) => column.sortable))
 const mobileSortId = 'mobile-sort'
@@ -670,10 +674,10 @@ const columnsSignature = computed(() =>
 )
 
 watch(
-  isDesktopViewport,
-  async (isDesktop) => {
+  showCards,
+  async (cards) => {
     detachDesktopTableTracking()
-    if (!isDesktop) return
+    if (cards) return
     await nextTick()
     attachDesktopTableTracking()
   },
@@ -794,7 +798,7 @@ const toggleAllVisible = (checked: boolean) => {
 // 是否启用虚拟化:仅桌面端且行数超过阈值时开启。小列表全量渲染,彻底绕开虚拟器的
 // 估算/测量/滚动补偿链路,消除可变行高导致的滚动抖动。
 const shouldVirtualize = computed(() =>
-  isDesktopViewport.value && (sortedData.value?.length ?? 0) > (props.virtualizeThreshold ?? 100)
+  !showCards.value && (sortedData.value?.length ?? 0) > (props.virtualizeThreshold ?? 100)
 )
 
 const rowVirtualizer = useVirtualizer(computed(() => ({

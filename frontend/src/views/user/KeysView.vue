@@ -24,7 +24,10 @@
                 @update:model-value="onStatusFilterChange"
               />
             </div>
-            <div class="keys-toolbar-actions flex shrink-0 items-center justify-end gap-3" data-test="keys-toolbar-actions">
+            <div class="keys-toolbar-actions flex shrink-0 flex-wrap items-center justify-end gap-3" data-test="keys-toolbar-actions">
+              <div class="inline-flex rounded-lg border border-gray-200 p-1 dark:border-dark-600" :aria-label="t('optimizations.view')">
+                <button v-for="mode in (['table', 'cards'] as const)" :key="mode" type="button" class="rounded-md px-3 py-1.5 text-sm" :class="keyView === mode ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="keyView === mode" :data-test="`keys-view-${mode}`" @click="keyView = mode">{{ t(`optimizations.${mode}`) }}</button>
+              </div>
               <button
                 @click="refreshPage"
                 :disabled="loading"
@@ -99,6 +102,7 @@
 
       <template #table>
         <DataTable
+          :layout="keyView === 'cards' ? 'cards' : 'responsive'"
           :columns="columns"
           :data="apiKeys"
           :loading="loading"
@@ -1291,6 +1295,9 @@
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
 const { t } = useI18n()
+const keyView = ref<'table' | 'cards'>('table')
+try { if (localStorage.getItem('kitty.keys.view') === 'cards') keyView.value = 'cards' } catch { /* private mode */ }
+watch(keyView, (value) => { try { localStorage.setItem('kitty.keys.view', value) } catch { /* preference only */ } })
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
