@@ -26,6 +26,8 @@ func TestManagedMigrationsReadOnlyValidation(t *testing.T) {
 	}{
 		{name: "exact", checksum: checksum, ok: true},
 		{name: "known_history", checksum: checksum, extraName: "231_disable_long_context_pricing.sql", extraSum: managedHistoricalMigrations["231_disable_long_context_pricing.sql"], ok: true},
+		{name: "reviewed_provider_324", checksum: checksum, extraName: "324_kitty_provider_operations.sql", extraSum: "0abacdbe412cf5af67b29f1564a75d530aef7c4f2bdfec85e50c02a472a1d8ed", ok: true},
+		{name: "changed_provider_324", checksum: checksum, extraName: "324_kitty_provider_operations.sql", extraSum: "bad"},
 		{name: "retired_grok_data_operation", checksum: checksum, extraName: "188_enable_grok_enhancement_group.sql", extraSum: "d53c9ab1f36d012ae13dfdb22b7303c94d6d9ebe01704430b681f9c6fc24fbe1", ok: true},
 		{name: "retired_grok_checksum_changed", checksum: checksum, extraName: "188_enable_grok_enhancement_group.sql", extraSum: "bad"},
 		{name: "exact_ticket_learning", checksum: checksum, extraName: "239_codex_harvest_node_learning.sql", extraSum: "40a2d7a2d40a9d29cfd77781c7f70ff96ef95e8824b03dc6e06cf4bc891636d9", ok: true},
