@@ -13,6 +13,7 @@ import (
 // Historical ledger identities are retained after feature retirement.
 // These allowances do not execute SQL or enable any retired feature.
 var managedHistoricalMigrations = map[string]string{
+	"323_kitty_permanent_usage.sql":         "4fc15e33d22dd709f8aa93f8175778088fb6f13959c33980cdd07700e4c3b59f",
 	"188_enable_grok_enhancement_group.sql": "d53c9ab1f36d012ae13dfdb22b7303c94d6d9ebe01704430b681f9c6fc24fbe1",
 	"239_codex_harvest_node_learning.sql":   "40a2d7a2d40a9d29cfd77781c7f70ff96ef95e8824b03dc6e06cf4bc891636d9",
 	"240_codex_harvest_flow_events.sql":     "5a438fe8536068659b50d4d03d24fd57da21f1f9e226ac920332506e985d173e",
