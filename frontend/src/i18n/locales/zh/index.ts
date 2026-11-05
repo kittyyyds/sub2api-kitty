@@ -4,6 +4,7 @@ import accountTestTiming from './accountTestTiming'
 import openaiAuth from './openaiAuth'
 import profitOps from './profitOps'
 import financeHub from './financeHub'
+import providerHub from './providerHub'
 import upstreamOps from './upstreamOps'
 import channelOps from './channelOps'
 import ipAudit from './ipAudit'
@@ -52,6 +53,7 @@ export default {
   upstreamOps,
   profitOps,
   financeHub,
+  providerHub,
   accountOps,
   tokenGuard,
   pelicanTests,

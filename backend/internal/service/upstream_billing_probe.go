@@ -254,6 +254,7 @@ func normalizeUpstreamBillingProbeSettings(settings *UpstreamBillingProbeSetting
 
 // UpstreamBillingProbeService discovers a remote Sub2API billing snapshot.
 type UpstreamBillingProbeService struct {
+	providerHub        *ChannelService
 	newAPIRepo         NewAPIAuthorizationRepository
 	newAPIEncryptor    SecretEncryptor
 	newAPIFixedKey     bool
@@ -320,10 +321,13 @@ func ProvideUpstreamBillingProbeService(
 	cfg *config.Config,
 	newAPIRepo NewAPIAuthorizationRepository,
 	encryptor SecretEncryptor,
+	channels *ChannelService,
 ) *UpstreamBillingProbeService {
 	svc := NewUpstreamBillingProbeService(accountRepo, accountTestService, settingService)
 	svc.SetLeaderLock(lockCache, db)
 	svc.SetNewAPIAuthorization(newAPIRepo, encryptor, cfg != nil && cfg.Totp.EncryptionKeyConfigured)
+	channels.SetProviderHubProbe(svc)
+	svc.providerHub = channels
 	startBackgroundService(cfg, svc)
 	return svc
 }
@@ -388,6 +392,9 @@ func (s *UpstreamBillingProbeService) RunDue(ctx context.Context) error {
 	}
 	s.cycleMu.Lock()
 	defer s.cycleMu.Unlock()
+	if s.providerHub != nil {
+		s.runProviderHubDue(ctx)
+	}
 
 	settings, err := s.getSettings(ctx)
 	if err != nil {

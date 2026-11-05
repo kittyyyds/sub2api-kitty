@@ -16,6 +16,7 @@ import (
 
 // ChannelHandler handles admin channel management
 type ChannelHandler struct {
+	providerAdmin  service.AdminService
 	channelService *service.ChannelService
 	billingService *service.BillingService
 	pricingService *service.PricingService
@@ -25,6 +26,8 @@ type ChannelHandler struct {
 func NewChannelHandler(channelService *service.ChannelService, billingService *service.BillingService, pricingService *service.PricingService) *ChannelHandler {
 	return &ChannelHandler{channelService: channelService, billingService: billingService, pricingService: pricingService}
 }
+
+func (h *ChannelHandler) SetProviderHubAdmin(admin service.AdminService) { h.providerAdmin = admin }
 
 // --- Request / Response types ---
 

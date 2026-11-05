@@ -1,5 +1,7 @@
 # 利润运营与独立上游渠道归属
 
+2026-11-06当前版本说明：本文下方保留早期渠道实体实现背景。当前发布基线已没有`/admin/upstream-channels`管理入口及对应实体写接口，迁移312/313和部分归属读取字段仍保留。Kitty.7新增的完整供应商、钱包、采购及成本快照系统位于`/admin/providers`，独立运营面板位于`/admin/operations`，见[provider-operations.md](provider-operations.md)。原`/admin/profit-operations`继续提供下面标注的当前倍率估算，不等同新增快照报表。
+
 利润运营页 `/admin/profit-operations` 按独立上游渠道实体聚合请求、收入与估算利润。渠道实体具有不可变内部 ID、唯一且创建后不变的 code、唯一可编辑名称和备注；账号使用独立 FK 显式归属。
 
 账号归属不由 URL 派生。同一渠道可包含不同 URL、无效/未知 URL、动态 OAuth 或不支持读取 URL 的账号；不同渠道也可包含相同 URL。只有当前未绑定账号才按现有安全有效 URL 自动聚合，无法识别时保留 unknown。利润筛选与下钻使用实体内部 ID，不受 URL、名称和分页位置变化影响。

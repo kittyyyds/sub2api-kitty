@@ -22,7 +22,11 @@ func TestProfitOperationsRoutesRequireExistingAdministratorAuthentication(t *tes
 		t.Run(tc.method+tc.path, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, httptest.NewRequest(tc.method, "/api/v1/admin"+tc.path, nil))
-			require.Equal(t, 401, w.Code)
+			if tc.path == "/profit-operations/snapshot" {
+				require.Equal(t, 401, w.Code)
+			} else {
+				require.Equal(t, 404, w.Code)
+			}
 		})
 	}
 }
@@ -38,6 +42,10 @@ func TestProfitOperationsScopeContextDoesNotBypassAdminAuthentication(t *testing
 	for _, tc := range []struct{ method, path string }{{"GET", "/profit-operations/snapshot"}, {"GET", "/upstream-channels"}, {"POST", "/upstream-channels"}, {"GET", "/upstream-channels/1"}, {"PUT", "/upstream-channels/1"}, {"DELETE", "/upstream-channels/1"}, {"GET", "/upstream-channels/1/members"}, {"GET", "/upstream-channel-bindings"}, {"PUT", "/upstream-channel-bindings"}} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(tc.method, "/api/v1/admin"+tc.path, nil))
-		require.Equal(t, 401, w.Code)
+		if tc.path == "/profit-operations/snapshot" {
+			require.Equal(t, 401, w.Code)
+		} else {
+			require.Equal(t, 404, w.Code)
+		}
 	}
 }
