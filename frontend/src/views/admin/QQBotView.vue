@@ -265,7 +265,7 @@ const healthFields = [
   { key: 'cooldown_minutes', min: 0, max: 1440, step: 1 }
 ] as const
 const notificationGroupsText = ref('')
-const priceNotifications = ref({ enabled: false, scheduled: true, groups: [] as string[] })
+const priceNotifications = ref({ enabled: false, scheduled: false, groups: [] as string[] })
 const notificationJobs = computed(() => runtime.value?.jobs.filter(job => job.kind === 'price_notification' || job.kind === 'health_notification' || job.kind === 'ranking_notification') ?? [])
 const baseline = ref<QQBotConfig | null>(null)
 const history = ref<QQConfigChange[]>([])
@@ -329,7 +329,7 @@ function apply(c: QQBotConfig, updateBaseline = true) {
   healthNotifications.value = { ...defaultHealthNotificationConfig(), ...c.health_notifications }
   healthGroupsText.value = healthNotifications.value.groups.join('\n')
   groupsText.value = (c.allowed_groups || []).join('\n')
-  priceNotifications.value = { enabled: false, scheduled: true, ...c.price_notifications, groups: c.price_notifications?.groups ?? [] }
+  priceNotifications.value = { enabled: false, scheduled: false, ...c.price_notifications, groups: c.price_notifications?.groups ?? [] }
   notificationGroupsText.value = priceNotifications.value.groups.join('\n')
   if (updateBaseline) baseline.value = cloneConfig(draft())
 }
