@@ -7,9 +7,9 @@
       </div>
       <div v-if="loading && !data" class="flex justify-center py-20"><LoadingSpinner /></div>
       <template v-if="data">
-        <section class="grid grid-cols-2 gap-4 lg:grid-cols-4" :aria-label="t('admin.operations.metrics')" data-testid="operations-metrics">
+        <section class="grid grid-cols-2 gap-4 xl:grid-cols-4" :aria-label="t('admin.operations.metrics')" data-testid="operations-metrics">
           <article v-for="metric in metrics" :key="metric.key" class="ops-metric card min-w-0 p-3 sm:p-5" :data-metric="metric.key">
-            <div class="flex flex-col items-start gap-3 sm:flex-row">
+            <div class="flex flex-col items-start gap-3 2xl:flex-row">
               <span class="ops-metric-icon" :class="metric.color"><Icon :name="metric.icon" size="md" :stroke-width="2" /></span>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t(metric.label) }}</p>
