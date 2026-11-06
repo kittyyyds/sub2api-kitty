@@ -344,10 +344,12 @@ export interface OperationsDashboardParams {
 }
 
 export interface OperationsDashboardMetrics {
+  today_cost_unknown?: number
+  today_monitor_unknown?: number
   today_user_consumption: number
   today_user_recharge: number
   today_monitor_consumption: number
-  /** Cash receipts are reported separately by ISO currency. */
+  /** Estimated gross margin, unavailable while any cost is unknown. */
   today_revenue: Record<string, number | null>
   yesterday_user_consumption: number
   yesterday_user_recharge: number

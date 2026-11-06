@@ -170,6 +170,8 @@ func TestCS1OperationsCostsCoverageGroupingAndRetention(t *testing.T) {
 func TestCS1OperationsRechargeOnlyCompletedCreditAndNoPayDuplicate(t *testing.T) {
 	billing, cmd, _, client := durableBillingFixture(t)
 	db := billing.db
+	_, roleErr := db.Exec(`INSERT INTO users(email,password_hash,role,balance) VALUES('admin@example.test','synthetic-only','admin',20),('super@example.test','synthetic-only','super_admin',30)`)
+	require.NoError(t, roleErr)
 	ctx := context.Background()
 	now := time.Now().UTC()
 	start := now.Truncate(24 * time.Hour)
@@ -185,6 +187,8 @@ func TestCS1OperationsRechargeOnlyCompletedCreditAndNoPayDuplicate(t *testing.T)
 	d, e := usage.GetOperationsDashboardData(ctx, start, start.Add(24*time.Hour), start, now.Add(time.Minute), start, now.Add(time.Minute), "UTC", 0)
 	require.NoError(t, e)
 	require.Equal(t, 110.0, d.Metrics.TodayUserRecharge)
+	require.Equal(t, 50.0, d.Metrics.AdminBalance)
+	require.Equal(t, 100.0, d.Metrics.TotalUserBalance)
 	require.Empty(t, d.Models)
 	require.Empty(t, d.Trend)
 }

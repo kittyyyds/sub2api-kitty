@@ -37,14 +37,14 @@ func (r *usageLogRepository) loadOperationsMetrics(ctx context.Context, data *se
   COALESCE(sum(p.actual_cost) FILTER(WHERE u.role='user' AND p.observed_at >= $1 AND p.observed_at < $2),0),
   COALESCE(sum(p.actual_cost) FILTER(WHERE u.role='user' AND p.observed_at >= $3 AND p.observed_at < $1),0),
   COALESCE(sum(p.actual_cost) FILTER(WHERE u.role='user'),0),
-  COALESCE(sum(p.actual_cost) FILTER(WHERE u.role='admin' AND p.observed_at >= $3 AND p.observed_at < $1),0),
+  COALESCE(sum(p.actual_cost) FILTER(WHERE u.role IN ('admin','super_admin') AND p.observed_at >= $3 AND p.observed_at < $1),0),
   count(*) FILTER(WHERE u.role='user' AND p.observed_at >= $1 AND p.observed_at < $2),
   count(*) FILTER(WHERE u.role='user' AND p.observed_at >= $3 AND p.observed_at < $1)
  FROM kitty_permanent_usage p JOIN users u ON u.id=p.user_id`, []any{todayStart, todayEnd, yesterday}, &data.Metrics.TodayUserConsumption, &data.Metrics.YesterdayUserConsumption, &data.Metrics.TotalUserConsumption, &data.Metrics.YesterdayAdminConsumption, &todayCount, &yesterdayCount)
 	if e != nil {
 		return e
 	}
-	e = scanSingleRow(ctx, r.sql, `SELECT COALESCE(sum(balance) FILTER(WHERE role='user'),0),COALESCE(sum(balance) FILTER(WHERE role='admin'),0) FROM users WHERE deleted_at IS NULL`, nil, &data.Metrics.TotalUserBalance, &data.Metrics.AdminBalance)
+	e = scanSingleRow(ctx, r.sql, `SELECT COALESCE(sum(balance) FILTER(WHERE role='user'),0),COALESCE(sum(balance) FILTER(WHERE role IN ('admin','super_admin')),0) FROM users WHERE deleted_at IS NULL`, nil, &data.Metrics.TotalUserBalance, &data.Metrics.AdminBalance)
 	if e != nil {
 		return e
 	}

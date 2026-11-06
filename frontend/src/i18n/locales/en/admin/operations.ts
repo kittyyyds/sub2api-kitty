@@ -1,5 +1,6 @@
 export default {
   operations: {
+    profitIncomplete: 'Missing costs: {requests} requests, {monitors} monitor checks',
     costBasis: "Consumption is request valuation. Costs use reconciled invoices, frozen procurement estimates, then the account cost recorded with the request. Margin is not cash profit.",
     costCoverage: "{requests} requests: {reconciled} reconciled; {procurement_estimated} procurement estimates; {account_estimated} account estimates; {unknown} unpriced. Unknown costs do not count as zero.",
     retentionHint: "Cumulative consumption uses permanent receipts. Breakdowns and trends use retained usage from {date}. Monitoring costs cover retained results.",
@@ -10,7 +11,7 @@ export default {
       todayUserConsumption: "Today's user spend",
       todayUserRecharge: "Today's user top-ups",
       todayMonitorConsumption: "Today's monitor spend",
-      todayRevenue: "Today's revenue",
+      todayRevenue: "Today's estimated gross margin",
       totalUserConsumption: 'Total user spend',
       totalUserBalance: 'Total user balance',
       totalMonitorConsumption: 'Total monitor spend',
@@ -18,7 +19,7 @@ export default {
       yesterdayUserConsumption: "Yesterday's spend",
       yesterdayUserRecharge: "Yesterday's recharge",
       yesterdayMonitorConsumption: "Yesterday's spend",
-      yesterdayRevenue: "Yesterday's revenue",
+      yesterdayRevenue: "Yesterday's estimated gross margin",
       comparisonGrowth: 'Change vs yesterday:',
       yesterdayIncrease: 'Added yesterday',
       yesterdayConsumption: 'Spent yesterday',
@@ -55,7 +56,7 @@ export default {
       deletedGroups: 'Deleted groups',
       deletedGroupsHint: 'Combined spend of deleted groups in this period',
       multiplier: 'Rate',
-      profit: 'Profit',
+      profit: 'Estimated margin',
       userCost: 'User spend',
       upstreamCost: 'Upstream spend',
       noGroups: 'No group spending data',

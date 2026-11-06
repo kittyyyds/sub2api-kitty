@@ -17,6 +17,7 @@
                   <p v-for="revenue in revenues" :key="revenue.currency" class="break-words text-lg font-bold tabular-nums text-gray-900 dark:text-white sm:text-xl" :title="revenue.currency">{{ formatMoney(revenue.amount, revenue.currency) }}</p>
                 </div>
                 <p v-else class="break-words text-lg font-bold tabular-nums text-gray-900 dark:text-white sm:text-xl">{{ formatMoney(data.metrics[metric.key]) }}</p>
+                <p v-if="metric.key === 'today_revenue' && ((data.metrics.today_cost_unknown ?? 0) + (data.metrics.today_monitor_unknown ?? 0) > 0)" class="mt-1 text-xs text-amber-700 dark:text-amber-300" data-testid="profit-incomplete">{{ t('admin.operations.profitIncomplete', { requests: data.metrics.today_cost_unknown ?? 0, monitors: data.metrics.today_monitor_unknown ?? 0 }) }}</p>
                 <p v-if="metric.key === 'today_revenue'" class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
                   <span>{{ t('admin.operations.yesterdayRevenue') }}:</span>
                   <span v-for="revenue in revenueComparisons" :key="revenue.currency" class="whitespace-nowrap tabular-nums">

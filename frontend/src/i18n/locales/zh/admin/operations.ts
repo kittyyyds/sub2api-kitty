@@ -1,5 +1,6 @@
 export default {
   operations: {
+    profitIncomplete: '成本待补齐：业务 {requests} 条，监控 {monitors} 条',
     costBasis: "消费为请求计价；上游成本优先取已对账账单，再取冻结采购估算，未配置时使用请求当时的账号成本快照。毛利不等于现金净利润。",
     costCoverage: "本区间 {requests} 次：已对账 {reconciled}；采购估算 {procurement_estimated}；账号估算 {account_estimated}；成本待核算 {unknown}。待核算项不按零成本计利润。",
     retentionHint: "累计消费保留永久收据；分组、模型、用户和趋势使用现存用量明细，最早保留日期 {date}。监控费用按留存结果统计。",
