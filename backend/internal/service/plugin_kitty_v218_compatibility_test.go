@@ -39,7 +39,7 @@ func TestRetiredBPSPluginsCannotBeReenabled(t *testing.T) {
 func TestKittyV219FinancePinnedPluginCompatibility(t *testing.T) {
 	var manifest PluginManifest
 	require.NoError(t, json.Unmarshal([]byte(gatewayPromptPinnedManifest), &manifest))
-	for _, version := range []string{"2.19.0-kitty.6", "2.19.0-kitty.7", "2.19.0-kitty.8", "2.19.0-kitty.9", "2.19.0-kitty.10", "2.19.0-kitty.11", "2.19.0-kitty.12"} {
+	for _, version := range []string{"2.19.0-kitty.6", "2.19.0-kitty.7", "2.19.0-kitty.8", "2.19.0-kitty.9", "2.19.0-kitty.10", "2.19.0-kitty.11", "2.19.0-kitty.12", "2.19.0-kitty.13", "2.19.0-kitty.14"} {
 		require.True(t, EvaluatePluginCompatibility(manifest, PluginHostInfo{Version: version}).Compatible)
 	}
 	manifest.Name += " modified"
