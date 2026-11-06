@@ -1520,6 +1520,12 @@
 
       <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
       <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
+        <div v-if="supportsProviderImport" class="flex flex-wrap gap-4 rounded-xl bg-gray-50 px-4 py-3 dark:bg-dark-800" role="radiogroup" :aria-label="t('admin.providerImport.sourceProvider')">
+          <label class="flex items-center gap-2"><input v-model="providerSource" type="radio" value="api" />{{ t('admin.providerImport.sourceApi') }}</label>
+          <label class="flex items-center gap-2"><input v-model="providerSource" type="radio" value="provider" />{{ t('admin.providerImport.sourceProvider') }}</label>
+        </div>
+        <ProviderAccountImport v-if="usingProvider" :platform="form.platform" :disabled="submitting" @select="selectProviderAccount" />
+        <template v-else>
         <GrokMediaProviderSelect
           v-if="form.platform === 'grok' || form.platform === 'video'"
           :video-platform="form.platform === 'video'"
@@ -1587,6 +1593,7 @@
           <p v-if="apiKeyHint" class="input-hint">{{ apiKeyHint }}</p>
         </div>
 
+        </template>
         <!-- 上游倍率自动探测：全部 API-key 平台可用（所在区块已限定 apikey 类型） -->
         <div
           class="flex items-center justify-between gap-4 border-t border-gray-200 pt-4 dark:border-dark-600"
@@ -4148,6 +4155,8 @@
 </template>
 
 <script setup lang="ts">
+import ProviderAccountImport from '@/components/account/ProviderAccountImport.vue'
+import { providerAccountRateMultiplier, suggestedProviderAccountName, type ProviderAccountSelection } from '@/components/account/providerImport'
 import { usesImagePriceProbe } from "@/utils/modelPriceProbe"
 import ExtraImageModelsField from '@/components/account/ExtraImageModelsField.vue'
 import { parseExtraImageModels } from '@/utils/extraImageModels'
@@ -4662,7 +4671,30 @@ function onCnPresetSelect(preset: { mode: CnAccountMode; protocol: CnApiProtocol
   apiKeyBaseUrl.value = preset.url
 }
 
+const providerSource = ref<'api' | 'provider'>('api')
+const providerSelection = ref<ProviderAccountSelection | null>(null)
+const supportsProviderImport = computed(() => form.type === 'apikey' && ['openai', 'anthropic', 'gemini', 'grok'].includes(form.platform))
+const usingProvider = computed(() => supportsProviderImport.value && providerSource.value === 'provider')
+let providerFilledRate: number | null = null
+let providerFilledName = ''
+function selectProviderAccount(selection: ProviderAccountSelection | null) {
+  providerSelection.value = selection
+  if (!selection) return
+  if (!form.name.trim() || form.name === providerFilledName) { form.name = suggestedProviderAccountName(selection); providerFilledName = form.name }
+  const rate = providerAccountRateMultiplier(selection.groupMultiplier)
+  if (rate !== null && (form.rate_multiplier === 1 || form.rate_multiplier === providerFilledRate)) { form.rate_multiplier = rate; providerFilledRate = rate }
+}
+watch(() => [form.platform, form.type, providerSource.value], () => {
+  providerSelection.value = null
+  if (providerFilledRate !== null && form.rate_multiplier === providerFilledRate) form.rate_multiplier = 1
+  if (providerFilledName && form.name === providerFilledName) form.name = ''
+  providerFilledRate = null
+  providerFilledName = ''
+})
+watch(() => props.show, show => { if (show) { providerSource.value = 'api'; providerSelection.value = null; providerFilledRate = null; providerFilledName = '' } })
+
 const syncPreviewCredentials = computed(() => {
+  if (usingProvider.value) { const selected = providerSelection.value; return selected ? { platform: form.platform, type: form.type, api_key: '', provider_id: selected.providerId, provider_key_id: selected.keyId } : undefined }
   if (!apiKeyValue.value.trim()) return undefined
   const baseUrl = isMultiProtocolPlatform.value && apiProtocol.value === 'adaptive'
     ? adaptiveBaseUrls.value.chat_completions.trim() || apiKeyBaseUrl.value.trim()
@@ -5642,6 +5674,7 @@ const createAccountWithReservation = async (payload: CreateAccountRequest) => {
  const reservation = oauthReservation.value
  const account=await adminAPI.accounts.create({
   ...payload,
+  ...(usingProvider.value && providerSelection.value && payload.type === 'apikey' ? {provider_id:providerSelection.value.providerId,provider_key_id:providerSelection.value.keyId} : {}),
   ...(reservation ? {import_ticket:reservation.id,proxy_id:reservation.proxy_id} : {})
  })
  oauthReservation.value=null
@@ -6238,7 +6271,8 @@ const handleSubmit = async () => {
   }
 
   // For apikey type, create directly
-  if (!apiKeyValue.value.trim()) {
+  if (usingProvider.value && !providerSelection.value) { appStore.showError(t('admin.providerImport.selectKeyRequired')); return }
+  if (!usingProvider.value && !apiKeyValue.value.trim()) {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
     return
   }
@@ -6262,8 +6296,7 @@ const handleSubmit = async () => {
 
   // Build credentials with optional model mapping
   const credentials: Record<string, unknown> = {
-    base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
-    api_key: apiKeyValue.value.trim()
+    ...(usingProvider.value ? {} : {base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl, api_key: apiKeyValue.value.trim()})
   }
   if (form.platform === 'grok' || form.platform === 'video') applyGrokMediaProvider(credentials, grokMediaProvider.value)
   if (form.platform === 'gemini' && isOfficialGeminiBaseUrl(apiKeyBaseUrl.value)) {

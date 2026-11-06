@@ -254,6 +254,7 @@ func normalizeUpstreamBillingProbeSettings(settings *UpstreamBillingProbeSetting
 
 // UpstreamBillingProbeService discovers a remote Sub2API billing snapshot.
 type UpstreamBillingProbeService struct {
+	cs1ProviderRefresh func(context.Context)
 	providerHub        *ChannelService
 	newAPIRepo         NewAPIAuthorizationRepository
 	newAPIEncryptor    SecretEncryptor

@@ -9,6 +9,7 @@
       <div class="flex justify-end space-x-3">
         <button
           @click="handleCancel"
+          :disabled="loading"
           type="button"
           class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-200 dark:hover:bg-dark-600 dark:focus:ring-offset-dark-800"
         >
@@ -16,6 +17,7 @@
         </button>
         <button
           @click="handleConfirm"
+          :disabled="loading"
           type="button"
           :class="[
             'rounded-md px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-dark-800',
@@ -44,6 +46,7 @@ interface Props {
   message: string
   confirmText?: string
   cancelText?: string
+  loading?: boolean
   danger?: boolean
 }
 
@@ -62,10 +65,10 @@ const cancelText = computed(() => props.cancelText || t('common.cancel'))
 const emit = defineEmits<Emits>()
 
 const handleConfirm = () => {
-  emit('confirm')
+  if (!props.loading) emit('confirm')
 }
 
 const handleCancel = () => {
-  emit('cancel')
+  if (!props.loading) emit('cancel')
 }
 </script>

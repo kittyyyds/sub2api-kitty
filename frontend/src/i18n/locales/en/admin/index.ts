@@ -1,3 +1,6 @@
+import upstream from './upstream'
+import providerImport from './providerImport'
+import operations from './operations'
 import moderationUsers from './moderationUsers'
 import groupCacheTest from './groupCacheTest'
 import requestCapture from './requestCapture'
@@ -14,6 +17,9 @@ import safetyPromptAudit from './safetyPromptAudit'
 import plugins from './plugins'
 
 export default {
+  ...upstream,
+  ...providerImport,
+  ...operations,
   ...moderationUsers,
   ...groupCacheTest,
   ...requestCapture,

@@ -660,6 +660,8 @@ export async function syncUpstreamModels(id: number): Promise<SyncUpstreamModels
 }
 
 export interface SyncUpstreamPreviewParams {
+  provider_id?: string
+  provider_key_id?: string
   platform: string
   type: string
   base_url?: string

@@ -136,7 +136,7 @@ func (r *accountRepository) Create(ctx context.Context, account *service.Account
 	}
 	client := r.client
 	var tx *dbent.Tx
-	if account != nil && (account.InitialQualityPlan != nil || account.InitialAdmissionPlan != nil || account.InitialIQBootstrap != nil || account.ImportTicket != "") {
+	if account != nil && (account.InitialQualityPlan != nil || account.InitialAdmissionPlan != nil || account.InitialIQBootstrap != nil || account.ImportTicket != "" || account.Extra["provider_binding"] != nil) {
 		var err error
 		tx, err = r.client.Tx(ctx)
 		if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
@@ -229,6 +229,21 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 		return translatePersistenceError(err, service.ErrAccountNotFound, nil)
 	}
 
+	if binding, ok := account.Extra["provider_binding"].(map[string]any); ok {
+		providerID, _ := binding["provider_id"].(string)
+		result, err := client.ExecContext(ctx, `INSERT INTO kitty_supplier_bindings(account_id,wallet_id)
+   SELECT $1,(value::jsonb->>'wallet_id')::bigint FROM settings WHERE key=$2 AND NOT COALESCE((value::jsonb->>'deleted')::boolean,false)`, created.ID, cs1ProviderPrefix+providerID)
+		if err != nil {
+			return err
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if count != 1 {
+			return service.ErrProviderHubConflict
+		}
+	}
 	for _, p := range []*service.ScheduledTestPlan{account.InitialQualityPlan, account.InitialAdmissionPlan} {
 		if p == nil {
 			continue

@@ -1082,6 +1082,26 @@ func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.POST("/permanent-usage/backfill", h.Admin.Channel.BackfillPermanentUsage)
 	admin.PUT("/supplier-balances/thresholds", h.Admin.Channel.SaveSupplierBalanceThresholds)
 	admin.GET("/profit-operations/snapshot", h.Admin.Channel.ProfitOperations)
+
+	admin.GET("/dashboard/operations", h.Admin.Dashboard.GetOperationsDashboard)
+	admin.GET("/dashboard/operations/users", h.Admin.Dashboard.GetOperationsUsers)
+	admin.GET("/dashboard/operations/users/suggest", h.Admin.Dashboard.GetOperationsUserSuggestions)
+	admin.GET("/payment/recharge-activity", h.Admin.Payment.RechargeActivity)
+	admin.GET("/payment/recharge-risks", h.Admin.Payment.RechargeRisks)
+	{
+		p := admin.Group("/providers")
+		p.GET("", h.Admin.Account.ListProviders)
+		p.GET("/options", h.Admin.Account.ListProviderOptions)
+		p.GET("/user-balance", h.Admin.Account.ProviderUserBalance)
+		p.POST("/probe", h.Admin.Account.ProbeProvider)
+		p.POST("", h.Admin.Account.CreateProvider)
+		p.PUT("/:id", h.Admin.Account.UpdateProvider)
+		p.DELETE("/:id", h.Admin.Account.DeleteProvider)
+		p.POST("/:id/refresh", h.Admin.Account.RefreshProvider)
+		p.GET("/:id/keys", h.Admin.Account.ListProviderKeys)
+		p.GET("/:id/groups", h.Admin.Account.ListProviderKeyGroups)
+		p.POST("/:id/keys", h.Admin.Account.CreateProviderKey)
+	}
 	admin.GET("/operations", h.Admin.Channel.ProviderOperations)
 	providers := admin.Group("/provider-hub")
 	{

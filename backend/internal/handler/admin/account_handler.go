@@ -50,6 +50,8 @@ func NewOAuthHandler(oauthService *service.OAuthService) *OAuthHandler {
 
 // AccountHandler handles admin account management
 type AccountHandler struct {
+	providerSettings        cs1ProviderStore
+	providerEncryptor       service.SecretEncryptor
 	claudeResetCredits      claudeResetReader
 	adminService            service.AdminService
 	oauthService            *service.OAuthService
@@ -128,6 +130,8 @@ func NewAccountHandler(
 
 // CreateAccountRequest represents create account request
 type CreateAccountRequest struct {
+	ProviderID              string         `json:"provider_id"`
+	ProviderKeyID           string         `json:"provider_key_id"`
 	ImportTicket            string         `json:"import_ticket"`
 	Name                    string         `json:"name" binding:"required"`
 	Notes                   *string        `json:"notes"`
@@ -1068,6 +1072,11 @@ func (h *AccountHandler) Create(c *gin.Context) {
 	var req CreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.applyProviderKeyBinding(c.Request.Context(), &req); err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 	if err := service.ValidateOpenAILongContextBillingExtra(req.Platform, req.Extra); err != nil {
@@ -3242,15 +3251,30 @@ func (h *AccountHandler) SyncUpstreamModels(c *gin.Context) {
 // POST /api/v1/admin/accounts/models/sync-upstream-preview
 func (h *AccountHandler) SyncUpstreamModelsPreview(c *gin.Context) {
 	var req struct {
-		Platform     string            `json:"platform" binding:"required"`
-		Type         string            `json:"type" binding:"required"`
-		BaseURL      string            `json:"base_url"`
-		APIKey       string            `json:"api_key" binding:"required"`
-		ProxyID      *int64            `json:"proxy_id" binding:"omitempty,gte=0"`
-		ModelMapping map[string]string `json:"model_mapping"`
+		ProviderID    string            `json:"provider_id"`
+		ProviderKeyID string            `json:"provider_key_id"`
+		Platform      string            `json:"platform" binding:"required"`
+		Type          string            `json:"type" binding:"required"`
+		BaseURL       string            `json:"base_url"`
+		APIKey        string            `json:"api_key"`
+		ProxyID       *int64            `json:"proxy_id" binding:"omitempty,gte=0"`
+		ModelMapping  map[string]string `json:"model_mapping"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.ProviderID != "" || req.ProviderKeyID != "" {
+		input := CreateAccountRequest{Platform: req.Platform, Type: req.Type, ProviderID: req.ProviderID, ProviderKeyID: req.ProviderKeyID, Credentials: map[string]any{"api_key": req.APIKey}}
+		if err := h.applyProviderKeyBinding(c.Request.Context(), &input); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		req.APIKey, _ = input.Credentials["api_key"].(string)
+		req.BaseURL, _ = input.Credentials["base_url"].(string)
+	}
+	if strings.TrimSpace(req.APIKey) == "" {
+		response.BadRequest(c, "API key or provider selection is required")
 		return
 	}
 	modelMapping := make(map[string]any, len(req.ModelMapping))

@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
     <div class="min-w-0 space-y-5">
-      <header class="flex flex-wrap items-center justify-between gap-3"><h1 class="text-2xl font-semibold">{{ t('providerHub.operations') }}</h1><div class="flex gap-2"><RouterLink class="btn btn-secondary" to="/admin/providers"><Icon name="cog" size="sm" />{{ t('providerHub.providersLink') }}</RouterLink><button class="btn btn-secondary" :disabled="loading" :title="t('providerHub.refresh')" :aria-label="t('providerHub.refresh')" @click="load"><Icon name="refresh" size="sm" /></button></div></header>
+      <header class="flex flex-wrap items-center justify-between gap-3"><h1 class="text-2xl font-semibold">{{ t('admin.upstream.costs.receipts') }}</h1><div class="flex gap-2"><RouterLink class="btn btn-secondary" to="/admin/providers"><Icon name="cog" size="sm" />{{ t('providerHub.providersLink') }}</RouterLink><button class="btn btn-secondary" :disabled="loading" :title="t('providerHub.refresh')" :aria-label="t('providerHub.refresh')" @click="load"><Icon name="refresh" size="sm" /></button></div></header>
       <form class="space-y-3 border-y border-gray-200 py-4 dark:border-dark-700" @submit.prevent="page = 1; load()">
         <div class="flex flex-wrap gap-2"><button v-for="preset in presets" :key="preset" type="button" class="btn btn-secondary" :disabled="loading" @click="setPeriod(preset)">{{ t(`providerHub.${preset}`) }}</button></div>
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

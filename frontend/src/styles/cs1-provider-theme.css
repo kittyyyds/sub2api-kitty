@@ -1,0 +1,34 @@
+/* Theme values required by the CS1 provider components; no layout overrides. */
+:root {
+  --md-sys-color-primary: #a87806;
+  --md-sys-color-on-primary: #fff;
+  --md-sys-color-surface: #fff;
+  --md-sys-color-surface-container: #f7f8fa;
+  --md-sys-color-on-surface: #111827;
+  --md-sys-color-on-surface-variant: #64748b;
+  --theme-ease-out: cubic-bezier(.2,.8,.2,1);
+  --theme-highlight: inset 0 1px 0 rgb(255 255 255 / .4);
+  --theme-elevation-2: 0 8px 25px rgb(15 23 42 / .07);
+  --theme-elevation-3: 0 16px 40px rgb(15 23 42 / .15);
+}
+html.dark {
+  --md-sys-color-primary: #e9b824;
+  --md-sys-color-on-primary: #171717;
+  --md-sys-color-surface: #1e293b;
+  --md-sys-color-surface-container: #0f172a;
+  --md-sys-color-on-surface: #f1f5f9;
+  --md-sys-color-on-surface-variant: #94a3b8;
+}
+html.dark .upstream-page .provider-balance {
+  background: linear-gradient(135deg, #302919, #403519);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05);
+}
+html.dark .upstream-page .provider-card-offline { background: #251e29; }
+html.dark .upstream-page .text-emerald-700 { color: #6ee7b7; }
+html.dark .upstream-page .bg-red-50 { background: #3b2029; color: #fda4af; }
+html.dark .provider-choice-active {
+  background: linear-gradient(135deg, #302919, #403519);
+  color: #f8d979;
+}
+html.dark .provider-choice-icon { color: #f8d979; }
+html.dark .provider-probe-bar { background: #21352d; }

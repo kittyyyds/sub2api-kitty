@@ -65,6 +65,7 @@ func ProvideAdminHandlers(
 	claudeResetCredits *service.ClaudeResetCreditService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
+	channelHandler.ConfigureCS1Providers(accountHandler, upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
 	accountHandler.SetOpenAIGatewayService(openAIGatewayService)
 	accountHandler.SetOpenCodeGoUsageService(opencodeGoUsage)

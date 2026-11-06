@@ -10,6 +10,9 @@ func (s *UpstreamBillingProbeService) runProviderHubDue(ctx context.Context) {
 		return
 	}
 	defer release()
+	if s.cs1ProviderRefresh != nil {
+		s.cs1ProviderRefresh(ctx)
+	}
 	repo, e := s.providerHub.providerHubRepo()
 	if e != nil {
 		return

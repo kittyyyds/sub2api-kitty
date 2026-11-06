@@ -1846,6 +1846,8 @@ export interface OpenAIResponsesState {
 }
 
 export interface CreateAccountRequest {
+  provider_id?: string
+  provider_key_id?: string
   import_ticket?: string
   name: string
   notes?: string | null
