@@ -5,6 +5,18 @@
 html.kitty-console-theme,
 .kitty-customer-shell,
 .kitty-admin-shell {
+
+  --kc-neutral-50: 248 248 245;
+  --kc-neutral-100: 238 238 232;
+  --kc-neutral-200: 220 222 213;
+  --kc-neutral-300: 195 200 187;
+  --kc-neutral-400: 167 173 162;
+  --kc-neutral-500: 129 135 121;
+  --kc-neutral-600: 98 105 92;
+  --kc-neutral-700: 60 65 55;
+  --kc-neutral-800: 41 44 38;
+  --kc-neutral-900: 32 34 31;
+  --kc-neutral-950: 22 23 21;
   --kc-primary-50: 254 248 244;
   --kc-primary-100: 255 237 221;
   --kc-primary-200: 255 211 178;
@@ -44,25 +56,38 @@ html.kitty-console-theme,
 html.dark.kitty-console-theme,
 .dark .kitty-customer-shell,
 .dark .kitty-admin-shell {
-  --kc-bg: #111827;
-  --kc-panel: #202b3b;
-  --kc-panel-muted: #182334;
-  --kc-ink: #f7faf8;
-  --kc-muted: #bec9c4;
-  --kc-line: #344052;
-  --kc-line-strong: #526273;
-  --kc-accent: #ffb594;
-  --kc-accent-strong: #ffd0bf;
-  --kc-accent-soft: #3e1600;
-  --kc-promo-soft: #5c2a10;
-  --kc-hover: #2b3949;
-  --kc-warm: #f0c77a;
-  --kc-danger: #f38a8a;
-  --kc-action: #f4f5f2;
-  --kc-action-hover: #dbe8e0;
-  --kc-on-action: #1c211f;
-  --kc-shadow: 0 1px 3px rgb(0 6 12 / 12%);
+  color-scheme: dark;
+  --kc-bg: #161715;
+  --kc-panel: #20221f;
+  --kc-panel-muted: #292c26;
+  --kc-ink: #e9e7df;
+  --kc-muted: #a7ada2;
+  --kc-line: #353932;
+  --kc-line-strong: #51594b;
+  --kc-accent: #e9a67b;
+  --kc-accent-strong: #f2bc98;
+  --kc-accent-soft: #322920;
+  --kc-promo-soft: #373023;
+  --kc-hover: #2a2d27;
+  --kc-warm: #e9a67b;
+  --kc-danger: #f3a09b;
+  --kc-action: #e9a67b;
+  --kc-action-hover: #f2bc98;
+  --kc-on-action: #282018;
+  --kc-primary-50: 242 224 208;
+  --kc-primary-100: 241 210 186;
+  --kc-primary-200: 242 188 152;
+  --kc-primary-300: 233 166 123;
+  --kc-primary-400: 226 153 108;
+  --kc-primary-500: 207 128 77;
+  --kc-primary-600: 178 104 60;
+  --kc-primary-700: 139 81 49;
+  --kc-primary-800: 92 61 40;
+  --kc-primary-900: 66 48 34;
+  --kc-primary-950: 50 41 32;
+  --kc-shadow: 0 1px 3px rgb(0 0 0 / 12%);
 }
+
 .kitty-customer-shell {
   position: relative;
   isolation: isolate;

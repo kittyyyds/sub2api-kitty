@@ -1,34 +1,33 @@
-/* Theme values required by the CS1 provider components; no layout overrides. */
+/* Reference components use Kitty's tokens, including portaled dialogs. */
 :root {
-  --md-sys-color-primary: #a87806;
-  --md-sys-color-on-primary: #fff;
-  --md-sys-color-surface: #fff;
-  --md-sys-color-surface-container: #f7f8fa;
-  --md-sys-color-on-surface: #111827;
-  --md-sys-color-on-surface-variant: #64748b;
+  --md-sys-color-primary: var(--kc-accent, #c45100);
+  --md-sys-color-on-primary: var(--kc-on-action, #fff);
+  --md-sys-color-surface: var(--kc-panel, #fff);
+  --md-sys-color-surface-container: var(--kc-panel-muted, #f8f5ef);
+  --md-sys-color-on-surface: var(--kc-ink, #1c1c19);
+  --md-sys-color-on-surface-variant: var(--kc-muted, #65665f);
+  --md-sys-color-outline-variant: var(--kc-line, #e6e2da);
   --theme-ease-out: cubic-bezier(.2,.8,.2,1);
-  --theme-highlight: inset 0 1px 0 rgb(255 255 255 / .4);
-  --theme-elevation-2: 0 8px 25px rgb(15 23 42 / .07);
-  --theme-elevation-3: 0 16px 40px rgb(15 23 42 / .15);
+  --theme-highlight: inset 0 1px 0 rgb(255 255 255 / .03);
+  --theme-elevation-1: var(--kc-shadow, 0 1px 3px rgb(0 0 0 / .04));
+  --theme-elevation-2: 0 8px 25px rgb(0 0 0 / .07);
+  --theme-elevation-3: 0 16px 40px rgb(0 0 0 / .15);
+  --kc-success: #386344;
+  --kc-success-soft: #eaf1e7;
+  --kc-warning: #996321;
+  --kc-warning-soft: #fff2d9;
+  --kc-error-soft: #fae9e6;
 }
 html.dark {
-  --md-sys-color-primary: #e9b824;
-  --md-sys-color-on-primary: #171717;
-  --md-sys-color-surface: #1e293b;
-  --md-sys-color-surface-container: #0f172a;
-  --md-sys-color-on-surface: #f1f5f9;
-  --md-sys-color-on-surface-variant: #94a3b8;
+  --kc-success: #a2c79b;
+  --kc-success-soft: #253327;
+  --kc-warning: #e9c28b;
+  --kc-warning-soft: #383022;
+  --kc-error-soft: #3a2827;
 }
-html.dark .upstream-page .provider-balance {
-  background: linear-gradient(135deg, #302919, #403519);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05);
-}
-html.dark .upstream-page .provider-card-offline { background: #251e29; }
-html.dark .upstream-page .text-emerald-700 { color: #6ee7b7; }
-html.dark .upstream-page .bg-red-50 { background: #3b2029; color: #fda4af; }
-html.dark .provider-choice-active {
-  background: linear-gradient(135deg, #302919, #403519);
-  color: #f8d979;
-}
-html.dark .provider-choice-icon { color: #f8d979; }
-html.dark .provider-probe-bar { background: #21352d; }
+.kitty-console-theme .segment-group { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--kc-line); border-radius: 10px; background: var(--kc-panel-muted); }
+.kitty-console-theme .segment-active { color: var(--kc-accent-strong); background: var(--kc-panel); box-shadow: var(--kc-shadow); }
+.kitty-console-theme .segment-idle { color: var(--kc-muted); background: transparent; }
+.kitty-console-theme .segment-idle:hover { color: var(--kc-ink); background: var(--kc-hover); }
+html.dark .upstream-page .text-emerald-700 { color: var(--kc-success); }
+html.dark .upstream-page .bg-red-50 { background: var(--kc-error-soft); color: var(--kc-danger); }

@@ -1,305 +1,232 @@
 <template>
-  <AppLayout>
+  <AppLayout class="dashboard-layout">
     <div class="space-y-6">
       <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center py-12">
+      <div v-if="loading" class="flex items-center justify-center py-16">
         <LoadingSpinner />
       </div>
 
       <template v-else-if="stats">
-        <!-- Row 1: Core Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <!-- Total API Keys -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
-                <Icon name="key" size="md" class="text-blue-600 dark:text-blue-400" :stroke-width="2" />
+        <!-- Live throughput and tokens lead; spend, latency and the request count sit in the strip below. -->
+        <section class="card adm-hero">
+          <div class="adm-live">
+            <p class="adm-live-head">
+              <span class="adm-live-dot" :class="{ 'is-active': (stats.rpm || 0) > 0 }" aria-hidden="true"></span>
+              <span class="adm-live-title">{{ t('admin.dashboard.liveNow') }}</span>
+              <span class="adm-live-window">{{ t('admin.dashboard.liveWindow') }}</span>
+            </p>
+            <dl class="adm-live-figures">
+              <div class="adm-live-figure" data-testid="dashboard-rpm">
+                <dt class="adm-live-unit">RPM</dt>
+                <dd class="adm-live-value" :title="formatNumber(stats.rpm)">{{ formatHeroNumber(stats.rpm) }}</dd>
+                <dd class="adm-live-caption">{{ t('admin.dashboard.rpmCaption') }}</dd>
               </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.apiKeys') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.total_api_keys }}
-                </p>
-                <p class="text-xs text-green-600 dark:text-green-400">
-                  {{ stats.active_api_keys }} {{ t('common.active') }}
-                </p>
+              <div class="adm-live-figure" data-testid="dashboard-tpm">
+                <dt class="adm-live-unit">TPM</dt>
+                <dd class="adm-live-value" :title="formatNumber(stats.tpm)">{{ formatHeroNumber(stats.tpm) }}</dd>
+                <dd class="adm-live-caption">{{ t('admin.dashboard.tpmCaption') }}</dd>
               </div>
+            </dl>
+          </div>
+
+          <div class="adm-today">
+            <header class="adm-today-head">
+              <h2 class="adm-section-title">{{ t('admin.dashboard.today') }}</h2>
+              <span
+                v-if="statsUpdatedTime"
+                class="adm-updated"
+                :class="{ 'is-stale': stats.stats_stale }"
+                data-testid="dashboard-stats-updated"
+              >
+                {{ stats.stats_stale
+                  ? t('admin.dashboard.statsStale', { time: statsUpdatedTime })
+                  : t('admin.dashboard.statsUpdatedAt', { time: statsUpdatedTime }) }}
+              </span>
+            </header>
+
+            <dl class="adm-token-figures">
+              <div class="adm-token-figure">
+                <dt>{{ t('admin.dashboard.todayTokens') }}</dt>
+                <dd class="adm-token-value" data-testid="dashboard-today-tokens" :title="formatNumber(stats.today_tokens)">{{ formatHeroNumber(stats.today_tokens) }}</dd>
+              </div>
+              <div class="adm-token-figure is-total">
+                <dt>{{ t('admin.dashboard.cumulativeTokens') }}</dt>
+                <dd class="adm-token-value" data-testid="dashboard-total-tokens" :title="formatNumber(stats.total_tokens)">{{ formatHeroNumber(stats.total_tokens) }}</dd>
+              </div>
+            </dl>
+
+            <!-- Token mix: same entity colours as the token trend chart below. -->
+            <div class="adm-mix">
+              <div class="adm-mix-head">
+                <span>{{ t('admin.dashboard.tokenMix') }}</span>
+                <span v-if="tokenMix.total === 0" class="font-normal">{{ t('admin.dashboard.noTokensToday') }}</span>
+              </div>
+              <div class="adm-mix-bar" role="img" :aria-label="tokenMixLabel">
+                <span
+                  v-for="part in visibleTokenParts"
+                  :key="part.key"
+                  class="adm-mix-segment"
+                  :style="{ width: part.percent + '%', background: part.color }"
+                  :title="part.label + ' ' + formatTokens(part.value)"
+                ></span>
+              </div>
+              <ul class="adm-mix-legend">
+                <li v-for="part in tokenMix.parts" :key="part.key" :class="{ 'is-zero': part.value === 0 }">
+                  <span class="adm-mix-swatch" :style="{ background: part.color }" aria-hidden="true"></span>
+                  <span>{{ part.label }}</span>
+                  <span class="adm-mix-value">{{ formatTokens(part.value) }}</span>
+                </li>
+              </ul>
             </div>
           </div>
 
-          <!-- Service Accounts -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
-                <Icon name="server" size="md" class="text-purple-600 dark:text-purple-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.accounts') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.total_accounts }}
-                </p>
-                <p class="text-xs">
-                  <span class="text-green-600 dark:text-green-400"
-                    >{{ stats.normal_accounts }} {{ t('common.active') }}</span
-                  >
-                  <span v-if="stats.error_accounts > 0" class="ml-1 text-red-500"
-                    >{{ stats.error_accounts }} {{ t('common.error') }}</span
-                  >
-                </p>
-              </div>
+          <dl class="adm-kpis">
+            <div class="adm-kpi">
+              <dt>{{ t('admin.dashboard.todayActualCost') }}</dt>
+              <dd class="adm-kpi-value" :title="t('admin.dashboard.actual')">${{ formatCost(stats.today_actual_cost) }}</dd>
+              <dd class="adm-kpi-sub">
+                <span
+                  v-if="(stats.today_cost || 0) > (stats.today_actual_cost || 0)"
+                  class="adm-list-price"
+                  :title="t('admin.dashboard.standard')"
+                >${{ formatCost(stats.today_cost) }}</span>
+                <span>{{ t('common.total') }} ${{ formatCost(stats.total_actual_cost) }}</span>
+              </dd>
             </div>
+            <div class="adm-kpi">
+              <dt>{{ t('admin.dashboard.todayAccountCost') }}</dt>
+              <dd class="adm-kpi-value">${{ formatCost(stats.today_account_cost) }}</dd>
+              <dd class="adm-kpi-sub">{{ t('common.total') }} ${{ formatCost(stats.total_account_cost) }}</dd>
+            </div>
+            <div class="adm-kpi">
+              <dt>{{ t('admin.dashboard.avgResponse') }}</dt>
+              <dd class="adm-kpi-value">{{ formatDuration(stats.average_duration_ms) }}</dd>
+              <dd class="adm-kpi-sub">{{ stats.active_users }} {{ t('admin.dashboard.activeUsers') }}</dd>
+            </div>
+            <div class="adm-kpi is-minor">
+              <dt>{{ t('admin.dashboard.todayRequests') }}</dt>
+              <dd class="adm-kpi-value">{{ formatNumber(stats.today_requests) }}</dd>
+              <dd class="adm-kpi-sub">{{ t('common.total') }} {{ formatNumber(stats.total_requests) }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <!-- Who and what is behind the traffic. -->
+        <div class="adm-resources">
+          <button type="button" class="card adm-resource" @click="router.push('/admin/users')">
+            <span class="adm-resource-head">
+              <span class="adm-resource-icon is-users" aria-hidden="true"><Icon name="users" size="md" /></span>
+              <span class="adm-resource-label">{{ t('admin.dashboard.users') }}</span>
+              <Icon name="chevronRight" size="sm" class="adm-resource-chevron" />
+            </span>
+            <span class="adm-resource-value">{{ formatNumber(stats.total_users) }}</span>
+            <span class="adm-resource-facts">
+              <span><strong class="text-accent-700">+{{ formatNumber(stats.today_new_users) }}</strong> {{ t('admin.dashboard.newToday') }}</span>
+              <span><strong>{{ formatNumber(stats.active_users) }}</strong> {{ t('admin.dashboard.activeToday') }}</span>
+              <span><strong>{{ formatNumber(stats.hourly_active_users) }}</strong> {{ t('admin.dashboard.activeThisHour') }}</span>
+            </span>
+          </button>
+
+          <button type="button" class="card adm-resource" @click="router.push('/admin/accounts')">
+            <span class="adm-resource-head">
+              <span class="adm-resource-icon is-accounts" aria-hidden="true"><Icon name="server" size="md" /></span>
+              <span class="adm-resource-label">{{ t('admin.dashboard.accounts') }}</span>
+              <Icon name="chevronRight" size="sm" class="adm-resource-chevron" />
+            </span>
+            <span class="adm-resource-value">{{ formatNumber(stats.total_accounts) }}</span>
+            <span class="adm-meter" aria-hidden="true">
+              <span class="adm-meter-fill" :style="{ width: sharePercent(stats.normal_accounts, stats.total_accounts) + '%' }"></span>
+            </span>
+            <span class="adm-resource-facts">
+              <span><strong>{{ formatNumber(stats.normal_accounts) }}</strong> {{ t('admin.dashboard.schedulableAccounts') }}</span>
+              <span v-for="flag in accountFlags" :key="flag.key" class="adm-flag" :class="'is-' + flag.tone">
+                <Icon :name="flag.icon" size="xs" />
+                {{ flag.label }} {{ flag.count }}
+              </span>
+              <span v-if="accountFlags.length === 0" class="adm-flag is-good">
+                <Icon name="checkCircle" size="xs" />
+                {{ t('admin.dashboard.accountsHealthy') }}
+              </span>
+            </span>
+          </button>
+
+          <div class="card adm-resource">
+            <span class="adm-resource-head">
+              <span class="adm-resource-icon is-keys" aria-hidden="true"><Icon name="key" size="md" /></span>
+              <span class="adm-resource-label">{{ t('admin.dashboard.apiKeys') }}</span>
+            </span>
+            <span class="adm-resource-value">{{ formatNumber(stats.total_api_keys) }}</span>
+            <span class="adm-meter" aria-hidden="true">
+              <span class="adm-meter-fill" :style="{ width: sharePercent(stats.active_api_keys, stats.total_api_keys) + '%' }"></span>
+            </span>
+            <span class="adm-resource-facts">
+              <span><strong>{{ formatNumber(stats.active_api_keys) }}</strong> {{ t('admin.dashboard.activeKeys') }}</span>
+            </span>
           </div>
 
-          <!-- Today Requests -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-                <Icon name="chart" size="md" class="text-green-600 dark:text-green-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.todayRequests') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ stats.today_requests }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('common.total') }}: {{ formatNumber(stats.total_requests) }}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- New Users Today -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-emerald-100 p-2 dark:bg-emerald-900/30">
-                <Icon name="userPlus" size="md" class="text-emerald-600 dark:text-emerald-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.users') }}
-                </p>
-                <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                  +{{ stats.today_new_users }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('common.total') }}: {{ formatNumber(stats.total_users) }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Row 2: Token Stats -->
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <!-- Today Tokens -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
-                <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.todayTokens') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatTokens(stats.today_tokens) }}
-                </p>
-                <p class="text-xs">
-                  <span
-                    class="text-green-600 dark:text-green-400"
-                    :title="t('admin.dashboard.actual')"
-                    >${{ formatCost(stats.today_actual_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-orange-500 dark:text-orange-400"
-                    :title="t('admin.dashboard.accountCost')"
-                    >${{ formatCost(stats.today_account_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-gray-400 dark:text-gray-500"
-                    :title="t('admin.dashboard.standard')"
-                    >${{ formatCost(stats.today_cost) }}</span
-                  >
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Total Tokens -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-indigo-100 p-2 dark:bg-indigo-900/30">
-                <Icon name="database" size="md" class="text-indigo-600 dark:text-indigo-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.totalTokens') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatTokens(stats.total_tokens) }}
-                </p>
-                <p class="text-xs">
-                  <span
-                    class="text-green-600 dark:text-green-400"
-                    :title="t('admin.dashboard.actual')"
-                    >${{ formatCost(stats.total_actual_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-orange-500 dark:text-orange-400"
-                    :title="t('admin.dashboard.accountCost')"
-                    >${{ formatCost(stats.total_account_cost) }}</span
-                  >
-                  <span class="text-gray-400 dark:text-gray-500"> / </span>
-                  <span
-                    class="text-gray-400 dark:text-gray-500"
-                    :title="t('admin.dashboard.standard')"
-                    >${{ formatCost(stats.total_cost) }}</span
-                  >
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Performance (RPM/TPM) -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-violet-100 p-2 dark:bg-violet-900/30">
-                <Icon name="bolt" size="md" class="text-violet-600 dark:text-violet-400" :stroke-width="2" />
-              </div>
-              <div class="flex-1">
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.performance') }}
-                </p>
-                <div class="flex items-baseline gap-2">
-                  <p class="text-xl font-bold text-gray-900 dark:text-white">
-                    {{ formatTokens(stats.rpm) }}
-                  </p>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">RPM</span>
-                </div>
-                <div class="flex items-baseline gap-2">
-                  <p class="text-sm font-semibold text-violet-600 dark:text-violet-400">
-                    {{ formatTokens(stats.tpm) }}
-                  </p>
-                  <span class="text-xs text-gray-500 dark:text-gray-400">TPM</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Avg Response Time -->
-          <div class="card p-4">
-            <div class="flex items-center gap-3">
-              <div class="rounded-lg bg-rose-100 p-2 dark:bg-rose-900/30">
-                <Icon name="clock" size="md" class="text-rose-600 dark:text-rose-400" :stroke-width="2" />
-              </div>
-              <div>
-                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.avgResponse') }}
-                </p>
-                <p class="text-xl font-bold text-gray-900 dark:text-white">
-                  {{ formatDuration(stats.average_duration_ms) }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ stats.active_users }} {{ t('admin.dashboard.activeUsers') }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="card p-4">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.dashboard.quickActions') }}
-            </h2>
-          </div>
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="card adm-shortcuts">
+            <p class="adm-shortcuts-title">{{ t('admin.dashboard.quickActions') }}</p>
             <button
               v-if="canUseBatchImage"
               type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-sky-50 dark:bg-dark-800/50 dark:hover:bg-sky-900/20"
+              class="adm-shortcut"
               @click="router.push('/batch-image')"
             >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
-                <Icon name="sparkles" size="md" :stroke-width="2" />
-              </span>
+              <span class="adm-shortcut-icon is-image" aria-hidden="true"><Icon name="sparkles" size="sm" /></span>
               <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.batchImage') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.batchImageDesc') }}
-                </span>
+                <span class="adm-shortcut-label">{{ t('admin.dashboard.batchImage') }}</span>
+                <span class="adm-shortcut-desc">{{ t('admin.dashboard.batchImageDesc') }}</span>
               </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-sky-500" />
             </button>
-            <button
-              type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-emerald-50 dark:bg-dark-800/50 dark:hover:bg-emerald-900/20"
-              @click="router.push('/admin/groups')"
-            >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <Icon name="grid" size="md" :stroke-width="2" />
-              </span>
+            <button type="button" class="adm-shortcut" @click="router.push('/admin/groups')">
+              <span class="adm-shortcut-icon" aria-hidden="true"><Icon name="grid" size="sm" /></span>
               <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.groupPricing') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.groupPricingDesc') }}
-                </span>
+                <span class="adm-shortcut-label">{{ t('admin.dashboard.groupPricing') }}</span>
+                <span class="adm-shortcut-desc">{{ t('admin.dashboard.groupPricingDesc') }}</span>
               </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-emerald-500" />
             </button>
           </div>
         </div>
 
-        <!-- Charts Section -->
-        <div class="space-y-6">
-          <!-- Date Range Filter -->
-          <div class="card p-4">
-            <div class="flex flex-wrap items-center gap-4">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.timeRange') }}:</span
+        <!-- One usage panel: controls in its header, charts below. -->
+        <section class="card adm-usage">
+          <header class="adm-usage-head">
+            <h2 class="adm-section-title">{{ t('admin.dashboard.usageTrends') }}</h2>
+            <div class="adm-usage-controls">
+              <DateRangePicker
+                v-model:start-date="startDate"
+                v-model:end-date="endDate"
+                :rolling24-hours="true"
+                @change="onDateRangeChange"
+              />
+              <div class="segment-group" role="radiogroup" :aria-label="t('admin.dashboard.granularity')">
+                <button
+                  v-for="option in granularityOptions"
+                  :key="option.value"
+                  type="button"
+                  role="radio"
+                  class="adm-segment"
+                  :class="granularity === option.value ? 'segment-active' : 'segment-idle'"
+                  :aria-checked="granularity === option.value"
+                  @click="selectGranularity(option.value)"
                 >
-                <DateRangePicker
-                  v-model:start-date="startDate"
-                  v-model:end-date="endDate"
-                  :rolling24-hours="true"
-                  @change="onDateRangeChange"
-                />
+                  {{ option.label }}
+                </button>
               </div>
-              <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
-                {{ t('common.refresh') }}
+              <button
+                type="button"
+                class="btn btn-secondary adm-refresh"
+                :disabled="chartsLoading"
+                :title="t('common.refresh')"
+                :aria-label="t('common.refresh')"
+                @click="loadDashboardStats"
+              >
+                <Icon name="refresh" size="sm" :class="chartsLoading ? 'animate-spin' : ''" />
               </button>
-              <div class="ml-auto flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >{{ t('admin.dashboard.granularity') }}:</span
-                >
-                <div class="w-28">
-                  <Select
-                    v-model="granularity"
-                    :options="granularityOptions"
-                    @change="loadChartData"
-                  />
-                </div>
-              </div>
             </div>
-          </div>
+          </header>
 
-          <!-- Charts Grid -->
-          <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div class="adm-charts">
             <ModelDistributionChart
               :model-stats="modelStats"
               :enable-ranking-view="true"
@@ -314,22 +241,23 @@
               :end-date="endDate"
               @ranking-click="goToUserUsage"
             />
-            <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+            <div class="adm-trend">
+              <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+            </div>
           </div>
 
-          <!-- User Usage Trend (Full Width) -->
-          <div class="card p-4">
-            <div class="mb-4 flex items-center justify-between gap-3">
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.dashboard.recentUsage') }} (Top 12)</h3>
+          <div class="adm-user-trend">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><h3 class="adm-chart-title">{{ t('admin.dashboard.recentUsage') }} (Top 12)</h3>
               <div class="flex gap-1" role="group" :aria-label="t('admin.dashboard.recentUsage')">
                 <button v-for="metric in (['tokens', 'actual_cost'] as const)" :key="metric" type="button"
-                  class="rounded px-2 py-1 text-xs" :class="userTrendMetric === metric ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300'"
+                  class="rounded px-2 py-1 text-xs" :class="userTrendMetric === metric ? 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200' : 'text-gray-600 dark:text-gray-300'"
                   :aria-pressed="userTrendMetric === metric" @click="setUserTrendMetric(metric)">
                   {{ t(metric === 'tokens' ? 'admin.dashboard.tokens' : 'admin.dashboard.actualSpending') }}
                 </button>
               </div>
-            </div>
-            <div class="h-64">
+
+</div>
+            <div class="adm-user-trend-plot">
               <div v-if="userTrendLoading" class="flex h-full items-center justify-center">
                 <LoadingSpinner size="md" />
               </div>
@@ -342,7 +270,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </template>
     </div>
   </AppLayout>
@@ -367,7 +295,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
-import Select from '@/components/common/Select.vue'
+import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
@@ -437,20 +365,81 @@ const appliedPreset = ref<string | null>('last24Hours')
 
 // Granularity options for Select component
 const granularityOptions = computed(() => [
-  { value: 'day', label: t('admin.dashboard.day') },
-  { value: 'hour', label: t('admin.dashboard.hour') }
+  { value: 'day' as const, label: t('admin.dashboard.day') },
+  { value: 'hour' as const, label: t('admin.dashboard.hour') }
 ])
 
 // Dark mode detection
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
+const { isDarkMode } = useDocumentDarkMode()
 
 // Chart colors
+const selectGranularity = (value: 'day' | 'hour') => {
+  if (granularity.value === value) return
+  granularity.value = value
+  void loadChartData()
+}
+
+
 const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb'
+  text: isDarkMode.value ? '#e6e2da' : '#353932',
+  grid: isDarkMode.value ? '#353932' : '#e6e2da'
 }))
+
+const statsUpdatedTime = computed(() => {
+  const value = stats.value?.stats_updated_at
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+})
+
+// Entity colours match TokenUsageTrend so input/output/cache read the same on the page.
+const TOKEN_MIX_COLORS = {
+  input: '#3b82f6',
+  output: '#10b981',
+  cacheWrite: '#f59e0b',
+  cacheRead: '#06b6d4'
+} as const
+
+const tokenMix = computed(() => {
+  const current = stats.value
+  const parts = [
+    { key: 'input', label: t('admin.dashboard.input'), value: toFiniteNumber(current?.today_input_tokens), color: TOKEN_MIX_COLORS.input },
+    { key: 'output', label: t('admin.dashboard.output'), value: toFiniteNumber(current?.today_output_tokens), color: TOKEN_MIX_COLORS.output },
+    { key: 'cacheWrite', label: t('admin.dashboard.cacheWrite'), value: toFiniteNumber(current?.today_cache_creation_tokens), color: TOKEN_MIX_COLORS.cacheWrite },
+    { key: 'cacheRead', label: t('admin.dashboard.cacheRead'), value: toFiniteNumber(current?.today_cache_read_tokens), color: TOKEN_MIX_COLORS.cacheRead }
+  ]
+  const total = parts.reduce((sum, part) => sum + Math.max(part.value, 0), 0)
+  return {
+    total,
+    parts: parts.map((part) => ({ ...part, percent: total > 0 ? (Math.max(part.value, 0) / total) * 100 : 0 }))
+  }
+})
+
+const visibleTokenParts = computed(() => tokenMix.value.parts.filter((part) => part.value > 0))
+
+const tokenMixLabel = computed(() =>
+  tokenMix.value.parts.map((part) => `${part.label} ${formatTokens(part.value)}`).join(', ')
+)
+
+const sharePercent = (part: number | null | undefined, total: number | null | undefined): number => {
+  const whole = toFiniteNumber(total)
+  if (whole <= 0) return 0
+  return Math.min(Math.max((toFiniteNumber(part) / whole) * 100, 0), 100)
+}
+
+// Counts that need attention; each carries an icon and a label, never colour alone.
+const accountFlags = computed(() => {
+  const current = stats.value
+  if (!current) return []
+  const flags: Array<{ key: string; label: string; count: number; tone: 'warning' | 'serious' | 'critical'; icon: 'clock' | 'bolt' | 'exclamationTriangle' }> = [
+    { key: 'ratelimit', label: t('admin.dashboard.rateLimitedAccounts'), count: toFiniteNumber(current.ratelimit_accounts), tone: 'warning', icon: 'clock' },
+    { key: 'overload', label: t('admin.dashboard.overloadedAccounts'), count: toFiniteNumber(current.overload_accounts), tone: 'serious', icon: 'bolt' },
+    { key: 'error', label: t('admin.dashboard.errorAccounts'), count: toFiniteNumber(current.error_accounts), tone: 'critical', icon: 'exclamationTriangle' }
+  ]
+  return flags.filter((flag) => flag.count > 0)
+})
+
 
 // Line chart options (for user trend chart)
 const lineOptions = computed(() => ({
@@ -599,6 +588,21 @@ const toFiniteNumber = (value: unknown): number => {
 const formatNumber = (value: number | null | undefined): string => {
   return toFiniteNumber(value).toLocaleString()
 }
+
+const HERO_UNITS = ['K', 'M', 'B', 'T'] as const
+const formatHeroNumber = (value: number | null | undefined): string => {
+  const number = toFiniteNumber(value)
+  if (Math.abs(number) < 1000) return Math.round(number).toLocaleString()
+  let scaled = number / 1000
+  let unit = 0
+  while (Math.abs(scaled) >= 999.5 && unit < HERO_UNITS.length - 1) {
+    scaled /= 1000
+    unit++
+  }
+  const digits = Math.abs(scaled) >= 99.95 ? 0 : Math.abs(scaled) >= 9.995 ? 1 : 2
+  return `${scaled.toFixed(digits)}${HERO_UNITS[unit]}`
+}
+
 
 const formatCost = (value: number | null | undefined): string => {
   const safeValue = toFiniteNumber(value)
@@ -779,4 +783,718 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* ---------- Today ---------- */
+.adm-hero {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+/* Live throughput: the two numbers an operator watches first. */
+.adm-live {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.875rem;
+  padding: 0.875rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(150deg, var(--kc-accent-soft), var(--kc-accent-soft) 55%, var(--kc-accent-soft));
+}
+
+.adm-live-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--kc-muted);
+}
+
+.adm-live-title {
+  font-weight: 700;
+  color: var(--kc-ink);
+}
+
+.adm-live-window {
+  margin-left: auto;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--kc-panel);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.adm-live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--kc-muted);
+}
+
+.adm-live-dot.is-active {
+  background: var(--kc-success);
+  box-shadow: 0 0 0 3px rgb(92 152 101 / 0.22);
+  animation: adm-live-pulse 2s ease-in-out infinite;
+}
+
+.adm-live-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.adm-live-figure {
+  container-type: inline-size;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 1rem;
+  background: var(--kc-panel);
+  box-shadow: var(--theme-highlight);
+}
+
+.adm-live-unit {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--kc-accent-strong);
+}
+
+/* The page's hero figures. Sized from their own tile (cqi) so a five-character
+ * value such as "1.28M" still fits a narrow phone column without being cut off. */
+.adm-live-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 2rem;
+  font-size: clamp(1.5rem, 29cqi, 2.875rem);
+  font-weight: 750;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--kc-ink);
+}
+
+.adm-live-caption {
+  font-size: 0.75rem;
+  color: var(--kc-muted);
+}
+
+.adm-today {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.adm-today-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.adm-section-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+}
+
+.adm-updated {
+  padding: 0.1875rem 0.625rem;
+  border-radius: 999px;
+  background: var(--kc-accent-soft);
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-updated.is-stale {
+  background: var(--kc-warning-soft);
+  color: var(--kc-warning);
+}
+
+/* Tokens: today's volume beside the all-time total. */
+.adm-token-figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem;
+}
+
+.adm-token-figure {
+  container-type: inline-size;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  border-radius: 1rem;
+  background: var(--kc-accent-soft);
+}
+
+.adm-token-figure dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-token-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.75rem;
+  font-size: clamp(1.375rem, 23cqi, 2.25rem);
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: var(--md-sys-color-on-surface);
+}
+
+.adm-token-figure.is-total {
+  background: var(--kc-success-soft);
+}
+
+.adm-token-figure.is-total .adm-token-value {
+  color: var(--kc-success);
+}
+
+.adm-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem;
+}
+
+.adm-kpi {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 1rem;
+  background: var(--kc-panel-muted);
+}
+
+.adm-kpi dt {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-kpi-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.625rem;
+  color: var(--md-sys-color-on-surface);
+}
+
+/* Request volume is context, not the headline. */
+.adm-kpi.is-minor {
+  background: var(--kc-accent-soft);
+}
+
+.adm-kpi.is-minor .adm-kpi-value {
+  font-size: 1.0625rem;
+  font-weight: 650;
+  color: var(--kc-muted);
+}
+
+.adm-kpi-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-list-price {
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+
+@keyframes adm-live-pulse {
+  50% {
+    box-shadow: 0 0 0 5px rgb(92 152 101 / 0.12);
+  }
+}
+
+.adm-mix {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.adm-mix-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Stacked bar: 2px surface gaps between segments instead of strokes. */
+.adm-mix-bar {
+  display: flex;
+  gap: 2px;
+  height: 0.625rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--kc-line);
+}
+
+.adm-mix-segment {
+  min-width: 2px;
+  height: 100%;
+}
+
+.adm-mix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 1rem;
+  font-size: 0.75rem;
+}
+
+.adm-mix-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-mix-legend li.is-zero {
+  opacity: 0.55;
+}
+
+.adm-mix-swatch {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0.125rem;
+}
+
+.adm-mix-value {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--md-sys-color-on-surface);
+}
+
+/* ---------- Resources ---------- */
+.adm-resources {
+  display: grid;
+  gap: 1rem;
+}
+
+.adm-resource {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.625rem;
+  padding: 1.125rem 1.25rem;
+  text-align: left;
+}
+
+button.adm-resource {
+  cursor: pointer;
+}
+
+button.adm-resource:hover {
+  box-shadow: var(--theme-highlight), var(--theme-elevation-2);
+}
+
+button.adm-resource:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.adm-resource-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.adm-resource-icon {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+}
+
+.adm-resource-icon.is-users {
+  background: var(--kc-success-soft);
+  color: var(--kc-success);
+}
+
+.adm-resource-icon.is-accounts {
+  background: var(--kc-accent-soft);
+  color: var(--kc-accent-strong);
+}
+
+.adm-resource-icon.is-keys {
+  background: var(--kc-accent-soft);
+  color: var(--kc-muted);
+}
+
+.adm-resource-label {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-resource-chevron {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.5;
+  transition: opacity 160ms ease, transform 200ms var(--theme-ease-out);
+}
+
+button.adm-resource:hover .adm-resource-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.adm-resource-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 2.125rem;
+  color: var(--md-sys-color-on-surface);
+}
+
+.adm-resource-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 0.875rem;
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-resource-facts strong {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--md-sys-color-on-surface);
+}
+
+.adm-resource-facts strong.text-accent-700 {
+  color: var(--kc-success);
+}
+
+/* Same-ramp track so the bar reads as a share of the whole. */
+.adm-meter {
+  display: block;
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--kc-success-soft);
+}
+
+.adm-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--kc-success);
+  transition: width 300ms ease;
+}
+
+.adm-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.adm-flag.is-warning {
+  background: var(--kc-warning-soft);
+  color: var(--kc-warning);
+}
+
+.adm-flag.is-serious {
+  background: var(--kc-accent-soft);
+  color: var(--kc-accent-strong);
+}
+
+.adm-flag.is-critical {
+  background: var(--kc-error-soft);
+  color: var(--kc-danger);
+}
+
+.adm-flag.is-good {
+  background: var(--kc-success-soft);
+  color: var(--kc-success);
+}
+
+.adm-shortcuts-title {
+  margin-bottom: 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.adm-shortcuts {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.125rem 1.25rem;
+}
+
+.adm-shortcut {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.875rem;
+  background: var(--kc-accent-soft);
+  text-align: left;
+  transition: background-color 160ms ease;
+}
+
+.adm-shortcut:hover {
+  background: var(--kc-accent-soft);
+}
+
+.adm-shortcut-icon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.625rem;
+  background: var(--kc-accent-soft);
+  color: var(--kc-accent-strong);
+}
+
+.adm-shortcut-icon.is-image {
+  background: var(--kc-panel-muted);
+  color: var(--kc-accent-strong);
+}
+
+.adm-shortcut:hover .adm-shortcut-icon {
+  background: var(--md-sys-color-surface);
+}
+
+.adm-shortcut-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+
+.adm-shortcut-desc {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* ---------- Usage ---------- */
+.adm-usage {
+  padding: 1.25rem;
+}
+
+.adm-usage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.adm-usage-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.adm-segment {
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.adm-refresh {
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.875rem;
+}
+
+/* minmax(0, 1fr): a wide model table scrolls inside its own box instead of
+ * widening the column (and the page) past a phone's viewport. */
+.adm-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.adm-charts > *,
+.adm-user-trend {
+  min-width: 0;
+}
+
+.adm-chart-title {
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface);
+}
+
+.adm-user-trend {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  box-shadow: inset 0 1px 0 var(--kc-line);
+}
+
+.adm-user-trend-plot {
+  position: relative;
+  height: 15rem;
+}
+
+.adm-user-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.875rem;
+}
+
+.adm-user-legend li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.adm-user-legend-item {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 999px;
+  background: var(--kc-accent-soft);
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: background-color 160ms ease, opacity 160ms ease;
+}
+
+.adm-user-legend-item:hover {
+  background: var(--kc-accent-soft);
+  color: var(--md-sys-color-on-surface);
+}
+
+.adm-user-legend-item.is-hidden {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+/* A short line key mirrors the plotted line rather than a filled box. */
+.adm-user-legend-key {
+  width: 0.75rem;
+  height: 0.1875rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+/* The shared chart components bring their own card; inside this panel they sit flat. */
+.adm-charts :deep(.card) {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (min-width: 768px) {
+  .adm-hero {
+    padding: 1.5rem;
+  }
+
+  .adm-live {
+    gap: 1rem;
+    padding: 1.125rem 1.25rem 1.25rem;
+  }
+
+  .adm-live-figures {
+    gap: 0.75rem;
+  }
+
+  .adm-live-figure {
+    padding: 0.875rem 1rem;
+  }
+
+  .adm-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .adm-resources {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adm-usage {
+    padding: 1.5rem;
+  }
+
+  .adm-user-trend-plot {
+    height: 17rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .adm-hero {
+    grid-template-columns: minmax(19rem, 0.9fr) minmax(0, 1.1fr);
+    gap: 1.25rem 1.5rem;
+  }
+
+  .adm-kpis {
+    grid-column: 1 / -1;
+  }
+
+  .adm-resources {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Side by side only when the model table keeps its columns readable. */
+@media (min-width: 1536px) {
+  .adm-charts {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .adm-trend {
+    padding-left: 1.5rem;
+    box-shadow: inset 1px 0 0 var(--kc-line);
+  }
+}
+
+@media (max-width: 1535px) {
+  .adm-trend {
+    padding-top: 1.5rem;
+    box-shadow: inset 0 1px 0 var(--kc-line);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-live-dot.is-active {
+    animation: none;
+  }
+
+  .adm-resource-chevron {
+    transition: none;
+  }
+
+  button.adm-resource:hover .adm-resource-chevron {
+    transform: none;
+  }
+}
 </style>

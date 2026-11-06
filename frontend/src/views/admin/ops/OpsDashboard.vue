@@ -145,6 +145,9 @@
 </template>
 
 <script setup lang="ts">
+import { useConsoleTheme } from '@/composables/useConsoleTheme'
+// Fullscreen replaces AppLayout, so the page must retain the shared tokens.
+useConsoleTheme()
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useDebounceFn, useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'

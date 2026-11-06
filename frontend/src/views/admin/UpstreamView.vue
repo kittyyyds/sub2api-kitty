@@ -74,7 +74,7 @@
 
           <div class="provider-balance mx-5 mt-4">
             <p class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.upstream.balance') }}</p>
-            <p class="mt-1 break-all text-3xl font-bold tabular-nums tracking-tight" :class="provider.low_balance_alert ? 'text-amber-700' : 'text-gray-900 dark:text-gray-100'">{{ provider.metrics.balance === null ? '—' : yuan(provider.metrics.balance * provider.exchange_rate) }}</p>
+            <p class="mt-1 break-all text-3xl font-bold tabular-nums tracking-tight" :class="provider.low_balance_alert ? 'text-amber-700 dark:text-amber-300' : 'text-gray-900 dark:text-gray-100'">{{ provider.metrics.balance === null ? '—' : yuan(provider.metrics.balance * provider.exchange_rate) }}</p>
             <p class="mt-0.5 text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ provider.metrics.balance === null ? t('admin.upstream.unknown') : money(provider.metrics.balance) + ' USD' }}</p>
           </div>
 
@@ -304,32 +304,29 @@ onUnmounted(() => {
 .upstream-metric { display: flex; align-items: flex-start; gap: 0.875rem; min-width: 0; padding: 1rem 1.125rem; }
 .upstream-metric-icon { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border-radius: 1rem; }
 @media (max-width: 639px) { .upstream-metric { flex-direction: column; padding: 0.75rem; } .upstream-metric > div { width: 100%; } }
-.tone-honey { background: #fff3bd; color: #7e5600; }
-.tone-garden { background: #e4f0df; color: #386344; }
-.tone-sky { background: #e0f0fb; color: #1f5f8b; }
-.tone-rose { background: #fbe6e1; color: #9a3b2b; }
+.tone-honey { background: var(--kc-accent-soft); color: var(--kc-accent-strong); }
+.tone-garden { background: var(--kc-success-soft); color: var(--kc-success); }
+.tone-sky { background: var(--kc-panel-muted); color: var(--kc-muted); }
+.tone-rose { background: var(--kc-accent-soft); color: var(--kc-accent-strong); }
 .upstream-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding: 0.75rem; }
-.upstream-empty-icon { display: flex; align-items: center; justify-content: center; width: 4.5rem; height: 4.5rem; margin-bottom: 1rem; border-radius: 1.5rem; background: #fff3bd; color: #976800; }
+.upstream-empty-icon { display: flex; align-items: center; justify-content: center; width: 4.5rem; height: 4.5rem; margin-bottom: 1rem; border-radius: 1.5rem; background: var(--kc-accent-soft); color: var(--kc-accent-strong); }
 .provider-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .provider-card:hover { box-shadow: var(--theme-highlight), var(--theme-elevation-2); }
-.provider-card-offline { background: linear-gradient(180deg, rgb(254 242 242 / 0.7), var(--md-sys-color-surface) 9rem); }
-.provider-avatar { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border-radius: 1rem; background: linear-gradient(135deg, #f8d65d, #e9b824); color: #3f3420; font-size: 0.875rem; font-weight: 800; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), 0 6px 14px -8px rgb(151 104 0 / 0.6); }
-.provider-avatar-newapi { background: linear-gradient(135deg, #a5cc9f, #5c9865); color: #fff; }
+.provider-card-offline { background: linear-gradient(180deg, var(--kc-error-soft), var(--kc-panel) 9rem); }
+.provider-avatar { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; border-radius: 1rem; background: var(--kc-accent); color: var(--kc-on-action); font-size: 0.875rem; font-weight: 800; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), 0 6px 14px -8px rgb(151 104 0 / 0.6); }
+.provider-avatar-newapi { background: var(--kc-success-soft); color: var(--kc-success); }
 .provider-icon-button { display: flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 0.75rem; color: var(--md-sys-color-on-surface-variant); transition: background-color 150ms ease, color 150ms ease; }
-.provider-icon-button:hover:not(:disabled) { background: var(--md-sys-color-surface-container); color: #7e5600; }
-.provider-icon-danger:hover:not(:disabled) { background: #fef2f2; color: #b91c1c; }
+.provider-icon-button:hover:not(:disabled) { background: var(--md-sys-color-surface-container); color: var(--kc-accent-strong); }
+.provider-icon-danger:hover:not(:disabled) { background: var(--kc-error-soft); color: var(--kc-danger); }
 .provider-icon-button:disabled { cursor: not-allowed; opacity: 0.5; }
 .provider-status { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.1875rem 0.625rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
-.provider-status-online { background: #e4f0df; color: #2e5038; }
-.provider-status-offline { background: #fee2e2; color: #991b1b; }
+.provider-status-online { background: var(--kc-success-soft); color: var(--kc-success); }
+.provider-status-offline { background: var(--kc-error-soft); color: var(--kc-danger); }
 .provider-status-dot { width: 0.4375rem; height: 0.4375rem; border-radius: 999px; background: currentColor; }
 .provider-status-online .provider-status-dot { box-shadow: 0 0 0 3px rgb(92 152 101 / 0.25); animation: provider-pulse 2.4s ease-in-out infinite; }
 @keyframes provider-pulse { 0%, 100% { box-shadow: 0 0 0 2px rgb(92 152 101 / 0.3); } 50% { box-shadow: 0 0 0 5px rgb(92 152 101 / 0.05); } }
-.provider-balance { padding: 0.875rem 1rem; border-radius: 1.25rem; background: linear-gradient(135deg, #fffbe8, #fff3bd); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8); }
+.provider-balance { padding: 0.875rem 1rem; border-radius: 1.25rem; background: linear-gradient(135deg, var(--kc-accent-soft), var(--kc-accent-soft)); box-shadow: var(--theme-highlight); }
 .provider-stat { min-width: 0; padding: 0.5rem 0.625rem; border-radius: 0.875rem; background: var(--md-sys-color-surface-container); background: color-mix(in srgb, var(--md-sys-color-surface-container) 55%, var(--md-sys-color-surface)); }
 .provider-footer { margin-top: auto; background: color-mix(in srgb, var(--md-sys-color-surface-container) 35%, transparent); }
 @media (prefers-reduced-motion: reduce) { .provider-status-online .provider-status-dot { animation: none; } }
- :global(.dark) .provider-balance { background: linear-gradient(135deg,#302919,#403519); }
- :global(.dark) .provider-stat { background: #0f172a; }
- :global(.dark) .provider-card-offline { background: #201d27; }
 </style>

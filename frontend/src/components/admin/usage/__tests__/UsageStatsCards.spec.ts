@@ -49,8 +49,8 @@ describe('UsageStatsCards', () => {
       props: { stats: { ...stats, total_actual_cost: 3, total_cost: 12, total_account_cost: 5 } },
       global: { stubs: { Icon: true } },
     })
-    const costCard = wrapper.findAll('.card')[2]
-    expect(costCard.get('.text-xl').text()).toBe('$3.0000')
+    const costCard = wrapper.get('.is-cost')
+    expect(costCard.get('.usage-summary-value').text()).toBe('$3.0000')
     expect(costCard.text()).toContain('Standard $12.0000')
     expect(costCard.text()).toContain('Cost $5.0000')
     wrapper.unmount()
@@ -69,15 +69,15 @@ describe('UsageStatsCards', () => {
     })
 
     const text = wrapper.text()
-    expect(text).toContain('Cache: 34')
-    expect(text).toContain('Cache Token Breakdown')
+    expect(text).toContain('Cache 34')
+    expect(wrapper.get('ul').attributes('aria-label')).toBe('Cache Token Breakdown')
     expect(text).toContain('Cache Creation')
     expect(text).toContain('12')
     expect(text).toContain('Cache Read')
     expect(text).toContain('22')
   })
 
-  it('keeps the cache tooltip out of the layout while it is hidden', () => {
+  it('shows every token component without requiring hover', () => {
     const wrapper = mount(UsageStatsCards, {
       props: {
         stats,
@@ -89,13 +89,7 @@ describe('UsageStatsCards', () => {
       },
     })
 
-    const tooltip = wrapper.findAll('span').find((el) => el.classes().includes('group-hover:block'))
-
-    expect(tooltip).toBeDefined()
-    // `opacity-0` hides the tooltip visually but keeps it in the layout, so its
-    // fixed width still widens the document and causes horizontal scrolling on
-    // narrow screens. `hidden` (display: none) takes it out of the flow.
-    expect(tooltip?.classes()).toContain('hidden')
-    expect(tooltip?.classes()).not.toContain('opacity-0')
+    expect(wrapper.get('[role="img"]').attributes('aria-label')).toContain('Cache Creation 12')
+    expect(wrapper.findAll('li').map(item => item.text())).toEqual(['In100', 'Out50', 'Cache Creation12', 'Cache Read22'])
   })
 })

@@ -2,28 +2,9 @@
   <AppLayout>
     <div class="space-y-6">
       <UsageStatsCards v-if="activeTab !== 'traffic'" :stats="usageStats" />
-      <!-- Charts Section -->
-      <div v-if="activeTab !== 'traffic'" class="space-y-4">
-        <div class="card p-4">
-          <div class="flex flex-wrap items-center gap-4">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
-              <DateRangePicker
-                v-model:start-date="startDate"
-                v-model:end-date="endDate"
-                :rolling24-hours="true"
-                @change="onDateRangeChange"
-              />
-            </div>
-            <div class="ml-auto flex items-center gap-2">
-              <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
-              <div class="w-28">
-                <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <UsageAnalysisPanel v-if="activeTab !== 'traffic'"
+        v-model:start-date="startDate" v-model:end-date="endDate" v-model:granularity="granularity"
+        @date-range-change="onDateRangeChange" @granularity-change="loadChartData">
           <ModelDistributionChart
             v-model:source="modelDistributionSource"
             v-model:metric="modelDistributionMetric"
@@ -46,8 +27,7 @@
             :end-date="endDate"
             :filters="breakdownFilters"
           />
-        </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
           <EndpointDistributionChart
             v-model:source="endpointDistributionSource"
             v-model:metric="endpointDistributionMetric"
@@ -63,11 +43,11 @@
             :filters="breakdownFilters"
           />
           <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
-        </div>
-      </div>
+
+      </UsageAnalysisPanel>
       <LatencyObservabilityPanel v-if="activeTab === 'usage'" :start-date="startDate" :end-date="endDate" :model="filters.model" :user-id="filters.user_id" :api-key-id="filters.api_key_id" :account-id="filters.account_id" :group-id="filters.group_id" :refresh-token="connectionRefreshKey" />
       <!-- 明细区：tab 栏 + 筛选 + 内容收进同一张卡片，消除割裂感 -->
-      <div class="card">
+      <div class="card usage-records">
         <div class="flex flex-wrap items-center border-b border-gray-200 px-2 dark:border-dark-700 sm:px-4">
           <button
             v-for="tab in detailTabs"
@@ -206,6 +186,7 @@
 </template>
 
 <script setup lang="ts">
+import UsageAnalysisPanel from '@/components/admin/usage/UsageAnalysisPanel.vue'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
@@ -215,8 +196,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatReasoningEffort } from '@/utils/format'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import { formatCacheHitRate } from '@/utils/usageCacheHitRate'
-import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import Select from '@/components/common/Select.vue'; import DateRangePicker from '@/components/common/DateRangePicker.vue'
-import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
+import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'; import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
 import UsageConnections from '@/components/admin/usage/UsageConnections.vue'
 import LatencyObservabilityPanel from '@/components/admin/usage/LatencyObservabilityPanel.vue'
@@ -303,7 +283,6 @@ const handleRankingSelectUser = (userId: number, email: string) => {
   applyFilters()
 }
 
-const granularityOptions = computed(() => [{ value: 'day', label: t('admin.dashboard.day') }, { value: 'hour', label: t('admin.dashboard.hour') }])
 // Use local timezone to avoid UTC timezone issues
 const formatLD = (d: Date) => {
   const year = d.getFullYear()

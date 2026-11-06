@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Title, Tooltip } from 'chart.js'
@@ -43,14 +44,14 @@ watch(
   }
 )
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+const { isDarkMode } = useDocumentDarkMode()
 const colors = computed(() => ({
   blue: '#3b82f6',
   blueAlpha: '#3b82f620',
   green: '#10b981',
   greenAlpha: '#10b98120',
-  grid: isDarkMode.value ? '#374151' : '#f3f4f6',
-  text: isDarkMode.value ? '#9ca3af' : '#6b7280'
+  grid: isDarkMode.value ? '#353932' : '#eeeee8',
+  text: isDarkMode.value ? '#a7ada2' : '#65665f'
 }))
 
 const totalRequests = computed(() => sumNumbers(props.points.map((p) => p.request_count)))
@@ -104,9 +105,9 @@ const options = computed(() => {
         labels: { color: c.text, usePointStyle: true, boxWidth: 6, font: { size: 10 } }
       },
       tooltip: {
-        backgroundColor: isDarkMode.value ? '#1f2937' : '#ffffff',
-        titleColor: isDarkMode.value ? '#f3f4f6' : '#111827',
-        bodyColor: isDarkMode.value ? '#d1d5db' : '#4b5563',
+        backgroundColor: isDarkMode.value ? '#20221f' : '#ffffff',
+        titleColor: isDarkMode.value ? '#eeeee8' : '#1c1c19',
+        bodyColor: isDarkMode.value ? '#dcded5' : '#62695c',
         borderColor: c.grid,
         borderWidth: 1,
         padding: 10,

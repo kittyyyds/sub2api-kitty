@@ -7,6 +7,19 @@ export default {
       colors: {
         // Console tokens also reach hover, focus, alpha variants and Teleport
         // controls. Public pages retain the existing teal fallback palette.
+        gray: {
+          50: 'rgb(var(--kc-neutral-50, 249 250 251) / <alpha-value>)',
+          100: 'rgb(var(--kc-neutral-100, 243 244 246) / <alpha-value>)',
+          200: 'rgb(var(--kc-neutral-200, 229 231 235) / <alpha-value>)',
+          300: 'rgb(var(--kc-neutral-300, 209 213 219) / <alpha-value>)',
+          400: 'rgb(var(--kc-neutral-400, 156 163 175) / <alpha-value>)',
+          500: 'rgb(var(--kc-neutral-500, 107 114 128) / <alpha-value>)',
+          600: 'rgb(var(--kc-neutral-600, 75 85 99) / <alpha-value>)',
+          700: 'rgb(var(--kc-neutral-700, 55 65 81) / <alpha-value>)',
+          800: 'rgb(var(--kc-neutral-800, 31 41 55) / <alpha-value>)',
+          900: 'rgb(var(--kc-neutral-900, 17 24 39) / <alpha-value>)',
+          950: 'rgb(var(--kc-neutral-950, 3 7 18) / <alpha-value>)',
+        },
         primary: {
           50: 'rgb(var(--kc-primary-50, 240 253 250) / <alpha-value>)',
           100: 'rgb(var(--kc-primary-100, 204 251 241) / <alpha-value>)',
@@ -22,31 +35,31 @@ export default {
         },
         // 辅助色 - 深蓝灰
         accent: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617'
+          50: 'rgb(var(--kc-neutral-50, 248 250 252) / <alpha-value>)',
+          100: 'rgb(var(--kc-neutral-100, 241 245 249) / <alpha-value>)',
+          200: 'rgb(var(--kc-neutral-200, 226 232 240) / <alpha-value>)',
+          300: 'rgb(var(--kc-neutral-300, 203 213 225) / <alpha-value>)',
+          400: 'rgb(var(--kc-neutral-400, 148 163 184) / <alpha-value>)',
+          500: 'rgb(var(--kc-neutral-500, 100 116 139) / <alpha-value>)',
+          600: 'rgb(var(--kc-neutral-600, 71 85 105) / <alpha-value>)',
+          700: 'rgb(var(--kc-neutral-700, 51 65 85) / <alpha-value>)',
+          800: 'rgb(var(--kc-neutral-800, 30 41 59) / <alpha-value>)',
+          900: 'rgb(var(--kc-neutral-900, 15 23 42) / <alpha-value>)',
+          950: 'rgb(var(--kc-neutral-950, 2 6 23) / <alpha-value>)'
         },
         // 深色模式背景
         dark: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617'
+          50: 'rgb(var(--kc-neutral-50, 248 250 252) / <alpha-value>)',
+          100: 'rgb(var(--kc-neutral-100, 241 245 249) / <alpha-value>)',
+          200: 'rgb(var(--kc-neutral-200, 226 232 240) / <alpha-value>)',
+          300: 'rgb(var(--kc-neutral-300, 203 213 225) / <alpha-value>)',
+          400: 'rgb(var(--kc-neutral-400, 148 163 184) / <alpha-value>)',
+          500: 'rgb(var(--kc-neutral-500, 100 116 139) / <alpha-value>)',
+          600: 'rgb(var(--kc-neutral-600, 71 85 105) / <alpha-value>)',
+          700: 'rgb(var(--kc-neutral-700, 51 65 85) / <alpha-value>)',
+          800: 'rgb(var(--kc-neutral-800, 30 41 59) / <alpha-value>)',
+          900: 'rgb(var(--kc-neutral-900, 15 23 42) / <alpha-value>)',
+          950: 'rgb(var(--kc-neutral-950, 2 6 23) / <alpha-value>)'
         }
       },
       fontFamily: {

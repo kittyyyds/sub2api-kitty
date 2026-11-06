@@ -233,7 +233,7 @@ describe('admin DashboardView', () => {
 
     const refreshedNow = new Date(initialNow.getTime() + 3 * 60 * 60 * 1000)
     vi.setSystemTime(refreshedNow)
-    const refreshButton = wrapper.findAll('button').find(button => button.text() === 'common.refresh')
+    const refreshButton = wrapper.findAll('button').find(button => button.attributes('aria-label') === 'common.refresh')
     expect(refreshButton).toBeDefined()
     await refreshButton!.trigger('click')
     await flushPromises()
@@ -268,7 +268,7 @@ describe('admin DashboardView', () => {
     getUserSpendingRanking.mockClear()
 
     vi.setSystemTime(new Date(2026, 9, 1, 3, 15, 30, 123))
-    const todayRefreshButton = wrapper.findAll('button').find(button => button.text() === 'common.refresh')
+    const todayRefreshButton = wrapper.findAll('button').find(button => button.attributes('aria-label') === 'common.refresh')
     expect(todayRefreshButton).toBeDefined()
     await todayRefreshButton!.trigger('click')
     await flushPromises()
@@ -296,7 +296,7 @@ describe('admin DashboardView', () => {
     getUserSpendingRanking.mockClear()
 
     vi.setSystemTime(new Date(2026, 9, 1, 6, 15, 30, 123))
-    const refreshButton = wrapper.findAll('button').find(button => button.text() === 'common.refresh')
+    const refreshButton = wrapper.findAll('button').find(button => button.attributes('aria-label') === 'common.refresh')
     expect(refreshButton).toBeDefined()
     await refreshButton!.trigger('click')
     await flushPromises()

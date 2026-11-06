@@ -30,6 +30,7 @@
 import '@/styles/onboarding.css'
 import '@/styles/console-admin-theme.css'
 import '@/styles/console-theme.css'
+import '@/styles/cs1-provider-theme.css'
 import '@/styles/relay.css'
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'

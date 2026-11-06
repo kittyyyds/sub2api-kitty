@@ -952,6 +952,7 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
+    { path: '/admin/operations', label: t('providerHub.operations'), icon: PriceTagIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: OpsMonitoringIcon, featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
@@ -970,7 +971,6 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/providers', label: t('providerHub.title'), icon: GlobeIcon },
-    { path: '/admin/operations', label: t('providerHub.operations'), icon: PriceTagIcon },
     { path: '/admin/smart-ops', label: t('accountOps.smartTitle'), icon: SmartOpsIcon, expandOnly: true, children: [
       { path: '/admin/auto-config', label: t('autoConfig.title'), icon: AccountOpsIcon },
       { path: '/admin/priority-scheduling', label: t('priorityScheduling.title'), icon: AccountOpsIcon },

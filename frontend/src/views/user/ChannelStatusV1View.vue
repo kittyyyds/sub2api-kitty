@@ -1,7 +1,11 @@
 <template>
   <AppLayout>
-    <div class="monitor-compact-page">
-    <header class="monitor-compact-heading"><div><div class="home-eyebrow">LIVE STATUS</div><h1>{{ ht('homeOverview.channel') }}</h1><p>{{ ht('homeOverview.channelHint') }}</p></div><span>{{ ht('homeOverview.channelCount', { n: items.length }) }}</span></header>
+    <div class="channel-status-page">
+    <section class="card channel-status-summary">
+    <header class="channel-status-heading"><div><h2>{{ ht('homeOverview.channel') }}</h2><p>{{ ht('homeOverview.channelHint') }}</p></div><span>{{ ht('homeOverview.channelCount', { n: items.length }) }}</span></header>
+    <div v-if="items.length" class="channel-status-counts">
+      <span v-for="count in statusCounts" :key="count.status" :class="`is-${count.tone}`"><strong>{{ count.count }}</strong> {{ count.label }}</span>
+    </div>
     <MonitorHero
       :overall-status="overallStatus"
       :interval-seconds="DEFAULT_INTERVAL_SECONDS"
@@ -12,9 +16,9 @@
       @update:window="handleWindowChange"
       @refresh="refresh()"
     />
+    </section>
 
-    <MonitorCardGrid
-      compact
+    <MonitorStatusBoard
       :items="items"
       :window="currentWindow"
       :loading="loading"
@@ -50,12 +54,12 @@ import MonitorHero, {
   type MonitorWindow,
   type OverallStatus,
 } from '@/components/user/monitor/MonitorHero.vue'
-import MonitorCardGrid from '@/components/user/monitor/MonitorCardGrid.vue'
+import MonitorStatusBoard from '@/components/user/monitor/MonitorStatusBoard.vue'
 import MonitorDetailDialog from '@/components/user/MonitorDetailDialog.vue'
 import { DEFAULT_INTERVAL_SECONDS, STATUS_OPERATIONAL } from '@/constants/channelMonitor'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import '@/styles/dashboard-home.css'
-import '@/styles/monitor-compact.css'
+
 
 const { t } = useI18n()
 const { t: ht } = useI18n()
@@ -98,6 +102,16 @@ const overallStatus = computed<OverallStatus>(() => {
 const detailTitle = computed(() => {
   return detailTarget.value?.name || t('channelStatus.detailTitle')
 })
+
+const statusCounts = computed(() => [
+  { status: 'operational', tone: 'good', label: t('monitorCommon.cardStatus.operational') },
+  { status: 'degraded', tone: 'warn', label: t('monitorCommon.cardStatus.degraded') },
+  { status: 'failed', tone: 'bad', label: t('monitorCommon.cardStatus.failed') },
+  { status: 'unknown', tone: 'muted', label: t('monitorCommon.cardStatus.error') },
+].map(row => ({ ...row, count: items.value.filter(item =>
+  row.status === 'failed' ? ['failed', 'error'].includes(item.primary_status)
+    : row.status === 'unknown' ? !['operational', 'degraded', 'failed', 'error'].includes(item.primary_status)
+      : item.primary_status === row.status).length })).filter(row => row.count > 0))
 
 // ── Loaders ──
 async function reload(silent = false) {
@@ -201,3 +215,16 @@ onBeforeUnmount(() => {
   if (abortController) abortController.abort()
 })
 </script>
+
+<style scoped>
+.channel-status-page { display: grid; min-width: 0; gap: 22px; }
+.channel-status-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.channel-status-summary { display: grid; gap: 16px; padding: 20px; }
+.channel-status-heading h2 { color: var(--kc-ink); font-size: 20px; font-weight: 700; }
+.channel-status-heading p,.channel-status-heading > span { margin-top: 6px; color: var(--kc-muted); font-size: 12px; }
+.channel-status-counts { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.channel-status-counts > span { border-radius: 8px; padding: 5px 10px; background: var(--kc-panel-muted); color: var(--kc-muted); }
+.channel-status-counts > .is-good { background: var(--kc-success-soft); color: var(--kc-success); }
+.channel-status-counts > .is-warn { background: var(--kc-warning-soft); color: var(--kc-warning); }
+.channel-status-counts > .is-bad { background: var(--kc-error-soft); color: var(--kc-danger); }
+</style>

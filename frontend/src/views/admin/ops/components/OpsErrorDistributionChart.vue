@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useDocumentDarkMode } from '@/composables/useDocumentDarkMode'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, ArcElement, Legend, Tooltip } from 'chart.js'
@@ -21,13 +22,13 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+const { isDarkMode } = useDocumentDarkMode()
 const colors = computed(() => ({
   blue: '#3b82f6',
   red: '#ef4444',
   orange: '#f59e0b',
-  gray: '#9ca3af',
-  text: isDarkMode.value ? '#9ca3af' : '#6b7280'
+  gray: '#a7ada2',
+  text: isDarkMode.value ? '#a7ada2' : '#65665f'
 }))
 
 const totalSlaErrors = computed(() =>
@@ -100,9 +101,9 @@ const options = computed(() => ({
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: isDarkMode.value ? '#1f2937' : '#ffffff',
-      titleColor: isDarkMode.value ? '#f3f4f6' : '#111827',
-      bodyColor: isDarkMode.value ? '#d1d5db' : '#4b5563'
+      backgroundColor: isDarkMode.value ? '#20221f' : '#ffffff',
+      titleColor: isDarkMode.value ? '#eeeee8' : '#1c1c19',
+      bodyColor: isDarkMode.value ? '#dcded5' : '#62695c'
     }
   }
 }))

@@ -212,13 +212,13 @@ async function save() {
 <style scoped>
 .provider-input { border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 26%, transparent); border-radius: 0.875rem; background: var(--md-sys-color-surface); padding: 0.65rem 0.9rem; box-shadow: inset 0 1px 2px rgb(63 52 32 / 0.04); }
 .provider-input:hover:not(:focus) { border-color: color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent); }
-.provider-input:focus { border-color: var(--md-sys-color-primary); box-shadow: 0 0 0 4px rgb(233 184 36 / 0.16); }
+.provider-input:focus { border-color: var(--md-sys-color-primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--kc-accent) 16%, transparent); }
 .provider-choice { display: flex; align-items: center; min-width: 0; gap: 0.5rem; cursor: pointer; border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 22%, transparent); border-radius: 1rem; background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface); transition: border-color 0.15s, background 0.15s, box-shadow 0.2s, transform 0.2s var(--theme-ease-out); }
 .provider-choice:focus-within { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
 .provider-choice:hover { border-color: var(--md-sys-color-primary); transform: translateY(-1px); }
-.provider-choice-active { border-color: var(--md-sys-color-primary); background: linear-gradient(135deg, #fffbe8, #fff3bd); color: #7e5600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary) 30%, transparent), 0 8px 18px -12px rgb(151 104 0 / 0.55); }
+.provider-choice-active { border-color: var(--md-sys-color-primary); background: linear-gradient(135deg, var(--kc-accent-soft), var(--kc-accent-soft)); color: var(--kc-accent-strong); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary) 30%, transparent), 0 8px 18px -12px rgb(151 104 0 / 0.55); }
 .provider-platform { min-height: 3.6rem; padding: 0.6rem 0.7rem; font-size: 0.8rem; }
-.provider-choice-icon { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 0.65rem; background: color-mix(in srgb, var(--md-sys-color-primary) 16%, var(--md-sys-color-surface)); color: #7e5600; }
+.provider-choice-icon { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 0.65rem; background: color-mix(in srgb, var(--md-sys-color-primary) 16%, var(--md-sys-color-surface)); color: var(--kc-accent-strong); }
 .provider-choice-active .provider-choice-icon { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
 .provider-mode { min-height: 2.75rem; padding: 0.5rem 0.75rem; font-size: 0.78rem; font-weight: 600; }
 .provider-radio { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 0.9rem; height: 0.9rem; border: 1.5px solid currentColor; border-radius: 50%; }
@@ -226,7 +226,7 @@ async function save() {
 .provider-secret { position: relative; display: block; }
 .provider-secret .provider-input { width: 100%; min-width: 0; padding-inline-end: 3rem; box-sizing: border-box; }
 .provider-secret button { position: absolute; right: 0.55rem; top: 50%; display: flex; align-items: center; justify-content: center; width: 1.85rem; height: 1.85rem; transform: translateY(-50%); border-radius: 0.55rem; background: transparent; color: var(--md-sys-color-on-surface-variant); transition: background 0.15s, color 0.15s; }
-.provider-secret button:hover { background: var(--md-sys-color-surface-container); color: #7e5600; }
+.provider-secret button:hover { background: var(--md-sys-color-surface-container); color: var(--kc-accent-strong); }
 .provider-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.7rem 0.9rem; border-radius: 1rem; background: color-mix(in srgb, var(--md-sys-color-surface-container) 55%, var(--md-sys-color-surface)); cursor: pointer; }
-.provider-probe-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.75rem; border-radius: 1rem; background: linear-gradient(135deg, rgb(228 240 223 / 0.7), rgb(255 251 232 / 0.9)); }
+.provider-probe-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.75rem; border-radius: 1rem; background: var(--kc-success-soft); }
 </style>

@@ -587,6 +587,12 @@ export default {
         loadFailed: '加载详情失败，请稍后重试',
       },
     },
+    summaryCumulative: '累计统计',
+    summaryRange: '所选范围',
+    analysis: {
+    title: '用量分析',
+    subtitle: '按模型、分组、端点与时间拆分所选范围',
+    },
   },
 
   // Shared keys for channel monitor (admin + user views)

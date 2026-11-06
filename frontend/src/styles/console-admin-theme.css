@@ -14,7 +14,7 @@
 .kitty-admin-shell .kitty-console-content { min-width: 0; }
 .kitty-admin-shell .kitty-console-content {
   width: 100%;
-  max-width: 2320px;
+  max-width: none;
   margin: 0 auto;
 }
 .kitty-admin-shell [data-console-header],

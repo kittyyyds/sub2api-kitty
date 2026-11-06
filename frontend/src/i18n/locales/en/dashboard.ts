@@ -582,6 +582,12 @@ export default {
         loadFailed: 'Failed to load detail, please try again',
       },
     },
+    summaryCumulative: 'All time',
+    summaryRange: 'Selected range',
+    analysis: {
+    title: 'Usage analysis',
+    subtitle: 'Break the selected range down by model, group, endpoint and time',
+    },
   },
 
   // Shared keys for channel monitor (admin + user views)
