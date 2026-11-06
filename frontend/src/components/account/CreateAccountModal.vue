@@ -4684,13 +4684,7 @@ function selectProviderAccount(selection: ProviderAccountSelection | null) {
   const rate = providerAccountRateMultiplier(selection.groupMultiplier)
   if (rate !== null && (form.rate_multiplier === 1 || form.rate_multiplier === providerFilledRate)) { form.rate_multiplier = rate; providerFilledRate = rate }
 }
-watch(() => [form.platform, form.type, providerSource.value], () => {
-  providerSelection.value = null
-  if (providerFilledRate !== null && form.rate_multiplier === providerFilledRate) form.rate_multiplier = 1
-  if (providerFilledName && form.name === providerFilledName) form.name = ''
-  providerFilledRate = null
-  providerFilledName = ''
-})
+
 watch(() => props.show, show => { if (show) { providerSource.value = 'api'; providerSelection.value = null; providerFilledRate = null; providerFilledName = '' } })
 
 const syncPreviewCredentials = computed(() => {
@@ -5134,6 +5128,14 @@ const form = reactive({
   rate_multiplier: 1,
   group_ids: [] as number[],
   expires_at: null as number | null
+})
+
+watch(() => [form.platform, form.type, providerSource.value], () => {
+  providerSelection.value = null
+  if (providerFilledRate !== null && form.rate_multiplier === providerFilledRate) form.rate_multiplier = 1
+  if (providerFilledName && form.name === providerFilledName) form.name = ''
+  providerFilledRate = null
+  providerFilledName = ''
 })
 
 // Helper to check if current type needs OAuth flow
