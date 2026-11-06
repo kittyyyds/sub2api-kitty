@@ -1,4 +1,26 @@
 export default { qqbot: {
+  joinReview: {
+    title: '进群自动审核',
+    enabled: '按网站累计消费自动审核进群申请',
+    help: '只处理本群开启后收到的新申请。机器人须为 QQ 群管理员，并在开放平台订阅群成员事件、具备入群审批接口权限。查询或审批异常时保留申请供人工核对。',
+    minSpent: '最低累计消费金额（按后台金额，不做币种换算）',
+    question: '对应的 QQ 入群问题',
+    questionHelp: '先在 QQ 群设置中添加问题，再在这里填写相同的问题文字；答案要求只填写一个注册邮箱。也支持将邮箱写在入群验证消息中。本站不会修改 QQ 群的问题。',
+    rejectReason: '拒绝原因',
+    identityHelp: '填写邮箱只用于进群资格核验，不能证明邮箱归属，不会自动绑定账号、发奖或开放账户信息。拒绝通过 QQ 申请的拒绝原因反馈，不发送群消息，不加入黑名单。',
+    decisions: {
+      approved: '消费达标，已同意进群', declined_ineligible: '未满足账号或消费条件，已拒绝',
+      declined_bad_answer: '未提供符合要求的邮箱答案，已拒绝', already_auto_approved: 'QQ 已自动通过，未重复审批',
+      cancelled_policy_changed: '配置已变更，已取消自动审批',
+      manual_invalid_or_stale_request: '待人工处理：申请信息不完整或已超时',
+      manual_verification_unavailable: '待人工处理：未收到对应问题或验证信息',
+      manual_credentials_unavailable: '待人工处理：QQ 连接暂不可用', manual_lookup_failed: '待人工处理：账户或消费查询失败',
+      manual_rate_limited: '待人工处理：达到 QQ 审批频率预算',
+      attempting_approve: '正在提交同意，尚未确认结果', attempting_decline: '正在提交拒绝，尚未确认结果',
+      manual_result_unconfirmed: '待人工核对：QQ 审批结果未确认，不会重复提交',
+      manual_other: '待人工核对：请查看 QQ 管理端和运行错误信息'
+    }
+  },
   rewardCreditHistory: 'QQ 活动奖励',
   transferCreditHistory: 'QQ 余额转账',
   chatPreview: {

@@ -173,8 +173,15 @@ func (s *Service) runOne(parent context.Context) {
 	}
 	if !isGroupMessageEvent(j.EventType) && j.EventType != interactionCreate {
 		err = s.memberEvent(ctx, c, j, e)
+		if err == nil && j.EventType == "GROUP_JOIN_REQUEST" {
+			err = s.reviewJoinRequest(ctx, c, j, e)
+		}
 		if err != nil {
-			s.finish(j, "failed", "群成员事件处理失败")
+			detail := "群成员事件处理失败"
+			if j.EventType == "GROUP_JOIN_REQUEST" && e.JoinReviewPolicy != "" {
+				detail = "入群审核未确认完成，请在 QQ 管理端核对；不会自动重复审批。"
+			}
+			s.finish(j, "failed", detail)
 		} else {
 			s.finish(j, "completed", "")
 		}

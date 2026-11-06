@@ -1,4 +1,26 @@
 export default { qqbot: {
+  joinReview: {
+    title: 'Group join approval',
+    enabled: 'Review join requests using lifetime site spending',
+    help: 'Applies only to new requests received after enabling this group. The bot must be a QQ group administrator with member events and approval API permissions. Lookup or approval failures leave the request for manual review.',
+    minSpent: 'Minimum lifetime spending (site amounts, no currency conversion)',
+    question: 'Matching QQ join question',
+    questionHelp: 'Set this question in QQ first, then enter the same text here. Applicants must answer with one registered email address. Email-only verification messages are also supported. This setting does not change the QQ group question.',
+    rejectReason: 'Rejection reason',
+    identityHelp: 'An email answer checks eligibility only; it does not prove ownership, bind an account, grant account access or issue rewards. Rejections use QQ’s request reason, with no group message or blacklist action.',
+    decisions: {
+      approved: 'Spending requirement met; approved', declined_ineligible: 'Account or spending requirement not met; declined',
+      declined_bad_answer: 'No valid email answer; declined', already_auto_approved: 'Already approved by QQ; no duplicate action',
+      cancelled_policy_changed: 'Cancelled because the configuration changed',
+      manual_invalid_or_stale_request: 'Manual review: invalid or stale request',
+      manual_verification_unavailable: 'Manual review: matching verification information unavailable',
+      manual_credentials_unavailable: 'Manual review: QQ connection unavailable', manual_lookup_failed: 'Manual review: account or spending lookup failed',
+      manual_rate_limited: 'Manual review: approval frequency budget reached',
+      attempting_approve: 'Submitting approval; result not confirmed', attempting_decline: 'Submitting rejection; result not confirmed',
+      manual_result_unconfirmed: 'Manual review: approval result unconfirmed; no automatic resubmission',
+      manual_other: 'Manual review: check QQ and the runtime error details'
+    }
+  },
   rewardCreditHistory: 'QQ activity reward',
   transferCreditHistory: 'QQ balance transfer',
   chatPreview: {

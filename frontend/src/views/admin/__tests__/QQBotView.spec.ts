@@ -31,6 +31,21 @@ async function mountView(locale: 'zh' | 'en' = 'zh', path = '/admin/qqbot/config
 async function category(w: VueWrapper, text: string) { await w.findAll('button').find(button => button.text() === text)!.trigger('click') }
 
 describe('QQ module settings', () => {
+ it('saves join approval rules for the selected group without enabling other groups', async () => {
+  const w = await mountView('zh', '/admin/qqbot/groups')
+  const card = w.get('#qqbot-settings-panel-groups').findAll('article')[0]!
+  await card.get('[data-testid="qq-join-review-enabled"]').setValue(true)
+  await card.get('[data-testid="qq-join-review-min-spent"]').setValue(10)
+  await card.get('[data-testid="qq-join-review-question"]').setValue('请输入已消费10元以上的用户邮箱')
+  await card.get('[data-testid="qq-join-review-reject-reason"]').setValue('本群只审核已消费用户')
+  await w.get('form').trigger('submit'); await flushPromises()
+  expect(api.saveSection).toHaveBeenCalledWith('groups', 'groups-1', expect.anything())
+  expect(server.group_policies?.find(p => p.group_id === 'group')?.join_review).toEqual({
+   enabled: true, min_spent: 10, question: '请输入已消费10元以上的用户邮箱', reject_reason: '本群只审核已消费用户'
+  })
+  expect(server.group_policies?.find(p => p.group_id === 'other-group')?.join_review?.enabled).not.toBe(true)
+  expect(w.get('#qqbot-settings-tab-groups').text()).not.toContain('•')
+ })
  beforeEach(() => {
   vi.resetAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})

@@ -51,7 +51,14 @@ export function defaultHealthNotificationConfig(): QQHealthNotificationConfig {
   return { enabled: false, groups: [], minimum_samples: 50, error_percent: 20, recovery_percent: 5,
     ttft_seconds: 10, failure_minutes: 3, recovery_minutes: 2, cooldown_minutes: 30 }
 }
+export interface QQJoinReviewConfig {
+  enabled: boolean; min_spent: number; question: string; reject_reason: string
+}
+export function defaultJoinReviewConfig(): QQJoinReviewConfig {
+  return { enabled: false, min_spent: 10, question: '请输入累计消费满10元的用户邮箱', reject_reason: '本群只审核已消费用户' }
+}
 export interface QQGroupPolicy {
+  join_review?: QQJoinReviewConfig
   group_id: string; label: string; disable_chat: boolean; disable_images: boolean
   disable_activities: boolean; disable_notifications: boolean; chat_daily_limit: number | null; image_daily_limit: number | null
 }

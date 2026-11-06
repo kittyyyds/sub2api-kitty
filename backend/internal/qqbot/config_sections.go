@@ -113,14 +113,15 @@ func (s *Service) ConfigHistory(ctx context.Context) ([]ConfigChange, error) {
 // Group policy is an additional restriction. Nil quotas inherit the global cap;
 // zero prohibits calls. Missing policies preserve existing installations.
 type GroupPolicy struct {
-	GroupID              string `json:"group_id"`
-	Label                string `json:"label"`
-	DisableChat          bool   `json:"disable_chat"`
-	DisableImages        bool   `json:"disable_images"`
-	DisableActivities    bool   `json:"disable_activities"`
-	DisableNotifications bool   `json:"disable_notifications"`
-	ChatDailyLimit       *int   `json:"chat_daily_limit"`
-	ImageDailyLimit      *int   `json:"image_daily_limit"`
+	JoinReview           *JoinReviewConfig `json:"join_review,omitempty"`
+	GroupID              string            `json:"group_id"`
+	Label                string            `json:"label"`
+	DisableChat          bool              `json:"disable_chat"`
+	DisableImages        bool              `json:"disable_images"`
+	DisableActivities    bool              `json:"disable_activities"`
+	DisableNotifications bool              `json:"disable_notifications"`
+	ChatDailyLimit       *int              `json:"chat_daily_limit"`
+	ImageDailyLimit      *int              `json:"image_daily_limit"`
 }
 
 func (c Config) groupPolicy(group string) GroupPolicy {
@@ -156,6 +157,9 @@ func validateGroupPolicies(c Config) error {
 		return errors.New("群策略最多 100 条")
 	}
 	for _, p := range c.GroupPolicies {
+		if err := validateJoinReview(p.JoinReview); err != nil {
+			return err
+		}
 		if !c.allows(p.GroupID) || seen[p.GroupID] || len([]rune(p.Label)) > 60 {
 			return errors.New("群策略须对应唯一的允许群，备注最多 60 字")
 		}

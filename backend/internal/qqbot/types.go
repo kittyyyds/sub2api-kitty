@@ -120,10 +120,14 @@ type Event struct {
 		Username   string `json:"username"`
 		Bot        bool   `json:"bot"`
 	} `json:"author"`
-	ApplySource   string `json:"apply_source"`
-	InvitedBy     string `json:"invited_by"`
-	ApplyAt       string `json:"apply_at"`
-	JoinRequestID string `json:"join_request_id"`
+	ApplySource      string          `json:"apply_source"`
+	InvitedBy        string          `json:"invited_by"`
+	ApplyAt          string          `json:"apply_at"`
+	JoinRequestID    string          `json:"join_request_id"`
+	VerifyInfo       JoinVerifyInfo  `json:"verify_info"`
+	AutoApproved     json.RawMessage `json:"auto_approved"`
+	Bot              bool            `json:"bot"`
+	JoinReviewPolicy string          `json:"_kitty_join_review_policy,omitempty"`
 }
 type Attachment struct {
 	URL         string `json:"url"`

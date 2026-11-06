@@ -16,7 +16,7 @@
     <article v-for="job in data.items" :key="job.id" class="space-y-2 rounded-lg border p-4 text-sm dark:border-dark-700">
       <p class="flex flex-wrap justify-between gap-2"><strong>{{ kindLabel(job.kind || 'event') }} · {{ job.status }}</strong><time>{{ new Date(job.created_at).toLocaleString() }}</time></p>
       <p class="break-all text-xs text-gray-500">{{ job.group_id }} · {{ job.member_id }} · {{ job.id }}</p>
-      <p v-if="job.trigger_reason || job.decision_reason">{{ job.trigger_reason }} → {{ job.decision_reason || job.status }}</p>
+      <p v-if="job.trigger_reason || job.decision_reason">{{ job.kind === 'join_review' ? t('qqbot.joinReview.title') : job.trigger_reason }} → {{ decisionLabel(job.kind, job.decision_reason || job.status) }}</p>
       <div v-if="job.image_decision?.tool" class="rounded bg-gray-50 p-3 text-xs dark:bg-dark-800">
         <p>{{ t('qqbot.workspace.imageDecision') }}: {{ job.image_decision.tool }} → {{ job.image_decision.review }} → {{ job.image_decision.execution }}</p>
         <p>{{ t('qqbot.workspace.imageReason') }}: {{ job.image_decision.reason }} · {{ job.image_decision.basis || 'none' }}</p>
@@ -53,8 +53,13 @@ watch(() => filters.group_id, () => { filters.member_id = '' }, { flush: 'sync' 
 function selectMember(member: QQMemberOption) { filters.group_id = member.group_id; filters.member_id = member.member_id }
 let applied = { ...filters }
 function search() { applied = { ...filters }; void load(1) }
-const kinds = ['chat', 'image', 'ambient_chat', 'spam_report', 'notifications', 'price_notification', 'health_notification', 'ranking_notification']
-function kindLabel(kind: string) { const key = `qqbot.workspace.jobKinds.${kind}`; return te(key) ? t(key) : kind }
+const kinds = ['chat', 'image', 'ambient_chat', 'join_review', 'spam_report', 'notifications', 'price_notification', 'health_notification', 'ranking_notification']
+function kindLabel(kind: string) { if (kind === 'join_review') return t('qqbot.joinReview.title'); const key = `qqbot.workspace.jobKinds.${kind}`; return te(key) ? t(key) : kind }
+function decisionLabel(kind: string, value: string) {
+ if (kind !== 'join_review') return value
+ const key = `qqbot.joinReview.decisions.${value}`
+ return te(key) ? t(key) : t('qqbot.joinReview.decisions.manual_other')
+}
 const statuses = ['queued', 'running', 'completed', 'skipped', 'failed', 'delivery_failed', 'expired', 'interrupted', 'cancelled']
 const queryKinds: QQSiteQueryKind[] = ['model_price', 'channel_status', 'activity_rules', 'account_balance', 'today_usage', 'lottery_chances']
 const queryStatuses = ['succeeded', 'not_found', 'unavailable', 'failed']

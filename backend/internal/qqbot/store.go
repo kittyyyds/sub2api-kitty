@@ -178,6 +178,21 @@ func (s *Service) Enqueue(ctx context.Context, c Config, p Payload) (err error) 
 		return nil
 	}
 	eventKey := p.ID
+	if p.Type == "GROUP_JOIN_REQUEST" {
+		// Never trust private policy metadata from an incoming event. Bind new
+		// review work to the exact saved bot, environment, group and rule.
+		e.JoinReviewPolicy = ""
+		if rule := c.groupPolicy(e.GroupID).JoinReview; rule != nil && rule.Enabled {
+			e.JoinReviewPolicy = joinReviewPolicy(c, e.GroupID)
+			if e.JoinRequestID != "" {
+				eventKey = "join_review:" + codeHash(fmt.Sprintf("%s:%t:%s:%s", c.AppID, c.Sandbox, e.GroupID, e.JoinRequestID))
+			}
+		}
+		p.Data, err = json.Marshal(e)
+		if err != nil {
+			return err
+		}
+	}
 	if isGroupMessageEvent(p.Type) {
 		if e.ID == "" {
 			outcome, reason = "ignored", "missing_message_id"
