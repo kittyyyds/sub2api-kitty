@@ -56,6 +56,7 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
+	QQBot             *QQBotHandler
 	RetainedMedia     *RetainedMediaHandler
 	Auth              *AuthHandler
 	User              *UserHandler

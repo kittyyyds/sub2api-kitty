@@ -987,6 +987,17 @@ const adminNavItems = computed((): NavItem[] => {
       { path: '/admin/request-captures', label: t('admin.requestCapture.title'), icon: RequestCaptureIcon, featureFlag: () => adminSettingsStore.requestCaptureEnabled },
     ] },
     { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
+    {
+      path: '/admin/qqbot', label: t('qqbot.title'), icon: BellIcon, expandOnly: true,
+      children: [
+        { path: '/admin/qqbot/overview', label: t('qqbot.workspace.overview'), icon: BellIcon },
+        { path: '/admin/qqbot/groups', label: t('qqbot.workspace.groups'), icon: UsersIcon },
+        { path: '/admin/qqbot/config', label: t('qqbot.basicConfig'), icon: BellIcon },
+        { path: '/admin/qqbot/activities', label: t('qqbot.activitiesTitle'), icon: GiftIcon },
+        { path: '/admin/qqbot/bindings', label: t('qqbot.workspace.members'), icon: UsersIcon },
+        { path: '/admin/qqbot/records', label: t('qqbot.workspace.records'), icon: OrderIcon },
+      ],
+    },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/support-tickets', label: t('nav.supportTickets'), icon: SupportTicketInboxIcon, featureFlag: flagSupportTickets, countBadge: () => supportTicketStore.adminPending },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },

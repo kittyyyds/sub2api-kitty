@@ -408,7 +408,7 @@ const contactInfo = ref('')
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
-  return type === 'balance' || type === 'admin_balance'
+  return type === 'balance' || type === 'admin_balance' || type === 'qq_reward' || type === 'qq_transfer'
 }
 
 const isSubscriptionType = (type: string) => {
@@ -420,6 +420,8 @@ const isAdminAdjustment = (type: string) => {
 }
 
 const getHistoryItemTitle = (item: RedeemHistoryItem) => {
+  if (item.type === 'qq_reward') return t('qqbot.rewardCreditHistory')
+  if (item.type === 'qq_transfer') return t('qqbot.transferCreditHistory')
   if (item.type === 'balance') {
     return t('redeem.balanceAddedRedeem')
   } else if (item.type === 'admin_balance') {

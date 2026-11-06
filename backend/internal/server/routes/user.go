@@ -37,6 +37,12 @@ func RegisterUserRoutes(
 	authenticated.GET("/video-tasks/stats", h.OpenAIGateway.MyVideoTaskStats)
 	{
 		// 用户接口
+		if h.QQBot != nil {
+			bot := authenticated.Group("/user/qqbot")
+			bot.GET("/binding", h.QQBot.Binding)
+			bot.POST("/binding-code", panelRateLimiter.Heavy(), h.QQBot.CreateBindingCode)
+			bot.POST("/binding-confirm", h.QQBot.ConfirmBinding)
+		}
 		user := authenticated.Group("/user")
 		{
 			user.GET("/profile", h.User.GetProfile)

@@ -37,7 +37,10 @@ import latencyObservability from './latencyObservability'
 
 import autoConfig from './autoConfig'
 
+import qqbot from './qqbot'
+
 export default {
+  ...qqbot,
   homeOverview: homeMessages.en,
   accountTestTiming,
   openaiAuth,

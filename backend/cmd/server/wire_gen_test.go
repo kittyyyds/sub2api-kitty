@@ -51,7 +51,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	schedulerSnapshotSvc := service.NewSchedulerSnapshotService(nil, nil, nil, nil, cfg)
 	opsSystemLogSinkSvc := service.NewOpsSystemLogSink(nil)
 
-	cleanup := provideCleanup(nil,
+	cleanup := provideCleanup(nil, // QQ bot runtime
+		nil, // retained media service
 		nil, // default/full runtime configuration
 		nil, // request capture manager
 		nil, // entClient

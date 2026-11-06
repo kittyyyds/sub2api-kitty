@@ -33,7 +33,8 @@
       </div>
 
       <SecurityRecords />
-      <ProfilePasswordForm />
+      <ProfileQQBotCard />
+        <ProfilePasswordForm />
 
       <ProfileBalanceNotifyCard
         v-if="user && balanceLowNotifyEnabled"
@@ -51,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import ProfileQQBotCard from '@/components/user/profile/ProfileQQBotCard.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Icon } from '@/components/icons'
