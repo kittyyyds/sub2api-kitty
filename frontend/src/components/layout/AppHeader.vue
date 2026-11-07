@@ -28,6 +28,7 @@
       <!-- Right: Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="app-header-controls flex min-w-0 items-center justify-end gap-2 2xl:gap-3" data-console-header-actions>
         <div v-if="user && !isCustomer" class="customer-header-primary-actions">
+          <CommunityHeaderButton />
           <AnnouncementBell />
         </div>
 
@@ -55,6 +56,7 @@
         </router-link>
 
         <div v-if="isCustomer" class="console-header-tools">
+          <CommunityHeaderButton />
           <AnnouncementBell />
           <router-link to="/custom/billing-rules" class="btn-secondary console-intelligence-button">
             <Icon name="dollar" size="sm" />
@@ -273,6 +275,7 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
+import CommunityHeaderButton from './CommunityHeaderButton.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { getNativeFeature } from '@/features/customer-console/nativeFeatureRegistry'
