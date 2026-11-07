@@ -31,6 +31,19 @@ async function mountView(locale: 'zh' | 'en' = 'zh', path = '/admin/qqbot/config
 async function category(w: VueWrapper, text: string) { await w.findAll('button').find(button => button.text() === text)!.trigger('click') }
 
 describe('QQ module settings', () => {
+ it.each(['zh', 'en'] as const)('%s saves welcome and automatic confirmation mail only for the selected group', async locale => {
+  const w = await mountView(locale, '/admin/qqbot/groups')
+  const card = w.get('#qqbot-settings-panel-groups').findAll('article')[0]!
+  expect((card.get('[data-testid="qq-welcome-enabled"]').element as HTMLInputElement).checked).toBe(false)
+  await card.get('[data-testid="qq-welcome-enabled"]').setValue(true)
+  await card.get('[data-testid="qq-welcome-auto-email"]').setValue(true)
+  await card.get('[data-testid="qq-welcome-reviewed"]').setValue('审核欢迎')
+  await card.get('[data-testid="qq-welcome-other"]').setValue('普通欢迎')
+  await w.get('form').trigger('submit'); await flushPromises()
+  expect(server.group_policies?.find(p => p.group_id === 'group')?.welcome).toEqual({ enabled: true, auto_email_binding: true, reviewed_text: '审核欢迎', other_text: '普通欢迎' })
+  expect(server.group_policies?.find(p => p.group_id === 'group')?.join_review?.enabled).not.toBe(true)
+  expect(server.group_policies?.find(p => p.group_id === 'other-group')?.welcome?.enabled).not.toBe(true)
+ })
  it('saves join approval rules for the selected group without enabling other groups', async () => {
   const w = await mountView('zh', '/admin/qqbot/groups')
   const card = w.get('#qqbot-settings-panel-groups').findAll('article')[0]!

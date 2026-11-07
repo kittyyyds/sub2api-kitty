@@ -23,12 +23,24 @@
           <p class="text-xs text-gray-500">{{ t('qqbot.joinReview.identityHelp') }}</p>
         </div>
       </fieldset>
+      <fieldset class="space-y-3 rounded-lg border p-4 dark:border-dark-700" data-testid="qq-welcome">
+        <legend class="px-1 text-sm font-medium">{{ t('qqbot.welcome.title') }}</legend>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" :checked="welcome(group).enabled" data-testid="qq-welcome-enabled" @change="updateWelcome(group, { enabled: ($event.target as HTMLInputElement).checked })" />{{ t('qqbot.welcome.enabled') }}</label>
+        <p class="text-xs text-gray-500">{{ t('qqbot.welcome.help') }}</p>
+        <div v-if="welcome(group).enabled" class="space-y-3">
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" :checked="welcome(group).auto_email_binding" data-testid="qq-welcome-auto-email" @change="updateWelcome(group, { auto_email_binding: ($event.target as HTMLInputElement).checked })" />{{ t('qqbot.welcome.autoEmail') }}</label>
+          <p class="text-xs text-gray-500">{{ t('qqbot.welcome.identityHelp') }}</p>
+          <label class="block text-sm">{{ t('qqbot.welcome.reviewedText') }}<textarea class="input" :value="welcome(group).reviewed_text" maxlength="500" rows="3" data-testid="qq-welcome-reviewed" @input="updateWelcome(group, { reviewed_text: ($event.target as HTMLTextAreaElement).value })" /></label>
+          <label class="block text-sm">{{ t('qqbot.welcome.otherText') }}<textarea class="input" :value="welcome(group).other_text" maxlength="500" rows="3" data-testid="qq-welcome-other" @input="updateWelcome(group, { other_text: ($event.target as HTMLTextAreaElement).value })" /></label>
+          <p class="text-xs text-gray-500">{{ t('qqbot.welcome.textHelp') }}</p>
+        </div>
+      </fieldset>
     </article>
   </div>
 </template>
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { defaultJoinReviewConfig, type QQGroupPolicy, type QQJoinReviewConfig } from '@/api/qqbot'
+import { defaultJoinReviewConfig, defaultWelcomeConfig, type QQGroupPolicy, type QQJoinReviewConfig, type QQWelcomeConfig } from '@/api/qqbot'
 const model = defineModel<QQGroupPolicy[]>({ required: true })
 defineProps<{ groups: string[]; names?: Record<string, string> }>()
 const { t } = useI18n()
@@ -38,4 +50,6 @@ function policy(group: string): QQGroupPolicy { return model.value.find(p => p.g
 function update(group: string, patch: Partial<QQGroupPolicy>) { const next = { ...policy(group), ...patch }; model.value = [...model.value.filter(p => p.group_id !== group), next] }
 function joinReview(group: string): QQJoinReviewConfig { return policy(group).join_review ?? defaultJoinReviewConfig() }
 function updateReview(group: string, patch: Partial<QQJoinReviewConfig>) { update(group, { join_review: { ...joinReview(group), ...patch } }) }
+function welcome(group: string): QQWelcomeConfig { return policy(group).welcome ?? defaultWelcomeConfig() }
+function updateWelcome(group: string, patch: Partial<QQWelcomeConfig>) { update(group, { welcome: { ...welcome(group), ...patch } }) }
 </script>

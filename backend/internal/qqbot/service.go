@@ -113,6 +113,7 @@ func (s *Service) maintenance(ctx context.Context) {
 	_, _ = s.db.ExecContext(ctx, `UPDATE qq_bot_jobs SET status='interrupted',error='处理进程中断，未自动重试；请检查调用用量',finished_at=NOW(),payload='{}' WHERE status='running' AND started_at<NOW()-INTERVAL '10 minutes'`)
 	_, _ = s.db.ExecContext(ctx, `UPDATE qq_bot_jobs SET status='expired',error='排队超过回复时限，请重新发送',finished_at=NOW(),payload='{}' WHERE status='queued' AND created_at<NOW()-INTERVAL '5 minutes' AND event_type IN ('GROUP_AT_MESSAGE_CREATE','GROUP_MESSAGE_CREATE','INTERACTION_CREATE')`)
 	_, _ = s.db.ExecContext(ctx, `UPDATE qq_bot_jobs SET result_image=NULL,result_text='',payload='{}',member_nickname='',message_preview='' WHERE created_at<NOW()-INTERVAL '24 hours' AND (result_image IS NOT NULL OR result_text<>'' OR payload<>'{}'::jsonb OR member_nickname<>'' OR message_preview<>'')`)
+	_, _ = s.db.ExecContext(ctx, `UPDATE qq_bot_jobs SET payload='{}' WHERE kind='join_review' AND status NOT IN ('queued','running') AND created_at<NOW()-INTERVAL '30 minutes' AND payload<>'{}'::jsonb`)
 	_, _ = s.db.ExecContext(ctx, `DELETE FROM qq_bot_bind_requests WHERE expires_at<NOW()`)
 	_, _ = s.db.ExecContext(ctx, `DELETE FROM qq_bot_email_bind_requests WHERE expires_at<NOW()`)
 	_, _ = s.db.ExecContext(ctx, `DELETE FROM qq_bot_transfer_requests WHERE expires_at<NOW()`)
@@ -236,7 +237,7 @@ func (s *Service) runOne(parent context.Context) {
 func (s *Service) finish(j Job, status, detail string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := s.db.ExecContext(ctx, `UPDATE qq_bot_jobs SET status=$2,error=$3,finished_at=NOW(),payload='{}' WHERE id=$1`, j.ID, status, limitText(detail, 250)); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE qq_bot_jobs SET status=$2,error=$3,finished_at=NOW(),payload=CASE WHEN $2='completed' AND kind='join_review' AND decision_reason='approved' AND payload ? '_kitty_approved' THEN jsonb_build_object('_kitty_approved',payload->'_kitty_approved') ELSE '{}'::jsonb END WHERE id=$1`, j.ID, status, limitText(detail, 250)); err != nil {
 		logMembershipEvent(ctx, j, nil, "finish", "failed", "job_status_write_failed")
 	}
 }
@@ -311,8 +312,9 @@ func (s *Service) memberEvent(ctx context.Context, c Config, j Job, e Event) err
 			outcome, reason = "recorded", "member_join_recorded"
 			if n == 0 {
 				outcome, reason = "ignored", "stale_membership_event"
+				return nil
 			}
-			return err
+			return s.welcomeMember(ctx, c, j, e)
 		}
 		res, err := s.db.ExecContext(ctx, `INSERT INTO qq_bot_members(app_id,group_id,member_id,left_at,last_membership_at) VALUES($1,$2,$3,$4,$4)
         ON CONFLICT(app_id,group_id,member_id) DO UPDATE SET left_at=EXCLUDED.left_at,last_membership_at=EXCLUDED.last_membership_at

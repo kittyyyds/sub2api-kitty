@@ -53,9 +53,10 @@ watch(() => filters.group_id, () => { filters.member_id = '' }, { flush: 'sync' 
 function selectMember(member: QQMemberOption) { filters.group_id = member.group_id; filters.member_id = member.member_id }
 let applied = { ...filters }
 function search() { applied = { ...filters }; void load(1) }
-const kinds = ['chat', 'image', 'ambient_chat', 'join_review', 'spam_report', 'notifications', 'price_notification', 'health_notification', 'ranking_notification']
-function kindLabel(kind: string) { if (kind === 'join_review') return t('qqbot.joinReview.title'); const key = `qqbot.workspace.jobKinds.${kind}`; return te(key) ? t(key) : kind }
+const kinds = ['chat', 'image', 'ambient_chat', 'join_review', 'welcome', 'spam_report', 'notifications', 'price_notification', 'health_notification', 'ranking_notification']
+function kindLabel(kind: string) { if (kind === 'welcome') return t('qqbot.welcome.title'); if (kind === 'join_review') return t('qqbot.joinReview.title'); const key = `qqbot.workspace.jobKinds.${kind}`; return te(key) ? t(key) : kind }
 function decisionLabel(kind: string, value: string) {
+ if (kind === 'welcome') { const key = `qqbot.welcome.decisions.${value}`; return te(key) ? t(key) : t('qqbot.welcome.decisions.other') + ' (' + value + ')' }
  if (kind !== 'join_review') return value
  const key = `qqbot.joinReview.decisions.${value}`
  return te(key) ? t(key) : t('qqbot.joinReview.decisions.manual_other')

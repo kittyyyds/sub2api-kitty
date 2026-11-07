@@ -178,6 +178,16 @@ func (s *Service) Enqueue(ctx context.Context, c Config, p Payload) (err error) 
 		return nil
 	}
 	eventKey := p.ID
+	e.JoinReviewPolicy, e.WelcomePolicy = "", ""
+	if p.Type == "GROUP_MEMBER_ADD" {
+		if w := c.groupPolicy(e.GroupID).Welcome; w != nil && w.Enabled {
+			e.WelcomePolicy = welcomePolicy(c, e.GroupID)
+			var ts int64
+			if json.Unmarshal(e.Timestamp, &ts) == nil && ts > 0 {
+				eventKey = "member_add:" + codeHash(fmt.Sprintf("%s:%t:%s:%s:%d", c.AppID, c.Sandbox, e.GroupID, member, ts))
+			}
+		}
+	}
 	if p.Type == "GROUP_JOIN_REQUEST" {
 		// Never trust private policy metadata from an incoming event. Bind new
 		// review work to the exact saved bot, environment, group and rule.
@@ -188,6 +198,13 @@ func (s *Service) Enqueue(ctx context.Context, c Config, p Payload) (err error) 
 				eventKey = "join_review:" + codeHash(fmt.Sprintf("%s:%t:%s:%s", c.AppID, c.Sandbox, e.GroupID, e.JoinRequestID))
 			}
 		}
+		p.Data, err = json.Marshal(e)
+		if err != nil {
+			return err
+		}
+	}
+	if p.Type == "GROUP_MEMBER_ADD" || p.Type == "GROUP_MEMBER_REMOVE" {
+		// Re-encoding drops unrecognized/private receipt fields from the wire.
 		p.Data, err = json.Marshal(e)
 		if err != nil {
 			return err

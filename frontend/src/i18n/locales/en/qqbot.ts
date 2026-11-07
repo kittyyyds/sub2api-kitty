@@ -1,4 +1,13 @@
 export default { qqbot: {
+  welcome: {
+    title: 'Join welcome and email confirmation', enabled: 'Welcome members after they actually join',
+    help: 'Only new membership events received after enabling are processed, with durable deduplication. Requires member events and proactive group message permission. Failed or uncertain sends are not retried automatically.',
+    autoEmail: 'Send binding confirmation email for site-approved spending reviews',
+    identityHelp: 'Reuses a successful site review from the last 30 minutes for this member and group. Binding requires email confirmation. Existing bindings are kept; conflicts never overwrite them. Invitations and other joins receive the regular binding guide.',
+    reviewedText: 'Introduction for approved applicants', otherText: 'Introduction for invited or other members',
+    textHelp: 'Up to 500 characters, without tags. The bot mentions the member and appends the actual binding and delivery state. Do not hardcode successful binding or email delivery claims.',
+    decisions: { attempting: 'Welcome attempt in progress; result unconfirmed', sent_mail_sent: 'Welcome and confirmation email sent; awaiting owner confirmation', sent_bound: 'Welcome sent; existing binding kept', sent_conflict: 'Welcome sent; binding conflict kept for review', sent_guide: 'Welcome sent with binding instructions', sent_mail_failed: 'Welcome sent; email delivery failed', sent_mail_not_sent: 'Welcome sent; email unavailable or limited', skipped_stale_event: 'Skipped invalid or stale membership event', skipped_rate_limited: 'Welcome budget reached', cancelled_policy_changed: 'Cancelled after policy change', other: 'Check welcome and email delivery status' }
+  },
   joinReview: {
     title: 'Group join approval',
     enabled: 'Review join requests using lifetime site spending',
@@ -7,7 +16,7 @@ export default { qqbot: {
     question: 'Matching QQ join question',
     questionHelp: 'Set this question in QQ first, then enter the same text here. Applicants must answer with one registered email address. Email-only verification messages are also supported. This setting does not change the QQ group question.',
     rejectReason: 'Rejection reason',
-    identityHelp: 'An email answer checks eligibility only; it does not prove ownership, bind an account, grant account access or issue rewards. Rejections use QQ’s request reason, with no group message or blacklist action.',
+    identityHelp: 'An email answer checks eligibility only. Binding requires owner confirmation and grants no account access or reward beforehand. Welcome settings below can initiate email confirmation after joining. Rejections use the QQ request reason without blacklisting.',
     decisions: {
       approved: 'Spending requirement met; approved', declined_ineligible: 'Account or spending requirement not met; declined',
       declined_bad_answer: 'No valid email answer; declined', already_auto_approved: 'Already approved by QQ; no duplicate action',

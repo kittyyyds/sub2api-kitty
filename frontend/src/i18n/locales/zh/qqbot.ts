@@ -1,4 +1,13 @@
 export default { qqbot: {
+  welcome: {
+    title: '入群欢迎与邮箱确认', enabled: '成员实际入群后发送欢迎消息',
+    help: '仅处理开启后收到的新入群事件，自动去重，不补发历史欢迎。需要订阅群成员事件，并具备主动群消息权限；群主须允许机器人主动发送。发送异常不会自动重复补发。',
+    autoEmail: '对本站消费审核通过的申请，自动发送邮箱绑定确认邮件',
+    identityHelp: '仅复用最近 30 分钟内、同一 QQ 身份和群的本站成功审核记录。邮箱确认前不会正式绑定；已绑定账号沿用，冲突不覆盖。管理员邀请及无可信审核记录的新人显示普通绑定指引。',
+    reviewedText: '消费审核通过的欢迎正文', otherText: '邀请或其他新成员的欢迎正文',
+    textHelp: '正文最多 500 字，不支持标签。机器人会自动艾特新成员，并根据真实绑定和邮件发送结果追加状态说明；不要在正文固定写“已绑定”或“邮件已发送”。',
+    decisions: { attempting: '正在处理欢迎，结果尚未确认', sent_mail_sent: '欢迎已发送，绑定确认邮件已发送（等待本人确认）', sent_bound: '欢迎已发送，沿用已有绑定', sent_conflict: '欢迎已发送，绑定冲突保留原记录', sent_guide: '欢迎已发送，显示普通绑定引导', sent_mail_failed: '欢迎已发送，邮件发送失败', sent_mail_not_sent: '欢迎已发送，邮件未发出或受限', skipped_stale_event: '未发送：入群事件过期或信息无效', skipped_rate_limited: '未发送：达到欢迎消息发送预算', cancelled_policy_changed: '已取消：群规则发生变化', other: '请核对欢迎发送和邮件状态' }
+  },
   joinReview: {
     title: '进群自动审核',
     enabled: '按网站累计消费自动审核进群申请',
@@ -7,7 +16,7 @@ export default { qqbot: {
     question: '对应的 QQ 入群问题',
     questionHelp: '先在 QQ 群设置中添加问题，再在这里填写相同的问题文字；答案要求只填写一个注册邮箱。也支持将邮箱写在入群验证消息中。本站不会修改 QQ 群的问题。',
     rejectReason: '拒绝原因',
-    identityHelp: '填写邮箱只用于进群资格核验，不能证明邮箱归属，不会自动绑定账号、发奖或开放账户信息。拒绝通过 QQ 申请的拒绝原因反馈，不发送群消息，不加入黑名单。',
+    identityHelp: '填写邮箱只核验进群资格；确认邮件前不会绑定账号、发奖或开放账户信息。开启下方欢迎功能后，可在实际入群时自动发起邮箱确认。拒绝通过 QQ 申请的拒绝原因反馈，不加入黑名单。',
     decisions: {
       approved: '消费达标，已同意进群', declined_ineligible: '未满足账号或消费条件，已拒绝',
       declined_bad_answer: '未提供符合要求的邮箱答案，已拒绝', already_auto_approved: 'QQ 已自动通过，未重复审批',

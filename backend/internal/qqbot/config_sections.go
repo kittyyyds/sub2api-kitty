@@ -113,6 +113,7 @@ func (s *Service) ConfigHistory(ctx context.Context) ([]ConfigChange, error) {
 // Group policy is an additional restriction. Nil quotas inherit the global cap;
 // zero prohibits calls. Missing policies preserve existing installations.
 type GroupPolicy struct {
+	Welcome              *WelcomeConfig    `json:"welcome,omitempty"`
 	JoinReview           *JoinReviewConfig `json:"join_review,omitempty"`
 	GroupID              string            `json:"group_id"`
 	Label                string            `json:"label"`
@@ -158,6 +159,9 @@ func validateGroupPolicies(c Config) error {
 	}
 	for _, p := range c.GroupPolicies {
 		if err := validateJoinReview(p.JoinReview); err != nil {
+			return err
+		}
+		if err := validateWelcome(p.Welcome); err != nil {
 			return err
 		}
 		if !c.allows(p.GroupID) || seen[p.GroupID] || len([]rune(p.Label)) > 60 {

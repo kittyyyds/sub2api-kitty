@@ -195,6 +195,10 @@ func (s *Service) reviewJoinRequest(ctx context.Context, c Config, j Job, e Even
 		_ = tx.Rollback()
 		return s.joinReviewRecord(ctx, j, reason)
 	}
+	receipt, err := s.approvedJoinReceipt(requestCtx, tx, current, e, op)
+	if err != nil {
+		return err
+	}
 	// Reserve at most one attempt durably. A timeout may mean QQ applied the
 	// decision; never replay an ambiguous operation or omit the request ID.
 	if _, err = tx.ExecContext(requestCtx, `SELECT pg_advisory_xact_lock(71427103)`); err != nil {
@@ -249,6 +253,11 @@ func (s *Service) reviewJoinRequest(ctx context.Context, c Config, j Job, e Even
 		}
 		_ = s.joinReviewRecord(finalCtx, j, code)
 		return sendErr
+	}
+	if receipt != nil {
+		raw, _ := json.Marshal(map[string]any{"_kitty_approved": receipt})
+		_, err = s.db.ExecContext(finalCtx, `UPDATE qq_bot_jobs SET kind='join_review',trigger_reason='join_request',decision_reason=$2,payload=$3::jsonb WHERE id=$1`, j.ID, reason, string(raw))
+		return err
 	}
 	return s.joinReviewRecord(finalCtx, j, reason)
 }

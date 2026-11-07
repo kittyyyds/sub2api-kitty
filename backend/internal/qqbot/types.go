@@ -128,6 +128,7 @@ type Event struct {
 	AutoApproved     json.RawMessage `json:"auto_approved"`
 	Bot              bool            `json:"bot"`
 	JoinReviewPolicy string          `json:"_kitty_join_review_policy,omitempty"`
+	WelcomePolicy    string          `json:"_kitty_welcome_policy,omitempty"`
 }
 type Attachment struct {
 	URL         string `json:"url"`

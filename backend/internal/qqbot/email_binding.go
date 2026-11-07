@@ -82,7 +82,7 @@ WHERE qq_bot_email_limits.count<$4 AND qq_bot_email_limits.last_sent_at<=NOW()-(
 
 // Prepare the request before acknowledging it in QQ, then deliver the email
 // after the acknowledgement so SMTP cannot delay the reply.
-func (s *Service) prepareEmailBinding(ctx context.Context, c Config, e Event, email string) (string, *preparedBindingEmail) {
+func (s *Service) prepareEmailBinding(ctx context.Context, c Config, e Event, email string, expectedUser ...int64) (string, *preparedBindingEmail) {
 	if !validBindingEmail(email) {
 		return "邮箱格式无效，请检查后重新提交。", nil
 	}
@@ -102,11 +102,20 @@ func (s *Service) prepareEmailBinding(ctx context.Context, c Config, e Event, em
 	if err != nil || uid <= 0 || !validBindingEmail(recipient) {
 		return emailBindingAccepted, nil
 	}
+	if len(expectedUser) > 0 && uid != expectedUser[0] {
+		return emailBindingAccepted, nil
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return emailBindingAccepted, nil
 	}
 	defer func() { _ = tx.Rollback() }()
+	if e.WelcomePolicy != "" {
+		current, configErr := s.lockConfig(ctx, tx)
+		if configErr != nil || !current.Enabled || !current.allows(e.GroupID) || e.WelcomePolicy != welcomePolicy(current, e.GroupID) {
+			return emailBindingAccepted, nil
+		}
+	}
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,273))`, c.AppID); err != nil {
 		return emailBindingAccepted, nil
 	}
@@ -155,7 +164,7 @@ user_id=EXCLUDED.user_id,email=EXCLUDED.email,expires_at=EXCLUDED.expires_at,cre
 	return emailBindingAccepted, &preparedBindingEmail{recipient: recipient, token: token, link: link}
 }
 
-func (s *Service) deliverBindingEmail(ctx context.Context, e Event, pending *preparedBindingEmail) {
+func (s *Service) deliverBindingEmail(ctx context.Context, e Event, pending *preparedBindingEmail) error {
 	if err := s.bindingEmail.SendEmail(ctx, pending.recipient, "确认绑定 QQ 群账号", bindingEmailBody(pending.link, e)); err != nil {
 		slog.Warn("QQ bot binding email delivery failed; check SMTP settings")
 		// Even if SMTP delivery is uncertain, an unsuccessful send cannot leave
@@ -163,7 +172,9 @@ func (s *Service) deliverBindingEmail(ctx context.Context, e Event, pending *pre
 		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = s.db.ExecContext(cleanup, `DELETE FROM qq_bot_email_bind_requests WHERE token_hash=$1`, codeHash(pending.token))
+		return errors.New("binding email delivery failed")
 	}
+	return nil
 }
 
 type EmailBindingPreview struct {

@@ -57,7 +57,16 @@ export interface QQJoinReviewConfig {
 export function defaultJoinReviewConfig(): QQJoinReviewConfig {
   return { enabled: false, min_spent: 10, question: '请输入累计消费满10元的用户邮箱', reject_reason: '本群只审核已消费用户' }
 }
+export interface QQWelcomeConfig {
+  enabled: boolean; auto_email_binding: boolean; reviewed_text: string; other_text: string
+}
+export function defaultWelcomeConfig(): QQWelcomeConfig {
+  return { enabled: false, auto_email_binding: false,
+    reviewed_text: '欢迎加入 Kitty 已消费用户交流群！进群消费资格审核已通过。',
+    other_text: '欢迎加入 Kitty 交流群！' }
+}
 export interface QQGroupPolicy {
+  welcome?: QQWelcomeConfig
   join_review?: QQJoinReviewConfig
   group_id: string; label: string; disable_chat: boolean; disable_images: boolean
   disable_activities: boolean; disable_notifications: boolean; chat_daily_limit: number | null; image_daily_limit: number | null
