@@ -25,7 +25,7 @@ describe('QQ binding confirmation', () => {
     const i18n = createI18n({ legacy: false, locale, messages: { zh, en } })
     api.binding.mockResolvedValue({ enabled: true, binding: null, pending: null })
     api.createCode.mockResolvedValue({ code: 'single-use-code' })
-    const wrapper = mount(ProfileQQBotCard, { global: { plugins: [i18n] } })
+    const wrapper = mount(ProfileQQBotCard, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
     await flushPromises()
     await wrapper.findAll('button')[0].trigger('click')
     await flushPromises()
@@ -50,7 +50,7 @@ describe('QQ binding confirmation', () => {
   it('does not show binding controls when the bot is disabled', async () => {
     const i18n = createI18n({ legacy: false, locale: 'zh', messages: { zh, en } })
     api.binding.mockResolvedValue({ enabled: false, binding: null, pending: null })
-    const wrapper = mount(ProfileQQBotCard, { global: { plugins: [i18n] } })
+    const wrapper = mount(ProfileQQBotCard, { global: { plugins: [i18n], stubs: { RouterLink: true } } })
     await flushPromises()
     expect(wrapper.find('section').exists()).toBe(false)
   })

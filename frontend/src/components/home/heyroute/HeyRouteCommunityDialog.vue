@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { communityGroupContact, telegramGroupContact } from '@/config/customerContact'
 
 import HeyRouteContactDialog, { type HeyRouteContactPlatform } from './HeyRouteContactDialog.vue'
@@ -67,5 +68,9 @@ const platforms = computed<HeyRouteContactPlatform[]>(() => [
     :scan-label="copy.communityDialogScan"
     :notice="copy.communityDialogNotice"
     @close="emit('close')"
-  />
+  >
+    <template #footer>
+      <RouterLink to="/community" class="mt-4 block rounded-xl border border-primary-300/40 px-4 py-3 text-center text-sm font-semibold text-primary-600 dark:text-primary-300" @click="emit('close')">{{ copy.communityDialogGuide }} ↗</RouterLink>
+    </template>
+  </HeyRouteContactDialog>
 </template>

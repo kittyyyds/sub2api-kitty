@@ -874,6 +874,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
+    { path: '/community', label: t('qqbot.communityTitle'), icon: UsersIcon },
     {
       path: '/affiliate',
       label: t('nav.affiliate'),

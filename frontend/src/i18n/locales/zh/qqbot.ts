@@ -1,4 +1,6 @@
 export default { qqbot: {
+  communityTitle: 'QQ群与福利',
+  communityBindingGuide: '查看群福利与完整绑定教程',
   welcome: {
     title: '入群欢迎与邮箱确认', enabled: '成员实际入群后发送欢迎消息',
     help: '仅处理开启后收到的新入群事件，自动去重，不补发历史欢迎。需要订阅群成员事件，并具备主动群消息权限；群主须允许机器人主动发送。发送异常不会自动重复补发。',

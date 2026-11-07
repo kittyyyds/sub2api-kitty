@@ -272,6 +272,9 @@ func RegisterAuthRoutes(
 	settings.Use(panelRateLimiter.PublicIP())
 	{
 		settings.GET("/public", h.Setting.GetPublicSettings)
+		if h.QQBot != nil {
+			settings.GET("/community", h.QQBot.CommunityGuide)
+		}
 		settings.GET("/email-unsubscribe", h.Setting.UnsubscribeNotificationEmail)
 	}
 

@@ -256,6 +256,7 @@ onBeforeUnmount(() => {
           </Transition>
 
           <p class="hr-contact-notice">{{ notice }}</p>
+          <slot name="footer" />
         </section>
       </div>
     </Transition>

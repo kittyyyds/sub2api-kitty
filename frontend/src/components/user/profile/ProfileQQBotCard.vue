@@ -1,8 +1,9 @@
 <template>
-  <section v-if="state?.enabled || state?.binding" class="card space-y-4 p-6">
+  <section v-if="state?.enabled || state?.binding" id="qq-binding" class="card space-y-4 p-6 scroll-mt-24">
     <h2 class="text-lg font-semibold">{{ t('qqbot.bindingTitle') }}</h2>
     <p class="text-sm text-gray-500">{{ t('qqbot.bindingHelp') }}</p>
     <p class="text-sm text-gray-500">{{ t('qqbot.emailBindingHelp') }}</p>
+    <RouterLink to="/community#binding" class="inline-flex text-sm font-medium text-primary-600 dark:text-primary-400">{{ t('qqbot.communityBindingGuide') }} ↗</RouterLink>
     <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
     <div v-if="state.binding" class="rounded-lg bg-green-50 p-3 text-green-800 dark:bg-green-950 dark:text-green-200">{{ t('qqbot.bound') }}：{{ state.binding.nickname || state.binding.member_id }}<p class="break-all text-xs">{{ state.binding.member_id }}</p></div>
     <template v-else>
@@ -17,6 +18,7 @@
 </template>
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { qqbotAPI, type QQBindingState } from '@/api/qqbot'
 const { t } = useI18n()

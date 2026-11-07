@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
 
   // ==================== Public Routes ====================
   {
+    path: '/community',
+    name: 'Community',
+    component: () => import('@/views/public/CommunityView.vue'),
+    meta: { requiresAuth: false, title: 'QQ群与福利', titleKey: 'qqbot.communityTitle' }
+  },
+  {
     path: '/home',
     name: 'Home',
     component: () => import('@/views/HomeLandingView.vue'),

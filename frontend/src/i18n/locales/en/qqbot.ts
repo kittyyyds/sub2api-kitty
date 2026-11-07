@@ -1,4 +1,6 @@
 export default { qqbot: {
+  communityTitle: 'QQ Community & Rewards',
+  communityBindingGuide: 'View group benefits and binding instructions',
   welcome: {
     title: 'Join welcome and email confirmation', enabled: 'Welcome members after they actually join',
     help: 'Only new membership events received after enabling are processed, with durable deduplication. Requires member events and proactive group message permission. Failed or uncertain sends are not retried automatically.',
