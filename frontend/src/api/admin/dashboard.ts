@@ -1,0 +1,525 @@
+import { shiftDate, zonedDayStart } from '@/views/admin/operationsUtils'
+import type { GroupPlatform } from '@/types'
+import type { RechargeChannel, RechargeOrder, RechargeOrderPage, RechargeRiskEvent, RechargeStatus, RechargeSummary } from '@/views/admin/operationsRechargeTypes'
+/**
+ * Admin Dashboard API endpoints
+ * Provides system-wide statistics and metrics
+ */
+
+import { apiClient } from '../client'
+import type {
+  DashboardStats,
+  TrendDataPoint,
+  ModelStat,
+  GroupStat,
+  ApiKeyUsageTrendPoint,
+  UserUsageTrendPoint,
+  UserSpendingRankingResponse,
+  UserBreakdownItem,
+  UsageRequestType
+} from '@/types'
+
+/**
+ * Get dashboard statistics
+ * @returns Dashboard statistics including users, keys, accounts, and token usage
+ */
+export async function getStats(): Promise<DashboardStats> {
+  const { data } = await apiClient.get<DashboardStats>('/admin/dashboard/stats')
+  return data
+}
+
+/**
+ * Get real-time metrics
+ * @returns Real-time system metrics
+ */
+export async function getRealtimeMetrics(): Promise<{
+  active_requests: number
+  requests_per_minute: number
+  average_response_time: number
+  error_rate: number
+}> {
+  const { data } = await apiClient.get<{
+    active_requests: number
+    requests_per_minute: number
+    average_response_time: number
+    error_rate: number
+  }>('/admin/dashboard/realtime')
+  return data
+}
+
+export interface TrendParams {
+  start_date?: string
+  end_date?: string
+  granularity?: 'day' | 'hour'
+  user_id?: number
+  api_key_id?: number
+  model?: string
+  account_id?: number
+  group_id?: number
+  request_type?: UsageRequestType
+  stream?: boolean
+  native_compaction_v2?: boolean | null
+  billing_type?: number | null
+	upstream_model_mismatch?: boolean
+}
+
+export interface TrendResponse {
+  trend: TrendDataPoint[]
+  start_date: string
+  end_date: string
+  granularity: string
+}
+
+/**
+ * Get usage trend data
+ * @param params - Query parameters for filtering
+ * @returns Usage trend data
+ */
+export async function getUsageTrend(params?: TrendParams): Promise<TrendResponse> {
+  const { data } = await apiClient.get<TrendResponse>('/admin/dashboard/trend', { params })
+  return data
+}
+
+export interface ModelStatsParams {
+  start_date?: string
+  end_date?: string
+  user_id?: number
+  api_key_id?: number
+  model?: string
+  model_source?: 'requested' | 'upstream' | 'mapping'
+  account_id?: number
+  group_id?: number
+  request_type?: UsageRequestType
+  stream?: boolean
+  native_compaction_v2?: boolean | null
+  billing_type?: number | null
+	upstream_model_mismatch?: boolean
+}
+
+export interface ModelStatsResponse {
+  models: ModelStat[]
+  start_date: string
+  end_date: string
+}
+
+/**
+ * Get model usage statistics
+ * @param params - Query parameters for filtering
+ * @returns Model usage statistics
+ */
+export async function getModelStats(params?: ModelStatsParams): Promise<ModelStatsResponse> {
+  const { data } = await apiClient.get<ModelStatsResponse>('/admin/dashboard/models', { params })
+  return data
+}
+
+export interface GroupStatsParams {
+  start_date?: string
+  end_date?: string
+  user_id?: number
+  api_key_id?: number
+  account_id?: number
+  group_id?: number
+  request_type?: UsageRequestType
+  stream?: boolean
+  native_compaction_v2?: boolean | null
+  billing_type?: number | null
+	upstream_model_mismatch?: boolean
+}
+
+export interface GroupStatsResponse {
+  groups: GroupStat[]
+  start_date: string
+  end_date: string
+}
+
+export interface DashboardSnapshotV2Params extends TrendParams {
+  include_stats?: boolean
+  include_trend?: boolean
+  include_model_stats?: boolean
+  include_group_stats?: boolean
+  include_users_trend?: boolean
+  users_trend_limit?: number
+}
+
+export interface DashboardSnapshotV2Stats extends DashboardStats {
+  uptime: number
+}
+
+export interface DashboardSnapshotV2Response {
+  generated_at: string
+  start_date: string
+  end_date: string
+  granularity: string
+  stats?: DashboardSnapshotV2Stats
+  trend?: TrendDataPoint[]
+  models?: ModelStat[]
+  groups?: GroupStat[]
+  users_trend?: UserUsageTrendPoint[]
+}
+
+/**
+ * Get group usage statistics
+ * @param params - Query parameters for filtering
+ * @returns Group usage statistics
+ */
+export async function getGroupStats(params?: GroupStatsParams): Promise<GroupStatsResponse> {
+  const { data } = await apiClient.get<GroupStatsResponse>('/admin/dashboard/groups', { params })
+  return data
+}
+
+export interface UserBreakdownParams {
+  start_date?: string
+  end_date?: string
+  group_id?: number
+  model?: string
+  model_source?: 'requested' | 'upstream' | 'mapping'
+  endpoint?: string
+  endpoint_type?: 'inbound' | 'upstream' | 'path'
+  limit?: number
+  // Sort column for the ranking (allowlisted server-side; falls back to actual_cost)
+  sort_by?: 'total_tokens' | 'input_tokens' | 'output_tokens' | 'cache_tokens' | 'requests' | 'cost' | 'actual_cost'
+  // Additional filter conditions
+  user_id?: number
+  api_key_id?: number
+  account_id?: number
+  request_type?: UsageRequestType
+  stream?: boolean
+  native_compaction_v2?: boolean | null
+  billing_type?: number | null
+}
+
+export interface UserBreakdownResponse {
+  users: UserBreakdownItem[]
+  start_date: string
+  end_date: string
+}
+
+export async function getUserBreakdown(params: UserBreakdownParams): Promise<UserBreakdownResponse> {
+  const { data } = await apiClient.get<UserBreakdownResponse>('/admin/dashboard/user-breakdown', {
+    params
+  })
+  return data
+}
+
+/**
+ * Get dashboard snapshot v2 (aggregated response for heavy admin pages).
+ */
+export async function getSnapshotV2(params?: DashboardSnapshotV2Params): Promise<DashboardSnapshotV2Response> {
+  const { data } = await apiClient.get<DashboardSnapshotV2Response>('/admin/dashboard/snapshot-v2', {
+    params
+  })
+  return data
+}
+
+export interface ApiKeyTrendParams extends TrendParams {
+  limit?: number
+}
+
+export interface ApiKeyTrendResponse {
+  trend: ApiKeyUsageTrendPoint[]
+  start_date: string
+  end_date: string
+  granularity: string
+}
+
+/**
+ * Get API key usage trend data
+ * @param params - Query parameters for filtering
+ * @returns API key usage trend data
+ */
+export async function getApiKeyUsageTrend(
+  params?: ApiKeyTrendParams
+): Promise<ApiKeyTrendResponse> {
+  const { data } = await apiClient.get<ApiKeyTrendResponse>('/admin/dashboard/api-keys-trend', {
+    params
+  })
+  return data
+}
+
+export interface UserTrendParams extends TrendParams {
+  limit?: number
+  metric?: 'tokens' | 'actual_cost'
+}
+
+export interface UserTrendResponse {
+  trend: UserUsageTrendPoint[]
+  start_date: string
+  end_date: string
+  granularity: string
+}
+
+export interface UserSpendingRankingParams
+  extends Pick<TrendParams, 'start_date' | 'end_date'> {
+  limit?: number
+}
+
+/**
+ * Get user usage trend data
+ * @param params - Query parameters for filtering
+ * @returns User usage trend data
+ */
+export async function getUserUsageTrend(params?: UserTrendParams): Promise<UserTrendResponse> {
+  const { data } = await apiClient.get<UserTrendResponse>('/admin/dashboard/users-trend', {
+    params
+  })
+  return data
+}
+
+/**
+ * Get user spending ranking data
+ * @param params - Query parameters for filtering
+ * @returns User spending ranking data
+ */
+export async function getUserSpendingRanking(
+  params?: UserSpendingRankingParams
+): Promise<UserSpendingRankingResponse> {
+  const { data } = await apiClient.get<UserSpendingRankingResponse>('/admin/dashboard/users-ranking', {
+    params
+  })
+  return data
+}
+
+export interface PlatformUsage {
+  platform: string
+  today_actual_cost: number
+  total_actual_cost: number
+}
+
+export interface BatchUserUsageStats {
+  user_id: number
+  today_actual_cost: number
+  total_actual_cost: number
+  by_platform?: PlatformUsage[]
+}
+
+export interface BatchUsersUsageResponse {
+  stats: Record<string, BatchUserUsageStats>
+}
+
+/**
+ * Get batch usage stats for multiple users
+ * @param userIds - Array of user IDs
+ * @returns Usage stats map keyed by user ID
+ */
+export async function getBatchUsersUsage(userIds: number[]): Promise<BatchUsersUsageResponse> {
+  const { data } = await apiClient.post<BatchUsersUsageResponse>('/admin/dashboard/users-usage', {
+    user_ids: userIds
+  })
+  return data
+}
+
+export interface BatchApiKeyUsageStats {
+  api_key_id: number
+  today_actual_cost: number
+  total_actual_cost: number
+}
+
+export interface BatchApiKeysUsageResponse {
+  stats: Record<string, BatchApiKeyUsageStats>
+}
+
+/**
+ * Get batch usage stats for multiple API keys
+ * @param apiKeyIds - Array of API key IDs
+ * @returns Usage stats map keyed by API key ID
+ */
+export async function getBatchApiKeysUsage(
+  apiKeyIds: number[]
+): Promise<BatchApiKeysUsageResponse> {
+  const { data } = await apiClient.post<BatchApiKeysUsageResponse>(
+    '/admin/dashboard/api-keys-usage',
+    {
+      api_key_ids: apiKeyIds
+    }
+  )
+  return data
+}
+
+export interface OperationsDashboardParams {
+  start_date: string
+  end_date: string
+  timezone: string
+  trend_days: 7 | 15
+  /** 0 means all groups; -1 selects unassigned usage. */
+  group_id: number
+}
+
+export interface OperationsDashboardMetrics {
+  today_cost_unknown?: number
+  today_monitor_unknown?: number
+  today_user_consumption: number
+  today_user_recharge: number
+  today_monitor_consumption: number
+  /** Estimated gross margin, unavailable while any cost is unknown. */
+  today_revenue: Record<string, number | null>
+  yesterday_user_consumption: number
+  yesterday_user_recharge: number
+  yesterday_monitor_consumption: number
+  yesterday_revenue: Record<string, number | null>
+  /** Null when historical balance changes are unavailable. */
+  yesterday_user_balance_change: number | null
+  yesterday_admin_consumption: number
+  total_user_consumption: number
+  total_user_balance: number
+  total_monitor_consumption: number
+  admin_balance: number
+}
+
+export interface OperationsProfitTrendPoint {
+  date: string
+  upstream_cost: number
+  user_cost: number
+  profit: number | null
+}
+
+export interface OperationsGroupProfitStat {
+ unknown_cost?: number
+  group_id: number
+  group_name: string
+  platform: GroupPlatform
+  rate_multiplier: number
+  user_cost: number
+  upstream_cost: number
+}
+
+export interface OperationsModelProfitStat {
+ unknown_cost?: number
+  model: string
+  platforms?: GroupPlatform[]
+  user_cost: number
+  upstream_cost: number
+}
+
+export interface OperationsUserSpendStat {
+ unknown_cost?: number
+  user_id: number
+  email: string
+  user_cost: number
+  upstream_cost: number
+}
+
+export interface OperationsUserSpendResponse {
+  users: OperationsUserSpendStat[]
+  detail: {
+    user_id: number
+    email: string
+    groups: OperationsGroupProfitStat[]
+    models: OperationsModelProfitStat[]
+  } | null
+}
+
+export interface OperationsUserSpendParams {
+  start_date: string
+  end_date: string
+  timezone: string
+  search?: string
+  user_id?: number
+}
+
+export interface OperationsDashboardResponse {
+  today_date?: string
+  today_start?: string
+  site_timezone?: string
+ cost_coverage: { requests: number; reconciled: number; procurement_estimated: number; account_estimated: number; unknown: number }
+ details_retained_since: string | null
+  metrics: OperationsDashboardMetrics
+  trend: OperationsProfitTrendPoint[]
+  groups: OperationsGroupProfitStat[]
+  models: OperationsModelProfitStat[]
+}
+
+export async function getOperationsDashboard(
+  params: OperationsDashboardParams
+): Promise<OperationsDashboardResponse> {
+  const { data } = await apiClient.get<OperationsDashboardResponse>('/admin/dashboard/operations', {
+    params
+  })
+  return data
+}
+
+export async function getOperationsUserSpend(params: OperationsUserSpendParams): Promise<OperationsUserSpendResponse> {
+  const { data } = await apiClient.get<OperationsUserSpendResponse>('/admin/dashboard/operations/users', { params })
+  return data
+}
+
+export async function getOperationsUserSuggestions(q: string): Promise<Array<{ user_id: number; email: string }>> {
+  const { data } = await apiClient.get<Array<{ user_id: number; email: string }>>('/admin/dashboard/operations/users/suggest', { params: { q } })
+  return data
+}
+
+export interface OperationsRechargeRankingResponse {
+  users: Array<{ user_id: number; email: string; amount: number; recharge_count: number }>
+  total_amount: number
+  total_users: number
+  total_count: number
+  date: string
+  start_time: string
+  end_time: string
+  site_timezone: string
+}
+export async function getOperationsRechargeRanking(): Promise<OperationsRechargeRankingResponse> {
+  const { data } = await apiClient.get<OperationsRechargeRankingResponse>('/admin/dashboard/operations/recharge-ranking')
+  return data
+}
+
+export interface OperationsRechargeOrderParams {
+  timezone?: string
+  page: number
+  page_size: 25
+  start_date: string
+  end_date: string
+  search?: string
+  status?: RechargeStatus
+  channel?: RechargeChannel
+}
+
+export async function getOperationsRechargeOrders(params: OperationsRechargeOrderParams): Promise<RechargeOrderPage> {
+  const start = zonedDayStart(params.start_date, params.timezone)
+  const end = zonedDayStart(shiftDate(params.end_date, 1), params.timezone)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new Error('Invalid recharge date range')
+  const query = {
+    page: params.page,
+    page_size: params.page_size,
+    email: params.search,
+    status: params.status,
+    channel: params.channel === 'code' ? 'redeem' : params.channel,
+    start_time: start.toISOString(),
+    end_time: end.toISOString()
+  }
+  const { data } = await apiClient.get<Omit<RechargeOrderPage, 'items'> & { items: Array<Omit<RechargeOrder, 'channel'> & { channel: RechargeChannel | 'redeem' }> }>('/admin/payment/recharge-activity', { params: query })
+  return { ...data, items: (data.items ?? []).map(order => ({ ...order, channel: order.channel === 'redeem' ? 'code' : order.channel })) }
+}
+
+export async function getOperationsRechargeSummary(params: Omit<OperationsRechargeOrderParams, 'page' | 'page_size' | 'status'>): Promise<RechargeSummary> {
+  const start = zonedDayStart(params.start_date, params.timezone)
+  const end = zonedDayStart(shiftDate(params.end_date, 1), params.timezone)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw new Error('Invalid recharge date range')
+  const { data } = await apiClient.get<RechargeSummary>('/admin/payment/recharge-activity/summary', { params: {
+    email: params.search, channel: params.channel === 'code' ? 'redeem' : params.channel,
+    start_time: start.toISOString(), end_time: end.toISOString()
+  } })
+  return data
+}
+
+export async function getOperationsRechargeRisks(): Promise<RechargeRiskEvent[]> {
+  const { data } = await apiClient.get<RechargeRiskEvent[]>('/admin/payment/recharge-risks')
+  return data
+}
+
+
+export const dashboardAPI = {
+ getOperationsDashboard, getOperationsRechargeRanking, getOperationsRechargeSummary, getOperationsUserSpend, getOperationsUserSuggestions, getOperationsRechargeOrders, getOperationsRechargeRisks,
+  getStats,
+  getRealtimeMetrics,
+  getUsageTrend,
+  getModelStats,
+  getGroupStats,
+  getSnapshotV2,
+  getApiKeyUsageTrend,
+  getUserUsageTrend,
+  getUserSpendingRanking,
+  getBatchUsersUsage,
+  getBatchApiKeysUsage
+}
+
+export default dashboardAPI

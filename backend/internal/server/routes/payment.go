@@ -1,0 +1,168 @@
+package routes
+
+import (
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
+	ratelimit "github.com/Wei-Shaw/sub2api/internal/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+)
+
+// publicOrderVerifyRateLimit caps anonymous legacy out_trade_no lookups per
+// client IP. The payment result page polls at most a handful of times per
+// order, so this leaves ample headroom for real users while making
+// out_trade_no enumeration impractical.
+const (
+	publicOrderVerifyRateLimit       = 20
+	publicOrderVerifyRateLimitWindow = time.Minute
+)
+
+// RegisterPaymentRoutes registers all payment-related routes:
+// user-facing endpoints, webhook endpoints, and admin endpoints.
+func RegisterPaymentRoutes(
+	v1 *gin.RouterGroup,
+	paymentHandler *handler.PaymentHandler,
+	webhookHandler *handler.PaymentWebhookHandler,
+	adminPaymentHandler *admin.PaymentHandler,
+	jwtAuth middleware.JWTAuthMiddleware,
+	adminAuth middleware.AdminAuthMiddleware,
+	auditLog middleware.AuditLogMiddleware,
+	settingService *service.SettingService,
+	panelRateLimiter *middleware.PanelRateLimiter,
+	redisClient *redis.Client,
+) {
+	// --- User-facing payment endpoints (authenticated) ---
+	authenticated := v1.Group("/payment")
+	authenticated.Use(gin.HandlerFunc(jwtAuth))
+	authenticated.Use(middleware.BackendModeUserGuard(settingService))
+	// 面板全局按用户限流
+	authenticated.Use(panelRateLimiter.Global())
+	{
+		authenticated.GET("/config", paymentHandler.GetPaymentConfig)
+		authenticated.GET("/checkout-info", paymentHandler.GetCheckoutInfo)
+		authenticated.GET("/plans", paymentHandler.GetPlans)
+		authenticated.GET("/limits", paymentHandler.GetLimits)
+		authenticated.GET("/coupons", paymentHandler.ListMyCoupons)
+		authenticated.GET("/coupons/usage", paymentHandler.ListMyCouponUsage)
+		authenticated.POST("/coupons/:id/quote", paymentHandler.QuoteCoupon)
+
+		invoices := authenticated.Group("/invoices")
+		{
+			invoices.GET("/config", paymentHandler.GetInvoiceConfig)
+			invoices.GET("/orders", paymentHandler.ListInvoiceOrders)
+			invoices.GET("", paymentHandler.ListInvoiceRequests)
+			invoices.POST("", paymentHandler.CreateInvoiceRequest)
+			invoices.GET("/:id/pdf", paymentHandler.DownloadInvoicePDF)
+		}
+
+		orders := authenticated.Group("/orders")
+		{
+			orders.POST("", paymentHandler.CreateOrder)
+			orders.POST("/verify", paymentHandler.VerifyOrder)
+			orders.GET("/my", paymentHandler.GetMyOrders)
+			orders.GET("/:id", paymentHandler.GetOrder)
+			orders.POST("/:id/cancel", paymentHandler.CancelOrder)
+			orders.POST("/:id/refund-request", paymentHandler.RequestRefund)
+			orders.GET("/refund-eligible-providers", paymentHandler.GetRefundEligibleProviders)
+		}
+	}
+
+	// --- Public payment endpoints (no auth) ---
+	// Signed resume-token recovery is the preferred public lookup path.
+	// The legacy anonymous out_trade_no verify endpoint remains available as a
+	// persisted-state compatibility path for staggered upgrades.
+	// The anonymous verify endpoint is IP rate-limited to prevent out_trade_no
+	// enumeration. It fails open on Redis errors so an outage never blocks a
+	// user who is mid-payment from seeing their result.
+	publicRateLimiter := ratelimit.NewRateLimiter(redisClient)
+	public := v1.Group("/payment/public")
+	{
+		public.POST("/orders/verify",
+			publicRateLimiter.Limit("payment-public-order-verify", publicOrderVerifyRateLimit, publicOrderVerifyRateLimitWindow),
+			paymentHandler.VerifyOrderPublic)
+		public.POST("/orders/resolve", paymentHandler.ResolveOrderPublicByResumeToken)
+	}
+
+	// --- Webhook endpoints (no auth) ---
+	webhook := v1.Group("/payment/webhook")
+	{
+		// EasyPay sends GET callbacks with query params
+		webhook.GET("/easypay", webhookHandler.EasyPayNotify)
+		webhook.POST("/easypay", webhookHandler.EasyPayNotify)
+		webhook.POST("/alipay", webhookHandler.AlipayNotify)
+		webhook.POST("/wxpay", webhookHandler.WxpayNotify)
+		webhook.POST("/stripe", webhookHandler.StripeWebhook)
+		webhook.POST("/airwallex", webhookHandler.AirwallexWebhook)
+		webhook.POST("/dujiaopay", webhookHandler.DujiaoPayWebhook)
+		webhook.POST("/paypal", webhookHandler.PayPalWebhook)
+	}
+
+	// --- Admin payment endpoints (admin auth) ---
+	adminGroup := v1.Group("/admin/payment")
+	adminGroup.Use(gin.HandlerFunc(adminAuth))
+	adminGroup.Use(panelRateLimiter.Global())
+	adminGroup.Use(gin.HandlerFunc(auditLog))
+	adminGroup.Use(middleware.AdminComplianceGuard(settingService))
+	{
+		// Dashboard
+		coupons := adminGroup.Group("/coupons")
+		{
+			coupons.GET("/templates", adminPaymentHandler.ListCouponTemplates)
+			coupons.POST("/templates", adminPaymentHandler.SaveCouponTemplate)
+			coupons.PUT("/templates/:id", adminPaymentHandler.SaveCouponTemplate)
+			coupons.POST("/issue", adminPaymentHandler.IssueCoupons)
+			coupons.GET("", adminPaymentHandler.ListCoupons)
+			coupons.GET("/usage", adminPaymentHandler.ListCouponUsage)
+			coupons.POST("/:id/revoke", adminPaymentHandler.RevokeCoupon)
+		}
+		adminGroup.GET("/dashboard", adminPaymentHandler.GetDashboard)
+
+		// Config
+		adminGroup.GET("/config", adminPaymentHandler.GetConfig)
+		adminGroup.PUT("/config", adminPaymentHandler.UpdateConfig)
+		invoices := adminGroup.Group("/invoices")
+		{
+			invoices.GET("/config", adminPaymentHandler.GetInvoiceConfig)
+			invoices.PUT("/config", adminPaymentHandler.UpdateInvoiceConfig)
+			invoices.GET("", adminPaymentHandler.ListInvoiceRequests)
+			invoices.POST("/:id/reject", adminPaymentHandler.RejectInvoiceRequest)
+			invoices.POST("/:id/issue", adminPaymentHandler.IssueInvoiceRequest)
+			invoices.GET("/:id/pdf", adminPaymentHandler.DownloadInvoicePDF)
+		}
+
+
+		// Orders
+		adminOrders := adminGroup.Group("/orders")
+		{
+			adminOrders.GET("", adminPaymentHandler.ListOrders)
+			adminOrders.GET("/:id", adminPaymentHandler.GetOrderDetail)
+			adminOrders.POST("/:id/cancel", adminPaymentHandler.CancelOrder)
+			adminOrders.POST("/:id/retry", adminPaymentHandler.RetryFulfillment)
+			adminOrders.POST("/:id/refund", adminPaymentHandler.ProcessRefund)
+			adminOrders.POST("/:id/refund/query", adminPaymentHandler.QueryAndFinalizeRefund)
+		}
+
+		// Subscription Plans
+		plans := adminGroup.Group("/plans")
+		{
+			plans.GET("", adminPaymentHandler.ListPlans)
+			plans.POST("", adminPaymentHandler.CreatePlan)
+			plans.PUT("/:id", adminPaymentHandler.UpdatePlan)
+			plans.DELETE("/:id", adminPaymentHandler.DeletePlan)
+		}
+
+		// Provider Instances
+		providers := adminGroup.Group("/providers")
+		{
+			providers.GET("", adminPaymentHandler.ListProviders)
+			providers.POST("", adminPaymentHandler.CreateProvider)
+			providers.PUT("/:id", adminPaymentHandler.UpdateProvider)
+			providers.DELETE("/:id", adminPaymentHandler.DeleteProvider)
+		}
+	}
+}

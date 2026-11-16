@@ -1,0 +1,148 @@
+import type { MonitorHealth, MonitorRecentRequest } from '@/api/channelMonitorV2'
+import type { HealthDisplayMode } from './monitorFormat'
+import type { HealthState, MonitorCandyHistory, MonitorCandyResult, MonitorCoverage, MonitorMatrixBucket, MonitorMatrixRow, MonitorMetric } from '@/api/channelMonitorV2'
+
+export const CANDY_HISTORY_LIMIT = 100
+export const CANDY_HISTORY_LIMIT_MIN = 15
+export const CANDY_HISTORY_LIMIT_MAX = 100
+export const MONITOR_CARD_SLOT_COUNT = 18
+/** Matches ChannelMonitorV2RecentSampleBucket. Sample bars are 5-minute slots, not the selected range bucket. */
+export const MONITOR_CARD_SAMPLE_BUCKET_MS = 5 * 60 * 1000
+
+export function candyHistoryLimit(history: { history_limit?: number } | null | undefined): number {
+  const limit = history?.history_limit
+  if (typeof limit === 'number' && Number.isInteger(limit) && limit >= CANDY_HISTORY_LIMIT_MIN && limit <= CANDY_HISTORY_LIMIT_MAX) return limit
+  return CANDY_HISTORY_LIMIT
+}
+
+export function monitorCandyHistories(row: Pick<MonitorMatrixRow, 'candy' | 'candy_checks'>): MonitorCandyHistory[] {
+  if (row.candy_checks && row.candy_checks.length > 0) return row.candy_checks
+  return row.candy ? [row.candy] : []
+}
+
+export function candyHistorySlots(history: MonitorCandyHistory): Array<MonitorCandyResult | null> {
+  const limit = candyHistoryLimit(history)
+  const results = history.results.slice(-limit)
+  return [...Array<null>(limit - results.length).fill(null), ...results]
+}
+
+export function hasMonitorSamples(metric: MonitorMetric): boolean {
+  return metric.has_samples === true || metric.request_count > 0
+}
+
+// A recent-sample bar is a bucket the health score can use. Traffic below
+// minimum_sample is not a sample. Redacted payloads keep has_samples and a
+// scored band; overall "unknown" is the server's insufficient-sample result.
+export function meetsMonitorSampleMinimum(bucket: Pick<MonitorMatrixBucket, 'metrics' | 'health'>): boolean {
+  if (!bucket.metrics || !hasMonitorSamples(bucket.metrics)) return false
+  const minimum = bucket.health?.minimum_sample
+  const count = bucket.metrics.request_count
+  if (typeof minimum === 'number' && minimum > 0 && count > 0) return count >= minimum
+  if (count <= 0 && bucket.metrics.has_samples === true && bucket.health?.overall === 'unknown') return false
+  return true
+}
+
+export function monitorRefreshSeconds(configSeconds: number | undefined, rows: readonly MonitorMatrixRow[], bootstrap: boolean): number {
+  if (bootstrap) return 10
+  let seconds = configSeconds && Number.isFinite(configSeconds) && configSeconds > 0 ? configSeconds : 300
+  for (const row of rows) {
+    for (const history of monitorCandyHistories(row)) {
+      const interval = history.interval_minutes
+      if (interval && Number.isFinite(interval) && interval > 0) {
+        seconds = Math.min(seconds, interval * 60)
+      }
+    }
+  }
+  // Refresh before a healthy minute probe can appear stale in a five-minute snapshot.
+  return Math.max(60, seconds)
+}
+
+export interface MonitorCardBar {
+  start: number
+  end: number
+  state: HealthState
+  buckets: MonitorMatrixBucket[]
+}
+
+function coverageBounds(coverage: MonitorCoverage | undefined) {
+  const start = Date.parse(coverage?.requested_start || '')
+  const end = Date.parse(coverage?.requested_end || coverage?.data_through || '')
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null
+  return { start, end }
+}
+
+// Card bars are the latest buckets that meet the minimum sample. A slot with no
+// data is never drawn. sample_buckets already ignores the selected range. Older
+// payloads only have range buckets, so those stay clipped.
+export function monitorCardTimeline(row: MonitorMatrixRow, coverage: MonitorCoverage | undefined): MonitorCardBar[] {
+  const dedicated = Array.isArray(row.sample_buckets)
+  const source = Array.isArray(row.sample_buckets) ? row.sample_buckets : row.buckets
+  const bounds = dedicated ? null : coverageBounds(coverage)
+  const widthMs = dedicated ? MONITOR_CARD_SAMPLE_BUCKET_MS : (coverage?.bucket_seconds && coverage.bucket_seconds > 0 ? coverage.bucket_seconds * 1000 : 0)
+  return source
+    .map(bucket => ({ bucket, at: Date.parse(bucket.bucket_start) }))
+    .filter(item => Number.isFinite(item.at) && meetsMonitorSampleMinimum(item.bucket) && (!bounds || (item.at >= bounds.start && item.at < bounds.end)))
+    .sort((a, b) => a.at - b.at)
+    .slice(-MONITOR_CARD_SLOT_COUNT)
+    .map(item => ({
+      start: item.at,
+      end: widthMs > 0 ? item.at + widthMs : item.at,
+      state: item.bucket.health.overall,
+      buckets: [item.bucket],
+    }))
+}
+
+export function candyDisplayState(history: MonitorCandyHistory, now: number): 'correct' | 'incorrect' | 'error' | 'unknown' | 'stale' {
+  const latest = history.results.at(-1)
+  if (!latest) return 'unknown'
+  const age = now - Date.parse(latest.checked_at)
+  if (!Number.isFinite(age) || age > Math.max(180, history.interval_minutes * 60 + 120) * 1000) return 'stale'
+  return latest.verdict
+}
+export function cardHealth(health: MonitorHealth, mode: HealthDisplayMode): HealthState {
+  if (mode === 'success') return health.error_rate
+  if (mode === 'ttft') return health.ttft
+  if (mode === 'cache') return health.cache || 'unknown'
+  return health.overall
+}
+
+export function hasMonitorTraffic(row: MonitorMatrixRow): boolean {
+  // Keep working when absolute request counts are redacted for ordinary users.
+  return row.has_traffic ?? (row.metrics.request_count > 0 || row.buckets.length > 0)
+}
+
+export interface MonitorHistorySlot {
+  start: number
+  end: number
+  bucket?: MonitorMatrixBucket
+}
+
+/** Keep real aggregate intervals and gaps; never average percentiles or redacted counts. */
+export function historyBucketsForCard(buckets: MonitorMatrixBucket[], coverage: MonitorCoverage): Array<MonitorHistorySlot | null> {
+  const start = Date.parse(coverage.requested_start)
+  const end = Date.parse(coverage.requested_end || coverage.data_through)
+  const step = coverage.bucket_seconds * 1000
+  if (![start, end, step].every(Number.isFinite) || end <= start || step <= 0) return Array(20).fill(null)
+
+  const first = Math.floor(start / step) * step
+  const count = Math.ceil((end - first) / step)
+  const visibleCount = Math.min(20, count)
+  const byStart = new Map(buckets.map(bucket => [Date.parse(bucket.bucket_start), bucket]))
+  const slots: Array<MonitorHistorySlot | null> = Array(20 - visibleCount).fill(null)
+  for (let index = count - visibleCount; index < count; index++) {
+    const bucketStart = first + index * step
+    slots.push({ start: Math.max(start, bucketStart), end: Math.min(end, bucketStart + step), bucket: byStart.get(bucketStart) })
+  }
+  return slots
+}
+
+export function recentRequestsForCard(requests: MonitorRecentRequest[] = []): Array<MonitorRecentRequest | null> {
+  const recent = [...requests].sort((a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at)).slice(-20)
+  return [...Array<null>(20 - recent.length).fill(null), ...recent]
+}
+
+export function requestHealth(request: MonitorRecentRequest | null): HealthState {
+  if (!request) return 'unknown'
+  if (request.status === 'success' || request.status === 'slow') return 'healthy'
+  return 'critical'
+}

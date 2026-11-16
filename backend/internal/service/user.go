@@ -1,0 +1,156 @@
+package service
+
+import (
+	"errors"
+	"time"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"golang.org/x/crypto/bcrypt"
+)
+
+// MaxPasswordBytes is bcrypt's input limit; longer passwords cannot be hashed.
+// The limit is in bytes (not characters), so multi-byte UTF-8 runes count more than once.
+const MaxPasswordBytes = 72
+
+// ErrPasswordTooLong is returned when a new password exceeds MaxPasswordBytes.
+// It sits beside the PASSWORD_TOO_SHORT rule (min 6 characters) used by the auth flows.
+var ErrPasswordTooLong = infraerrors.BadRequest("PASSWORD_TOO_LONG", "password must be at most 72 bytes")
+
+// ValidatePasswordMaxLength rejects passwords bcrypt cannot hash. Flows that set
+// a password must call it before any irreversible step (consuming a verification
+// code, reset token, captcha ticket, ...).
+func ValidatePasswordMaxLength(password string) error {
+	if len(password) > MaxPasswordBytes {
+		return ErrPasswordTooLong
+	}
+	return nil
+}
+
+// hashPasswordBcrypt hashes a password with bcrypt and maps bcrypt's too-long
+// error to ErrPasswordTooLong so no caller can surface it as a 500.
+func hashPasswordBcrypt(password string) (string, error) {
+	if err := ValidatePasswordMaxLength(password); err != nil {
+		return "", err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		if errors.Is(err, bcrypt.ErrPasswordTooLong) {
+			return "", ErrPasswordTooLong
+		}
+		return "", err
+	}
+	return string(hash), nil
+}
+
+type User struct {
+	ID             int64
+	Email          string
+	Username       string
+	Notes          string
+	AvatarURL      string
+	AvatarSource   string
+	AvatarMIME     string
+	AvatarByteSize int
+	AvatarSHA256   string
+	PasswordHash   string
+	Role           string
+	Balance        float64
+	FrozenBalance  float64
+	Concurrency    int
+	Status         string
+	AllowedGroups  []int64
+	// RestrictPublicGroups narrows the public groups this user may bind to the
+	// ones listed in AllowedGroups. False keeps the default, where every public
+	// group is bindable.
+	RestrictPublicGroups bool
+	TokenVersion         int64 // Incremented on password change to invalidate existing tokens
+	// TokenVersionResolved indicates TokenVersion already contains the fingerprint-derived
+	// value expected in JWT claims and refresh-token state.
+	TokenVersionResolved bool
+	SignupSource         string
+	LastLoginAt          *time.Time
+	LastActiveAt         *time.Time
+	LastUsedAt           *time.Time
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	DeletedAt            *time.Time // 非 nil 表示用户已软删除
+
+	// GroupRates 用户专属分组倍率配置
+	// map[groupID]rateMultiplier
+	GroupRates map[int64]float64
+
+	// TOTP 双因素认证字段
+	TotpSecretEncrypted *string    // AES-256-GCM 加密的 TOTP 密钥
+	TotpEnabled         bool       // 是否启用 TOTP
+	TotpEnabledAt       *time.Time // TOTP 启用时间
+
+	// 余额不足通知
+	BalanceNotifyEnabled       bool
+	BalanceNotifyThresholdType string // "fixed" (default) | "percentage"
+	BalanceNotifyThreshold     *float64
+	BalanceNotifyExtraEmails   []NotifyEmailEntry
+	TotalRecharged             float64
+
+	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
+	// 且该 (用户, 分组) 无 rpm_override 时作为全局兜底生效，计数键 rpm:u:{userID}:{min}。
+	RPMLimit int
+
+	// UserGroupRPMOverride 来自 auth cache snapshot 的 (user, group) RPM 覆盖值。
+	// nil = 该 API Key 对应的 (user, group) 无 override；非 nil 时 checkRPM 直接使用，
+	// 避免每请求查 DB。字段不持久化到数据库。
+	UserGroupRPMOverride *int
+	// UserGroupRPMOverrideGroupID 是 snapshot 已成功查询 override 的分组 ID（0 = 未知）。
+	// 等于当前分组且 UserGroupRPMOverride 为 nil 时表示确认无 override，checkRPM 不再查 DB。
+	UserGroupRPMOverrideGroupID int64
+
+	// UserGroupDeniedModels 来自 auth cache snapshot 的 (user, group) 禁用模型，
+	// 即该 API Key 所属用户在 Key 分组内不能使用的模型。字段不持久化到 users 表。
+	UserGroupDeniedModels []string
+
+	APIKeys       []APIKey
+	Subscriptions []UserSubscription
+}
+
+func (u *User) IsAdmin() bool {
+	return u != nil && IsAdminRole(u.Role)
+}
+
+func IsAdminRole(role string) bool { return role == RoleAdmin || role == RoleSuperAdmin }
+func (u *User) IsSuperAdmin() bool { return u != nil && u.Role == RoleSuperAdmin }
+
+func (u *User) IsActive() bool {
+	return u.Status == StatusActive
+}
+
+// CanBindGroup checks whether a user can bind to a given group.
+// For standard groups:
+//   - Public groups (non-exclusive): bindable by every user, unless the user has
+//     RestrictPublicGroups set, in which case the group must be in AllowedGroups
+//   - Exclusive groups: only users with the group in AllowedGroups can bind
+func (u *User) CanBindGroup(groupID int64, isExclusive bool) bool {
+	// 公开分组（非专属）：默认所有用户都可以绑定；仅当该用户开启了公开分组
+	// 限制时，才需要落在 AllowedGroups 中。
+	if !isExclusive && !u.RestrictPublicGroups {
+		return true
+	}
+	// 专属分组，以及受限用户的公开分组：需要在 AllowedGroups 中
+	for _, id := range u.AllowedGroups {
+		if id == groupID {
+			return true
+		}
+	}
+	return false
+}
+
+func (u *User) SetPassword(password string) error {
+	hash, err := hashPasswordBcrypt(password)
+	if err != nil {
+		return err
+	}
+	u.PasswordHash = hash
+	return nil
+}
+
+func (u *User) CheckPassword(password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) == nil
+}

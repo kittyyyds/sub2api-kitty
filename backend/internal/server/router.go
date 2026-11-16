@@ -1,0 +1,189 @@
+package server
+
+import (
+	"context"
+	"log"
+	"sync/atomic"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/middleware"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/server/routes"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/web"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+)
+
+const frameSrcRefreshTimeout = 5 * time.Second
+
+// SetupRouter 配置路由器中间件和路由
+func SetupRouter(
+	r *gin.Engine,
+	handlers *handler.Handlers,
+	jwtAuth middleware2.JWTAuthMiddleware,
+	optionalJWTAuth middleware2.OptionalJWTAuthMiddleware,
+	adminAuth middleware2.AdminAuthMiddleware,
+	apiKeyAuth middleware2.APIKeyAuthMiddleware,
+	auditLog middleware2.AuditLogMiddleware,
+	stepUpAuth middleware2.StepUpAuthMiddleware,
+	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
+	opsService *service.OpsService,
+	settingService *service.SettingService,
+	userService *service.UserService,
+	compositeResolver *service.CompositeRouteResolver,
+	cfg *config.Config,
+	redisClient *redis.Client,
+) *gin.Engine {
+	middleware2.SetIngressRejectRecorder(opsService)
+	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
+	var cachedFrameOrigins atomic.Pointer[[]string]
+	emptyOrigins := []string{}
+	cachedFrameOrigins.Store(&emptyOrigins)
+
+	refreshFrameOrigins := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), frameSrcRefreshTimeout)
+		defer cancel()
+		origins, err := settingService.GetFrameSrcOrigins(ctx)
+		if err != nil {
+			// 获取失败时保留已有缓存，避免 frame-src 被意外清空
+			return
+		}
+		cachedFrameOrigins.Store(&origins)
+	}
+	refreshFrameOrigins() // 启动时初始化
+
+	// 应用中间件
+	r.Use(middleware2.RequestLogger())
+	// 将客户端 IP + UA 注入 request context，供 token 签发/会话绑定/审计日志统一读取。
+	// 解析模式按请求快照：兼容开关开启时信任原始转发头，关闭时使用 server.trusted_proxies。
+	r.Use(middleware2.SessionBindingContext(cfg))
+	r.Use(middleware2.Logger())
+	r.Use(middleware2.CORS(cfg.CORS))
+	r.Use(middleware2.SecurityHeaders(cfg.Security.CSP, func() []string {
+		if p := cachedFrameOrigins.Load(); p != nil {
+			return *p
+		}
+		return nil
+	}))
+	r.Use(middleware2.ServerTiming(cfg.Server.EnableServerTiming))
+	var connectionRecorder middleware2.ConnectionTraceRecorder
+	var trafficRecorder middleware2.TrafficRecorder
+	if handlers.Admin != nil && handlers.Admin.Usage != nil {
+		connectionRecorder = handlers.Admin.Usage
+		trafficRecorder = handlers.Admin.Usage
+	}
+	r.Use(middleware2.RequestTiming(connectionRecorder))
+	r.Use(middleware2.UserTraffic(trafficRecorder))
+	mainlandWebBlock, err := middleware2.NewMainlandWebBlock(cfg.Security.MainlandWebBlock, settingService.IsMainlandWebBlockEnabled)
+	if err != nil {
+		log.Panicf("Failed to initialize mainland web restriction: %v", err)
+	}
+	r.Use(mainlandWebBlock)
+	// Run before embedded HTML and business handlers. Verified serverless IPs
+	// have already been attached by SessionBindingContext.
+	if settingService.IPRisk != nil {
+		r.Use(settingService.IPRisk.Middleware())
+	}
+
+	// Serve embedded frontend with settings injection if available
+	if cfg.RunsBackgroundJobs() && web.HasEmbeddedFrontend() {
+		frontendServer, err := web.NewFrontendServer(settingService) //nolint:staticcheck // SA4023: the !embed stub always errors; embed builds can return nil
+		if err != nil {                                              //nolint:staticcheck // SA4023: see above
+			log.Printf("Warning: Failed to create frontend server with settings injection: %v, using legacy mode", err)
+			r.Use(web.ServeEmbeddedFrontend())
+			settingService.SetOnUpdateCallback(refreshFrameOrigins)
+		} else {
+			// Register combined callback: invalidate HTML cache + refresh frame origins
+			settingService.SetOnUpdateCallback(func() {
+				frontendServer.InvalidateCache()
+				refreshFrameOrigins()
+			})
+			r.Use(frontendServer.Middleware())
+		}
+	} else {
+		settingService.SetOnUpdateCallback(refreshFrameOrigins)
+	}
+
+	// 注册路由
+	registerRoutes(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, userService, compositeResolver, cfg, redisClient)
+
+	return r
+}
+
+// registerRoutes 注册所有 HTTP 路由
+func registerRoutes(
+	r *gin.Engine,
+	h *handler.Handlers,
+	jwtAuth middleware2.JWTAuthMiddleware,
+	optionalJWTAuth middleware2.OptionalJWTAuthMiddleware,
+	adminAuth middleware2.AdminAuthMiddleware,
+	apiKeyAuth middleware2.APIKeyAuthMiddleware,
+	auditLog middleware2.AuditLogMiddleware,
+	stepUpAuth middleware2.StepUpAuthMiddleware,
+	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
+	opsService *service.OpsService,
+	settingService *service.SettingService,
+	userService *service.UserService,
+	compositeResolver *service.CompositeRouteResolver,
+	cfg *config.Config,
+	redisClient *redis.Client,
+) {
+	// 通用路由（健康检查、状态等）
+	routes.RegisterCommonRoutes(r)
+	if cfg.Runtime.Role == config.RuntimeRoleGateway {
+
+		// Global settings, payments, and internal worker/admin APIs stay on the
+		// primary. Request replicas only expose authenticated gateway routes.
+		routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg)
+		return
+	}
+
+	// API v1
+	v1 := r.Group("/api/v1")
+	if h.Admin != nil && h.Admin.OpenAIReauth != nil {
+		worker := v1.Group("/internal/openai-reauth")
+		worker.POST("/runtime-settings", h.Admin.OpenAIReauth.RuntimeSettings)
+		worker.POST("/claim", h.Admin.OpenAIReauth.Claim)
+		worker.POST("/:task_id/progress", h.Admin.OpenAIReauth.Progress)
+		worker.POST("/:task_id/credentials", h.Admin.OpenAIReauth.Credentials)
+		worker.POST("/:task_id/fail", h.Admin.OpenAIReauth.Fail)
+	}
+	if h.QQBot != nil {
+		v1.POST("/qqbot/webhook", h.QQBot.Webhook)
+		limits := middleware.NewRateLimiter(redisClient)
+		binding := v1.Group("/qqbot/email-binding")
+		binding.Use(limits.LimitWithOptions("qqbot-email-binding", 20, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
+		binding.Use(gin.HandlerFunc(auditLog))
+		binding.POST("/preview", h.QQBot.PreviewEmailBinding)
+		binding.POST("/confirm", h.QQBot.ConfirmEmailBinding)
+		transfer := v1.Group("/qqbot/transfer")
+		transfer.Use(limits.LimitWithOptions("qqbot-transfer", 10, time.Minute, middleware.RateLimitOptions{FailureMode: middleware.RateLimitFailClose}))
+		transfer.Use(gin.HandlerFunc(auditLog))
+		transfer.POST("/preview", h.QQBot.PreviewTransfer)
+		transfer.POST("/confirm", h.QQBot.ConfirmTransfer)
+	}
+
+	// 面板 API 限流器：认证接口按用户 ID、公开接口按安全客户端 IP，
+	// 防止高频刷管理面接口打爆数据库（阈值可在系统设置中调整）。
+	panelRateLimiter := middleware2.NewPanelRateLimiter(redisClient, settingService)
+
+	// 注册各模块路由
+	routes.RegisterAuthRoutes(v1, h, jwtAuth, auditLog, redisClient, settingService, panelRateLimiter)
+	routes.RegisterUserRoutes(v1, h, jwtAuth, auditLog, settingService, panelRateLimiter, middleware2.PanelAPIKeyAuth(apiKeyService, subscriptionService, cfg))
+	routes.RegisterModelPlazaRoutes(v1, h, optionalJWTAuth, settingService, panelRateLimiter)
+	routes.RegisterAdminRoutes(v1, h, adminAuth, auditLog, stepUpAuth, settingService, panelRateLimiter, userService)
+	routes.RegisterMCPRoutes(v1, h, auditLog, stepUpAuth, settingService, panelRateLimiter, cfg.CORS.AllowedOrigins, redisClient)
+	routes.RegisterMCPOAuthRoutes(r, v1, h, redisClient)
+	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg)
+	routes.RegisterAPIKeyTestRoutes(r, h, jwtAuth, middleware2.PanelAPIKeyAuth(apiKeyService, subscriptionService, cfg), settingService, opsService, compositeResolver, panelRateLimiter)
+	routes.RegisterCanvasRoutes(r, v1, jwtAuth, apiKeyService, userService, settingService, panelRateLimiter)
+	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, auditLog, settingService, panelRateLimiter, redisClient)
+
+	handler.RegisterPageRoutes(v1, cfg.Pricing.DataDir, gin.HandlerFunc(jwtAuth), gin.HandlerFunc(adminAuth), settingService)
+}

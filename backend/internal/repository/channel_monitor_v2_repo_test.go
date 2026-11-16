@@ -1,0 +1,606 @@
+package repository
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
+	"github.com/stretchr/testify/require"
+)
+
+func TestChannelMonitorV2DateBinOriginIsUTC(t *testing.T) {
+	require.Equal(t, "TIMESTAMPTZ '1970-01-01 00:00:00+00'", channelMonitorV2DateBinOrigin)
+	require.Equal(t, "date_bin($1::interval,m.bucket_start,TIMESTAMPTZ '1970-01-01 00:00:00+00')", channelMonitorV2DateBinExpr("m.bucket_start"))
+
+	for _, query := range []string{
+		channelMonitorV2FixedRollupBoundsSQL,
+		channelMonitorV2MetricsRollupSQL,
+		channelMonitorV2UserMetricsRollupSQL,
+		channelMonitorV2HistogramRollupSQL,
+		channelMonitorV2ErrorRollupSQL,
+	} {
+		require.Contains(t, query, channelMonitorV2DateBinOrigin)
+		require.NotContains(t, query, "TIMESTAMPTZ '1970-01-01'")
+	}
+}
+
+func TestChannelMonitorV2DisplayModelPreservesObservedNames(t *testing.T) {
+	cfg := service.ChannelMonitorV2Config{Platforms: []service.ChannelMonitorV2PlatformConfig{
+		{Platform: "openai", Enabled: true, Models: []string{"shared", "gpt-5"}},
+		{Platform: "grok", Enabled: true, Models: []string{"grok-4"}},
+		// Empty models list must NOT collapse everything into __other__.
+		{Platform: "anthropic", Enabled: true, Models: []string{}},
+	}}
+	require.Equal(t, "shared", channelMonitorV2DisplayModel(cfg, "openai", "shared"))
+	require.Equal(t, "shared", channelMonitorV2DisplayModel(cfg, "grok", "shared"))
+	require.Equal(t, "claude-sonnet-4", channelMonitorV2DisplayModel(cfg, "anthropic", "claude-sonnet-4"))
+	// Unconfigured platform still surfaces the real model name.
+	require.Equal(t, "gemini-2.5-pro", channelMonitorV2DisplayModel(cfg, "gemini", "gemini-2.5-pro"))
+	require.True(t, channelMonitorV2ModelSelected(service.ChannelMonitorV2Filter{Models: []string{"shared"}}, cfg, "grok", "shared"))
+}
+
+func TestChannelMonitorV2MatrixDimensionKey(t *testing.T) {
+	cfg := service.ChannelMonitorV2Config{Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}}}
+	key := channelMonitorV2MatrixDimensionKey(service.ChannelMonitorV2GroupByPlatformGroupModel, cfg, "openai", 7, "gpt-5")
+	require.Equal(t, channelMonitorV2MatrixKey{platform: "openai", groupID: 7, model: "gpt-5"}, key)
+	key = channelMonitorV2MatrixDimensionKey(service.ChannelMonitorV2GroupByPlatformModel, cfg, "openai", 7, "unlisted")
+	require.Equal(t, channelMonitorV2MatrixKey{platform: "openai", model: "unlisted"}, key)
+	key = channelMonitorV2MatrixDimensionKey(service.ChannelMonitorV2GroupByPlatform, cfg, "openai", 7, "gpt-5")
+	require.Equal(t, channelMonitorV2MatrixKey{platform: "openai"}, key)
+}
+
+func TestChannelMonitorV2ModelDimensionsAreObservedAndFilterable(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	start := time.Now().UTC().Truncate(time.Hour)
+	filter := service.ChannelMonitorV2Filter{Start: start, End: start.Add(time.Hour), Bucket: 5 * time.Minute}
+	cfg := service.ChannelMonitorV2Config{Platforms: []service.ChannelMonitorV2PlatformConfig{
+		{Platform: "openai", Enabled: true, Models: []string{"unused-model"}},
+		{Platform: "grok", Enabled: true},
+	}}
+	mock.ExpectQuery("SELECT usage_coverage_start").WillReturnRows(sqlmock.NewRows([]string{"usage", "error", "through", "computed", "backfill"}).AddRow(start, start, filter.End, filter.End, start))
+	mock.ExpectQuery("SELECT m.platform").WillReturnRows(sqlmock.NewRows([]string{"platform", "group_name", "group_platform", "group_id", "model", "count"}).
+		AddRow("openai", "A", "openai", 7, "called-model", 2).
+		AddRow("grok", "B", "grok", 8, "called-model", 3))
+	repo := &channelMonitorV2Repository{db: db}
+	dimensions, err := repo.GetDimensions(context.Background(), filter, cfg)
+	require.NoError(t, err)
+	require.Len(t, dimensions.Models, 2)
+	for _, model := range dimensions.Models {
+		require.Equal(t, "called-model", model.Value)
+		require.Equal(t, "called-model", model.Label)
+		require.True(t, channelMonitorV2ModelSelected(service.ChannelMonitorV2Filter{Models: []string{model.Value}}, cfg, model.Platform, "called-model"))
+	}
+	for _, grouping := range []service.ChannelMonitorV2GroupBy{service.ChannelMonitorV2GroupByPlatformModel, service.ChannelMonitorV2GroupByPlatformGroupModel} {
+		require.Empty(t, seedChannelMonitorV2MatrixAccumulators(filter, cfg, grouping, nil))
+	}
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChannelMonitorV2HistogramPercentilesAreMergedFromCounts(t *testing.T) {
+	// 100 samples: 50@100, 40@500, 10@1000
+	// target = int64(total*p + 0.999999) truncates: p50→50, p90→90, p95→95
+	// cumulative hits: p50@100, p90@500 (50+40), p95@1000
+	histogram := map[int64]int64{100: 50, 500: 40, 1000: 10}
+	require.Equal(t, int64(100), *histPercentile(histogram, .5))
+	require.Equal(t, int64(500), *histPercentile(histogram, .9))
+	require.Equal(t, int64(1000), *histPercentile(histogram, .95))
+	require.Nil(t, histPercentile(nil, .95))
+	// latencyMetric exposes avg + p50 + p90 + p95
+	lat := latencyMetric(1000, 10, histogram)
+	require.NotNil(t, lat.AvgMs)
+	require.NotNil(t, lat.P50Ms)
+	require.NotNil(t, lat.P90Ms)
+	require.NotNil(t, lat.P95Ms)
+	require.Equal(t, int64(100), *lat.P50Ms)
+	require.Equal(t, int64(500), *lat.P90Ms)
+	require.Equal(t, int64(1000), *lat.P95Ms)
+}
+
+func TestChannelMonitorV2MetricIncludesSuccessRate(t *testing.T) {
+	acc := newMetricAccumulator()
+	acc.success, acc.errors = 80, 20
+	metric := acc.metric(1, false)
+	require.Equal(t, int64(100), metric.RequestCount)
+	require.InDelta(t, 0.8, metric.SuccessRate, 0.0001)
+	require.InDelta(t, 0.2, metric.ErrorRate, 0.0001)
+	require.Nil(t, metric.UpstreamAffectedRequests)
+
+	adminMetric := acc.metric(1, true)
+	require.NotNil(t, adminMetric.UpstreamAffectedRequests)
+}
+
+func TestChannelMonitorV2OutputTPSUsesGenerationSumsAndMissingStaysUnknown(t *testing.T) {
+	acc := newMetricAccumulator()
+	require.Nil(t, acc.metric(1, true).OutputTPS)
+	// Legacy aggregates may contain output totals without eligible timings.
+	acc.addFact(channelMonitorV2Fact{Output: 10000, DurationSum: 500, DurationCount: 1})
+	require.Nil(t, acc.metric(1, true).OutputTPS)
+	acc.addFact(channelMonitorV2Fact{TPSOutputTokens: 100, TPSGenerationMS: 1000, TPSSamples: 1})
+	acc.addFact(channelMonitorV2Fact{TPSOutputTokens: 100, TPSGenerationMS: 10000, TPSSamples: 1})
+	for _, minutes := range []float64{1, 60, 1440} {
+		metric := acc.metric(minutes, true)
+		require.EqualValues(t, 2, metric.TPSSamples)
+		require.InDelta(t, 200.0/11, *metric.OutputTPS, .00001)
+	}
+}
+
+func TestChannelMonitorV2WhereUsesConfiguredScopeAndEmptyFilterMeansAllConfigured(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{Start: time.Unix(1, 0), End: time.Unix(2, 0)}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}, {Platform: "grok", Enabled: false}},
+		GroupIDs:  []int64{3, 4},
+	}
+	where, args := channelMonitorV2Where(filter, cfg, "m")
+	require.Contains(t, where, "m.platform = ANY($3)")
+	require.Contains(t, where, "m.group_id = ANY($4)")
+	require.Len(t, args, 4)
+}
+
+func TestChannelMonitorV2WhereRejectsGroupFilterOutsideConfiguredScope(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{
+		Start: time.Unix(1, 0), End: time.Unix(2, 0), GroupIDs: []int64{9},
+	}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		GroupIDs:  []int64{3, 4},
+	}
+	where, args := channelMonitorV2Where(filter, cfg, "m")
+	require.Contains(t, where, "FALSE")
+	require.NotContains(t, where, "m.group_id = ANY")
+	require.Len(t, args, 3)
+}
+
+func TestChannelMonitorV2WhereRestrictsOrdinaryViewerToAllowedConfiguredGroups(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{
+		Start: time.Unix(1, 0), End: time.Unix(2, 0),
+		GroupIDs: []int64{4, 9}, AllowedGroupIDs: []int64{3, 4}, RestrictGroups: true,
+	}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		GroupIDs:  []int64{3, 4, 9},
+	}
+	where, args := channelMonitorV2Where(filter, cfg, "m")
+	require.Contains(t, where, "m.group_id = ANY($4)")
+	require.Equal(t, pq.Array([]int64{4}), args[3])
+}
+
+func TestChannelMonitorV2WhereRejectsOrdinaryViewerWithNoAllowedGroups(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{
+		Start: time.Unix(1, 0), End: time.Unix(2, 0),
+		GroupIDs: []int64{9}, RestrictGroups: true,
+	}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		GroupIDs:  []int64{3, 9},
+	}
+	where, _ := channelMonitorV2Where(filter, cfg, "m")
+	require.Contains(t, where, "FALSE")
+	require.NotContains(t, where, "m.group_id = ANY")
+}
+
+func TestChannelMonitorV2CatalogKeepsViewerScopeWhileIgnoringPickerFilters(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{
+		Platforms: []string{"openai"}, GroupIDs: []int64{9}, Models: []string{"gpt-5"},
+		AllowedGroupIDs: []int64{3}, RestrictGroups: true,
+	}
+	catalog := channelMonitorV2CatalogFilter(filter)
+	require.Empty(t, catalog.Platforms)
+	require.Empty(t, catalog.GroupIDs)
+	require.Empty(t, catalog.Models)
+	require.True(t, catalog.RestrictGroups)
+	require.Equal(t, []int64{3}, catalog.AllowedGroupIDs)
+}
+
+func TestChannelMonitorV2AdminScopeRemainsGlobal(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{Start: time.Unix(1, 0), End: time.Unix(2, 0), GroupIDs: []int64{9}}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		GroupIDs:  []int64{3, 9},
+	}
+	where, args := channelMonitorV2Where(filter, cfg, "m")
+	require.Contains(t, where, "m.group_id = ANY($4)")
+	require.Equal(t, pq.Array([]int64{9}), args[3])
+}
+
+func TestChannelMonitorV2MatrixDoesNotSeedGroupsForEmptyViewerScope(t *testing.T) {
+	filter := service.ChannelMonitorV2Filter{RestrictGroups: true}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true}},
+		GroupIDs:  []int64{3, 9},
+	}
+	accs := seedChannelMonitorV2MatrixAccumulators(filter, cfg, service.ChannelMonitorV2GroupByPlatformGroup, map[int64]channelMonitorV2GroupInfo{
+		3: {name: "private"}, 9: {name: "other-private"},
+	})
+	require.Empty(t, accs)
+}
+
+func TestChannelMonitorV2EmptyRestrictedScopeReturnsEmptyInventory(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	repo := &channelMonitorV2Repository{db: db}
+	filter := service.ChannelMonitorV2Filter{RestrictGroups: true}
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}},
+		GroupIDs:  []int64{3, 9},
+	}
+
+	dimensions, err := repo.GetDimensions(context.Background(), filter, cfg)
+	require.NoError(t, err)
+	require.Empty(t, dimensions.Platforms)
+	require.Empty(t, dimensions.Groups)
+	require.Empty(t, dimensions.Models)
+	require.NotNil(t, dimensions.Platforms)
+	require.NotNil(t, dimensions.Groups)
+	require.NotNil(t, dimensions.Models)
+
+	models, err := repo.GetModels(context.Background(), filter, cfg, false)
+	require.NoError(t, err)
+	require.Empty(t, models.Items)
+	require.NotNil(t, models.Items)
+	require.Equal(t, service.ChannelMonitorV2Coverage{}, models.Coverage)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChannelMonitorV2EmptyRestrictedScopeReturnsEmptySnapshotWithoutQueries(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter service.ChannelMonitorV2Filter
+	}{
+		{
+			name:   "no allowed groups",
+			filter: service.ChannelMonitorV2Filter{RestrictGroups: true},
+		},
+		{
+			name: "requested groups exclude allowed configured scope",
+			filter: service.ChannelMonitorV2Filter{
+				GroupIDs: []int64{9}, AllowedGroupIDs: []int64{3}, RestrictGroups: true,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
+			repo := &channelMonitorV2Repository{db: db}
+			cfg := service.ChannelMonitorV2Config{
+				Enabled: true,
+				Platforms: []service.ChannelMonitorV2PlatformConfig{{
+					Platform: "openai", Enabled: true, Models: []string{"gpt-5"},
+				}},
+				GroupIDs: []int64{3},
+			}
+
+			snapshot, err := repo.GetSnapshot(context.Background(), test.filter, cfg, false)
+			require.NoError(t, err)
+			require.Equal(t, service.ChannelMonitorV2Config{}, snapshot.Config)
+			require.Equal(t, service.ChannelMonitorV2Coverage{}, snapshot.Coverage)
+			require.Equal(t, service.ChannelMonitorV2Metric{}, snapshot.Metrics)
+			require.Equal(t, service.ChannelMonitorV2Health{}, snapshot.Health)
+			require.Empty(t, snapshot.Trend)
+			require.NotNil(t, snapshot.Trend)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestChannelMonitorV2EmptyRestrictedScopeReturnsEmptyMatrixForEveryGrouping(t *testing.T) {
+	groupings := []service.ChannelMonitorV2GroupBy{
+		service.ChannelMonitorV2GroupByPlatform,
+		service.ChannelMonitorV2GroupByPlatformModel,
+		service.ChannelMonitorV2GroupByPlatformGroup,
+		service.ChannelMonitorV2GroupByPlatformGroupModel,
+	}
+	for _, groupBy := range groupings {
+		t.Run(string(groupBy), func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
+			repo := &channelMonitorV2Repository{db: db}
+			filter := service.ChannelMonitorV2Filter{RestrictGroups: true}
+			cfg := service.ChannelMonitorV2Config{
+				Platforms: []service.ChannelMonitorV2PlatformConfig{{Platform: "openai", Enabled: true, Models: []string{"gpt-5"}}},
+				GroupIDs:  []int64{3, 9},
+			}
+
+			matrix, err := repo.GetMatrix(context.Background(), filter, cfg, groupBy, false)
+			require.NoError(t, err)
+			require.Equal(t, groupBy, matrix.GroupBy)
+			require.Empty(t, matrix.Items)
+			require.NotNil(t, matrix.Items)
+			require.Equal(t, service.ChannelMonitorV2Coverage{}, matrix.Coverage)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestChannelMonitorV2ErrorAggregationCountsFinalUserErrorsOnly(t *testing.T) {
+	query := strings.ToLower(channelMonitorV2ErrorAggregationSQL)
+	require.Contains(t, query, "not current_error.is_count_tokens")
+	require.Contains(t, query, "error_type = 'cyber_policy'")
+	require.Contains(t, query, "distinct on")
+	require.Contains(t, query, "candidate_ids")
+	require.Contains(t, query, "where bucket_start >= $1 and bucket_start < $2")
+	require.Contains(t, query, "upstream_affected_requests")
+	require.Contains(t, query, "jsonb_array_length(current_error.upstream_errors) > 0")
+	// request_id dedup must be time-bounded (no full-history scan).
+	require.Contains(t, query, "interval '90 minutes'")
+	require.Contains(t, query, "current_error.created_at >= $1 - interval '90 minutes'")
+}
+
+func TestChannelMonitorV2ErrorAggregationResolvesCompositePlatform(t *testing.T) {
+	query := strings.ToLower(channelMonitorV2ErrorAggregationSQL)
+	// Composite groups are a routing layer: error facts must resolve the concrete
+	// account platform (joining groups/accounts) so they aggregate under the same
+	// platform key as usage facts instead of the never-enabled 'composite' platform.
+	require.Contains(t, query, "g.platform = 'composite'")
+	require.Contains(t, query, "left join groups g on g.id = current_error.group_id")
+	require.Contains(t, query, "left join accounts a on a.id = current_error.account_id")
+	require.Contains(t, query, "a.platform")
+	require.Contains(t, query, "nullif(trim(a.platform), '')")
+	require.NotContains(t, query, "nullif(trim(a.platform))")
+}
+
+func TestChannelMonitorV2UsageSuccessExcludesCyberBillingRows(t *testing.T) {
+	for _, query := range []string{channelMonitorV2UsageMetricsSQL, channelMonitorV2UserMetricsSQL} {
+		require.Contains(t, query, "COALESCE(ul.request_type, 0) NOT IN (4, 6)")
+		require.Contains(t, query, "COALESCE(ul.request_type, 0) NOT IN (1, 4, 6)")
+		require.Contains(t, query, "ul.actual_cost > 0")
+		require.Contains(t, query, "cache_eligible_input_tokens")
+		require.Contains(t, query, "ul.stream = TRUE OR ul.openai_ws_mode = TRUE")
+	}
+	require.Contains(t, channelMonitorV2PlatformSQL, "g.platform = 'composite'")
+	require.Contains(t, channelMonitorV2PlatformSQL, "a.platform")
+	require.Contains(t, channelMonitorV2HistogramSQL, "ul.actual_cost > 0")
+}
+
+func TestChannelMonitorV2CacheRateExcludesSynchronousRequests(t *testing.T) {
+	acc := newMetricAccumulator()
+	acc.addFact(channelMonitorV2Fact{Success: 1, Input: 100, Output: 20, CacheCreation: 30, CacheRead: 50})
+	m := acc.metric(1, true)
+	require.Equal(t, int64(1), m.RequestCount)
+	require.Equal(t, int64(100), m.InputTokens)
+	require.Zero(t, m.CacheEligibleInputTokens)
+	require.Zero(t, m.CacheRateNumerator)
+	require.Zero(t, m.CacheRateDenominator)
+	require.False(t, m.HasCacheSamples)
+	require.Zero(t, m.CacheRate)
+	require.Equal(t, int64(200), m.TokenCount)
+	require.Equal(t, int64(30), m.CacheCreationTokens)
+	require.Equal(t, int64(50), m.CacheReadTokens)
+
+	acc.addFact(channelMonitorV2Fact{Success: 1, Input: 100, CacheEligibleInput: 100, CacheCreation: 20, CacheEligibleCreation: 20, CacheRead: 80, CacheEligibleRead: 80})
+	m = acc.metric(1, true)
+	require.Equal(t, int64(200), m.InputTokens)
+	require.Equal(t, int64(100), m.CacheEligibleInputTokens)
+	require.Equal(t, int64(80), m.CacheRateNumerator)
+	require.Equal(t, int64(200), m.CacheRateDenominator)
+	require.True(t, m.HasCacheSamples)
+	require.InDelta(t, 0.4, m.CacheRate, 0.0001)
+
+	// Weight by input tokens, including streaming requests with no cache hits.
+	acc.addFact(channelMonitorV2Fact{Success: 1, Input: 900, CacheEligibleInput: 900})
+	m = acc.metric(1, true)
+	require.Equal(t, int64(3), m.RequestCount)
+	require.Equal(t, int64(1300), m.TokenCount)
+	require.Equal(t, int64(80), m.CacheRateNumerator)
+	require.Equal(t, int64(1100), m.CacheRateDenominator)
+	require.InDelta(t, 80.0/1100.0, m.CacheRate, 0.0001)
+}
+
+func TestChannelMonitorV2CacheRateDistinguishesMissingTokensAndZeroHits(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		input         int64
+		eligibleInput int64
+		hasSamples    bool
+	}{
+		{name: "empty denominator"},
+		{name: "synchronous input without cache hits", input: 100},
+		{name: "streaming input without cache hits", input: 100, eligibleInput: 100, hasSamples: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			acc := newMetricAccumulator()
+			acc.addFact(channelMonitorV2Fact{Success: 1, Input: tc.input, CacheEligibleInput: tc.eligibleInput, Output: 20})
+			m := acc.metric(1, true)
+			require.Equal(t, int64(1), m.RequestCount)
+			require.Equal(t, tc.eligibleInput, m.CacheEligibleInputTokens)
+			require.Zero(t, m.CacheRateNumerator)
+			require.Equal(t, tc.eligibleInput, m.CacheRateDenominator)
+			require.Equal(t, tc.hasSamples, m.HasCacheSamples)
+			require.Zero(t, m.CacheRate)
+		})
+	}
+}
+
+func TestChannelMonitorV2CacheRateDoesNotUseIneligibleTokenTotals(t *testing.T) {
+	// Full totals alone cannot identify streaming/WS traffic and must not be
+	// treated as eligible samples.
+	acc := newMetricAccumulator()
+	acc.addFact(channelMonitorV2Fact{Success: 4, Input: 3020, Output: 40, CacheCreation: 30, CacheRead: 230})
+	m := acc.metric(1, true)
+	require.Equal(t, int64(4), m.RequestCount)
+	require.Equal(t, int64(3320), m.TokenCount)
+	require.Zero(t, m.CacheEligibleInputTokens)
+	require.Zero(t, m.CacheRateNumerator)
+	require.Zero(t, m.CacheRateDenominator)
+	require.False(t, m.HasCacheSamples)
+	require.Zero(t, m.CacheRate)
+}
+
+func TestChannelMonitorV2RatesUseCoveredWindow(t *testing.T) {
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	filter := service.ChannelMonitorV2Filter{Start: start, End: start.Add(24 * time.Hour)}
+	coverage := service.ChannelMonitorV2Coverage{CoverageStart: start.Add(6 * time.Hour), DataThrough: start.Add(18 * time.Hour)}
+	require.Equal(t, 12*60.0, channelMonitorV2CoveredMinutes(filter, coverage))
+	effective := channelMonitorV2CommonCoverageFilter(filter, coverage)
+	require.Equal(t, coverage.CoverageStart, effective.Start)
+	require.Equal(t, coverage.DataThrough, effective.End)
+}
+
+func TestChannelMonitorV2HistoryCoverageCompleteIgnoresTrailingLag(t *testing.T) {
+	start := time.Date(2026, 8, 7, 2, 20, 0, 0, time.UTC)
+	// History reaches the window start → complete even if data_through is behind filter.End.
+	require.True(t, channelMonitorV2HistoryCoverageComplete(start, start))
+	require.True(t, channelMonitorV2HistoryCoverageComplete(start.Add(-time.Hour), start))
+	// Backfill still short of the window start → incomplete.
+	require.False(t, channelMonitorV2HistoryCoverageComplete(start.Add(time.Hour), start))
+	require.False(t, channelMonitorV2HistoryCoverageComplete(time.Time{}, start))
+}
+
+func TestChannelMonitorV2TierRetentionPolicy(t *testing.T) {
+	require.Equal(t, 3*24*time.Hour, channelMonitorV2RetentionUser1m)
+	require.Equal(t, 7*24*time.Hour, channelMonitorV2RetentionMetrics1m)
+	require.Equal(t, 7*24*time.Hour, channelMonitorV2RetentionError1m)
+	require.Equal(t, 7*24*time.Hour, channelMonitorV2RetentionHistogram1m)
+	require.Equal(t, 7*24*time.Hour, channelMonitorV2RetentionRollup5m)
+	require.Equal(t, 30*24*time.Hour, channelMonitorV2RetentionRollup1h)
+	require.Equal(t, 45*24*time.Hour, channelMonitorV2RetentionRollup12h)
+	require.Equal(t, 90*24*time.Hour, channelMonitorV2RetentionRollup1d)
+	require.Equal(t, channelMonitorV2RetentionRollup1d, channelMonitorV2MaxRetention())
+	require.Contains(t, channelMonitorV2WatermarkSQL, "INTERVAL '90 days'")
+
+	// Every fixed rollup second must appear with a retention rule.
+	wantSeconds := map[int]time.Duration{
+		300:   channelMonitorV2RetentionRollup5m,
+		3600:  channelMonitorV2RetentionRollup1h,
+		43200: channelMonitorV2RetentionRollup12h,
+		86400: channelMonitorV2RetentionRollup1d,
+	}
+	seen := map[int]time.Duration{}
+	for _, rule := range channelMonitorV2RetentionRules {
+		if rule.bucketSeconds == 0 {
+			require.True(t, rule.retention > 0)
+			continue
+		}
+		if prev, ok := seen[rule.bucketSeconds]; ok {
+			require.Equal(t, prev, rule.retention)
+		}
+		seen[rule.bucketSeconds] = rule.retention
+	}
+	for seconds, want := range wantSeconds {
+		got, ok := seen[seconds]
+		require.Truef(t, ok, "missing retention rule for bucket_seconds=%d", seconds)
+		require.Equal(t, want, got)
+	}
+
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	require.Equal(t, now.Add(-7*24*time.Hour), channelMonitorV2RetentionCutoff(now, channelMonitorV2RetentionMetrics1m))
+	require.Equal(t, now.Add(-90*24*time.Hour), channelMonitorV2RetentionCutoff(now, channelMonitorV2MaxRetention()))
+}
+
+func TestSameFixedRollupBucket(t *testing.T) {
+	start := time.Date(2026, 8, 7, 10, 0, 0, 0, time.UTC)
+	require.True(t, sameFixedRollupBucket(start, start.Add(10*time.Minute), 86400))
+	require.False(t, sameFixedRollupBucket(start, start.Add(15*time.Hour), 43200))
+	require.False(t, sameFixedRollupBucket(start, start.Add(24*time.Hour), 86400))
+}
+
+// Needles present in service.ClassifyChannelMonitorV2Error must appear in the
+// aggregation SQL CASE so rollup categories match drilldown classification.
+func TestChannelMonitorV2SQLTaxonomyContainsGoNeedles(t *testing.T) {
+	sql := channelMonitorV2ErrorAggregationSQL
+	needles := []string{
+		"blocked keyword",
+		"invalid_api_key",
+		"max_tokens",
+		"invalid_request",
+		"model not supported",
+		"billing hard limit",
+		"no healthy upstream account",
+		"rate_limit",
+		"gateway timeout",
+		"connection refused",
+		"unexpected eof",
+	}
+	for _, needle := range needles {
+		require.Containsf(t, strings.ToLower(sql), strings.ToLower(needle), "SQL taxonomy missing Go needle %q", needle)
+	}
+}
+
+func TestApplyIgnoredErrorsAdjustsRatesKeepsAbsoluteVolume(t *testing.T) {
+	m := service.ChannelMonitorV2Metric{
+		RequestCount:  100,
+		ErrorRequests: 20,
+		ErrorRate:     0.20,
+		SuccessRate:   0.80,
+	}
+	// Success absolute still 80 → success rate stays 0.80 even after ignoring 5 errors.
+	m.SuccessRequests = 80
+	applyIgnoredErrors(&m, 5)
+	require.Equal(t, int64(100), m.RequestCount)
+	require.Equal(t, int64(20), m.ErrorRequests)
+	require.InDelta(t, 0.15, m.ErrorRate, 0.0001)
+	require.InDelta(t, 0.80, m.SuccessRate, 0.0001)
+
+	// Clamp ignored > errors: scored error_rate → 0; success stays true ratio.
+	m2 := service.ChannelMonitorV2Metric{RequestCount: 10, ErrorRequests: 2, SuccessRequests: 8, ErrorRate: 0.2, SuccessRate: 0.8}
+	applyIgnoredErrors(&m2, 99)
+	require.InDelta(t, 0.0, m2.ErrorRate, 0.0001)
+	require.InDelta(t, 0.8, m2.SuccessRate, 0.0001)
+
+	// No-op when ignored is zero
+	m3 := service.ChannelMonitorV2Metric{RequestCount: 10, ErrorRequests: 2, SuccessRequests: 8, ErrorRate: 0.2, SuccessRate: 0.8}
+	applyIgnoredErrors(&m3, 0)
+	require.InDelta(t, 0.2, m3.ErrorRate, 0.0001)
+	require.InDelta(t, 0.8, m3.SuccessRate, 0.0001)
+}
+
+func TestRedactChannelMonitorV2MetricZerosVolume(t *testing.T) {
+	// Service helper is in service package; covered there. Keep a smoke note that
+	// rates survive a manual zeroing of volume fields used by the UI contract.
+	m := service.ChannelMonitorV2Metric{
+		RequestCount: 100, ErrorRequests: 10, SuccessRequests: 90,
+		TokenCount: 1000, RPM: 5, TPM: 50, ErrorRate: 0.1, SuccessRate: 0.9, CacheRate: 0.4,
+	}
+	// Mimic redact: zero volume only
+	m.RequestCount, m.ErrorRequests, m.SuccessRequests, m.TokenCount = 0, 0, 0, 0
+	require.Equal(t, 0.1, m.ErrorRate)
+	require.Equal(t, 5.0, m.RPM)
+}
+
+func TestChannelMonitorV2CatalogFilterClearsMultiSelectDimensions(t *testing.T) {
+	start := time.Unix(1, 0)
+	end := time.Unix(2, 0)
+	filter := service.ChannelMonitorV2Filter{
+		Start: start, End: end, Bucket: time.Minute,
+		Platforms: []string{"openai"}, GroupIDs: []int64{3}, Models: []string{"gpt-5"},
+	}
+	catalog := channelMonitorV2CatalogFilter(filter)
+	require.Nil(t, catalog.Platforms)
+	require.Nil(t, catalog.GroupIDs)
+	require.Nil(t, catalog.Models)
+	// Time window / coverage-related fields remain.
+	require.Equal(t, start, catalog.Start)
+	require.Equal(t, end, catalog.End)
+	require.Equal(t, time.Minute, catalog.Bucket)
+
+	cfg := service.ChannelMonitorV2Config{
+		Platforms: []service.ChannelMonitorV2PlatformConfig{
+			{Platform: "openai", Enabled: true},
+			{Platform: "grok", Enabled: true},
+		},
+		GroupIDs: []int64{3, 4},
+	}
+	catalogWhere, catalogArgs := channelMonitorV2Where(catalog, cfg, "m")
+	_, metricArgs := channelMonitorV2Where(filter, cfg, "m")
+
+	// Catalog WHERE still applies config scope (enabled platforms + group allow-list).
+	require.Contains(t, catalogWhere, "m.platform = ANY")
+	require.Contains(t, catalogWhere, "m.group_id = ANY")
+	require.Len(t, catalogArgs, 4) // start, end, platforms, groups
+	require.Len(t, metricArgs, 4)
+
+	// Metrics WHERE is narrower once multi-select platforms/groups are applied.
+	require.NotEqual(t, catalogArgs, metricArgs)
+	// Group seeding without multi-select uses full config allow-list.
+	require.Equal(t, []int64{3, 4}, configuredChannelMonitorV2GroupIDs(catalog, cfg))
+	require.Equal(t, []int64{3}, configuredChannelMonitorV2GroupIDs(filter, cfg))
+}

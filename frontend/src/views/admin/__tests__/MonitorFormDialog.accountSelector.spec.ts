@@ -1,0 +1,481 @@
+import { defineComponent, nextTick } from 'vue'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { ChannelMonitor } from '@/api/admin/channelMonitor'
+import MonitorFormDialog from '@/components/admin/monitor/MonitorFormDialog.vue'
+
+const {
+  listTemplates,
+  accountsList,
+  accountsGetById,
+  monitorCreate,
+  monitorUpdate,
+} = vi.hoisted(() => ({
+  listTemplates: vi.fn(),
+  accountsList: vi.fn(),
+  accountsGetById: vi.fn(),
+  monitorCreate: vi.fn(),
+  monitorUpdate: vi.fn(),
+}))
+
+
+vi.mock('@/utils/featureFlags', () => ({
+  isChannelMonitorV1Mode: () => true,
+  isChannelMonitorV2Mode: () => false,
+  getChannelMonitorMode: () => 'v1' as const,
+}))
+
+vi.mock('@/features/channel-monitor-v2/MonitorSettingsPanel.vue', () => ({
+  default: { name: 'MonitorSettingsPanel', template: '<div data-testid="v2-settings" />' },
+}))
+
+vi.mock('@/api/admin', () => ({
+  adminAPI: {
+    channelMonitor: {
+      create: monitorCreate,
+      update: monitorUpdate,
+    },
+    channelMonitorTemplate: {
+      list: listTemplates,
+    },
+    accounts: {
+      list: (...args: unknown[]) => accountsList(...args),
+      getById: (...args: unknown[]) => accountsGetById(...args),
+    },
+  },
+}))
+
+vi.mock('@/api/keys', () => ({
+  keysAPI: { list: vi.fn() },
+}))
+
+vi.mock('@/api/groups', () => ({
+  userGroupsAPI: { getUserGroupRates: vi.fn() },
+}))
+
+vi.mock('@/stores/app', () => ({
+  useAppStore: () => ({
+    cachedPublicSettings: null,
+    showError: vi.fn(),
+    showSuccess: vi.fn(),
+  }),
+}))
+
+vi.mock('vue-i18n', async () => {
+  const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
+  return {
+    ...actual,
+    useI18n: () => ({ t: (key: string) => key }),
+  }
+})
+
+const BaseDialogStub = defineComponent({
+  props: { show: { type: Boolean, default: false } },
+  template: '<div v-if="show"><slot /><slot name="footer" /></div>',
+})
+
+function makeMonitor(overrides: Partial<ChannelMonitor> = {}): ChannelMonitor {
+  return {
+    id: 42,
+    name: 'primary',
+    provider: 'openai',
+    api_mode: 'chat_completions',
+    endpoint: 'https://api.example.com',
+    api_key_masked: 'sk-t***',
+    primary_model: 'gpt-4o-mini',
+    extra_models: [],
+    group_name: '',
+    enabled: true,
+    interval_seconds: 60,
+    jitter_seconds: 0,
+    last_checked_at: null,
+    created_by: 1,
+    created_at: '2026-07-16T00:00:00Z',
+    updated_at: '2026-07-16T00:00:00Z',
+    primary_status: '',
+    primary_latency_ms: null,
+    availability_7d: 0,
+    extra_models_status: [],
+    template_id: null,
+    extra_headers: {},
+    body_override_mode: 'off',
+    body_override: null,
+    check_mode: 'probe',
+    account_id: null,
+    ...overrides,
+  }
+}
+
+let unmountWrapper: (() => void) | undefined
+
+function mountDialog(monitor: ChannelMonitor | null = null) {
+  const wrapper = mount(MonitorFormDialog, {
+    props: { show: true, monitor },
+    global: {
+      stubs: {
+        BaseDialog: BaseDialogStub,
+        Toggle: true,
+        ModelTagInput: true,
+        MonitorKeyPickerDialog: true,
+        MonitorAdvancedRequestConfig: true,
+      },
+    },
+  })
+  unmountWrapper = () => wrapper.unmount()
+  return wrapper
+}
+
+const accountTrigger = (wrapper: VueWrapper) =>
+  wrapper.get('[data-testid="monitor-linked-account"] button')
+
+const openAccountDropdown = async (wrapper: VueWrapper) => {
+  await accountTrigger(wrapper).trigger('click')
+  await nextTick()
+  const dropdown = document.body.querySelector<HTMLElement>('.select-dropdown-portal')
+  expect(dropdown).not.toBeNull()
+  return dropdown as HTMLElement
+}
+
+const openPathDropdown = async (wrapper: VueWrapper) => {
+  await wrapper.get('#monitor-request-path-preset').trigger('click')
+  await nextTick()
+  return document.body.querySelector<HTMLElement>('.select-dropdown-portal')!
+}
+
+const selectPath = async (wrapper: VueWrapper, text: string) => {
+  const dropdown = await openPathDropdown(wrapper)
+  const option = [...dropdown.querySelectorAll<HTMLElement>('.select-option')].find(el => el.textContent?.trim() === text)
+  expect(option, `path option ${text}`).toBeDefined()
+  option!.click()
+  await nextTick()
+}
+
+const clickOption = (dropdown: HTMLElement, text: string) => {
+  const option = [...dropdown.querySelectorAll('.select-option')].find((el) =>
+    el.textContent?.includes(text),
+  )
+  expect(option, `option containing "${text}" not found`).toBeDefined()
+  ;(option as HTMLElement).click()
+}
+
+const typeAccountSearch = async (dropdown: HTMLElement, query: string) => {
+  const input = dropdown.querySelector<HTMLInputElement>('.select-search-input')
+  expect(input).not.toBeNull()
+  input!.value = query
+  input!.dispatchEvent(new Event('input'))
+  await nextTick()
+}
+
+afterEach(() => {
+  unmountWrapper?.()
+  unmountWrapper = undefined
+  document.body.innerHTML = ''
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
+describe('MonitorFormDialog linked account selector', () => {
+  beforeEach(() => {
+    listTemplates.mockReset().mockResolvedValue({ items: [] })
+    accountsList.mockReset().mockResolvedValue({ items: [] })
+    accountsGetById.mockReset()
+    monitorCreate.mockReset().mockResolvedValue({})
+    monitorUpdate.mockReset().mockResolvedValue({})
+  })
+
+  it('edits and clears a custom path without replacing the provider or saved key', async () => {
+    const wrapper = mountDialog(makeMonitor({ provider: 'zhipu', request_path: '/v1/chat/completions' }))
+    await flushPromises()
+    expect(wrapper.get('#monitor-request-path-preset').text()).toBe('/v1/chat/completions')
+    expect(wrapper.find('[data-testid="monitor-request-path"]').exists()).toBe(false)
+    await selectPath(wrapper, 'admin.channelMonitor.form.requestPathCustom')
+    const input = wrapper.get<HTMLInputElement>('[data-testid="monitor-request-path"]')
+    expect(input.element.value).toBe('/v1/chat/completions')
+    await input.setValue(' /relay/v1/chat/completions ')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenLastCalledWith(42, expect.objectContaining({ provider: 'zhipu', request_path: '/relay/v1/chat/completions' }))
+    expect(monitorUpdate.mock.calls[0]![1]).not.toHaveProperty('api_key')
+    await selectPath(wrapper, 'admin.channelMonitor.form.requestPathDefault (/api/paas/v4/chat/completions)')
+    expect(wrapper.find('[data-testid="monitor-request-path"]').exists()).toBe(false)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenLastCalledWith(42, expect.objectContaining({ request_path: '', provider: 'zhipu' }))
+  })
+
+  it('opens legacy monitors with the default path and resets it for a new monitor', async () => {
+    const wrapper = mountDialog(makeMonitor())
+    await flushPromises()
+    expect(wrapper.get('#monitor-request-path-preset').text()).toContain('requestPathDefault')
+    await selectPath(wrapper, 'admin.channelMonitor.form.requestPathCustom')
+    await wrapper.get('[data-testid="monitor-request-path"]').setValue('/relay/chat/completions')
+    await wrapper.setProps({ monitor: null })
+    expect(wrapper.find('[data-testid="monitor-request-path"]').exists()).toBe(false)
+    expect(wrapper.get('#monitor-request-path-preset').text()).toContain('requestPathDefault (/v1/messages)')
+    await wrapper.get('[data-testid="monitor-check-mode-quota"]').trigger('click')
+    expect(wrapper.find('#monitor-request-path-preset').exists()).toBe(false)
+  })
+
+  it('selects the compatible GLM path and submits without changing protocol or key', async () => {
+    const wrapper = mountDialog(makeMonitor({ provider: 'zhipu', request_path: '' }))
+    await flushPromises()
+    await selectPath(wrapper, '/v1/chat/completions')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({
+      request_path: '/v1/chat/completions', provider: 'zhipu', api_mode: 'chat_completions',
+    }))
+    expect(monitorUpdate.mock.calls[0]![1]).not.toHaveProperty('api_key')
+  })
+
+  it('preserves an existing special path and resets custom mode when another monitor opens', async () => {
+    const wrapper = mountDialog(makeMonitor({ request_path: '/relay/special/chat/completions' }))
+    await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('[data-testid="monitor-request-path"]').element.value).toBe('/relay/special/chat/completions')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ request_path: '/relay/special/chat/completions' }))
+    await wrapper.get('[data-testid="monitor-request-path"]').setValue('')
+    expect(wrapper.find('[data-testid="monitor-request-path"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="monitor-request-path"]').setValue('/v1/chat/completions')
+    expect(wrapper.find('[data-testid="monitor-request-path"]').exists()).toBe(true)
+    await selectPath(wrapper, 'admin.channelMonitor.form.requestPathCustom')
+    await wrapper.setProps({ monitor: makeMonitor({ id: 43, request_path: '/v1/chat/completions' }) })
+    expect(wrapper.find('[data-testid="monitor-request-path"]').exists()).toBe(false)
+    expect(wrapper.get('#monitor-request-path-preset').text()).toBe('/v1/chat/completions')
+  })
+
+  it.each([
+    ['openai', 'responses', '/v1/responses', '/v1/chat/completions'],
+    ['anthropic', 'chat_completions', '/v1/messages', '/v1/responses'],
+    ['deepseek', 'chat_completions', '/v1/chat/completions', '/v1/messages'],
+  ] as const)('offers paths matching %s %s', async (provider, api_mode, path, excluded) => {
+    const wrapper = mountDialog(makeMonitor({ provider, api_mode }))
+    await flushPromises()
+    const dropdown = await openPathDropdown(wrapper)
+    expect(dropdown.textContent).toContain(path)
+    expect(dropdown.textContent).not.toContain(excluded)
+    await wrapper.get('#monitor-request-path-preset').trigger('click')
+    await selectPath(wrapper, path)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ provider, api_mode, request_path: path }))
+  })
+
+  it('keeps Gemini model-dependent defaults automatic rather than saving a literal template', async () => {
+    const wrapper = mountDialog(makeMonitor({ provider: 'gemini', request_path: '' }))
+    await flushPromises()
+    const dropdown = await openPathDropdown(wrapper)
+    expect(dropdown.querySelectorAll('.select-option')).toHaveLength(2)
+    expect(dropdown.textContent).toContain('/v1beta/models/{model}:generateContent')
+    await wrapper.get('#monitor-request-path-preset').trigger('click')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ request_path: '' }))
+  })
+
+  it('loads the first page of provider accounts when quota mode is enabled', async () => {
+    accountsList.mockResolvedValue({ items: [{ id: 1, name: 'a', platform: 'anthropic' }] })
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(accountsList).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="monitor-check-mode-quota"]').trigger('click')
+    await flushPromises()
+
+    expect(accountsList).toHaveBeenCalledTimes(1)
+    expect(accountsList).toHaveBeenCalledWith(
+      1,
+      50,
+      { platform: 'anthropic' },
+      { signal: expect.any(AbortSignal) },
+    )
+  })
+
+  it('debounced typing hits server-side search and aborts the previous request', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountDialog()
+    await wrapper.get('[data-testid="monitor-check-mode-quota"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(0)
+
+    const dropdown = await openAccountDropdown(wrapper)
+    await typeAccountSearch(dropdown, 'hidden')
+    expect(accountsList).toHaveBeenCalledTimes(1, 'debounce window must not fire a request')
+
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(accountsList).toHaveBeenCalledTimes(2)
+    const lastCall = accountsList.mock.calls[accountsList.mock.calls.length - 1]
+    expect(lastCall[2]).toMatchObject({ platform: 'anthropic', search: 'hidden' })
+    const firstSignal = (accountsList.mock.calls[0][3] as { signal: AbortSignal }).signal
+    expect(firstSignal.aborted).toBe(true)
+  })
+
+  it('hydrates a bound account missing from the first page and keeps the binding', async () => {
+    accountsList.mockResolvedValue({ items: [{ id: 1, name: 'first page account', platform: 'anthropic' }] })
+    accountsGetById.mockResolvedValue({ id: 999, name: 'hidden gem', platform: 'anthropic' })
+    const wrapper = mountDialog(makeMonitor({
+      provider: 'anthropic',
+      check_mode: 'quota',
+      account_id: 999,
+      endpoint: '',
+      primary_model: 'quota',
+    }))
+    await flushPromises()
+
+    expect(accountsGetById).toHaveBeenCalledWith(999)
+    expect(accountTrigger(wrapper).text()).toContain('hidden gem (#999)')
+
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ account_id: 999 }))
+  })
+
+  it('clears the binding with a visible hint when the bound account cannot be loaded', async () => {
+    accountsGetById.mockRejectedValue(new Error('gone'))
+    const wrapper = mountDialog(makeMonitor({
+      provider: 'anthropic',
+      check_mode: 'quota',
+      account_id: 999,
+      endpoint: '',
+      primary_model: 'quota',
+    }))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('admin.channelMonitor.form.linkedAccountMissing')
+    expect(accountTrigger(wrapper).text()).not.toContain('hidden gem')
+
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).not.toHaveBeenCalled()
+  })
+
+  it('shows the OpenAI codex probe hint only in quota mode on openai', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('openAIQuotaProbeHint')
+
+    await wrapper.get('[data-testid="monitor-check-mode-quota"]').trigger('click')
+    await flushPromises()
+    // anthropic 平台不显示。
+    expect(wrapper.text()).not.toContain('openAIQuotaProbeHint')
+
+    await wrapper.get('[data-testid="monitor-provider-openai"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('openAIQuotaProbeHint')
+  })
+
+  it('keeps a picked account visible when a later search hides it', async () => {
+    vi.useFakeTimers()
+    accountsList
+      .mockResolvedValueOnce({ items: [
+        { id: 1, name: 'alpha', platform: 'anthropic' },
+        { id: 2, name: 'beta', platform: 'anthropic' },
+      ] })
+      .mockResolvedValueOnce({ items: [{ id: 2, name: 'beta', platform: 'anthropic' }] })
+    const wrapper = mountDialog()
+    await wrapper.get('[data-testid="monitor-check-mode-quota"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(0)
+
+    const dropdown = await openAccountDropdown(wrapper)
+    clickOption(dropdown, 'alpha (#1)')
+    await nextTick()
+    expect(accountTrigger(wrapper).text()).toContain('alpha (#1)')
+
+    // 搜索 beta：结果页只剩 beta，但已选中的 alpha 仍固定展示、提交仍保留绑定。
+    const reopened = await openAccountDropdown(wrapper)
+    await typeAccountSearch(reopened, 'beta')
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(accountTrigger(wrapper).text()).toContain('alpha (#1)')
+
+    await wrapper.findAll('input[type="text"]')[0].setValue('my monitor')
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(monitorCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: 1 }))
+  })
+
+  it('clears the account binding when the provider switches', async () => {
+    accountsList.mockResolvedValue({ items: [{ id: 1, name: 'alpha', platform: 'anthropic' }] })
+    const wrapper = mountDialog()
+    await wrapper.get('[data-testid="monitor-check-mode-quota"]').trigger('click')
+    await flushPromises()
+
+    const dropdown = await openAccountDropdown(wrapper)
+    clickOption(dropdown, 'alpha (#1)')
+    await nextTick()
+    expect(accountTrigger(wrapper).text()).toContain('alpha (#1)')
+
+    await wrapper.get('[data-testid="monitor-provider-openai"]').trigger('click')
+    await flushPromises()
+
+    expect(accountTrigger(wrapper).text()).not.toContain('alpha')
+    expect(accountTrigger(wrapper).text()).toContain('linkedAccountPlaceholder')
+  })
+
+  // P2-7(b)：antigravity 强制的 quota 在切走时要对称还原，占位模型一并清掉。
+  it('restores probe mode and clears the quota placeholder when switching away from antigravity', async () => {
+    accountsGetById.mockRejectedValue(new Error('gone'))
+    const wrapper = mountDialog(makeMonitor({
+      provider: 'antigravity',
+      check_mode: 'quota',
+      account_id: 7,
+      endpoint: '',
+      primary_model: 'quota',
+    }))
+    await flushPromises()
+
+    await wrapper.get('[data-testid="monitor-provider-anthropic"]').trigger('click')
+    await flushPromises()
+
+    // 占位模型已被清空：probe 模式必填校验拦下提交，而不是拿 'quota' 探活。
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="monitor-primary-model"]').setValue('claude-sonnet-4-5')
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({
+      check_mode: 'probe',
+      primary_model: 'claude-sonnet-4-5',
+    }))
+  })
+
+  // P2-7(c)：update 切回 probe 显式发 account_id=0 解绑存量关联（null=不动）。
+  it('unbinds the linked account with account_id=0 when a quota monitor switches back to probe', async () => {
+    accountsGetById.mockRejectedValue(new Error('gone'))
+    const wrapper = mountDialog(makeMonitor({
+      provider: 'anthropic',
+      check_mode: 'quota',
+      account_id: 999,
+      endpoint: '',
+      primary_model: 'quota',
+    }))
+    await flushPromises()
+
+    await wrapper.get('[data-testid="monitor-check-mode-probe"]').trigger('click')
+    await wrapper.get('[data-testid="monitor-primary-model"]').setValue('claude-sonnet-4-5')
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+
+    expect(monitorUpdate).toHaveBeenCalledWith(42, expect.objectContaining({ account_id: 0 }))
+  })
+
+  // P2-7(c)：create 绝不发 0（后端会把 0 存成 &0 触发外键违约），保持 null。
+  it('keeps account_id null when creating a probe monitor', async () => {
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await wrapper.findAll('input[type="text"]')[0].setValue('my monitor')
+    await wrapper.get('[data-testid="monitor-primary-model"]').setValue('claude-sonnet-4-5')
+    await wrapper.get('#channel-monitor-form').trigger('submit')
+    await flushPromises()
+
+    expect(monitorCreate).toHaveBeenCalledWith(expect.objectContaining({
+      check_mode: 'probe',
+      account_id: null,
+    }))
+  })
+})

@@ -1,0 +1,33 @@
+/* Reference components use Kitty's tokens, including portaled dialogs. */
+:root {
+  --md-sys-color-primary: var(--kc-accent, #c45100);
+  --md-sys-color-on-primary: var(--kc-on-action, #fff);
+  --md-sys-color-surface: var(--kc-panel, #fff);
+  --md-sys-color-surface-container: var(--kc-panel-muted, #f8f5ef);
+  --md-sys-color-on-surface: var(--kc-ink, #1c1c19);
+  --md-sys-color-on-surface-variant: var(--kc-muted, #65665f);
+  --md-sys-color-outline-variant: var(--kc-line, #e6e2da);
+  --theme-ease-out: cubic-bezier(.2,.8,.2,1);
+  --theme-highlight: inset 0 1px 0 rgb(255 255 255 / .03);
+  --theme-elevation-1: var(--kc-shadow, 0 1px 3px rgb(0 0 0 / .04));
+  --theme-elevation-2: 0 8px 25px rgb(0 0 0 / .07);
+  --theme-elevation-3: 0 16px 40px rgb(0 0 0 / .15);
+  --kc-success: #386344;
+  --kc-success-soft: #eaf1e7;
+  --kc-warning: #996321;
+  --kc-warning-soft: #fff2d9;
+  --kc-error-soft: #fae9e6;
+}
+html.dark {
+  --kc-success: #a2c79b;
+  --kc-success-soft: #253327;
+  --kc-warning: #e9c28b;
+  --kc-warning-soft: #383022;
+  --kc-error-soft: #3a2827;
+}
+.kitty-console-theme .segment-group { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--kc-line); border-radius: 10px; background: var(--kc-panel-muted); }
+.kitty-console-theme .segment-active { color: var(--kc-accent-strong); background: var(--kc-panel); box-shadow: var(--kc-shadow); }
+.kitty-console-theme .segment-idle { color: var(--kc-muted); background: transparent; }
+.kitty-console-theme .segment-idle:hover { color: var(--kc-ink); background: var(--kc-hover); }
+html.dark .upstream-page .text-emerald-700 { color: var(--kc-success); }
+html.dark .upstream-page .bg-red-50 { background: var(--kc-error-soft); color: var(--kc-danger); }

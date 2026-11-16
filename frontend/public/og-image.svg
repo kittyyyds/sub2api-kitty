@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">kitty API</title>
+  <desc id="desc">A unified AI API gateway represented by the kitty Orbit routing mark.</desc>
+  <defs>
+    <linearGradient id="paper" x1="60" y1="20" x2="1120" y2="610" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7FAF8"/>
+      <stop offset=".55" stop-color="#EEF4F1"/>
+      <stop offset="1" stop-color="#F6EEE9"/>
+    </linearGradient>
+    <linearGradient id="core" x1="18" y1="13" x2="48" y2="52" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#292E2B"/>
+      <stop offset="1" stop-color="#101411"/>
+    </linearGradient>
+    <linearGradient id="orbit" x1="7" y1="48" x2="58" y2="17" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55C8B8"/>
+      <stop offset=".5" stop-color="#F3D45F"/>
+      <stop offset="1" stop-color="#FF8E78"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="20" flood-color="#18352D" flood-opacity=".22"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#paper)"/>
+  <path d="M0 92h1200M0 538h1200M78 0v630M1122 0v630" fill="none" stroke="#18352D" stroke-opacity=".08"/>
+  <g transform="translate(26 2) scale(7.2)">
+    <path d="M18.2 21 19.8 10.4l8.2 6.2A19.7 19.7 0 0 1 32 16.2c1.37 0 2.7.14 4 .4l8.2-6.2L45.8 21A17.9 17.9 0 1 1 18.2 21Z" fill="url(#core)" filter="url(#shadow)"/>
+    <path d="M9.1 43.4c-3.1-5.7 4.8-15.8 17.7-22.7 12.8-6.8 25.8-7.7 28.9-2 3.1 5.8-4.8 15.9-17.7 22.8-12.8 6.8-25.8 7.7-28.9 1.9Z" fill="none" stroke="url(#orbit)" stroke-linecap="round" stroke-width="3.2"/>
+    <path d="M25 23v20M25.5 33.5c5-.7 8.3-5.2 13.5-9M25.5 33.5c5.4.7 8.8 5.5 14.5 9.1" fill="none" stroke="#F7F6EE" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.4"/>
+    <circle cx="9.1" cy="43.4" r="3" fill="#55C8B8" stroke="#171B19" stroke-width="1.4"/>
+    <circle cx="55.7" cy="18.7" r="3" fill="#FF8E78" stroke="#171B19" stroke-width="1.4"/>
+    <circle cx="42.6" cy="18.4" r="2.6" fill="#F3D45F" stroke="#171B19" stroke-width="1.2"/>
+  </g>
+  <g fill="#171B19">
+    <text x="565" y="276" font-family="Arial, Helvetica, sans-serif" font-size="98" font-weight="800">kitty API</text>
+    <text x="570" y="345" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="600">ONE KEY. EVERY MODEL.</text>
+  </g>
+  <path d="M570 386h440" stroke="#171B19" stroke-opacity=".18"/>
+  <g font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="600" fill="#41504A">
+    <text x="570" y="438">Unified routing</text>
+    <text x="770" y="438">Transparent usage</text>
+    <text x="1003" y="438">Stable access</text>
+  </g>
+  <circle cx="548" cy="430" r="7" fill="#55C8B8"/>
+  <circle cx="748" cy="430" r="7" fill="#F3D45F"/>
+  <circle cx="981" cy="430" r="7" fill="#FF8E78"/>
+</svg>

@@ -1,0 +1,573 @@
+package admin
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"math"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+	"unicode"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/gin-gonic/gin"
+)
+
+type providerMetrics struct {
+	Balance       *float64 `json:"balance"`
+	TodaySpend    *float64 `json:"today_spend"`
+	TotalRecharge *float64 `json:"total_recharge"`
+	TotalSpend    *float64 `json:"total_spend"`
+	Currency      string   `json:"currency"`
+}
+
+type providerRecord struct {
+	AttemptedAt             *time.Time      `json:"attempted_at,omitempty"`
+	Revision                int64           `json:"revision"`
+	WalletID                int64           `json:"wallet_id"`
+	SupplierID              int64           `json:"supplier_id"`
+	ID                      string          `json:"id"`
+	Name                    string          `json:"name"`
+	SiteType                string          `json:"site_type"`
+	BaseURL                 string          `json:"base_url"`
+	AuthMode                string          `json:"auth_mode"`
+	Account                 string          `json:"account,omitempty"`
+	UserID                  string          `json:"user_id,omitempty"`
+	ExchangeRate            float64         `json:"exchange_rate"`
+	Notes                   string          `json:"notes,omitempty"`
+	SecretEncrypted         string          `json:"secret_encrypted"`
+	Status                  string          `json:"status"`
+	Metrics                 providerMetrics `json:"metrics"`
+	UpdatedAt               *time.Time      `json:"updated_at,omitempty"`
+	LastError               string          `json:"last_error,omitempty"`
+	ErrorKind               string          `json:"error_kind,omitempty"`
+	SuppressLowBalanceAlert bool            `json:"suppress_low_balance_alert"`
+	LowBalanceAlert         bool            `json:"low_balance_alert"`
+	AlertSent               bool            `json:"alert_sent,omitempty"`
+}
+
+type providerView struct {
+	Revision                int64           `json:"revision"`
+	WalletID                int64           `json:"wallet_id"`
+	ID                      string          `json:"id"`
+	Name                    string          `json:"name"`
+	SiteType                string          `json:"site_type"`
+	BaseURL                 string          `json:"base_url"`
+	AuthMode                string          `json:"auth_mode"`
+	Account                 string          `json:"account,omitempty"`
+	UserID                  string          `json:"user_id,omitempty"`
+	ExchangeRate            float64         `json:"exchange_rate"`
+	Notes                   string          `json:"notes,omitempty"`
+	Status                  string          `json:"status"`
+	Metrics                 providerMetrics `json:"metrics"`
+	UpdatedAt               *time.Time      `json:"updated_at,omitempty"`
+	LastError               string          `json:"last_error,omitempty"`
+	SuppressLowBalanceAlert bool            `json:"suppress_low_balance_alert"`
+	LowBalanceAlert         bool            `json:"low_balance_alert"`
+}
+
+func (r providerRecord) view() providerView {
+	mode := r.AuthMode
+	if mode == "api_key" {
+		mode = "token"
+	}
+	return providerView{r.Revision, r.WalletID, r.ID, r.Name, r.SiteType, r.BaseURL, mode, r.Account,
+		r.UserID, r.ExchangeRate, r.Notes, r.Status, r.Metrics, r.UpdatedAt, r.LastError,
+		r.SuppressLowBalanceAlert, r.LowBalanceAlert}
+}
+
+type providerInput struct {
+	Revision                int64   `json:"revision"`
+	ID                      string  `json:"id"`
+	Name                    string  `json:"name"`
+	SiteType                string  `json:"site_type"`
+	BaseURL                 string  `json:"base_url"`
+	AuthMode                string  `json:"auth_mode"`
+	Account                 string  `json:"account"`
+	Password                string  `json:"password"`
+	AccessToken             string  `json:"access_token"`
+	RefreshToken            string  `json:"refresh_token"`
+	TokenType               string  `json:"token_type"`
+	UserID                  string  `json:"user_id"`
+	SystemAccessToken       string  `json:"system_access_token"`
+	ExchangeRate            float64 `json:"exchange_rate"`
+	Notes                   string  `json:"notes"`
+	SuppressLowBalanceAlert bool    `json:"suppress_low_balance_alert"`
+}
+
+var providerWriteMu sync.Mutex
+
+func newProviderID() (string, error) {
+	id := make([]byte, 12)
+	if _, err := rand.Read(id); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(id), nil
+}
+
+func (h *AccountHandler) providerRecords(c *gin.Context) ([]providerRecord, error) {
+	var records []providerRecord
+	err := h.providerSettings.LoadProviderRecords(c.Request.Context(), &records)
+	return records, err
+}
+
+func validateProviderInput(input *providerInput, previous *providerRecord) (providerRecord, string, error) {
+	if input == nil {
+		return providerRecord{}, "", errors.New("missing provider")
+	}
+	base, err := normalizeProviderURL(input.BaseURL)
+	if err != nil {
+		return providerRecord{}, "", err
+	}
+	name := strings.TrimSpace(input.Name)
+	if len(name) == 0 || len(name) > 120 || len(input.Notes) > 1000 || len(input.Account) > 320 ||
+		strings.IndexFunc(name, unicode.IsControl) >= 0 || strings.IndexFunc(input.Account, unicode.IsControl) >= 0 {
+		return providerRecord{}, "", errors.New("invalid provider name or notes")
+	}
+	if len(input.Password) > 1024 {
+		return providerRecord{}, "", errors.New("login credential is too long")
+	}
+	if input.SiteType != "sub2api" && input.SiteType != "newapi" {
+		return providerRecord{}, "", errors.New("unsupported provider type")
+	}
+	if input.AuthMode == "api_key" {
+		input.AuthMode = "token"
+	}
+	if input.AuthMode != "password" && input.AuthMode != "token" {
+		return providerRecord{}, "", errors.New("unsupported login mode")
+	}
+	if input.AuthMode == "password" && strings.TrimSpace(input.Account) == "" {
+		return providerRecord{}, "", errors.New("login account is required")
+	}
+	userID := ""
+	if input.SiteType == "newapi" && input.AuthMode == "token" {
+		userID = strings.TrimSpace(input.UserID)
+		if len(userID) > 128 || strings.IndexFunc(userID, unicode.IsControl) >= 0 {
+			return providerRecord{}, "", errors.New("the New API user ID must be an identifier without control characters (up to 128 bytes)")
+		}
+		// A personal access token (nap_…) identifies its account by itself; only
+		// a legacy system access token is sent with the account's user ID. A kept
+		// token still carries the user ID it was saved with.
+		token := strings.TrimSpace(input.SystemAccessToken)
+		if userID == "" && token != "" && !newAPIPersonalToken(token) {
+			return providerRecord{}, "", errors.New("a legacy New API system access token requires the user ID; personal access tokens (nap_…) do not")
+		}
+	}
+	if math.IsNaN(input.ExchangeRate) || math.IsInf(input.ExchangeRate, 0) || input.ExchangeRate < 0 || input.ExchangeRate > 1e6 {
+		return providerRecord{}, "", errors.New("invalid exchange rate")
+	}
+	rate := input.ExchangeRate
+	if rate == 0 {
+		rate = 1
+	}
+	record := providerRecord{Name: name, SiteType: input.SiteType, BaseURL: base,
+		AuthMode: input.AuthMode, Account: strings.TrimSpace(input.Account), ExchangeRate: rate,
+		UserID: userID, Notes: strings.TrimSpace(input.Notes), SuppressLowBalanceAlert: input.SuppressLowBalanceAlert}
+	secret := input.Password
+	if input.AuthMode == "token" {
+		if input.SiteType == "sub2api" {
+			if input.AccessToken != "" || input.RefreshToken != "" {
+				secret, err = encodeProviderToken(input.AccessToken, input.RefreshToken, input.TokenType)
+				if err != nil {
+					return providerRecord{}, "", err
+				}
+			} else {
+				secret = ""
+			}
+		} else {
+			if input.SystemAccessToken != "" {
+				if strings.HasPrefix(strings.ToLower(strings.TrimSpace(input.SystemAccessToken)), "sk-") {
+					return providerRecord{}, "", errors.New("the New API site requires the user system access token, not an sk- model API key")
+				}
+				secret, err = encodeProviderToken(input.SystemAccessToken, "", "Bearer")
+				if err != nil {
+					return providerRecord{}, "", err
+				}
+			} else {
+				secret = ""
+			}
+		}
+	}
+	if previous != nil {
+		record.ID = previous.ID
+		record.Revision = previous.Revision
+		record.WalletID = previous.WalletID
+		record.SupplierID = previous.SupplierID
+		oldMode := previous.AuthMode
+		if oldMode == "api_key" {
+			oldMode = "token"
+		}
+		sameSource := base == previous.BaseURL && input.SiteType == previous.SiteType && input.AuthMode == oldMode && strings.TrimSpace(input.Account) == previous.Account && userID == previous.UserID
+		if sameSource {
+			// A failed probe during a name or credential edit must keep the last
+			// observed balance. Never reuse it for a different upstream account.
+			record.Metrics = previous.Metrics
+			record.UpdatedAt = previous.UpdatedAt
+		}
+		if sameSource && !record.SuppressLowBalanceAlert {
+			record.AlertSent = previous.AlertSent
+			record.LowBalanceAlert = previous.LowBalanceAlert
+		}
+		// Never send a saved credential to a different origin during an edit/probe.
+		if secret == "" && base == previous.BaseURL && input.SiteType == previous.SiteType && input.AuthMode == oldMode && strings.TrimSpace(input.Account) == previous.Account && userID == previous.UserID {
+			record.SecretEncrypted = previous.SecretEncrypted
+		}
+	}
+	if len(secret) > 8192 {
+		return providerRecord{}, "", errors.New("login credential is too long")
+	}
+	if secret == "" && record.SecretEncrypted == "" {
+		return providerRecord{}, "", errors.New("login credential is required")
+	}
+	return record, secret, nil
+}
+
+func (h *AccountHandler) probeRecord(c *gin.Context, record *providerRecord, secret string) error {
+	return h.probeRecordContext(c.Request.Context(), record, secret)
+}
+
+func (h *AccountHandler) probeRecordContext(ctx context.Context, record *providerRecord, secret string) error {
+	now := time.Now().UTC()
+	record.AttemptedAt = &now
+	if secret == "" {
+		if h.providerEncryptor == nil {
+			return errors.New("provider encryption unavailable")
+		}
+		var err error
+		secret, err = h.providerEncryptor.Decrypt(record.SecretEncrypted)
+		if err != nil {
+			return errProviderStoredLogin
+		}
+	}
+	probe, probeErr := probeProvider(ctx, *record, secret)
+	effectiveSecret := probe.secret
+	if effectiveSecret == "" {
+		effectiveSecret = secret
+	}
+	if effectiveSecret != "" {
+		if h.providerEncryptor == nil {
+			return errors.New("provider encryption unavailable")
+		}
+		ciphertext, err := h.providerEncryptor.Encrypt(effectiveSecret)
+		if err != nil {
+			return errors.New("could not protect provider login")
+		}
+		record.SecretEncrypted = ciphertext
+	}
+	if probeErr != nil {
+		return probeErr
+	}
+	if record.SiteType == "newapi" && record.AuthMode == "token" && record.UserID == "" {
+		// Shown in the form; a personal access token never sends it. A
+		// configured ID is kept even when the site reports another or none.
+		record.UserID = probe.userID
+	}
+	record.Metrics = probe.metrics
+	record.Status = "connected"
+	record.LastError = ""
+	record.ErrorKind = ""
+	now = time.Now().UTC()
+	record.UpdatedAt = &now
+	return nil
+}
+
+// markProviderDisconnected records a failed probe. The last observed balance
+// is kept; a remote failure does not invalidate it.
+func markProviderDisconnected(record *providerRecord, err error) {
+	record.Status = "disconnected"
+	record.LastError = providerPublicError(err)
+	record.ErrorKind = providerFailureKind(err)
+}
+
+// providerFailureKind classifies a failed probe for providerRecord.ErrorKind:
+// a login the provider no longer accepts is "auth", a token that signs in but
+// lacks a permission is "scope", and other failures, such as an unreachable
+// site, are "".
+func providerFailureKind(err error) string {
+	var scope *providerScopeError
+	switch {
+	case errors.As(err, &scope):
+		return "scope"
+	case errors.Is(err, errProviderAuthentication), errors.Is(err, errProviderStoredLogin),
+		errors.Is(err, errProviderTwoFactor), errors.Is(err, errProviderTurnstile):
+		return "auth"
+	default:
+		return ""
+	}
+}
+
+// Protect the submitted credential before contacting a remote site. A failed
+// probe must still leave a usable, encrypted login in the saved record.
+func (h *AccountHandler) protectProviderCredential(record *providerRecord, secret string) error {
+	if h.providerEncryptor == nil {
+		return errors.New("provider encryption unavailable")
+	}
+	if secret == "" {
+		if record.SecretEncrypted == "" {
+			return errors.New("provider login is unavailable")
+		}
+		return nil
+	}
+	ciphertext, err := h.providerEncryptor.Encrypt(secret)
+	if err != nil {
+		return errors.New("could not protect provider login")
+	}
+	record.SecretEncrypted = ciphertext
+	return nil
+}
+
+// ListProviders returns ten records at a time and an overview for the whole list.
+func (h *AccountHandler) ListProviders(c *gin.Context) {
+	query := strings.ToLower(strings.TrimSpace(c.Query("search")))
+	if len([]rune(query)) > 200 {
+		response.BadRequest(c, "Search is too long")
+		return
+	}
+	filter := strings.TrimSpace(c.Query("status"))
+	if filter != "" && filter != "connected" && filter != "disconnected" {
+		response.BadRequest(c, "Invalid status")
+		return
+	}
+	records, err := h.providerRecords(c)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to load providers")
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	const size = 10
+	filtered := make([]providerView, 0, len(records))
+	connected := 0
+	var totalBalance float64
+	for _, record := range records {
+		if record.Status == "connected" {
+			connected++
+		}
+		if record.Metrics.Balance != nil {
+			totalBalance += *record.Metrics.Balance * record.ExchangeRate
+		}
+		if query != "" && !strings.Contains(strings.ToLower(record.Name+" "+record.BaseURL), query) {
+			continue
+		}
+		if filter != "" && filter != record.Status {
+			continue
+		}
+		filtered = append(filtered, record.view())
+	}
+	pages := (len(filtered) + size - 1) / size
+	if pages == 0 {
+		pages = 1
+	}
+	if page > pages {
+		page = pages
+	}
+	start := (page - 1) * size
+	end := start + size
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	c.Header("Cache-Control", "private, no-store")
+	response.Success(c, gin.H{
+		"items": filtered[start:end], "total": len(filtered), "page": page, "page_size": size, "pages": pages,
+		"overview": gin.H{"provider_count": len(records), "connected_count": connected, "upstream_total_balance": totalBalance},
+	})
+}
+
+func (h *AccountHandler) ProbeProvider(c *gin.Context) {
+	var input providerInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, "Invalid provider")
+		return
+	}
+	var previous *providerRecord
+	if input.ID != "" {
+		records, err := h.providerRecords(c)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "Could not load provider")
+			return
+		}
+		for index := range records {
+			if records[index].ID == input.ID {
+				previous = &records[index]
+				break
+			}
+		}
+		if previous == nil {
+			response.NotFound(c, "Provider not found")
+			return
+		}
+	}
+	record, secret, err := validateProviderInput(&input, previous)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	// Testing a form must not consume a one-use refresh token. The Save and
+	// Refresh actions can rotate it because they persist the resulting login.
+	if record.SiteType == "sub2api" && record.AuthMode == "token" {
+		tested := secret
+		if tested == "" && h.providerEncryptor != nil {
+			tested, err = h.providerEncryptor.Decrypt(record.SecretEncrypted)
+		}
+		credential, decodeErr := decodeProviderToken(tested)
+		if err != nil || decodeErr != nil {
+			response.BadRequest(c, "Could not read provider login")
+			return
+		}
+		if credential.AccessToken == "" {
+			response.BadRequest(c, "Refresh Token 请直接保存验证；测试登录需要 Access Token，以免消耗一次性刷新令牌。")
+			return
+		}
+		secret, err = encodeProviderToken(credential.AccessToken, "", credential.TokenType)
+		if err != nil {
+			response.BadRequest(c, "Invalid provider token")
+			return
+		}
+	}
+	if err := h.probeRecord(c, &record, secret); err != nil {
+		response.Error(c, http.StatusBadGateway, providerPublicError(err))
+		return
+	}
+
+	response.Success(c, record.view())
+}
+
+func (h *AccountHandler) CreateProvider(c *gin.Context) {
+	var input providerInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, "Invalid provider")
+		return
+	}
+	record, secret, err := validateProviderInput(&input, nil)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if err := h.protectProviderCredential(&record, secret); err != nil {
+		response.Error(c, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	if err := h.probeRecord(c, &record, secret); err != nil {
+		markProviderDisconnected(&record, err)
+	} else {
+		h.updateCachedProviderWarning(c.Request.Context(), &record)
+	}
+	record.ID, err = newProviderID()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Could not create provider")
+		return
+	}
+	providerWriteMu.Lock()
+	defer providerWriteMu.Unlock()
+	err = h.saveProviderRecord(c.Request.Context(), &record)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Created(c, record.view())
+}
+
+func (h *AccountHandler) UpdateProvider(c *gin.Context) {
+	var input providerInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, "Invalid provider")
+		return
+	}
+	providerWriteMu.Lock()
+	defer providerWriteMu.Unlock()
+	records, err := h.providerRecords(c)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Could not load providers")
+		return
+	}
+	for index := range records {
+		if records[index].ID != c.Param("id") {
+			continue
+		}
+		if input.Revision != records[index].Revision {
+			response.Error(c, 409, "Provider changed; reload before saving")
+			return
+		}
+		record, secret, err := validateProviderInput(&input, &records[index])
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		if err := h.protectProviderCredential(&record, secret); err != nil {
+			response.Error(c, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		if err := h.probeRecord(c, &record, secret); err != nil {
+			markProviderDisconnected(&record, err)
+		} else {
+			h.updateCachedProviderWarning(c.Request.Context(), &record)
+		}
+		records[index] = record
+		if err := h.saveProviderRecord(c.Request.Context(), &records[index]); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		response.Success(c, records[index].view())
+		return
+	}
+	response.NotFound(c, "Provider not found")
+}
+
+func (h *AccountHandler) RefreshProvider(c *gin.Context) {
+	providerWriteMu.Lock()
+	defer providerWriteMu.Unlock()
+	records, err := h.providerRecords(c)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Could not load providers")
+		return
+	}
+	for index := range records {
+		if records[index].ID != c.Param("id") {
+			continue
+		}
+		probeErr := h.probeRecord(c, &records[index], "")
+		if probeErr != nil {
+			markProviderDisconnected(&records[index], probeErr)
+		} else {
+			h.updateCachedProviderWarning(c.Request.Context(), &records[index])
+		}
+		if err := h.saveProviderRecord(c.Request.Context(), &records[index]); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if probeErr != nil {
+			response.Error(c, http.StatusBadGateway, providerPublicError(probeErr))
+			return
+		}
+		response.Success(c, records[index].view())
+		return
+	}
+	response.NotFound(c, "Provider not found")
+}
+
+func (h *AccountHandler) DeleteProvider(c *gin.Context) {
+	providerWriteMu.Lock()
+	defer providerWriteMu.Unlock()
+	records, err := h.providerRecords(c)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Could not load providers")
+		return
+	}
+	for index := range records {
+		if records[index].ID == c.Param("id") {
+			if err := h.providerSettings.DeleteCS1Provider(c.Request.Context(), records[index].ID, records[index].Revision); err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			response.Success(c, gin.H{"deleted": true})
+			return
+		}
+	}
+	response.NotFound(c, "Provider not found")
+}

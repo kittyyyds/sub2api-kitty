@@ -1,0 +1,488 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+var (
+	ErrScheduledTestVoteUnavailable = errors.New("this voting round is unavailable")
+	ErrScheduledTestVoteInvalid     = errors.New("vote must be pass or fail")
+)
+
+type ScheduledTestProtectionConfig struct {
+	RequiredConsecutivePasses int                            `json:"required_consecutive_passes,omitempty"`
+	Enabled                   bool                           `json:"enabled"`
+	Rules                     []ScheduledTestProtectionRule  `json:"rules"`
+	Mode                      string                         `json:"mode,omitempty"`
+	Combinations              []ScheduledTestCombinationRule `json:"combinations,omitempty"`
+	PassGroupIDs              []int64                        `json:"pass_group_ids,omitempty"`
+	OnPass                    *ScheduledTestOutcomeAction    `json:"on_pass,omitempty"`
+	OnFail                    *ScheduledTestOutcomeAction    `json:"on_fail,omitempty"`
+}
+
+type ScheduledTestProtectionRule struct {
+	AutoReview       *ScheduledTestAutoReviewConfig `json:"auto_review,omitempty"`
+	PassRate         *ScheduledTestPassRateConfig   `json:"pass_rate,omitempty"`
+	Priority         int                            `json:"priority"`
+	RequiredPass     bool                           `json:"required_pass"`
+	TestDefinitionID int64                          `json:"test_definition_id"`
+	Thresholds       []ScheduledTestThreshold       `json:"thresholds,omitempty"`
+	MinSamples       int64                          `json:"min_samples,omitempty"`
+	PauseOnFailure   bool                           `json:"pause_on_failure,omitempty"`
+	ExpectedAnswer   string                         `json:"expected_answer,omitempty"`
+	AnswerMatch      string                         `json:"answer_match,omitempty"`
+	ModelMatch       string                         `json:"model_match,omitempty"`
+	Vote             *ScheduledTestVoteConfig       `json:"vote,omitempty"`
+	OnPass           *ScheduledTestOutcomeAction    `json:"on_pass,omitempty"`
+	OnFail           *ScheduledTestOutcomeAction    `json:"on_fail,omitempty"`
+}
+
+type ScheduledTestThreshold struct {
+	Metric   string  `json:"metric"`
+	Operator string  `json:"operator"`
+	Value    float64 `json:"value"`
+}
+
+type ScheduledTestVoteConfig struct {
+	Enabled       bool `json:"enabled"`
+	PublicEnabled bool `json:"public_enabled,omitempty"`
+	RejectAbove   int  `json:"reject_above"`
+	PassAtLeast   int  `json:"pass_at_least"`
+}
+
+type ScheduledTestVotingSummary struct {
+	Enabled         bool   `json:"enabled"`
+	Open            bool   `json:"open"`
+	PassCount       int    `json:"pass_count"`
+	FailCount       int    `json:"fail_count"`
+	MyVote          string `json:"my_vote,omitempty"`
+	RejectAbove     int    `json:"reject_above"`
+	PassAtLeast     int    `json:"pass_at_least"`
+	ReferenceAnswer string `json:"reference_answer,omitempty"`
+	AccountPaused   bool   `json:"account_paused"`
+}
+
+type ScheduledTestVoteResult struct {
+	Result *ScheduledTestResult       `json:"result"`
+	Voting ScheduledTestVotingSummary `json:"voting"`
+}
+
+// Optional repository capability keeps legacy execution adapters compatible.
+// State transitions and ballot authorization must be checked transactionally.
+type ScheduledTestProtectionRepository interface {
+	ListDetectionAccountIDs(context.Context, *int64, *int64) ([]int64, error)
+	BeginProtection(context.Context, *ScheduledTestResult, ScheduledTestProtectionRule) error
+	CompleteProtection(context.Context, *ScheduledTestResult, string, string) error
+	ListVotingResults(context.Context, int64) ([]*ScheduledTestVoteResult, error)
+	CastTestVote(context.Context, int64, int64, string) (*ScheduledTestVoteResult, error)
+	ClearPlanProtection(context.Context, int64) error
+}
+
+func (p *ScheduledTestPlan) ProtectionRule(definitionID *int64) *ScheduledTestProtectionRule {
+	if p == nil || !p.Enabled || !p.Protection.Enabled || definitionID == nil {
+		return nil
+	}
+	for i := range p.Protection.Rules {
+		if p.Protection.Rules[i].TestDefinitionID == *definitionID {
+			return &p.Protection.Rules[i]
+		}
+	}
+	return nil
+}
+
+func validateScheduledTestProtection(plan *ScheduledTestPlan) error {
+	config := &plan.Protection
+	if config.Mode != "" && config.Mode != "per_test" && config.Mode != "combined" && config.Mode != "all_pass" {
+		return fmt.Errorf("protection mode must be per_test, combined or all_pass")
+	}
+	if !config.Enabled {
+		return nil
+	}
+	if len(config.Rules) == 0 || len(config.Rules) > 32 {
+		return fmt.Errorf("automatic protection requires between 1 and 32 rules")
+	}
+	// Automatic visual results always retain an administrator correction path.
+	for i := range config.Rules {
+		rule := &config.Rules[i]
+		// In the simple round-based mode a successful new round must not wait
+		// for historical failures to age out of a second, independent gate.
+		if config.UsesAllPass() && rule.PassRate != nil && rule.PassRate.Enabled {
+			rule.PassRate.WindowSize = 1
+			rule.PassRate.RecoverConsecutive = 1
+			rule.PassRate.PauseBelow = 100
+			rule.PassRate.RecoverAtLeast = 100
+			rule.PassRate.PauseOnSingleFailure = true
+		}
+		if rule.UsesAutoReview() {
+			if rule.Vote == nil {
+				rule.Vote = &ScheduledTestVoteConfig{PassAtLeast: 1}
+			}
+			rule.Vote.Enabled = true
+			if rule.Vote.PassAtLeast == 0 {
+				rule.Vote.PassAtLeast = 1
+			}
+		}
+	}
+	if err := validateScheduledTestAllPass(plan); err != nil {
+		return err
+	}
+	selected := make(map[int64]bool, len(plan.TestDefinitionIDs))
+	for _, id := range plan.TestDefinitionIDs {
+		selected[id] = true
+	}
+	seen := map[int64]bool{}
+	for i := range config.Rules {
+		rule := &config.Rules[i]
+		if err := rule.PassRate.Validate(); err != nil {
+			return err
+		}
+		if !selected[rule.TestDefinitionID] || seen[rule.TestDefinitionID] {
+			return fmt.Errorf("protection rules must refer to distinct selected test definitions")
+		}
+		seen[rule.TestDefinitionID] = true
+		if !config.UsesCombinations() && (rule.Priority < 0 || rule.Priority > 1000) {
+			return fmt.Errorf("priority must be between 0 and 1000")
+		}
+		if !config.UsesCombinations() && rule.RequiredPass && rule.Vote != nil && rule.Vote.Enabled && !rule.UsesAutoReview() {
+			return fmt.Errorf("required_pass only supports automatic conditions")
+		}
+		if !config.UsesCombinations() {
+			if err := validateScheduledTestActions(rule); err != nil {
+				return err
+			}
+		}
+		for _, groupID := range rule.ManagedGroupIDs() {
+			if !config.UsesCombinations() && !slices.Contains(plan.GroupIDs, groupID) {
+				return fmt.Errorf("action group %d must be selected in group_ids", groupID)
+			}
+		}
+		if rule.MinSamples < 0 || rule.MinSamples > 1000000000 {
+			return fmt.Errorf("min_samples must be between 0 and 1000000000")
+		}
+		rule.ExpectedAnswer = strings.TrimSpace(rule.ExpectedAnswer)
+		if len([]rune(rule.ExpectedAnswer)) > 10000 {
+			return fmt.Errorf("expected_answer must be at most 10000 characters")
+		}
+		if rule.AnswerMatch == "" {
+			rule.AnswerMatch = "exact"
+		}
+		switch rule.AnswerMatch {
+		case "exact", "contains", "numeric":
+		default:
+			return fmt.Errorf("answer_match must be exact, contains, or numeric")
+		}
+		if rule.ModelMatch != "" && rule.ModelMatch != "exact" && rule.ModelMatch != "snapshot" {
+			return fmt.Errorf("model_match must be exact or snapshot")
+		}
+		voting := rule.Vote != nil && rule.Vote.Enabled
+		if rule.Vote != nil && rule.Vote.PublicEnabled && !voting {
+			return fmt.Errorf("public voting requires review to be enabled")
+		}
+		if voting && (rule.Vote.RejectAbove < 0 || rule.Vote.PassAtLeast < 1 || rule.Vote.RejectAbove > 1000000 || rule.Vote.PassAtLeast > 1000000) {
+			return fmt.Errorf("reject_above must be non-negative and pass_at_least positive (maximum 1000000)")
+		}
+		if !voting && rule.ExpectedAnswer != "" && rule.AnswerMatch == "numeric" {
+			v, err := strconv.ParseFloat(rule.ExpectedAnswer, 64)
+			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+				return fmt.Errorf("numeric expected_answer must be finite")
+			}
+		}
+		if len(rule.Thresholds) > 20 {
+			return fmt.Errorf("at most 20 thresholds per test are supported")
+		}
+		for _, threshold := range rule.Thresholds {
+			if threshold.Operator != "lt" && threshold.Operator != "gt" {
+				return fmt.Errorf("threshold operator must be lt or gt")
+			}
+			if math.IsNaN(threshold.Value) || math.IsInf(threshold.Value, 0) {
+				return fmt.Errorf("threshold must be finite")
+			}
+			switch threshold.Metric {
+			case "latency_ms":
+				if threshold.Value < 0 {
+					return fmt.Errorf("latency threshold cannot be negative")
+				}
+			case "output_numeric":
+			default:
+				return fmt.Errorf("unsupported protection metric %q", threshold.Metric)
+			}
+		}
+	}
+	return validateScheduledTestCombinations(plan)
+}
+
+func validateProtectionOutputKind(rule *ScheduledTestProtectionRule, kind string) error {
+	if kind == "statistics" {
+		return fmt.Errorf("statistics protection has been retired")
+	}
+	if rule == nil {
+		return nil
+	}
+	if rule.AutoReview != nil && rule.AutoReview.Enabled && kind != "html" {
+		return fmt.Errorf("automatic visual review requires HTML/SVG output")
+	}
+	if rule.PassRate != nil && rule.PassRate.Enabled && kind != "capability" && kind != "model_check" {
+		hasAbilityCondition := rule.ExpectedAnswer != "" || rule.Vote != nil && rule.Vote.Enabled || rule.UsesAutoReview()
+		for _, threshold := range rule.Thresholds {
+			hasAbilityCondition = hasAbilityCondition || threshold.Metric == "output_numeric"
+		}
+		if !hasAbilityCondition {
+			return fmt.Errorf("pass_rate requires an answer, numeric threshold, or review condition")
+		}
+	}
+	if kind == "model_check" {
+		if (rule.Vote != nil && rule.Vote.Enabled) || rule.ExpectedAnswer != "" {
+			return fmt.Errorf("model consistency uses response metadata and cannot use answer comparison or voting")
+		}
+		if rule.ModelMatch == "" {
+			rule.ModelMatch = "exact"
+		}
+	} else {
+		if rule.ModelMatch != "" {
+			return fmt.Errorf("model_match requires a model_check test")
+		}
+		if kind != "capability" && (rule.Vote == nil || !rule.Vote.Enabled) && !rule.PauseOnFailure && rule.ExpectedAnswer == "" && len(rule.Thresholds) == 0 && rule.OnFail == nil {
+			return fmt.Errorf("each protection rule needs a threshold, answer, voting, or failure check")
+		}
+	}
+	if kind == "capability" && ((rule.Vote != nil && rule.Vote.Enabled) || rule.ExpectedAnswer != "") {
+		return fmt.Errorf("%s cannot use answer comparison or voting", kind)
+	}
+	for _, threshold := range rule.Thresholds {
+		switch threshold.Metric {
+		case "output_numeric":
+			if kind != "number" {
+				return fmt.Errorf("output_numeric requires a numeric test")
+			}
+		case "latency_ms":
+		default:
+			return fmt.Errorf("unsupported protection metric %q", threshold.Metric)
+		}
+	}
+	return nil
+}
+
+// Missing observations are inconclusive, never a synthetic zero or a pass that
+// could release an existing suspension. Any observed violation wins.
+func evaluateScheduledTestProtection(rule ScheduledTestProtectionRule, result *ScheduledTestResult) (string, string) {
+	if QualityResultDeferred(result) {
+		return "pending", result.ErrorMessage
+	}
+	if result == nil || result.Status == "pending" || result.Status == "running" {
+		return "pending", "检测未完成，等待下一轮"
+	}
+	if verdict, reason := EvaluateScheduledTestDuration(rule, result); verdict != "pass" {
+		return verdict, reason
+	}
+	if result.Status != "success" && result.Status != "passed" {
+		// A configured failure action is an explicit request to resolve an
+		// unsuccessful execution as a failed quality check.  This lets rules
+		// such as Candy immediately run their on_fail group/scheduling action
+		// after the final retry, while preserving the legacy pending behavior
+		// for rules that have neither an action nor pause_on_failure enabled.
+		if rule.PauseOnFailure || rule.OnFail != nil {
+			return "fail", "检测执行失败"
+		}
+		return "pending", "检测未完成，等待下一轮"
+	}
+	if rule.UsesAutoReview() {
+		if result.ExecutionInfo == nil || result.ExecutionInfo.AutoReview == nil {
+			return "pending", "等待自动视觉评审"
+		}
+		review := result.ExecutionInfo.AutoReview
+		if review.Verdict != "pass" {
+			if review.Verdict == "fail" {
+				return "fail", review.Reason
+			}
+			return "pending", review.Reason
+		}
+	}
+	missing := false
+	if result.OutputKind == "capability" {
+		if result.ExecutionInfo == nil || result.ExecutionInfo.Capability == nil || result.ExecutionInfo.Capability.Verdict == "pending" {
+			return "pending", "能力检测未完成，等待复测"
+		}
+		if result.ExecutionInfo.Capability.Verdict != "pass" {
+			return "fail", "随机能力检测未达到通过标准"
+		}
+	}
+	if result.OutputKind == "model_check" {
+		check := result.OutputModelCheck
+		if check != nil && check.Verdict == "fail" {
+			return "fail", "上游返回模型与实际请求模型不一致"
+		}
+		missing = check == nil || check.Verdict != "pass"
+	}
+	for _, threshold := range rule.Thresholds {
+		if threshold.Metric == "latency_ms" {
+			continue // Checked independently, including on administrator-reviewed results.
+		}
+		value, ok := scheduledTestMetric(result, threshold.Metric, rule.MinSamples)
+		if !ok {
+			missing = true
+			continue
+		}
+		comparisonValue, comparisonThreshold := value, threshold.Value
+		if (threshold.Operator == "lt" && comparisonValue < comparisonThreshold) || (threshold.Operator == "gt" && comparisonValue > comparisonThreshold) {
+			return "fail", scheduledTestThresholdReason(threshold, value)
+		}
+	}
+	if rule.ExpectedAnswer != "" && (rule.Vote == nil || !rule.Vote.Enabled) {
+		answer := strings.TrimSpace(result.ResponseText)
+		matched := false
+		switch rule.AnswerMatch {
+		case "contains":
+			matched = strings.Contains(answer, rule.ExpectedAnswer)
+		case "numeric":
+			value, ok := scheduledTestMetric(result, "output_numeric", 0)
+			if !ok {
+				value, ok = extractScheduledTestNumber(result.ResponseText)
+			}
+			expected, err := strconv.ParseFloat(rule.ExpectedAnswer, 64)
+			matched = ok && err == nil && value == expected
+		default:
+			matched = answer == rule.ExpectedAnswer
+		}
+		if !matched {
+			return "fail", "检测答案不符合配置"
+		}
+	}
+	if missing {
+		if result.OutputKind == "model_check" {
+			return "pending", "缺少有效模型标识，无法确认一致性"
+		}
+		return "pending", "有效样本不足，等待下一轮"
+	}
+	return "pass", ""
+}
+
+func (r ScheduledTestProtectionRule) HasDurationThreshold() bool {
+	for _, threshold := range r.Thresholds {
+		if threshold.Metric == "latency_ms" {
+			return true
+		}
+	}
+	return false
+}
+
+// A configured duration condition is independent of content review. Missing or
+// unfinished timing cannot release a hold; a human approval cannot erase it.
+func EvaluateScheduledTestDuration(rule ScheduledTestProtectionRule, result *ScheduledTestResult) (string, string) {
+	if !rule.HasDurationThreshold() {
+		return "pass", ""
+	}
+	if result == nil || QualityResultDeferred(result) || result.Status == "" || result.Status == "pending" || result.Status == "running" || result.LatencyMs < 0 {
+		return "pending", "等待完整检测耗时"
+	}
+	if result.Status != "success" && result.Status != "passed" {
+		return "fail", "检测执行失败"
+	}
+	for _, threshold := range rule.Thresholds {
+		if threshold.Metric != "latency_ms" {
+			continue
+		}
+		value := float64(result.LatencyMs)
+		if (threshold.Operator == "gt" && value > threshold.Value) || (threshold.Operator == "lt" && value < threshold.Value) {
+			return "fail", scheduledTestThresholdReason(threshold, value)
+		}
+	}
+	return "pass", ""
+}
+
+func scheduledTestThresholdReason(threshold ScheduledTestThreshold, observed float64) string {
+	label, unit := threshold.Metric, ""
+	switch threshold.Metric {
+	case "latency_ms":
+		label, unit = "检测总耗时", "ms"
+	case "output_numeric":
+		label = "输出数值"
+	}
+	operator := "小于"
+	if threshold.Operator == "gt" {
+		operator = "大于"
+	}
+	return fmt.Sprintf("%s%s%g%s（实际 %g%s）", label, operator, threshold.Value, unit, observed, unit)
+}
+
+func scheduledTestMetric(result *ScheduledTestResult, metric string, _ int64) (float64, bool) {
+	var value *float64
+	switch metric {
+	case "latency_ms":
+		if result.LatencyMs < 0 {
+			return 0, false
+		}
+		return float64(result.LatencyMs), true
+	case "output_numeric":
+		// Use the same extraction as result display. Persisted numeric output
+		// may have been derived by an older parser; source text is authoritative.
+		if strings.EqualFold(strings.TrimSpace(result.OutputKind), "number") && strings.TrimSpace(result.ResponseText) != "" {
+			return extractScheduledTestNumber(result.ResponseText)
+		}
+		value = result.OutputNumeric
+
+	}
+	if value == nil || math.IsNaN(*value) || math.IsInf(*value, 0) {
+		return 0, false
+	}
+	return *value, true
+}
+
+func (s *ScheduledTestService) protectionRepository() ScheduledTestProtectionRepository {
+	if s == nil {
+		return nil
+	}
+	repo, _ := s.resultRepo.(ScheduledTestProtectionRepository)
+	return repo
+}
+
+func (s *ScheduledTestService) ListVotingResults(ctx context.Context, userID int64) ([]*ScheduledTestVoteResult, error) {
+	repo := s.protectionRepository()
+	if repo == nil {
+		return nil, ErrScheduledTestVoteUnavailable
+	}
+	rows, err := repo.ListVotingResults(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		rows = []*ScheduledTestVoteResult{}
+	}
+	for _, row := range rows {
+		sanitizeTestVoteResult(row)
+	}
+	return rows, nil
+}
+
+func (s *ScheduledTestService) CastTestVote(ctx context.Context, userID, resultID int64, vote string) (*ScheduledTestVoteResult, error) {
+	if vote != "pass" && vote != "fail" {
+		return nil, ErrScheduledTestVoteInvalid
+	}
+	if userID <= 0 || resultID <= 0 {
+		return nil, ErrScheduledTestVoteUnavailable
+	}
+	repo := s.protectionRepository()
+	if repo == nil {
+		return nil, ErrScheduledTestVoteUnavailable
+	}
+	row, err := repo.CastTestVote(ctx, userID, resultID, vote)
+	if err != nil {
+		return nil, err
+	}
+	sanitizeTestVoteResult(row)
+	return row, nil
+}
+
+func sanitizeTestVoteResult(row *ScheduledTestVoteResult) {
+	if row == nil || row.Result == nil {
+		return
+	}
+	row.Result.AccountName = ""
+	row.Result.ErrorMessage = ""
+	normalizeStoredTestResults([]*ScheduledTestResult{row.Result})
+}
