@@ -141,7 +141,7 @@ func TestOpenAITokenProvider_CacheHit(t *testing.T) {
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
 		Credentials: map[string]any{
-			"access_token": "db-token",
+			"access_token": "cached-token",
 		},
 	}
 	cacheKey := OpenAITokenCacheKey(account)
@@ -821,24 +821,26 @@ func TestOpenAITokenProvider_Real_LockRace_PollingHitsCache(t *testing.T) {
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
 		Credentials: map[string]any{
-			"access_token":  "fallback-token",
-			"refresh_token": "refresh-token",
-			"expires_at":    expiresAt,
+			"access_token":       "fallback-token",
+			"refresh_token":      "refresh-token",
+			"chatgpt_account_id": "same-account", "chatgpt_user_id": "same-user",
+			"expires_at": expiresAt,
 		},
 	}
 
+	winner := kittyCacheOwnerJWT("same-account", "same-user")
 	cacheKey := OpenAITokenCacheKey(account)
 	go func() {
 		time.Sleep(5 * time.Millisecond)
 		cache.mu.Lock()
-		cache.tokens[cacheKey] = "winner-token"
+		cache.tokens[cacheKey] = winner
 		cache.mu.Unlock()
 	}()
 
 	provider := NewOpenAITokenProvider(nil, cache, nil)
 	token, err := provider.GetAccessToken(context.Background(), account)
 	require.NoError(t, err)
-	require.Equal(t, "winner-token", token)
+	require.Equal(t, winner, token)
 }
 
 func TestOpenAITokenProvider_Real_LockRace_ContextCanceled(t *testing.T) {
@@ -879,23 +881,25 @@ func TestOpenAITokenProvider_RuntimeMetrics_LockWaitHitAndSnapshot(t *testing.T)
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
 		Credentials: map[string]any{
-			"access_token":  "fallback-token",
-			"refresh_token": "refresh-token",
-			"expires_at":    expiresAt,
+			"access_token":       "fallback-token",
+			"refresh_token":      "refresh-token",
+			"chatgpt_account_id": "same-account", "chatgpt_user_id": "same-user",
+			"expires_at": expiresAt,
 		},
 	}
+	winner := kittyCacheOwnerJWT("same-account", "same-user")
 	cacheKey := OpenAITokenCacheKey(account)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		cache.mu.Lock()
-		cache.tokens[cacheKey] = "winner-token"
+		cache.tokens[cacheKey] = winner
 		cache.mu.Unlock()
 	}()
 
 	provider := NewOpenAITokenProvider(nil, cache, nil)
 	token, err := provider.GetAccessToken(context.Background(), account)
 	require.NoError(t, err)
-	require.Equal(t, "winner-token", token)
+	require.Equal(t, winner, token)
 
 	metrics := provider.SnapshotRuntimeMetrics()
 	require.GreaterOrEqual(t, metrics.RefreshRequests, int64(1))

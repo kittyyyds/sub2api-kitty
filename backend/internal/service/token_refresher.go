@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -102,28 +104,22 @@ func (r *OpenAITokenRefresher) CanRefresh(account *Account) bool {
 
 // NeedsRefresh 检查token是否需要刷新
 // expires_at 缺失且处于限流状态时需要刷新，防止限流期间 token 静默过期
-func (r *OpenAITokenRefresher) NeedsRefresh(account *Account, refreshWindow time.Duration) bool {
-	if account.IsOpenAIPersonalAccessToken() {
+func (r *OpenAITokenRefresher) NeedsRefresh(account *Account, _ time.Duration) bool {
+	if account.IsOpenAIPersonalAccessToken() || account.IsOpenAIAgentIdentity() || strings.HasPrefix(strings.TrimSpace(account.GetOpenAIAccessToken()), "at-") {
 		return false
 	}
 	if strings.TrimSpace(account.GetOpenAIRefreshToken()) == "" {
 		return false
 	}
-	expiresAt := account.GetCredentialAsTime("expires_at")
-	if expiresAt == nil {
-		return account.IsRateLimited()
-	}
-
-	return time.Until(*expiresAt) < refreshWindow
+	return codexAutomaticRefreshReason(account, time.Now()) != ""
 }
 
 // Refresh 执行token刷新
 // 保留原有credentials中的所有字段，只更新token相关字段
 func (r *OpenAITokenRefresher) Refresh(ctx context.Context, account *Account) (map[string]any, error) {
-	// 后台刷新由过期窗口触发，对应官方 RefreshReason::ProactiveExpiry；
-	// 调用方已声明原因时（例如手动刷新）保持不变。
 	if openai.CodexRefreshReasonFromContext(ctx) == "" {
-		ctx = openai.WithCodexRefreshReason(ctx, "proactive_expiry")
+		reason := codexRefreshReasonForAccount(account, time.Now())
+		ctx = openai.WithCodexRefreshReason(ctx, reason)
 	}
 	tokenInfo, err := r.openaiOAuthService.RefreshAccountToken(ctx, account)
 	if err != nil {
@@ -136,4 +132,47 @@ func (r *OpenAITokenRefresher) Refresh(ctx context.Context, account *Account) (m
 	newCredentials = NormalizeOpenAIPersonalAccessTokenCredentials(account, tokenInfo, newCredentials)
 
 	return newCredentials, nil
+}
+
+func (r *OpenAITokenRefresher) AuthCredentialsPersisted(ctx context.Context, previous *Account) {
+	r.openaiOAuthService.AuthCredentialsPersisted(ctx, previous)
+}
+
+func codexRefreshReasonForAccount(account *Account, now time.Time) string {
+	if reason := codexAutomaticRefreshReason(account, now); reason != "" {
+		return reason
+	}
+	return "forced"
+}
+
+func codexAutomaticRefreshReason(account *Account, now time.Time) string {
+	if account == nil {
+		return ""
+	}
+	parts := strings.Split(account.GetOpenAIAccessToken(), ".")
+	if len(parts) == 3 {
+		if raw, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
+			var claims struct {
+				Exp *int64 `json:"exp"`
+			}
+			if json.Unmarshal(raw, &claims) == nil && claims.Exp != nil {
+				if *claims.Exp <= now.Add(5*time.Minute).Unix() {
+					return "proactive_expiry"
+				}
+				return ""
+			}
+		}
+	}
+	// Imported opaque tokens have no JWT exp. Preserve Kitty's persisted
+	// expiry contract; when a JWT does carry exp it remains authoritative.
+	if expiry := account.GetCredentialAsTime("expires_at"); expiry != nil {
+		if !expiry.After(now.Add(openAITokenRefreshSkew)) {
+			return "proactive_expiry"
+		}
+		return ""
+	}
+	if last := account.GetCredentialAsTime("last_refresh"); last != nil && last.Before(now.Add(-8*24*time.Hour)) {
+		return "scheduled"
+	}
+	return ""
 }

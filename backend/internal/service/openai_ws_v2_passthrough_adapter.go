@@ -701,6 +701,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2PassthroughWithVMRoute(
 	if account == nil {
 		return errors.New("account is nil")
 	}
+	if err := s.validateOpenAIResponseAuthOwner(ctx, c, account, gjson.GetBytes(firstClientMessage, "previous_response_id").String()); err != nil {
+		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+	}
 	if err := requestmodel.ValidateWebSocketModelFields(firstClientMessage); err != nil {
 		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
 	}
@@ -942,13 +945,16 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2PassthroughWithVMRoute(
 		return errors.New("openai ws passthrough dialer is nil")
 	}
 
+	authSource := snapshotOAuthRefreshAccount(codexAccountIdentitySource(c, account))
 	agentTaskRecoveryTried := false
+	oauthRecoveryStep := 0
+	var oauthCredentialOwner *Account
 	var upstreamConn openAIWSClientConn
 	statusCode := 0
 	var handshakeHeaders http.Header
 	for {
 		if !vmBound {
-			headers, err = s.refreshOpenAIAgentIdentityHeaders(ctx, account, headers)
+			headers, err = s.refreshOpenAIWSAuthHeaders(ctx, authSource, headers)
 			if err != nil {
 				return fmt.Errorf("refresh ws authentication headers: %w", err)
 			}
@@ -957,6 +963,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2PassthroughWithVMRoute(
 		if vmBound {
 			dialCtx = withOpenAIVMWSHTTPClient(dialCtx, vmRoute.client)
 		}
+		sentHeaders := cloneHeader(headers)
 		upstreamConn, statusCode, handshakeHeaders, err = dialOpenAIWSForAccount(dialCtx, s.cfg, openAIWSAcquireRequest{
 			Account:  account,
 			WSURL:    wsURL,
@@ -978,6 +985,22 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2PassthroughWithVMRoute(
 				return fmt.Errorf("agent identity task recovery failed: %w", recoveryErr)
 			}
 			continue
+		}
+		if !vmBound && statusCode == http.StatusUnauthorized {
+			if oauthRecoveryStep < 2 {
+				var recovered bool
+				if oauthRecoveryStep == 0 {
+					headers, oauthCredentialOwner, recovered = s.reloadOpenAIOAuthHeaders(ctx, authSource, sentHeaders)
+				} else {
+					headers, oauthCredentialOwner, recovered = s.recoverOpenAIOAuthHeaders(ctx, oauthCredentialOwner, sentHeaders)
+				}
+				oauthRecoveryStep++
+				if recovered {
+					continue
+				}
+			} else if oauthCredentialOwner != nil && s.openAITokenProvider != nil {
+				s.openAITokenProvider.RecordUnauthorizedAfterRefresh(ctx, oauthCredentialOwner, strings.TrimPrefix(sentHeaders.Get("Authorization"), "Bearer "))
+			}
 		}
 		logOpenAIWSV2Passthrough(
 			"relay_dial_failed account_id=%d status_code=%d err=%s",
@@ -1097,6 +1120,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2PassthroughWithVMRoute(
 			}
 			eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
 			isResponseCreate := eventType == "response.create"
+			if isResponseCreate {
+				if err := s.validateOpenAIResponseAuthOwner(ctx, c, account, gjson.GetBytes(payload, "previous_response_id").String()); err != nil {
+					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+				}
+			}
 			responseCreateAt := time.Time{}
 			acceptedTurn := false
 			if isResponseCreate {
@@ -1428,6 +1456,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2PassthroughWithVMRoute(
 					}
 					eventType, _, _ := parseOpenAIWSEventEnvelope(upstreamPayload)
 					markOpenAIWSClientVisibleFailure(c, eventType, upstreamPayload)
+					if successfulOpenAIResponseAuthOwnerTerminal(eventType) {
+						status := gjson.GetBytes(upstreamPayload, "response.status").String()
+						if status == "" || status == "completed" {
+							s.bindOpenAIResponseAuthOwner(ctx, c, account, gjson.GetBytes(upstreamPayload, "response.id").String())
+						}
+					}
 				}
 				clientWriteUpstreamPayload = nil
 				if msgType == coderws.MessageText && ((!vmBound && openAIWSPassthroughIsTerminalOutput(payload)) || vmTurnSettled) {

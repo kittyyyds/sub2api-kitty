@@ -81,6 +81,13 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 		}
 		return nil, err
 	}
+	if _, err := s.prepareCodexAccountIdentitySource(ctx, c, account); err != nil {
+		return nil, err
+	}
+	if err := s.validateOpenAIResponseAuthOwner(ctx, c, account, gjson.GetBytes(body, "previous_response_id").String()); err != nil {
+		writeOpenAIResponseAuthOwnerError(c, err)
+		return nil, err
+	}
 	beginUpstreamResponseModelObservation(c)
 	ClearActualOpenAIUpstreamEndpoint(c)
 	if s.openaiVM != nil {
@@ -105,9 +112,6 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 	clearOpenAIResponsesNamespaceNames(c)
 	setCodexToolNameReverse(c, nil)
 	rememberOpenAIResponsesClientInstructions(c, body)
-	if _, err := s.prepareCodexAccountIdentitySource(ctx, c, account); err != nil {
-		return nil, err
-	}
 	// Codex OAuth 身份：先固化下游会话证据（匿名请求得到 attempt 级稳定种子），
 	// 再按会话快照解析出站版本与 wire profile；VM 路由与非 openai 平台不进入。
 	restoreClientSession := stageCodexHTTPClientSession(c, account, body)

@@ -150,7 +150,7 @@ func TestQueryUsageResetCreditCountPrecedence(t *testing.T) {
 				Platform: PlatformOpenAI,
 				Type:     AccountTypeOAuth,
 				Status:   StatusActive,
-				Credentials: map[string]any{
+				Credentials: map[string]any{"access_token": "fake-token",
 					"chatgpt_account_id": "org-parent123",
 				},
 			}

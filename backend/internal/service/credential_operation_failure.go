@@ -11,6 +11,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 // CredentialOperationFailure is a projection of one persisted operation, never
@@ -49,7 +50,7 @@ func NewCredentialOperationRefreshError(status int, body []byte) error {
 	if safe := credentialOperationRefreshMarker(rawCode); safe != "" {
 		marker = safe
 	}
-	return &CredentialOperationError{Code: code, cause: infraerrors.New(502, "OPENAI_OAUTH_TOKEN_REFRESH_FAILED", fmt.Sprintf("token refresh failed: status %d, code %s", status, marker))}
+	return &CredentialOperationError{Code: code, cause: fmt.Errorf("%w: %w", infraerrors.New(502, "OPENAI_OAUTH_TOKEN_REFRESH_FAILED", fmt.Sprintf("token refresh failed: status %d, code %s", status, marker)), openai.NewRefreshTokenError(status, body))}
 }
 
 func credentialOperationRefreshMarker(code string) string {

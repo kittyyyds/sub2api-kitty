@@ -9,6 +9,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 // OAuthRefreshExecutor 各平台实现的 OAuth 刷新执行器
@@ -88,6 +91,15 @@ func newContextMutex() *contextMutex {
 	return &contextMutex{token: make(chan struct{}, 1)}
 }
 
+func (m *contextMutex) TryLock() bool {
+	select {
+	case m.token <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *contextMutex) Lock(ctx context.Context) error {
 	select {
 	case m.token <- struct{}{}:
@@ -114,7 +126,7 @@ func snapshotOAuthRefreshAccount(account *Account) *Account {
 		return nil
 	}
 	snapshot := *account
-	snapshot.Credentials = shallowCopyMap(account.Credentials)
+	snapshot.Credentials = cloneOAuthRefreshCredentials(account.Credentials)
 	if account.ProxyID != nil {
 		proxyID := *account.ProxyID
 		snapshot.ProxyID = &proxyID
@@ -125,10 +137,11 @@ func snapshotOAuthRefreshAccount(account *Account) *Account {
 // OAuthRefreshAPI 统一的 OAuth Token 刷新入口
 // 封装分布式锁、进程内互斥锁、DB 重读、已刷新检查、竞争恢复等通用逻辑
 type OAuthRefreshAPI struct {
-	accountRepo AccountRepository
-	tokenCache  GeminiTokenCache // 可选，nil = 无分布式锁
-	lockTTL     time.Duration
-	localLocks  sync.Map // key: cacheKey string -> value: *contextMutex
+	accountRepo    AccountRepository
+	tokenCache     GeminiTokenCache // 可选，nil = 无分布式锁
+	lockTTL        time.Duration
+	localLocks     sync.Map // key: cacheKey string -> value: *contextMutex
+	openAIFailures sync.Map // account ID -> credential-scoped OpenAI rejection
 }
 
 // NewOAuthRefreshAPI 创建统一刷新 API
@@ -183,12 +196,30 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 	requestPath := isOAuthRefreshRequestPath(ctx)
 	cacheKey := executor.CacheKey(account)
 
-	// 0. 获取进程内互斥锁（防止同一进程内的并发刷新竞争）
+	// 0. 获取进程内互斥锁（防止同一进程内的并发刷新竞争）。受限
+	// 管理员 refresh 在 Ent 事务中已经持有 accounts 行锁；普通 OAuth
+	// 不能在等待本地 mutex 时继续持有该行锁，否则后台刷新（先 mutex、
+	// 后 CAS UPDATE 行）会形成 mutex↔row-lock 反序死锁。事务内只对
+	// ordinary managed OpenAI OAuth 做非阻塞尝试；抢不到锁按已有
+	// LockHeld 语义退出，让外层事务及时回滚。非事务请求/后台仍等待
+	// 以保持原有去重行为。
 	localMu := api.getLocalLock(cacheKey)
-	if err := localMu.Lock(ctx); err != nil {
+	if dbent.TxFromContext(ctx) != nil && isStoredOpenAIManagedOAuth(account) {
+		if !localMu.TryLock() {
+			return &OAuthRefreshResult{LockHeld: true}, nil
+		}
+	} else if err := localMu.Lock(ctx); err != nil {
 		return nil, fmt.Errorf("oauth refresh local lock: %w", err)
 	}
-	defer localMu.Unlock()
+	distributedLocked := false
+	defer func() {
+		releaseOpenAIRefreshLocksAfterTransaction(ctx, account, func() {
+			if distributedLocked {
+				api.releaseRefreshLock(ctx, cacheKey)
+			}
+			localMu.Unlock()
+		})
+	}()
 
 	// 1. 获取分布式锁
 	if api.tokenCache != nil {
@@ -204,7 +235,7 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 			// 锁被其他 worker 持有
 			return &OAuthRefreshResult{LockHeld: true}, nil
 		} else {
-			defer api.releaseRefreshLock(ctx, cacheKey)
+			distributedLocked = true
 		}
 	}
 
@@ -225,9 +256,10 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 	if freshAccount.ID != account.ID {
 		return nil, fmt.Errorf("%w: account identity mismatch", errOAuthRefreshAccountRereadFailed)
 	}
-	// Background refresh must keep quality-paused credentials alive. Requests
-	// still reject an account paused after scheduling, even with a valid token.
-	if !freshAccount.IsActive() && (requestPath || freshAccount.Status != StatusQualityPaused) {
+	if account.IsOpenAIOAuth() && (!sameOpenAIOAuthOwner(account, freshAccount) || (requestPath && !sameOpenAIOAuthProxy(account, freshAccount))) {
+		return nil, fmt.Errorf("%w: OAuth owner changed", errOAuthRefreshAccountStateChanged)
+	}
+	if !freshAccount.IsActive() && !isOpenAIManualRefresh(ctx, freshAccount) && (requestPath || freshAccount.Status != StatusQualityPaused) {
 		if requestPath {
 			return nil, fmt.Errorf("%w: account is not active", errOAuthRefreshAccountStateChanged)
 		}
@@ -247,12 +279,22 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 		}
 		return &OAuthRefreshResult{Account: freshAccount}, nil
 	}
+	if failure := api.openAIRefreshFailure(freshAccount); failure != nil {
+		return &OAuthRefreshResult{Account: snapshotOAuthRefreshAccount(freshAccount)}, failure
+	}
 
 	// 3. 二次检查是否仍需刷新（另一条路径可能已刷新）
 	if !executor.NeedsRefresh(freshAccount, refreshWindow) {
 		return &OAuthRefreshResult{
 			Account: freshAccount,
 		}, nil
+	}
+
+	// Verify the mandatory persistence capability before consuming a token.
+	if freshAccount.IsOpenAIOAuth() {
+		if _, ok := api.accountRepo.(OpenAIOAuthRefreshSuccessRepository); !ok {
+			return nil, openAIRefreshCASNotConfigured()
+		}
 	}
 
 	// 4. 执行平台特定刷新逻辑
@@ -266,7 +308,9 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 	if refreshErr != nil {
 		// 竞争恢复：invalid_grant 可能是另一个 worker 已消费了旧 refresh_token
 		// 重新读取 DB，如果 refresh_token 已更新则说明是竞争，返回成功
-		if isInvalidGrantError(refreshErr) {
+		var openAIError *openai.RefreshTokenError
+		openAIPermanent := freshAccount.Platform == PlatformOpenAI && errors.As(refreshErr, &openAIError) && openAIError.Permanent
+		if isInvalidGrantError(refreshErr) || openAIPermanent {
 			if recoveredAccount, recovered := api.tryRecoverFromRefreshRace(ctx, freshAccount); recovered {
 				if requestPath && recoveredAccount.Platform == PlatformGrok {
 					if eligibilityErr := grokOAuthRequestAccountEligibilityError(recoveredAccount); eligibilityErr != nil {
@@ -282,6 +326,16 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 				}, nil
 			}
 		}
+		if openAIPermanent {
+			current, readErr := api.accountRepo.GetByID(ctx, attemptedAccount.ID)
+			if readErr != nil || current == nil {
+				return nil, &oauthRefreshStateUnavailableError{err: errors.New("OpenAI OAuth rejection state could not be reread")}
+			}
+			if current.ID != attemptedAccount.ID || !current.IsActive() || openAIRefreshFingerprint(current) != openAIRefreshFingerprint(attemptedAccount) {
+				return nil, &oauthRefreshStateUnavailableError{err: errOAuthRefreshAccountStateChanged}
+			}
+			api.recordOpenAIRefreshFailure(attemptedAccount, openAIError)
+		}
 		// Preserve the exact account snapshot used by the failed upstream call.
 		// Callers can then conditionally mutate only that credential version and
 		// avoid quarantining a concurrently reauthorized account.
@@ -294,7 +348,11 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 
 	// 5. 设置版本号 + 更新 DB
 	if newCredentials != nil {
+		newCredentials = shallowCopyMap(newCredentials)
 		newCredentials["_token_version"] = time.Now().UnixMilli()
+		if freshAccount.IsOpenAIOAuth() {
+			return api.persistOpenAIRefreshSuccess(ctx, attemptedAccount, newCredentials, executor, cacheKey)
+		}
 		if freshAccount.IsGrokOAuth() {
 			conditionalRepo, ok := api.accountRepo.(GrokOAuthRefreshSuccessRepository)
 			if !ok {
@@ -358,6 +416,13 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 				"error", updateErr,
 			)
 			return nil, fmt.Errorf("%w: %v", errOAuthRefreshCredentialPersist, updateErr)
+		}
+		if freshAccount.IsOpenAIOAuth() {
+			if publisher, ok := executor.(interface {
+				AuthCredentialsPersisted(context.Context, *Account)
+			}); ok {
+				publisher.AuthCredentialsPersisted(ctx, attemptedAccount)
+			}
 		}
 	}
 
@@ -425,6 +490,9 @@ func (api *OAuthRefreshAPI) tryRecoverFromRefreshRace(ctx context.Context, usedA
 	if err != nil || reReadAccount == nil {
 		return nil, false
 	}
+	if usedAccount.Platform == PlatformOpenAI && (!sameOpenAIOAuthOwner(usedAccount, reReadAccount) || !reReadAccount.IsActive() || !canRecoverOpenAIOAuth(reReadAccount)) {
+		return nil, false
+	}
 	usedRT := usedAccount.GetCredential("refresh_token")
 	currentRT := reReadAccount.GetCredential("refresh_token")
 	if usedRT == "" || currentRT == "" {
@@ -441,6 +509,28 @@ func (api *OAuthRefreshAPI) tryRecoverFromRefreshRace(ctx context.Context, usedA
 func MergeCredentials(oldCreds, newCreds map[string]any) map[string]any {
 	if newCreds == nil {
 		newCreds = make(map[string]any)
+	}
+	oldChatGPTID, _ := oldCreds["chatgpt_account_id"].(string)
+	newChatGPTID, _ := newCreds["chatgpt_account_id"].(string)
+	_, oldHasState := oldCreds["subscription_is_delinquent"]
+	_, newHasState := newCreds["subscription_is_delinquent"]
+	if oldChatGPTID != "" || newChatGPTID != "" || oldHasState || newHasState {
+		// A subscription snapshot belongs to one ChatGPT identity and plan.
+		for _, key := range []string{"chatgpt_account_id", "plan_type"} {
+			previous, _ := oldCreds[key].(string)
+			current, _ := newCreds[key].(string)
+			if strings.TrimSpace(previous) != "" && strings.TrimSpace(current) != "" && !strings.EqualFold(strings.TrimSpace(previous), strings.TrimSpace(current)) {
+				if expiry, _ := newCreds["subscription_expires_at"].(string); strings.TrimSpace(expiry) == "" {
+					newCreds["subscription_expires_at"] = ""
+					newCreds["subscription_is_delinquent"] = nil
+				}
+			}
+		}
+		if _, hasDate := newCreds["subscription_expires_at"]; hasDate {
+			if _, hasState := newCreds["subscription_is_delinquent"]; !hasState {
+				newCreds["subscription_is_delinquent"] = nil
+			}
+		}
 	}
 	for k, v := range oldCreds {
 		if _, exists := newCreds[k]; !exists {
@@ -466,4 +556,33 @@ func BuildClaudeAccountCredentials(tokenInfo *TokenInfo) map[string]any {
 		creds["scope"] = tokenInfo.Scope
 	}
 	return creds
+}
+
+// Refresh CAS compares the original complete JSON document. Do not let an
+// executor's nested metadata edits mutate the expected snapshot in place.
+func cloneOAuthRefreshCredentials(value map[string]any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(value))
+	for key, entry := range value {
+		cloned[key] = cloneOAuthRefreshJSONValue(entry)
+	}
+	return cloned
+}
+func cloneOAuthRefreshJSONValue(value any) any {
+	switch v := value.(type) {
+	case map[string]any:
+		return cloneOAuthRefreshCredentials(v)
+	case []any:
+		cloned := make([]any, len(v))
+		for i, entry := range v {
+			cloned[i] = cloneOAuthRefreshJSONValue(entry)
+		}
+		return cloned
+	case []string:
+		return append([]string(nil), v...)
+	default:
+		return value
+	}
 }

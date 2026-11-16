@@ -293,7 +293,9 @@ func openAIConfiguredCodexModelIDs(accounts []Account) []string {
 
 func openAIConfiguredCodexModelIDsForGroup(accounts []Account, group *Group) []string {
 	var groupID *int64
-	if group != nil { groupID = &group.ID }
+	if group != nil {
+		groupID = &group.ID
+	}
 	models := supplementUnmappedOpenAIModels(accounts, groupID, openAIConfiguredCodexModelIDs(accounts))
 	if group == nil || !group.ModelAllowlistEnabled() {
 		return filterRetiredOpenAIModelIDs(accounts, models)
@@ -1733,6 +1735,13 @@ func (s *OpenAIGatewayService) fetchNativeCodexModelsManifest(ctx context.Contex
 	switch {
 	case credAccount.IsOpenAIOAuth():
 		authToken = strings.TrimSpace(credAccount.GetOpenAIAccessToken())
+		if !credAccount.IsOpenAIAgentIdentity() && !credAccount.IsOpenAIPersonalAccessToken() && !credAccount.IsOpenAIVMManaged() && s.openAITokenProvider != nil {
+			var tokenErr error
+			authToken, tokenErr = s.openAITokenProvider.GetAccessToken(ctx, credAccount)
+			if tokenErr != nil {
+				return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_AUTH_FAILED", "Codex models OAuth credentials are unavailable")
+			}
+		}
 		if authToken == "" && !credAccount.IsOpenAIAgentIdentity() && !credAccount.IsOpenAIVMManaged() {
 			return nil, infraerrors.New(http.StatusBadGateway, "OPENAI_CODEX_MODELS_TOKEN_MISSING", "account has no Codex backend access token")
 		}

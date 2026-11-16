@@ -68,6 +68,7 @@ func TestGetOpenAIUsage_SparkShadow_WritesExtraAndReturnsNonEmptyWindows(t *test
 		Type:     AccountTypeOAuth,
 		Status:   StatusActive,
 		Credentials: map[string]any{
+			"access_token":       "fake-access-token",
 			"chatgpt_account_id": "org-spark-parent",
 		},
 	}

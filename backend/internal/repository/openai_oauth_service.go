@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -221,4 +222,20 @@ func newOpenAINoProxyHintError(cause error) error {
 		"OPENAI_OAUTH_PROXY_REQUIRED",
 		"OpenAI OAuth request failed: no proxy is configured and this server could not reach OpenAI directly. Select a proxy that can access OpenAI, then retry; if the authorization code has expired, regenerate the authorization URL.",
 	).WithCause(cause)
+}
+
+func (s *openaiOAuthService) RetireAuthClient(ctx context.Context, refreshToken, clientID string) {
+	if id := openai.CodexAuthAccountFromContext(ctx); id > 0 {
+		// A successful reload replaces the account's auth client, including
+		// snapshots loaded concurrently with a different token or device.
+		codexAuthH2Pool.Retire(fmt.Sprintf("auth-account-%d", id))
+		return
+	}
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		clientID = openai.ClientID
+	}
+	body, _ := json.Marshal(map[string]string{"client_id": clientID, "grant_type": "refresh_token", "refresh_token": refreshToken})
+	ua, originator := service.CodexAuthIdentityForContext(ctx)
+	codexAuthH2Pool.Retire(codexAuthPoolKey(ctx, s.tokenURL, http.Header{"User-Agent": {ua}, "Originator": {originator}}, body))
 }

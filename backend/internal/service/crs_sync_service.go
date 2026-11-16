@@ -1445,6 +1445,10 @@ func (s *CRSSyncService) refreshOAuthToken(ctx context.Context, account *Account
 			}
 		}
 	case PlatformOpenAI:
+		if isStoredOpenAIManagedOAuth(account) {
+			s.refreshStoredOpenAIAccount(ctx, account)
+			return nil // the coordinator already persisted with exact-state CAS
+		}
 		if s.openaiOAuthService == nil {
 			return nil
 		}
@@ -1585,4 +1589,20 @@ func (s *CRSSyncService) PreviewFromCRS(ctx context.Context, input SyncFromCRSIn
 	}
 
 	return result, nil
+}
+
+func (s *CRSSyncService) refreshStoredOpenAIAccount(ctx context.Context, account *Account) {
+	if s.openaiOAuthService == nil {
+		return
+	}
+	if isStoredOpenAIManagedOAuth(account) {
+		_, _ = s.openaiOAuthService.RefreshStoredAccount(ctx, account)
+		return
+	}
+	if refreshed := s.refreshOAuthToken(ctx, account); refreshed != nil {
+		previous := snapshotOAuthRefreshAccount(account)
+		if err := persistAccountCredentials(ctx, s.accountRepo, account, refreshed); err == nil {
+			s.openaiOAuthService.AuthCredentialsPersisted(ctx, previous)
+		}
+	}
 }

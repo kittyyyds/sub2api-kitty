@@ -673,6 +673,7 @@ func TestTokenRefreshService_RefreshWithRetry_OtherPlatformOAuth(t *testing.T) {
 		},
 	}
 
+	configureOpenAIRefreshTestCoordinator(service, repo, account)
 	err := service.refreshWithRetry(context.Background(), account, refresher, refresher, time.Hour)
 	require.NoError(t, err)
 	require.Equal(t, 1, repo.updateCalls)
@@ -705,6 +706,7 @@ func TestTokenRefreshService_RefreshWithRetry_UsesCredentialsUpdater(t *testing.
 		},
 	}
 
+	configureOpenAIRefreshTestCoordinator(service, repo, account)
 	err := service.refreshWithRetry(context.Background(), account, refresher, refresher, time.Hour)
 	require.NoError(t, err)
 	require.Equal(t, 1, repo.updateCredentialsCalls)
@@ -887,6 +889,7 @@ func TestTokenRefreshService_RefreshWithRetry_NonRetryableErrorAllPlatforms(t *t
 				err: errors.New("invalid_grant: token revoked"),
 			}
 
+			configureOpenAIRefreshTestCoordinator(service, repo, account)
 			err := service.refreshWithRetry(context.Background(), account, refresher, refresher, time.Hour)
 			require.Error(t, err)
 			require.Equal(t, 1, repo.setErrorCalls) // 所有平台不可重试错误都应 SetError
@@ -912,6 +915,7 @@ func TestTokenRefreshService_RefreshWithRetry_NoRefreshTokenDoesNotTempUnschedul
 		err: errors.New("no refresh token available"),
 	}
 
+	configureOpenAIRefreshTestCoordinator(service, repo, account)
 	err := service.refreshWithRetry(context.Background(), account, refresher, refresher, time.Hour)
 	require.Error(t, err)
 	require.Equal(t, 0, repo.updateCalls)

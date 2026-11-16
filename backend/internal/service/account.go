@@ -2191,10 +2191,7 @@ func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapabilit
 }
 
 func (a *Account) GetChatGPTUserID() string {
-	if !a.IsOpenAIOAuth() {
-		return ""
-	}
-	return a.GetCredential("chatgpt_user_id")
+	return openAIOAuthAccountUserID(a)
 }
 
 func (a *Account) GetOpenAIOrganizationID() string {

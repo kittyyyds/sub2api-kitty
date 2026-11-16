@@ -59,7 +59,7 @@ func codexAccountIdentityNamespace(account *Account) string {
 		return ""
 	}
 	if upstreamAccountID := strings.TrimSpace(account.GetChatGPTAccountID()); upstreamAccountID != "" {
-		if upstreamUserID := strings.TrimSpace(account.GetCredential("chatgpt_user_id")); upstreamUserID != "" {
+		if upstreamUserID := strings.TrimSpace(account.GetChatGPTUserID()); upstreamUserID != "" {
 			return "chatgpt:" + upstreamAccountID + ":user:" + upstreamUserID
 		}
 		return "chatgpt:" + upstreamAccountID

@@ -11,6 +11,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 )
 
@@ -837,6 +838,9 @@ func (s *TokenRefreshService) refreshWithRetryWithRateGate(
 	refreshWindow time.Duration,
 	gate refreshAttemptGate,
 ) error {
+	if account != nil && account.IsOpenAIOAuth() && (s.refreshAPI == nil || executor == nil) {
+		return openAIRefreshCASNotConfigured()
+	}
 	var lastErr error
 	maxRetries := s.maxRetries()
 
@@ -987,7 +991,7 @@ func (s *TokenRefreshService) refreshWithRetryWithRateGate(
 		if isNonRetryableRefreshError(err) {
 			errorMsg := "Token refresh failed (non-retryable): " + logredact.RedactText(err.Error())
 			isGrokOAuth := account.IsGrokOAuth()
-			if !isGrokOAuth {
+			if !isGrokOAuth && !account.IsOpenAIOAuth() {
 				s.notifyAccountSchedulingBlocked(account, time.Time{}, "token_refresh_non_retryable")
 			}
 			s.clearAntigravityForceTokenRefresh(ctx, account, "non_retryable")
@@ -1011,6 +1015,18 @@ func (s *TokenRefreshService) refreshWithRetryWithRateGate(
 						slog.Info("token_refresh.grok_error_status_skipped_stale_credentials", "account_id", account.ID)
 						return errRefreshSkipped
 					}
+				}
+			} else if account.IsOpenAIOAuth() {
+				mutation, ok := s.accountRepo.(OpenAIOAuthRefreshFailureRepository)
+				if !ok {
+					return openAIRefreshCASNotConfigured()
+				}
+				persistentlyBlocked, setErr = mutation.SetOpenAIOAuthRefreshErrorIfUnchanged(ctx, account.ID, account.Credentials, account.ProxyID, errorMsg)
+				if setErr == nil && !persistentlyBlocked {
+					return errRefreshSkipped
+				}
+				if setErr == nil {
+					s.notifyAccountSchedulingBlocked(account, time.Time{}, "token_refresh_non_retryable")
 				}
 			} else {
 				setErr = s.accountRepo.SetError(ctx, account.ID, errorMsg)
@@ -1387,6 +1403,15 @@ func (e *providerConfigurationRefreshError) Unwrap() error {
 }
 
 func isSharedProviderRefreshError(err error) bool {
+	var tokenErr *openai.RefreshTokenError
+	if errors.As(err, &tokenErr) {
+		switch tokenErr.Code {
+		case "invalid_client", "unauthorized_client", "invalid_scope":
+			return true
+		}
+		return false
+	}
+
 	if err == nil {
 		return false
 	}
@@ -1408,6 +1433,11 @@ func isSharedProviderRefreshError(err error) bool {
 // 这些错误通常表示凭证已失效或配置确实缺失，需要用户重新授权
 // 注意：missing_project_id 错误只在真正缺失（从未获取过）时返回，临时获取失败不会返回此错误
 func isNonRetryableRefreshError(err error) bool {
+	var tokenErr *openai.RefreshTokenError
+	if errors.As(err, &tokenErr) {
+		return tokenErr.Permanent
+	}
+
 	if err == nil {
 		return false
 	}
@@ -1532,5 +1562,13 @@ func (s *TokenRefreshService) ensureAntigravityPrivacy(ctx context.Context, acco
 			"account_id", account.ID,
 			"privacy_mode", mode,
 		)
+	}
+}
+
+func (e *rateLimitedOAuthRefreshExecutor) AuthCredentialsPersisted(ctx context.Context, previous *Account) {
+	if publisher, ok := e.OAuthRefreshExecutor.(interface {
+		AuthCredentialsPersisted(context.Context, *Account)
+	}); ok {
+		publisher.AuthCredentialsPersisted(ctx, previous)
 	}
 }

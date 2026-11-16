@@ -68,9 +68,11 @@ func (e *openAIWSDialError) Unwrap() error {
 }
 
 type openAIWSAcquireRequest struct {
-	Account *Account
-	WSURL   string
-	Headers http.Header
+	// AuthOwner is the immutable credential source; routing remains on Account.
+	AuthOwner *Account
+	Account   *Account
+	WSURL     string
+	Headers   http.Header
 	// HeadersFactory is evaluated inside dialConn. It exists so credentials
 	// whose authorization is per-dial (Agent Identity) are never cached in
 	// lastAcquire or delayed prewarm state.
@@ -87,6 +89,7 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSHandshakeCompatibilityKey struct {
+	oauthOwner          openAIOAuthOwner
 	codexTurnState      string
 	betaFeatures        string
 	codexInstallationID string
@@ -2510,6 +2513,7 @@ func normalizeOpenAIWSBetaFeatures(headers http.Header) string {
 
 func normalizeOpenAIWSHandshakeCompatibility(account *Account, headers http.Header) openAIWSHandshakeCompatibilityKey {
 	key := openAIWSHandshakeCompatibilityKey{
+		oauthOwner:     openAIOAuthOwnerForAccount(account),
 		betaFeatures:   normalizeOpenAIWSBetaFeatures(headers),
 		codexTurnState: normalizeOpenAIWSStableIdentityHeader(headers, openAICodexTurnStateHeader),
 	}

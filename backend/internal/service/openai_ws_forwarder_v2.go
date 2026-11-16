@@ -39,6 +39,10 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	if s == nil || account == nil {
 		return nil, wrapOpenAIWSFallback("invalid_state", errors.New("service or account is nil"))
 	}
+	if err := s.validateOpenAIResponseAuthOwner(ctx, c, account, openAIWSPayloadString(reqBody, "previous_response_id")); err != nil {
+		writeOpenAIResponseAuthOwnerError(c, err)
+		return nil, err
+	}
 	if err := rejectRetiredBPSCredentialWebSocket(account); err != nil {
 		return nil, err
 	}
@@ -269,12 +273,18 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	acquireCtx, acquireCancel := context.WithTimeout(ctx, s.openAIWSAcquireTimeout())
 	defer acquireCancel()
 
-	lease, err := s.getOpenAIWSConnPool().Acquire(acquireCtx, openAIWSAcquireRequest{
-		Account: account,
-		WSURL:   wsURL,
-		Headers: wsHeaders,
+	authSource := snapshotOAuthRefreshAccount(codexAccountIdentitySource(c, account))
+	authAccount, authOwnerErr := s.openAIRequestAuthOwnerAccount(ctx, c, account)
+	if authOwnerErr != nil {
+		return nil, authOwnerErr
+	}
+	acquireRequest := openAIWSAcquireRequest{
+		Account:   authAccount,
+		AuthOwner: authSource,
+		WSURL:     wsURL,
+		Headers:   wsHeaders,
 		HeadersFactory: func(factoryCtx context.Context, headers http.Header) (http.Header, error) {
-			return s.refreshOpenAIAgentIdentityHeaders(factoryCtx, account, headers)
+			return s.refreshOpenAIWSAuthHeaders(factoryCtx, authSource, headers)
 		},
 		PreferredConnID: preferredConnID,
 		ForceNewConn:    forceNewConn,
@@ -285,7 +295,8 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			}
 			return 0
 		}(),
-	})
+	}
+	lease, err := s.acquireOpenAIWSWithAuthRecovery(acquireCtx, s.getOpenAIWSConnPool(), &acquireRequest)
 	if err != nil {
 		var agentDialErr *openAIWSDialError
 		if s.isAgentIdentityAccount(ctx, account) && errors.As(err, &agentDialErr) && isAgentIdentityTaskInvalidWSDialError(agentDialErr) && agentTaskRecoveryTried != nil && !*agentTaskRecoveryTried {
@@ -1062,6 +1073,9 @@ readLoop:
 
 	if responseID != "" && stateStore != nil {
 		ttl := s.openAIWSResponseStickyTTL()
+		if successfulOpenAIResponseAuthOwnerTerminal(upstreamTerminalEvent) {
+			s.bindOpenAIResponseAuthOwner(ctx, c, account, responseID)
+		}
 		logOpenAIWSBindResponseAccountWarn(groupID, account.ID, responseID, stateStore.BindResponseAccount(ctx, groupID, responseID, account.ID, ttl))
 		stateStore.BindResponseConn(responseID, lease.ConnID(), ttl)
 	}

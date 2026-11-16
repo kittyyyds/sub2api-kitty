@@ -339,6 +339,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		promptCacheKey := strings.TrimSpace(values[2].String())
 		previousResponseID := strings.TrimSpace(values[3].String())
+		if err := s.validateOpenAIResponseAuthOwner(ctx, c, account, previousResponseID); err != nil {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+		}
 		previousResponseIDKind := ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 		if previousResponseID != "" && previousResponseIDKind == OpenAIPreviousResponseIDKindMessageID {
 			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(
@@ -779,6 +782,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			responseID := strings.TrimSpace(result.RequestID)
 			if responseID != "" && stateStore != nil {
 				ttl := s.openAIWSResponseStickyTTL()
+				if successfulOpenAIResponseAuthOwnerTerminal(result.UpstreamTerminalEvent) {
+					s.bindOpenAIResponseAuthOwner(ctx, c, account, responseID)
+				}
 				logOpenAIWSBindResponseAccountWarn(groupID, account.ID, responseID, stateStore.BindResponseAccount(ctx, groupID, responseID, account.ID, ttl))
 			}
 			nextClientMessage, readErr := readClientMessage()
@@ -830,12 +836,18 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if routeErr != nil {
 		return routeErr
 	}
+	authSource := snapshotOAuthRefreshAccount(codexAccountIdentitySource(c, account))
+	authAccount, authOwnerErr := s.openAIRequestAuthOwnerAccount(ctx, c, account)
+	if authOwnerErr != nil {
+		return authOwnerErr
+	}
 	baseAcquireReq := openAIWSAcquireRequest{
-		Account: account,
-		WSURL:   wsURL,
-		Headers: wsHeaders,
+		Account:   authAccount,
+		AuthOwner: authSource,
+		WSURL:     wsURL,
+		Headers:   wsHeaders,
 		HeadersFactory: func(factoryCtx context.Context, headers http.Header) (http.Header, error) {
-			return s.refreshOpenAIAgentIdentityHeaders(factoryCtx, account, headers)
+			return s.refreshOpenAIWSAuthHeaders(factoryCtx, authSource, headers)
 		},
 		ProxyURL:     proxyURL,
 		ForceNewConn: false,
@@ -905,7 +917,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		// 上游读写失败后的重试同样新建，避免再拿到同批陈旧的空闲连接。
 		req.ForceNewConn = dedicatedMode || forceNewConn
 		acquireCtx, acquireCancel := context.WithTimeout(ctx, acquireTimeout)
-		lease, acquireErr := pool.Acquire(acquireCtx, req)
+		lease, acquireErr := s.acquireOpenAIWSWithAuthRecovery(acquireCtx, pool, &req)
+		baseAcquireReq.Headers = req.Headers
 		acquireCancel()
 		var dialErr *openAIWSDialError
 		if acquireErr != nil && s.isAgentIdentityAccount(ctx, account) && errors.As(acquireErr, &dialErr) && isAgentIdentityTaskInvalidWSDialError(dialErr) && !agentTaskRecoveryTried {
@@ -2003,6 +2016,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 
 		if responseID != "" && stateStore != nil {
 			ttl := s.openAIWSResponseStickyTTL()
+			if successfulOpenAIResponseAuthOwnerTerminal(result.UpstreamTerminalEvent) {
+				s.bindOpenAIResponseAuthOwner(ctx, c, account, responseID)
+			}
 			logOpenAIWSBindResponseAccountWarn(groupID, account.ID, responseID, stateStore.BindResponseAccount(ctx, groupID, responseID, account.ID, ttl))
 			stateStore.BindResponseConn(responseID, connID, ttl)
 		}

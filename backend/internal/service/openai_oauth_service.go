@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,11 +16,13 @@ import (
 
 // OpenAIOAuthService handles OpenAI OAuth authentication flows
 type OpenAIOAuthService struct {
-	sessionStore         *openai.SessionStore
-	proxyRepo            ProxyRepository
-	oauthClient          OpenAIOAuthClient
-	privacyClientFactory PrivacyClientFactory // 用于调用 chatgpt.com/backend-api（ImpersonateChrome）
-	passwordLogin        *openAIPasswordLoginClient
+	sessionStore          *openai.SessionStore
+	proxyRepo             ProxyRepository
+	oauthClient           OpenAIOAuthClient
+	privacyClientFactory  PrivacyClientFactory // 用于调用 chatgpt.com/backend-api（ImpersonateChrome）
+	passwordLogin         *openAIPasswordLoginClient
+	storedRefreshAPI      *OAuthRefreshAPI
+	storedRefreshExecutor OAuthRefreshExecutor
 }
 
 // NewOpenAIOAuthService creates a new OpenAI OAuth service
@@ -125,6 +129,7 @@ type OpenAIExchangeCodeInput struct {
 
 // OpenAITokenInfo represents the token information for OpenAI
 type OpenAITokenInfo struct {
+	refreshedAt           time.Time
 	AccessToken           string `json:"access_token"`
 	RefreshToken          string `json:"refresh_token"`
 	IDToken               string `json:"id_token,omitempty"`
@@ -203,7 +208,8 @@ func (s *OpenAIOAuthService) ExchangeCode(ctx context.Context, input *OpenAIExch
 		RefreshToken: tokenResp.RefreshToken,
 		IDToken:      tokenResp.IDToken,
 		ExpiresIn:    int64(tokenResp.ExpiresIn),
-		ExpiresAt:    time.Now().Unix() + int64(tokenResp.ExpiresIn),
+		ExpiresAt:    openAIRefreshedTokenExpiresAt(tokenResp.AccessToken, tokenResp.ExpiresIn),
+		refreshedAt:  time.Now().UTC(),
 		ClientID:     clientID,
 	}
 
@@ -248,7 +254,8 @@ func (s *OpenAIOAuthService) RefreshTokenWithClientID(ctx context.Context, refre
 		RefreshToken: tokenResp.RefreshToken,
 		IDToken:      tokenResp.IDToken,
 		ExpiresIn:    int64(tokenResp.ExpiresIn),
-		ExpiresAt:    time.Now().Unix() + int64(tokenResp.ExpiresIn),
+		ExpiresAt:    openAIRefreshedTokenExpiresAt(tokenResp.AccessToken, tokenResp.ExpiresIn),
+		refreshedAt:  time.Now().UTC(),
 	}
 	if trimmed := strings.TrimSpace(clientID); trimmed != "" {
 		tokenInfo.ClientID = trimmed
@@ -422,6 +429,9 @@ func (s *OpenAIOAuthService) BuildAccountCredentials(tokenInfo *OpenAITokenInfo)
 	if tokenInfo.ExpiresAt > 0 {
 		creds["expires_at"] = time.Unix(tokenInfo.ExpiresAt, 0).Format(time.RFC3339)
 	}
+	if !tokenInfo.refreshedAt.IsZero() {
+		creds["last_refresh"] = tokenInfo.refreshedAt.Format(time.RFC3339Nano)
+	}
 	// 仅在刷新响应返回了新的 refresh_token 时才更新，防止用空值覆盖已有令牌
 	if strings.TrimSpace(tokenInfo.RefreshToken) != "" {
 		creds["refresh_token"] = tokenInfo.RefreshToken
@@ -470,4 +480,56 @@ func (s *OpenAIOAuthService) Stop() {
 
 func normalizeOpenAIOAuthPlatform(platform string) string {
 	return openai.OAuthPlatformOpenAI
+}
+
+func openAIRefreshedTokenExpiresAt(accessToken string, expiresIn int64) int64 {
+	parts := strings.Split(accessToken, ".")
+	if len(parts) == 3 {
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		var claims struct {
+			ExpiresAt int64 `json:"exp"`
+		}
+		if err == nil && json.Unmarshal(payload, &claims) == nil && claims.ExpiresAt > 0 {
+			return claims.ExpiresAt
+		}
+	}
+	if expiresIn > 0 {
+		return time.Now().Unix() + expiresIn
+	}
+	return 0
+}
+
+func openAIAccessTokenExpiresAt(account *Account) *time.Time {
+	if expiresAt := openAIRefreshedTokenExpiresAt(account.GetOpenAIAccessToken(), 0); expiresAt > 0 {
+		expiry := time.Unix(expiresAt, 0)
+		return &expiry
+	}
+	return account.GetCredentialAsTime("expires_at")
+}
+
+func (s *OpenAIOAuthService) retireAccountAuthClient(ctx context.Context, account *Account) {
+	if s == nil || !canRecoverOpenAIOAuth(account) {
+		return
+	}
+	client, ok := s.oauthClient.(interface {
+		RetireAuthClient(context.Context, string, string)
+	})
+	if !ok {
+		return
+	}
+	ctx = openai.WithCodexAuthAccount(ctx, account.ID)
+	if profile, ok := resolveCodexDeviceProfile(account); ok {
+		ctx = openai.WithCodexClientUserAgent(ctx, profile.UserAgent)
+	}
+	client.RetireAuthClient(ctx, account.GetOpenAIRefreshToken(), account.GetCredential("client_id"))
+}
+
+func (s *OpenAIOAuthService) AuthCredentialsPersisted(ctx context.Context, previous *Account) {
+	if s == nil || !canRecoverOpenAIOAuth(previous) {
+		return
+	}
+	snapshot := snapshotOAuthRefreshAccount(previous)
+	AfterAccountCommit(ctx, func(committed context.Context) {
+		s.retireAccountAuthClient(committed, snapshot)
+	})
 }

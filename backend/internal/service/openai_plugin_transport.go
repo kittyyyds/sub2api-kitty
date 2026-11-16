@@ -15,9 +15,9 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// doOpenAIUpstream 按 IPv6 路由校验 → VM 桥 → VM 代理校验 → 智能 WS → codexwire/
+// doOpenAIUpstreamOnce 按 IPv6 路由校验 → VM 桥 → VM 代理校验 → 智能 WS → codexwire/
 // httpUpstream 的顺序选择出站；响应解析、错误映射、SSE 和计费仍由现有核心链处理。
-func (s *OpenAIGatewayService) doOpenAIUpstream(request *http.Request, proxyURL string, account *Account) (*http.Response, error) {
+func (s *OpenAIGatewayService) doOpenAIUpstreamOnce(request *http.Request, proxyURL string, account *Account) (*http.Response, error) {
 	if request == nil || account == nil {
 		return nil, errors.New("OpenAI request or account is missing")
 	}
@@ -235,4 +235,88 @@ func (s *AccountTestService) doOpenAIAccountTestUpstream(
 	}
 
 	return s.doAccountTestHTTP(request, proxyURL, account.ID, account.Concurrency)
+}
+
+func (s *OpenAIGatewayService) doOpenAIUpstream(request *http.Request, proxyURL string, account *Account) (*http.Response, error) {
+	if request == nil || account == nil {
+		return nil, errors.New("OpenAI request or account is missing")
+	}
+	rejectedToken := strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")
+	response, err := s.doOpenAIUpstreamOnce(request, proxyURL, account)
+	if err != nil || response == nil || response.StatusCode != http.StatusUnauthorized || s.openAITokenProvider == nil || account.IsOpenAIVMBound() || account.IsOpenAIVMManaged() || request.Context().Err() != nil {
+		return response, err
+	}
+	if attempt, _ := request.Context().Value(groupSmartWSAttemptKey{}).(*groupSmartWSAttempt); attempt != nil && attempt.sent.Load() {
+		return response, nil
+	}
+	// Only replay bodies with an explicit rewind contract, before any response
+	// body has been passed to the caller or an SSE frame has been committed.
+	if request.Body != nil && request.Body != http.NoBody && request.GetBody == nil {
+		return response, nil
+	}
+	credentialAccount, err := s.openAIOAuthCredentialOwner(request.Context(), account)
+	if err != nil {
+		return response, nil
+	}
+	if !canRecoverOpenAIOAuth(credentialAccount) || rejectedToken == "" || rejectedToken == request.Header.Get("Authorization") {
+		return response, nil
+	}
+	// A shadow resolves its parent here, after the initial request. A parent
+	// reauthorized while that request was in flight is not a recovery source
+	// for the old request body. Verify continuity with the bearer actually sent.
+	if account.IsCredentialShadow() && !openAICachedAccessTokenMatchesAccount(credentialAccount, rejectedToken) {
+		return response, nil
+	}
+	retry := request.Clone(request.Context())
+	if request.GetBody != nil {
+		retry.Body, err = request.GetBody()
+		if err != nil {
+			return response, nil
+		}
+	}
+	reloadedHeaders, reloadedOwner, reloaded := s.reloadOpenAIOAuthHeaders(request.Context(), credentialAccount, request.Header)
+	if !reloaded {
+		if retry.Body != nil {
+			_ = retry.Body.Close()
+		}
+		return response, nil
+	}
+	if response.Body != nil {
+		_ = response.Body.Close()
+	}
+	retry.Header = reloadedHeaders
+	response, err = s.doOpenAIUpstreamOnce(retry, proxyURL, account)
+	if err != nil || response == nil || response.StatusCode != http.StatusUnauthorized || request.Context().Err() != nil {
+		return response, err
+	}
+	credentialAccount = reloadedOwner
+	rejectedToken = strings.TrimPrefix(reloadedHeaders.Get("Authorization"), "Bearer ")
+	retry = request.Clone(request.Context())
+	if request.GetBody != nil {
+		retry.Body, err = request.GetBody()
+		if err != nil {
+			return response, nil
+		}
+	}
+	refreshCtx := withCodexSourceBuildAuthIdentity(request.Context(), credentialAccount, request.Header)
+	token, refreshErr := s.openAITokenProvider.RefreshAfterUnauthorized(refreshCtx, credentialAccount, rejectedToken)
+	if refreshErr != nil {
+		if retry.Body != nil && retry.Body != http.NoBody {
+			_ = retry.Body.Close()
+		}
+		// Preserve the original 401 and its normal account error policy. A
+		// temporary refresh transport failure must not become a permanent ban.
+		return response, nil
+	}
+	if response.Body != nil {
+		_ = response.Body.Close()
+	}
+	retry.Header.Set("Authorization", "Bearer "+token)
+	response, err = s.doOpenAIUpstreamOnce(retry, proxyURL, account)
+	if err == nil && response != nil && response.StatusCode == http.StatusUnauthorized && request.URL != nil && strings.HasSuffix(strings.TrimRight(request.URL.Path, "/"), "/responses") {
+		// A tool-specific endpoint may deny access independently of inference.
+		// Only the Responses endpoint establishes rejection of the repaired auth.
+		s.openAITokenProvider.RecordUnauthorizedAfterRefresh(request.Context(), credentialAccount, token)
+	}
+	return response, err
 }

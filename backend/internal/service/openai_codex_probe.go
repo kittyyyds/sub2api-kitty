@@ -89,7 +89,7 @@ func (s *OpenAIGatewayService) doOpenAICodexProbe(req *http.Request, proxyURL st
 	}
 	// Preserve each diagnostic caller's admission and error policy. A health
 	// sample must not refresh credentials or record a permanent auth failure.
-	return s.doOpenAIUpstream(req, proxyURL, account)
+	return s.doOpenAIUpstreamOnce(req, proxyURL, account)
 }
 
 func (s *OpenAIGatewayService) prepareOpenAICodexProbeRequest(req *http.Request, account *Account) error {
