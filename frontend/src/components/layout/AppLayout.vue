@@ -20,6 +20,7 @@
 
       <!-- Main Content -->
       <main class="kitty-console-content app-content w-full min-w-0" :class="[isAdmin ? 'p-3 sm:p-4 lg:p-5 xl:p-6' : 'p-4 md:p-6 lg:p-8', { 'min-h-0 flex-1 overflow-hidden': contained }]">
+        <CustomerPageTabs v-if="!isAdmin" />
         <slot />
       </main>
     </div>
@@ -41,6 +42,7 @@ import { detectConsolePerformanceMode } from '@/utils/consolePerformance'
 import { useConsoleTheme } from '@/composables/useConsoleTheme'
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
+import CustomerPageTabs from './CustomerPageTabs.vue'
 
 // Opt in for pages whose panels own their scrolling, while keeping the
 // ordinary document layout for all other routes.

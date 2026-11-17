@@ -401,7 +401,7 @@ function handleReplayGuide() {
 
 function formatHeaderMoney(value: number) {
   if (!Number.isFinite(value)) return '$0.00'
-  return `$${value.toFixed(2)}`
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function handleClickOutside(event: MouseEvent) {
