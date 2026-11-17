@@ -94,22 +94,29 @@ func TestOpenAIInternalFailureEventHidesRepeatedDetails(t *testing.T) {
 func TestOpenAIInternalFailureResponsesDelivery(t *testing.T) {
 	for _, mode := range []string{"native", "passthrough"} {
 		for _, tc := range []struct {
-			name, eventType   string
-			partial, failover bool
+			name, eventType            string
+			partial, failover, metered bool
 		}{
-			{"bare before output", "error", false, false},
-			{"bare after output", "error", true, false},
-			{"failed before output", "response.failed", false, true},
-			{"failed after output", "response.failed", true, false},
+			{"bare before output", "error", false, false, true},
+			{"bare after output", "error", true, false, true},
+			{"failed before output", "response.failed", false, false, true},
+			{"failed before output without usage", "response.failed", false, true, false},
+			{"failed after output", "response.failed", true, false, true},
 		} {
 			t.Run(mode+"/"+tc.name, func(t *testing.T) {
 				c, rec := newNonStreamingFailoverContext(t)
-				payload, err := json.Marshal(gin.H{
-					"type": tc.eventType, "sequence_number": 2,
-					"error": gin.H{"type": "server_error", "code": "server_error", "message": internalExcelFailure},
-					"response": gin.H{"id": "resp_test", "object": "response", "created_at": 1789656300, "status": "failed", "output": []any{},
-						"usage": gin.H{"input_tokens": 7}, "error": gin.H{"code": "server_error", "message": internalExcelFailure}},
-				})
+				errorBody := gin.H{"type": "server_error", "code": "server_error", "message": internalExcelFailure}
+				failure := gin.H{"type": tc.eventType, "sequence_number": 2}
+				usage := gin.H{"input_tokens": 0}
+				if tc.metered {
+					usage["input_tokens"] = 7
+				}
+				if tc.eventType == "response.failed" {
+					failure["response"] = gin.H{"id": "resp_test", "object": "response", "created_at": 1789656300, "status": "failed", "output": []any{}, "usage": usage, "error": errorBody}
+				} else {
+					failure["error"], failure["usage"] = errorBody, usage
+				}
+				payload, err := json.Marshal(failure)
 				require.NoError(t, err)
 				stream := ""
 				if tc.partial {

@@ -52,7 +52,11 @@ func TestAccountFeatures24DatabaseIntegration(t *testing.T) {
  (5,'anthropic','oauth','{"plan_type":"prolite"}',NULL,NULL),
  (6,'openai','oauth','{"plan_type":"prolite"}',NULL,NOW()),
  (7,'openai','oauth','{}',6,NULL),
- (8,'openai','oauth','{"plan_type":"Plus"}',1,NULL);`)
+ (8,'openai','oauth','{"plan_type":"Plus"}',1,NULL),
+ (9,'openai','oauth','{"plan_type":" \t\n "}',1,NULL),
+ (10,'openai','oauth','{"plan_type":"  "}',6,NULL),
+ (11,'openai','oauth','{"plan_type":"pro-500"}',NULL,NULL),
+ (12,'openai','oauth','{"plan_type":"Free"}',NULL,NULL);`)
 	client := dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 	defer client.Close()
 	planCtx, err := service.WithAccountPlanFilter(ctx, "Pro 100")
@@ -60,10 +64,10 @@ func TestAccountFeatures24DatabaseIntegration(t *testing.T) {
 	q := applyAccountPlanFilter(planCtx, client.Account.Query())
 	total, err := q.Clone().Count(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 2, total)
+	require.Equal(t, 3, total)
 	var ids []int64
 	require.NoError(t, q.Order(dbent.Asc("id")).Select("id").Scan(ctx, &ids))
-	require.Equal(t, []int64{1, 2}, ids)
+	require.Equal(t, []int64{1, 2, 9}, ids)
 	var paged []int64
 	require.NoError(t, applyAccountPlanFilter(planCtx, client.Account.Query()).Order(dbent.Asc("id")).Offset(1).Limit(1).Select("id").Scan(ctx, &paged))
 	require.Equal(t, []int64{2}, paged)
@@ -72,6 +76,18 @@ func TestAccountFeatures24DatabaseIntegration(t *testing.T) {
 	ids = nil // Ent's Scan appends to a provided slice.
 	require.NoError(t, applyAccountPlanFilter(planCtx, client.Account.Query()).Select("id").Scan(ctx, &ids))
 	require.Equal(t, []int64{8}, ids)
+	for _, tc := range []struct {
+		plan string
+		ids  []int64
+	}{
+		{"pro", []int64{3}}, {"pro200", []int64{3}}, {"promax", []int64{11}}, {"pro500", []int64{11}}, {"free", []int64{12}},
+	} {
+		filtered, e := service.WithAccountPlanFilter(ctx, tc.plan)
+		require.NoError(t, e)
+		ids = nil
+		require.NoError(t, applyAccountPlanFilter(filtered, client.Account.Query()).Order(dbent.Asc("id")).Select("id").Scan(ctx, &ids))
+		require.Equal(t, tc.ids, ids)
+	}
 	_, err = service.WithAccountPlanFilter(ctx, "invalid OR true")
 	require.Error(t, err)
 

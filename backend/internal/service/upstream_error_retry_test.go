@@ -393,18 +393,37 @@ func TestUpstreamErrorRetryStreamKeepsUsageAndOfficialLimits(t *testing.T) {
 			svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}}
 			account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
 			var err error
+			var meteredUsage *OpenAIUsage
 			if streaming && passthrough {
-				_, err = svc.handleStreamingResponsePassthrough(ctx, resp, c, account, time.Now(), "gpt-5", "gpt-5")
+				var result *openaiStreamingResultPassthrough
+				result, err = svc.handleStreamingResponsePassthrough(ctx, resp, c, account, time.Now(), "gpt-5", "gpt-5")
+				if result != nil {
+					meteredUsage = result.usage
+				}
 			} else if streaming {
-				_, err = svc.handleStreamingResponse(ctx, resp, c, account, time.Now(), "gpt-5", "gpt-5")
+				var result *openaiStreamingResult
+				result, err = svc.handleStreamingResponse(ctx, resp, c, account, time.Now(), "gpt-5", "gpt-5")
+				if result != nil {
+					meteredUsage = result.usage
+				}
 			} else if passthrough {
-				_, err = svc.handlePassthroughSSEToJSON(resp, c, account, []byte(body), "gpt-5", "gpt-5")
+				var result *openaiNonStreamingResultPassthrough
+				result, err = svc.handlePassthroughSSEToJSON(resp, c, account, []byte(body), "gpt-5", "gpt-5")
+				if result != nil {
+					meteredUsage = result.usage
+				}
 			} else {
-				_, err = svc.handleSSEToJSON(resp, c, account, []byte(body), "gpt-5", "gpt-5")
+				var result *openaiNonStreamingResult
+				result, err = svc.handleSSEToJSON(resp, c, account, []byte(body), "gpt-5", "gpt-5")
+				if result != nil {
+					meteredUsage = result.usage
+				}
 			}
 			var failure *UpstreamFailoverError
-			require.ErrorAs(t, err, &failure)
-			require.True(t, failure.ConfiguredRetryUnsafe, "earlier usage must survive error envelope rewriting")
+			require.Error(t, err)
+			require.False(t, errors.As(err, &failure), "already metered work must not invite account replay")
+			require.NotNil(t, meteredUsage)
+			require.Equal(t, 8, meteredUsage.InputTokens, "earlier usage must survive error envelope rewriting")
 			claimed, err := TryConfiguredUpstreamErrorRetry(ctx, failure)
 			require.False(t, claimed)
 			require.NoError(t, err)

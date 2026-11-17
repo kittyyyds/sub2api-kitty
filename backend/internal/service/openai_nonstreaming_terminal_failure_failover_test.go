@@ -142,7 +142,7 @@ func TestNonStreamingSSEToJSON_NonRetryableFailedEventStillWritesProtocolError(t
 			var failoverErr *UpstreamFailoverError
 			require.False(t, errors.As(err, &failoverErr), "不可重试的上游错误不得换号")
 			wantStatus := http.StatusBadGateway
-			if tc.name == "context_window" {
+			if tc.name == "context_window" || tc.name == "invalid_request" {
 				wantStatus = http.StatusBadRequest
 			}
 			require.Equal(t, wantStatus, rec.Code)

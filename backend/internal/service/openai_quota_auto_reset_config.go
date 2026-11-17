@@ -6,18 +6,21 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 const (
-	OpenAIAutoResetCreditEnabledExtraKey     = "auto_reset_credit_enabled"
-	OpenAIAutoResetCredit5hThresholdExtraKey = "auto_reset_credit_5h_threshold"
-	OpenAIAutoResetCredit7dThresholdExtraKey = "auto_reset_credit_7d_threshold"
-	OpenAIAutoResetCreditStateExtraKey       = "codex_auto_reset_credit_state"
+	OpenAIAutoResetCreditEnabledExtraKey      = "auto_reset_credit_enabled"
+	OpenAIAutoResetCredit5hThresholdExtraKey  = "auto_reset_credit_5h_threshold"
+	OpenAIAutoResetCredit7dThresholdExtraKey  = "auto_reset_credit_7d_threshold"
+	OpenAIAutoResetCreditStateExtraKey        = "codex_auto_reset_credit_state"
+	OpenAIAutoResetCreditOptInVersionExtraKey = "auto_reset_credit_opt_in_version"
 
 	openAIAutoResetCreditDefaultThreshold = 1.0
 	openAIAutoResetCreditMinimumThreshold = 0.001
+	openAIAutoResetCreditOptInVersion     = 1
 )
 
 // OpenAIAutoResetCreditConfig 是账号级自动用卡配置。阈值采用 0-1 比例，
@@ -28,7 +31,7 @@ type OpenAIAutoResetCreditConfig struct {
 	Threshold7d float64
 }
 
-// ResolveOpenAIAutoResetCreditConfig 只接受 OpenAI OAuth 母账号；历史账号未配置时
+// ResolveOpenAIAutoResetCreditConfig 只接受 OpenAI OAuth 账号；历史账号未配置时
 // 始终保持关闭，防止升级后产生意外消费。
 func ResolveOpenAIAutoResetCreditConfig(account *Account) OpenAIAutoResetCreditConfig {
 	config := OpenAIAutoResetCreditConfig{
@@ -38,7 +41,9 @@ func ResolveOpenAIAutoResetCreditConfig(account *Account) OpenAIAutoResetCreditC
 	if !isOpenAIAutoResetCreditAccount(account) || account.Extra == nil {
 		return config
 	}
-	config.Enabled = resolveAccountExtraBool(account.Extra, OpenAIAutoResetCreditEnabledExtraKey)
+	// The retired feature may have left enabled=true on accounts never edited
+	// since its removal. Restoring the worker must require a new explicit opt-in.
+	config.Enabled = account.Extra[OpenAIAutoResetCreditEnabledExtraKey] == true && openAIAutoResetCreditConfirmed(account.Extra[OpenAIAutoResetCreditOptInVersionExtraKey])
 	if value, ok := resolveAccountExtraNumber(account.Extra, OpenAIAutoResetCredit5hThresholdExtraKey); ok && isValidOpenAIAutoResetThreshold(value) {
 		config.Threshold5h = value
 	}
@@ -58,8 +63,10 @@ func normalizeOpenAIAutoResetCreditExtra(platform, accountType string, isShadow 
 	if extra == nil {
 		return nil, nil
 	}
+	confirmed := openAIAutoResetCreditConfirmed(extra[OpenAIAutoResetCreditOptInVersionExtraKey])
 	normalized := cloneOpenAIAutoResetExtra(extra)
 	delete(normalized, OpenAIAutoResetCreditStateExtraKey)
+	delete(normalized, OpenAIAutoResetCreditOptInVersionExtraKey)
 
 	_, hasEnabled := normalized[OpenAIAutoResetCreditEnabledExtraKey]
 	_, has5h := normalized[OpenAIAutoResetCredit5hThresholdExtraKey]
@@ -68,7 +75,7 @@ func normalizeOpenAIAutoResetCreditExtra(platform, accountType string, isShadow 
 		return normalized, nil
 	}
 	if platform != PlatformOpenAI || accountType != AccountTypeOAuth || isShadow {
-		return nil, infraerrors.New(http.StatusBadRequest, "OPENAI_AUTO_RESET_CREDIT_ACCOUNT_INVALID", "automatic reset credits are only supported for OpenAI OAuth parent accounts")
+		return nil, infraerrors.New(http.StatusBadRequest, "OPENAI_AUTO_RESET_CREDIT_ACCOUNT_INVALID", "automatic reset credits are only supported for OpenAI OAuth accounts")
 	}
 
 	enabled := false
@@ -78,6 +85,9 @@ func normalizeOpenAIAutoResetCreditExtra(platform, accountType string, isShadow 
 			return nil, infraerrors.New(http.StatusBadRequest, "OPENAI_AUTO_RESET_CREDIT_ENABLED_INVALID", "auto_reset_credit_enabled must be a boolean")
 		}
 		enabled = value
+	}
+	if enabled && confirmed {
+		normalized[OpenAIAutoResetCreditOptInVersionExtraKey] = openAIAutoResetCreditOptInVersion
 	}
 	for key, present := range map[string]bool{
 		OpenAIAutoResetCredit5hThresholdExtraKey: has5h,
@@ -104,6 +114,7 @@ func stripOpenAIAutoResetCreditManagedExtra(extra map[string]any, stripConfig bo
 	}
 	delete(extra, OpenAIAutoResetCreditStateExtraKey)
 	if stripConfig {
+		delete(extra, OpenAIAutoResetCreditOptInVersionExtraKey)
 		delete(extra, OpenAIAutoResetCreditEnabledExtraKey)
 		delete(extra, OpenAIAutoResetCredit5hThresholdExtraKey)
 		delete(extra, OpenAIAutoResetCredit7dThresholdExtraKey)
@@ -145,4 +156,39 @@ func cloneOpenAIAutoResetExtra(source map[string]any) map[string]any {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func validateOpenAIManualReset(account *Account, now time.Time) error {
+	if ResolveOpenAIAutoResetCreditConfig(account).Enabled {
+		return infraerrors.Conflict("OPENAI_QUOTA_AUTO_RESET_ENABLED", "disable automatic reset credits before using a reset credit manually")
+	}
+	if account == nil {
+		return nil
+	}
+	state := openAIAutoResetStateFromExtra(account.Extra)
+	if state == nil || (state.Status != OpenAIAutoResetStatusChecking && state.Status != OpenAIAutoResetStatusResetting) {
+		return nil
+	}
+	checkedAt, err := time.Parse(time.RFC3339, state.CheckedAt)
+	if err == nil && now.Sub(checkedAt) >= 0 && now.Sub(checkedAt) < 2*time.Minute {
+		return infraerrors.Conflict("OPENAI_QUOTA_AUTO_RESET_IN_PROGRESS", "automatic quota reset is still in progress; wait before using another reset credit manually")
+	}
+	return nil
+}
+
+// Confirmation is versioned JSON data, not a truthy/string coercion.
+func openAIAutoResetCreditConfirmed(value any) bool {
+	switch v := value.(type) {
+	case int:
+		return v == openAIAutoResetCreditOptInVersion
+	case int64:
+		return v == int64(openAIAutoResetCreditOptInVersion)
+	case float64:
+		return v == float64(openAIAutoResetCreditOptInVersion)
+	case json.Number:
+		parsed, err := v.Float64()
+		return err == nil && parsed == float64(openAIAutoResetCreditOptInVersion)
+	default:
+		return false
+	}
 }

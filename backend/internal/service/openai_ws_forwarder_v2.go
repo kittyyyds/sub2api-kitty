@@ -296,6 +296,16 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			return 0
 		}(),
 	}
+	// This entry is HTTP ingress before any frame has been sent. Prior
+	// attempts can only reach this fresh acquire after their replay guards
+	// allowed recovery; connection-bound continuation and native WS opt out.
+	eligibleHTTPFallback := previousResponseID == "" && preferredConnID == "" &&
+		isCodexOAuthAccount(account) &&
+		ctx.Err() == nil && !IsResponseCommitted(c) && !openAIStreamClientOutputStarted(c, false) &&
+		(c == nil || c.Writer == nil || !c.Writer.Written()) && (&openAIResponseReplayGuard{}).CanReplay(c)
+	if c != nil {
+		acquireRequest.BeforeFreshDial = s.openAIWSEdgeDialHook(getAPIKeyFromContext(c), mappedModel, eligibleHTTPFallback)
+	}
 	lease, err := s.acquireOpenAIWSWithAuthRecovery(acquireCtx, s.getOpenAIWSConnPool(), &acquireRequest)
 	if err != nil {
 		var agentDialErr *openAIWSDialError
@@ -463,13 +473,17 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 
 	// Codex 身份通道按官方 ResponseCreateWsRequest serde 序输出帧字节；其余账号
 	// （含 VM、API Key）走通用 marshal。
-	var writeErr error
-	if frame := s.marshalCodexWSFrameForAccount(account, payload); len(frame) > 0 {
-		payloadBytes = len(frame)
-		writeErr = lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(frame), s.openAIWSWriteTimeout())
-	} else {
-		writeErr = lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout())
+
+	// Keep the exact sent frame for index/value-checked parameter repair.
+	wireBody := s.marshalCodexWSFrameForAccount(account, payload)
+	if len(wireBody) == 0 {
+		wireBody, err = json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
 	}
+	payloadBytes = len(wireBody)
+	writeErr := lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(wireBody), s.openAIWSWriteTimeout())
 	if err := writeErr; err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
@@ -567,7 +581,46 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			Duration:                      time.Since(startTime),
 			FirstTokenMs:                  firstTokenMs,
 			ClientDisconnect:              clientDisconnected,
+			ImageCount:                    imageCounter.Count(),
+			ImageOutputSizes:              imageCounter.Sizes(),
 		}
+	}
+
+	// The upstream can already have generated text or executed a hosted tool
+	// while a non-streaming client has received no bytes. Client delivery and
+	// upstream progress are independent replay boundaries; metered usage/image
+	// results also cannot be discarded by a new attempt.
+	var replayGuard openAIResponseReplayGuard
+	upstreamProgress := func() bool {
+		return replayGuard.progressed || upstreamOutputStarted || openAIUsageHasTokens(usage) || imageCounter.Count() > 0
+	}
+	replayUnsafe := func() bool { return wroteDownstream || upstreamProgress() }
+	partialResultWithUsage := func() *OpenAIForwardResult {
+		// Cyber-policy failures already settle their observed usage through
+		// OpsCyberPolicy in the handler; returning it again would bill twice.
+		if GetOpsCyberPolicy(c) != nil || !upstreamProgress() {
+			return nil
+		}
+		result := resultWithUsage()
+		result.upstreamFailed = true
+		return result
+	}
+	incompleteAfterProgress := func(cause error) (*OpenAIForwardResult, error) {
+		if reqStream && wroteDownstream && responseID == "" && !openAIUsageHasTokens(usage) && imageCounter.Count() == 0 {
+			// Preserve the existing streaming error contract when there is no
+			// response identity or metered result to retain.
+			return nil, fmt.Errorf("upstream websocket error after downstream output: %w", cause)
+		}
+		// A locally terminated stream has no successful upstream terminal.
+		// Preserve its known attribution/usage without marking it successful.
+		upstreamTerminalEvent = "response.incomplete"
+		message := "upstream websocket ended before completing the response"
+		setOpsUpstreamError(c, http.StatusBadGateway, sanitizeUpstreamErrorMessage(cause.Error()), "")
+		if !reqStream && !clientDisconnected {
+			MarkResponseCommitted(c)
+			c.JSON(http.StatusBadGateway, gin.H{"error": gin.H{"type": "upstream_error", "message": message}})
+		}
+		return partialResultWithUsage(), newOpenAIUpstreamStreamReadError(cause)
 	}
 
 	var flusher http.Flusher
@@ -650,6 +703,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	// disconnects, use the same timeout as a bounded total drain budget.
 	var pendingJSONDocuments [][]byte
 
+	var pendingParameterError []byte
 readLoop:
 	for {
 		markClientRequestCanceled()
@@ -687,6 +741,17 @@ readLoop:
 			}
 		}
 		markClientRequestCanceled()
+		synthesizedParameterFailure := false
+		if readErr != nil && len(pendingParameterError) > 0 && ctx.Err() == nil && !clientDisconnected {
+			// A standalone parameter error must surface without turning the
+			// following EOF into a new model execution. Only a real failed
+			// terminal can authorize targeted repair.
+			message = append([]byte(nil), pendingParameterError...)
+			pendingParameterError = nil
+			readErr = nil
+			synthesizedParameterFailure = true
+			lease.MarkBroken()
+		}
 		if readErr == nil && !json.Valid(message) {
 			eventType, _, _ := parseOpenAIWSEventEnvelope(message)
 			if eventType == "" {
@@ -701,6 +766,9 @@ readLoop:
 				len(message),
 				wroteDownstream,
 			)
+			if replayUnsafe() {
+				return incompleteAfterProgress(errors.New("upstream websocket returned malformed Responses event JSON"))
+			}
 			if !wroteDownstream {
 				return nil, wrapOpenAIWSFallback("invalid_event_json", errors.New("upstream websocket returned malformed Responses event JSON"))
 			}
@@ -730,6 +798,9 @@ readLoop:
 					continue
 				}
 				break
+			}
+			if replayUnsafe() {
+				return incompleteAfterProgress(readErr)
 			}
 			if !wroteDownstream {
 				return nil, wrapOpenAIWSFallback(classifyOpenAIWSReadFallbackReason(readErr), readErr)
@@ -801,6 +872,7 @@ readLoop:
 			}
 			message = restoreCodexToolNamesFromContext(c, message)
 		}
+		replayGuard.Observe(message, eventType)
 		if openAIWSMessageShouldParseUsage(eventType, message) {
 			parseOpenAIWSResponseUsageFromCompletedEvent(message, usage)
 		}
@@ -808,16 +880,55 @@ readLoop:
 
 		if eventType == "error" || eventType == "response.failed" {
 			markOpenAICyberPolicyEvent(c, message, http.StatusOK, usage)
+			if eventType == "response.failed" && !synthesizedParameterFailure && !deltaApplied && !replayUnsafe() && !clientDisconnected && ctx.Err() == nil && replayGuard.CanReplay(c) {
+				// Rejection indices refer to the exact WS frame: OAuth may have
+				// inserted an instructions item, shifting the HTTP body's input.
+
+				value, _ := c.Get(openAIRejectedFieldRetryAttemptKey)
+				if attempt, _ := value.(*openAIRejectedFieldRetryAttempt); attempt != nil {
+					_, retryErr := withOpenAIRejectedFieldRetryAttempt(c, wireBody, attempt.state, func() (*OpenAIForwardResult, error) {
+						return nil, newOpenAIRejectedFieldStreamRetrySignal(c, message)
+					})
+					if retryErr != nil {
+						lease.MarkBroken()
+						return nil, retryErr
+					}
+				}
+			}
 		}
-		// A gateway-inferred anchor rejected before any output: drop the chain
-		// and replay this request once with its full input (the WS retry loop
-		// in Forward owns the single replay). Client-supplied anchors keep the
-		// existing previous_response_not_found recovery.
+
+		parameterErrorCode, parameterErrorType, parameterErrorMessage := parseOpenAIWSErrorEventFields(message)
+		parameterFallbackReason, _ := classifyOpenAIWSErrorEventFromRaw(parameterErrorCode, parameterErrorType, parameterErrorMessage)
+		if !synthesizedParameterFailure && eventType == "error" && len(message) <= maxOpenAIErrorNormalizationBytes &&
+			openAIStreamFailureStatus(message, parameterErrorMessage) == http.StatusBadRequest &&
+			parameterFallbackReason != "previous_response_not_found" && parameterFallbackReason != openAIWSFallbackReasonInvalidEncryptedContent &&
+			!isOpenAIContextWindowError(parameterErrorMessage, message) && GetOpsCyberPolicy(c) == nil {
+			// Keep parameter errors private until their authoritative terminal:
+			// response.failed can carry metered work absent from the bare event.
+			pendingParameterError = append(pendingParameterError[:0], message...)
+			continue
+		}
+		if isTerminalEvent {
+			pendingParameterError = nil
+		}
+
+		// A standalone capacity terminal can precede any semantic output, just
+		// like a bare error. Preserve already metered usage and image results.
+		if reqStream && eventType == "response.failed" &&
+			!openAIUsageHasTokens(usage) && imageCounter.Count() == 0 &&
+			isOpenAIUpstreamCapacityShedEvent(message) {
+			errCodeRaw, errTypeRaw, errMsgRaw := parseOpenAIWSErrorEventFields(message)
+			if failoverErr := s.openAIWSV2PreOutputAccountFailover(c, account, lease.HandshakeHeaders(), message, errCodeRaw, errTypeRaw, errMsgRaw, replayUnsafe(), clientDisconnected); failoverErr != nil {
+				lease.MarkBroken()
+				return nil, failoverErr
+			}
+		}
+
 		if eventType != "error" && !isTerminalEvent && (openAIStreamDataStartsClientOutput(string(message), eventType) || openAIStreamDataStartsVisibleOutput(string(message), eventType)) {
 			upstreamOutputStarted = true
 		}
 		if deltaApplied && !wroteDownstream && !upstreamOutputStarted && !clientDisconnected && ctx.Err() == nil &&
-			!openAIUsageHasTokens(usage) && imageCounter.Count() == 0 && (eventType == "error" || eventType == "response.failed") {
+			!replayGuard.progressed && !openAIUsageHasTokens(usage) && imageCounter.Count() == 0 && (eventType == "error" || eventType == "response.failed") {
 			path := "error"
 			if eventType == "response.failed" {
 				path = "response.error"
@@ -837,7 +948,7 @@ readLoop:
 			// 注入的增量锚点所在链已不可信；删除后后续请求回到完整上下文发送。
 			stateStore.DeleteSessionDeltaChain(groupID, sessionHash)
 		}
-		if !wroteDownstream && (eventType == "error" || eventType == "response.failed") {
+		if !synthesizedParameterFailure && !wroteDownstream && (eventType == "error" || eventType == "response.failed") {
 			if hit, _, _ := detectOpenAICyberPolicy(message); !hit && openAIWSBillingStatus(message, extractOpenAISSEErrorMessage(message)) == 0 {
 				if retryFailure := configuredOpenAIStreamRetryFailure(ctx, message, extractOpenAISSEErrorMessage(message), usage); retryFailure != nil {
 					lease.MarkBroken()
@@ -862,7 +973,7 @@ readLoop:
 				// the websocket itself was established with HTTP 200. Before any
 				// downstream output, return a failover so the handler can try the
 				// next account; after output, only expose the safe event message.
-				if !wroteDownstream {
+				if !replayUnsafe() && ctx.Err() == nil && !clientDisconnected {
 					lease.MarkBroken()
 					return nil, newUpstreamBillingFailoverError(
 						billingStatus,
@@ -920,7 +1031,7 @@ readLoop:
 			}
 			// error 事件后连接不再可复用，避免回池后污染下一请求。
 			lease.MarkBroken()
-			if !wroteDownstream && canFallback {
+			if !replayUnsafe() && ctx.Err() == nil && !clientDisconnected && canFallback {
 				return nil, wrapOpenAIWSFallback(fallbackReason, errors.New(errMsg))
 			}
 			statusCode := openAIWSErrorHTTPStatusFromRaw(errCodeRaw, errTypeRaw)
@@ -946,11 +1057,11 @@ readLoop:
 					},
 				})
 			}
-			return nil, fmt.Errorf("openai ws error event: %s", errMsg)
+			return partialResultWithUsage(), fmt.Errorf("openai ws error event: %s", errMsg)
 		}
 		if eventType == "response.failed" {
 			if billingStatus := openAIWSBillingStatus(message, extractOpenAISSEErrorMessage(message)); billingStatus != 0 {
-				if !wroteDownstream {
+				if !replayUnsafe() && ctx.Err() == nil && !clientDisconnected {
 					// response.failed is terminal and normally handled after the
 					// event is written. Billing failures must fail over first so
 					// the provider account balance is never exposed downstream.
@@ -1035,7 +1146,7 @@ readLoop:
 	}
 
 	if clientDisconnected && terminalEventCount == 0 {
-		return resultWithUsage(), fmt.Errorf("openai ws stream incomplete after client disconnect: %w", context.Canceled)
+		return partialResultWithUsage(), fmt.Errorf("openai ws stream incomplete after client disconnect: %w", context.Canceled)
 	}
 	if !reqStream {
 		if clientDisconnected {
@@ -1051,6 +1162,9 @@ readLoop:
 				terminalEventCount,
 				wroteDownstream,
 			)
+			if replayUnsafe() {
+				return incompleteAfterProgress(errors.New("no terminal response payload"))
+			}
 			if !wroteDownstream {
 				return nil, wrapOpenAIWSFallback("missing_final_response", errors.New("no terminal response payload"))
 			}
@@ -1071,7 +1185,7 @@ readLoop:
 		flushStreamWriter(true)
 	}
 
-	if responseID != "" && stateStore != nil {
+	if responseID != "" && stateStore != nil && successfulOpenAIResponseAuthOwnerTerminal(upstreamTerminalEvent) {
 		ttl := s.openAIWSResponseStickyTTL()
 		if successfulOpenAIResponseAuthOwnerTerminal(upstreamTerminalEvent) {
 			s.bindOpenAIResponseAuthOwner(ctx, c, account, responseID)
@@ -1079,10 +1193,10 @@ readLoop:
 		logOpenAIWSBindResponseAccountWarn(groupID, account.ID, responseID, stateStore.BindResponseAccount(ctx, groupID, responseID, account.ID, ttl))
 		stateStore.BindResponseConn(responseID, lease.ConnID(), ttl)
 	}
-	if stateStore != nil && storeDisabled && sessionHash != "" {
+	if stateStore != nil && storeDisabled && sessionHash != "" && successfulOpenAIResponseAuthOwnerTerminal(upstreamTerminalEvent) {
 		stateStore.BindSessionConn(groupID, sessionHash, lease.ConnID(), s.openAIWSSessionStickyTTL())
 	}
-	if deltaRecorder != nil && stateStore != nil && sessionHash != "" && cleanExit && !clientDisconnected {
+	if deltaRecorder != nil && stateStore != nil && sessionHash != "" && cleanExit && !clientDisconnected && successfulOpenAIResponseAuthOwnerTerminal(upstreamTerminalEvent) {
 		if next, ok := deltaRecorder.finalize(account.ID, deltaFieldsFP, deltaLogicalHashes, nil); ok {
 			if next == nil {
 				stateStore.DeleteSessionDeltaChain(groupID, sessionHash)
@@ -1129,6 +1243,12 @@ readLoop:
 	result := resultWithUsage()
 	result.ImageCount = imageCounter.Count()
 	result.ImageOutputSizes = imageCounter.Sizes()
+	if !successfulOpenAIResponseAuthOwnerTerminal(upstreamTerminalEvent) {
+		// The terminal failure is already delivered on the Responses protocol.
+		// Preserve the existing result contract for settlement and let the
+		// terminal/failed marker drive scheduling, never successful publication.
+		result.upstreamFailed = true
+	}
 	return result, nil
 }
 

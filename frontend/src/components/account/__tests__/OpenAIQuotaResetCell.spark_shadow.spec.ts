@@ -444,6 +444,7 @@ describe('OpenAIQuotaResetCell 自动用卡运行态', () => {
     const account = makeAccount({
       extra: {
         auto_reset_credit_enabled: true,
+        auto_reset_credit_opt_in_version: 1,
         codex_auto_reset_credit_state: {
           status,
           trigger_window: '5h',

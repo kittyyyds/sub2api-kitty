@@ -2929,7 +2929,7 @@
           <button
             type="button"
             data-testid="auto-reset-credit-enabled"
-            @click="autoResetCreditEnabled = !autoResetCreditEnabled"
+            @click="autoResetCreditEnabled ? (autoResetCreditEnabled = false) : (showAutoResetCreditConfirm = true)"
             :class="[
               'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
               autoResetCreditEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
@@ -3474,6 +3474,14 @@
     </template>
   </BaseDialog>
 
+  <ConfirmDialog
+    :show="showAutoResetCreditConfirm"
+    :title="t('admin.accounts.autoResetSafety.confirmTitle')"
+    :message="t('admin.accounts.autoResetSafety.confirmMessage', { threshold5h: autoResetCredit5hThreshold, threshold7d: autoResetCredit7dThreshold })"
+    :confirm-text="t('common.confirm')" :cancel-text="t('common.cancel')" danger
+    @confirm="autoResetCreditEnabled = true; showAutoResetCreditConfirm = false"
+    @cancel="showAutoResetCreditConfirm = false"
+  />
   <!-- Mixed Channel Warning Dialog -->
   <ConfirmDialog
     :show="showMixedChannelWarning"
@@ -4245,6 +4253,7 @@ const autoPause7dThreshold = ref<number | null>(null)
 const autoPause5hDisabled = ref(false)
 const autoPause7dDisabled = ref(false)
 const autoResetCreditEnabled = ref(false)
+const showAutoResetCreditConfirm = ref(false)
 const autoResetCredit5hThreshold = ref(100)
 const autoResetCredit7dThreshold = ref(100)
 const isModelPriceProbe = computed(() => props.account?.platform === 'video' || usesImagePriceProbe(props.account?.platform, editBaseUrl.value))
@@ -4830,7 +4839,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 	autoPause7dThreshold.value = typeof extra?.auto_pause_7d_threshold === 'number' ? extra.auto_pause_7d_threshold * 100 : null
 	autoPause5hDisabled.value = extra?.auto_pause_5h_disabled === true
 	autoPause7dDisabled.value = extra?.auto_pause_7d_disabled === true
-	autoResetCreditEnabled.value = extra?.auto_reset_credit_enabled === true
+	showAutoResetCreditConfirm.value = false
+	autoResetCreditEnabled.value = extra?.auto_reset_credit_enabled === true && extra?.auto_reset_credit_opt_in_version === 1
 	autoResetCredit5hThreshold.value =
 		typeof extra?.auto_reset_credit_5h_threshold === 'number' ? extra.auto_reset_credit_5h_threshold * 100 : 100
 	autoResetCredit7dThreshold.value =
@@ -6495,6 +6505,7 @@ const handleSubmit = async () => {
 		}
 		if (props.account.type === 'oauth' && !isSparkShadow.value) {
 			newExtra.auto_reset_credit_enabled = autoResetCreditEnabled.value
+			newExtra.auto_reset_credit_opt_in_version = autoResetCreditEnabled.value ? 1 : null
 			newExtra.auto_reset_credit_5h_threshold = autoResetCredit5hThreshold.value / 100
 			newExtra.auto_reset_credit_7d_threshold = autoResetCredit7dThreshold.value / 100
 		}

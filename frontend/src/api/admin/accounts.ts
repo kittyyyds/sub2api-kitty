@@ -622,6 +622,11 @@ export async function setSchedulable(id: number, schedulable: boolean): Promise<
  * @param enabled - Whether the account may spend credits after its plan allowance is exhausted
  * @returns Updated account
  */
+export async function setOpenAIAutoResetCreditEnabled(id: number, enabled: boolean): Promise<Account> {
+  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/auto-reset-credit-enabled`, { enabled })
+  return data
+}
+
 export async function setOpenAICreditsEnabled(id: number, enabled: boolean): Promise<Account> {
   const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/openai-credits`, {
     enabled
@@ -1244,6 +1249,7 @@ export const accountsAPI = {
   resetTempUnschedulable,
   setSchedulable,
   setOpenAICreditsEnabled,
+  setOpenAIAutoResetCreditEnabled,
   getAvailableModels,
   syncUpstreamModels,
   batchSyncUpstreamModels,

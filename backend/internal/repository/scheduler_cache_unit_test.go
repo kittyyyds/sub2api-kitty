@@ -457,10 +457,11 @@ func TestSchedulerMetadataPayload_KeepsOpenAIAutoResetCreditFields(t *testing.T)
 		Status:      service.StatusActive,
 		Schedulable: true,
 		Extra: map[string]any{
-			"codex_7d_used_percent":                          90.0,
-			service.OpenAIAutoResetCreditEnabledExtraKey:     true,
-			service.OpenAIAutoResetCredit5hThresholdExtraKey: 0.95,
-			service.OpenAIAutoResetCredit7dThresholdExtraKey: 0.98,
+			"codex_7d_used_percent":                           90.0,
+			service.OpenAIAutoResetCreditEnabledExtraKey:      true,
+			service.OpenAIAutoResetCreditOptInVersionExtraKey: 1,
+			service.OpenAIAutoResetCredit5hThresholdExtraKey:  0.95,
+			service.OpenAIAutoResetCredit7dThresholdExtraKey:  0.98,
 			service.OpenAIAutoResetCreditStateExtraKey: map[string]any{
 				"status":          service.OpenAIAutoResetStatusAvailable,
 				"available_count": 3,
@@ -477,6 +478,7 @@ func TestSchedulerMetadataPayload_KeepsOpenAIAutoResetCreditFields(t *testing.T)
 
 	config := service.ResolveOpenAIAutoResetCreditConfig(&cached)
 	require.True(t, config.Enabled)
+	require.EqualValues(t, 1, cached.Extra[service.OpenAIAutoResetCreditOptInVersionExtraKey], "the confirmation must survive the scheduler metadata projection")
 	require.Equal(t, 0.95, config.Threshold5h)
 	require.Equal(t, 0.98, config.Threshold7d)
 
@@ -485,6 +487,8 @@ func TestSchedulerMetadataPayload_KeepsOpenAIAutoResetCreditFields(t *testing.T)
 	require.Equal(t, service.OpenAIAutoResetStatusAvailable, state["status"])
 	require.EqualValues(t, 3, state["available_count"])
 	require.Equal(t, checkedAt, state["checked_at"])
+	delete(cached.Extra, service.OpenAIAutoResetCreditOptInVersionExtraKey)
+	require.False(t, service.ResolveOpenAIAutoResetCreditConfig(&cached).Enabled, "a legacy cached flag does not authorize automatic consumption")
 }
 
 func TestBuildSchedulerMetadataAccount_KeepsQuotaStateForCachedAccounts(t *testing.T) {

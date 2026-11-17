@@ -60,6 +60,7 @@ vi.mock('vue-i18n', async () => {
 })
 
 import EditAccountModal from '../EditAccountModal.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 
 const BaseDialogStub = defineComponent({
   name: 'BaseDialog',
@@ -2041,6 +2042,10 @@ describe('EditAccountModal OpenAI 自动使用重置卡', () => {
     const wrapper = mountModal(account)
 
     await wrapper.get('[data-testid="auto-reset-credit-enabled"]').trigger('click')
+    const confirmation = wrapper.findAllComponents(ConfirmDialog).find(dialog => dialog.props('title') === 'admin.accounts.autoResetSafety.confirmTitle')!
+    expect(confirmation.props('show')).toBe(true)
+    confirmation.vm.$emit('confirm')
+    await flushPromises()
     await wrapper.get('[data-testid="auto-reset-credit-5h-threshold"]').setValue('75.5')
     await wrapper.get('[data-testid="auto-reset-credit-7d-threshold"]').setValue('92')
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
@@ -2059,6 +2064,10 @@ describe('EditAccountModal OpenAI 自动使用重置卡', () => {
   it('开启后拒绝超出 0.1–100 范围的任一阈值', async () => {
     const wrapper = mountModal(buildOpenAIOAuthParentAccount())
     await wrapper.get('[data-testid="auto-reset-credit-enabled"]').trigger('click')
+    const confirmation = wrapper.findAllComponents(ConfirmDialog).find(dialog => dialog.props('title') === 'admin.accounts.autoResetSafety.confirmTitle')!
+    expect(confirmation.props('show')).toBe(true)
+    confirmation.vm.$emit('confirm')
+    await flushPromises()
     await wrapper.get('[data-testid="auto-reset-credit-5h-threshold"]').setValue('0')
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
     expect(updateAccountMock).not.toHaveBeenCalled()

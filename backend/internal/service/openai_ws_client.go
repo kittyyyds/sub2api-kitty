@@ -79,6 +79,8 @@ func newDefaultOpenAIWSClientDialer() openAIWSClientDialer {
 }
 
 type coderOpenAIWSClientDialer struct {
+	directOnce   sync.Once
+	directClient *http.Client
 	proxyMu      sync.Mutex
 	proxyClients map[string]*openAIWSProxyClientEntry
 	proxyHits    atomic.Int64
@@ -140,6 +142,11 @@ func (d *coderOpenAIWSClientDialer) Dial(
 			return nil, 0, nil, err
 		}
 		opts.HTTPClient = proxyClient
+	} else {
+		d.directOnce.Do(func() {
+			d.directClient = &http.Client{Transport: &http.Transport{Proxy: nil, MaxIdleConns: 100, MaxIdleConnsPerHost: 100, IdleConnTimeout: 90 * time.Second, TLSHandshakeTimeout: 10 * time.Second, ForceAttemptHTTP2: true}}
+		})
+		opts.HTTPClient = d.directClient
 	}
 
 	conn, resp, err := coderws.Dial(ctx, targetURL, opts)

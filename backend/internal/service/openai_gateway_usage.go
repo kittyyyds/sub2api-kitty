@@ -167,7 +167,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		return errors.New("upstream usage unavailable; token usage was not recorded and request was not billed")
 	}
 	ensureOpenAIUsageAudit(result, input.InboundEndpoint)
-	if s.rateLimitService != nil && input.Account != nil && input.Account.Platform == PlatformOpenAI {
+	if !input.CyberBlocked && result.SucceededForScheduling() && s.rateLimitService != nil && input.Account != nil && input.Account.Platform == PlatformOpenAI {
 		s.rateLimitService.ResetOpenAI403Counter(ctx, input.Account.ID)
 	}
 

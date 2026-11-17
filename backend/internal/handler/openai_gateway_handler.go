@@ -175,6 +175,10 @@ type grokMediaEligibilityProber interface {
 
 const maxOpenAIFirstOutputTimeoutSwitches = 1
 
+func openAIForwardHasSchedulingSample(result *service.OpenAIForwardResult) bool {
+	return result != nil
+}
+
 func openAIForwardSucceededForScheduling(result *service.OpenAIForwardResult) bool {
 	return result.SucceededForScheduling()
 }
@@ -3365,7 +3369,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				cyberRecordPendingAfterFailover = preserveOpenAIWSCyberRecord(cyberRecordPendingAfterFailover, cyberMarked, turnErr)
 
 				if turnErr != nil {
-					if result == nil || result.ImageCount <= 0 {
+					if result == nil || (result.ImageCount <= 0 && result.Usage.InputTokens <= 0 && result.Usage.OutputTokens <= 0 &&
+						result.Usage.CacheReadInputTokens <= 0 && result.Usage.CacheCreationInputTokens <= 0 &&
+						result.Usage.ImageInputTokens <= 0 && result.Usage.ImageOutputTokens <= 0) {
 						return
 					}
 					// cyber 命中时该 turn 的用量已由 recordCyberPolicyIfMarked(forwardErrored=true)
@@ -3373,7 +3379,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					if service.GetOpsCyberPolicy(c) != nil {
 						return
 					}
-					reqLog.Warn("openai.websocket_partial_error_with_image_result",
+					reqLog.Warn("openai.websocket_partial_error_with_metered_result",
 						zap.Int64("account_id", account.ID),
 						zap.Int("image_count", result.ImageCount),
 						zap.Error(turnErr),
@@ -3397,7 +3403,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				if scheduleModel == "" {
 					scheduleModel = turnRequestedModel
 				}
-				h.gatewayService.ReportOpenAIAccountScheduleResult(account, scheduleModel, openAIForwardSucceededForScheduling(result), result.FirstTokenMs)
+				if openAIForwardHasSchedulingSample(result) {
+					h.gatewayService.ReportOpenAIAccountScheduleResult(account, scheduleModel, turnErr == nil && openAIForwardSucceededForScheduling(result), result.FirstTokenMs)
+				}
 				inboundEndpoint := GetInboundEndpoint(c)
 				upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account, result)
 				quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)

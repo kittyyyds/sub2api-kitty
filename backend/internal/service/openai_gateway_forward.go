@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // Forward forwards request to OpenAI API
@@ -1125,27 +1126,48 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 		}
 		retryBudget := s.openAIWSRetryTotalBudget()
 		retryStartedAt := time.Now()
+		wsRejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
 	wsRetryLoop:
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
 			wsAttempts = attempt
-			wsResult, wsErr = s.forwardOpenAIWSV2(
-				ctx,
-				c,
-				account,
-				wsReqBody,
-				clientPromptCacheKey,
-				wsExecutionScope,
-				token,
-				wsDecision,
-				isCodexCLI,
-				reqStream,
-				originalModel,
-				upstreamModel,
-				startTime,
-				attempt,
-				wsLastFailureReason,
-				&agentTaskRecoveryTried,
-			)
+			wsResult, wsErr = withOpenAIRejectedFieldRetryAttempt(c, body, wsRejectedFieldRetryState, func() (*OpenAIForwardResult, error) {
+				return s.forwardOpenAIWSV2(
+					ctx,
+					c,
+					account,
+					wsReqBody,
+					clientPromptCacheKey,
+					wsExecutionScope,
+					token,
+					wsDecision,
+					isCodexCLI,
+					reqStream,
+					originalModel,
+					upstreamModel,
+					startTime,
+					attempt,
+					wsLastFailureReason,
+					&agentTaskRecoveryTried,
+				)
+			})
+			if signal, ok := asOpenAIRejectedFieldStreamRetrySignal(wsErr); ok {
+				// Keep the repaired final input (including the instructions item)
+				// and strip only the WS transport envelope for HTTP fallback.
+				body, err = sjson.DeleteBytes(signal.body, "type")
+				if err != nil {
+					return nil, err
+				}
+				requestView = newOpenAIRequestView(body)
+				wsReqBody, err = requestView.Decode(c)
+				reqBody = wsReqBody
+				if err != nil {
+					return nil, err
+				}
+				// Field repairs use their shared budget, independently of the
+				// existing bounded transport reconnect attempts.
+				attempt--
+				continue
+			}
 			if wsErr == nil {
 				break
 			}
@@ -1264,8 +1286,17 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 			}
 			return wsResult, nil
 		}
-		s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
-		return nil, wsErr
+		if wsResult != nil || !openAIWSEdgeHTTPFallbackEligible(ctx, c, account, body, wsErr) {
+			s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
+			return wsResult, wsErr
+		}
+		reason := openAIWSEdgeBackoffReason
+		if !errors.Is(wsErr, errOpenAIWSEdgeBackoff) {
+			reason = "edge_challenge_403"
+		}
+		c.Set("openai_ws_session_fallback_reason", reason)
+		// Continue below with the original full HTTP request. No WS request
+		// was submitted and no persistent session/account disable is written.
 	}
 
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, upstreamModel, billingModel, originalModel)
@@ -1479,7 +1510,16 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 		searchCount := 0
 		var imageOutputSizes []string
 		if reqStream {
-			streamResult, err := s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, upstreamModel, reasoningEffortValue)
+			streamResult, err := withOpenAIRejectedFieldRetryAttempt(c, body, rejectedFieldRetryState, func() (*openaiStreamingResult, error) {
+				return s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, upstreamModel, reasoningEffortValue)
+			})
+			if signal, ok := asOpenAIRejectedFieldStreamRetrySignal(err); ok {
+				_ = resp.Body.Close()
+				body = signal.body
+				requestView = newOpenAIRequestView(body)
+				reqBody = nil
+				continue
+			}
 			if err != nil {
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
@@ -1517,7 +1557,17 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 					}
 					return s.handleErrorResponse(ctx, compactResp, c, account, body, resolveOpenAIErrorSchedulingModel(billingModel, upstreamModel))
 				}
-				return nil, err
+				var partial *OpenAIForwardResult
+				if streamResult != nil {
+					partial = newOpenAIFailedHTTPResult(c, resp, streamResult.usage, streamResult.responseID, originalModel, upstreamModel, reqStream, startTime)
+					if partial != nil {
+						partial.BillingModel = billingModel
+						partial.ServiceTier = resolvedOpenAIUpstreamServiceTier(c, serviceTier)
+						partial.ReasoningEffort = reasoningEffort
+						partial.FirstTokenMs = streamResult.firstTokenMs
+					}
+				}
+				return partial, err
 			}
 			usage = streamResult.usage
 			firstTokenMs = streamResult.firstTokenMs
@@ -1526,7 +1576,16 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 			imageOutputSizes = streamResult.imageOutputSizes
 			searchCount = streamResult.searchCount
 		} else {
-			nonStreamResult, err := s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
+			nonStreamResult, err := withOpenAIRejectedFieldRetryAttempt(c, body, rejectedFieldRetryState, func() (*openaiNonStreamingResult, error) {
+				return s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
+			})
+			if signal, ok := asOpenAIRejectedFieldStreamRetrySignal(err); ok {
+				_ = resp.Body.Close()
+				body = signal.body
+				requestView = newOpenAIRequestView(body)
+				reqBody = nil
+				continue
+			}
 			if err != nil {
 				if signal, ok := asOpenAICompactFallbackSignal(err); ok {
 					if retryBody, fallbackModel, retry := s.prepareOpenAICompactFallbackRetry(
@@ -1541,7 +1600,16 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 						continue
 					}
 				}
-				return nil, err
+				var partial *OpenAIForwardResult
+				if nonStreamResult != nil {
+					partial = newOpenAIFailedHTTPResult(c, resp, nonStreamResult.usage, nonStreamResult.responseID, originalModel, upstreamModel, reqStream, startTime)
+					if partial != nil {
+						partial.BillingModel = billingModel
+						partial.ServiceTier = resolvedOpenAIUpstreamServiceTier(c, serviceTier)
+						partial.ReasoningEffort = reasoningEffort
+					}
+				}
+				return partial, err
 			}
 			usage = nonStreamResult.usage
 			responseID = strings.TrimSpace(nonStreamResult.responseID)

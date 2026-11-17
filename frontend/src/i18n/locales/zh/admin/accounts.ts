@@ -1,6 +1,16 @@
 // Kitty UI messages plus Custom-only feature messages.
 export default {
   "accounts": {
+    autoResetSafety: {
+      label: '自动用重置卡',
+      confirmTitle: '开启自动用重置卡？',
+      confirmMessage: '当前阈值：5 小时 {threshold5h}%、7 天 {threshold7d}%。达到任一阈值时，系统会自动消耗此账号可用的重置卡。开启后可能消耗有价值的卡片。只有确认后才生效；关闭不会中断已提交的用卡操作。',
+      legacy: '旧配置尚未重新确认，自动用卡当前未启用',
+      enabled: '自动用卡已开启',
+      disabled: '自动用卡已关闭',
+      manualBlocked: '自动用卡已开启，请先关闭后再手动使用重置卡',
+      inProgress: '用卡设置正在保存或自动重置仍在执行，请稍后再试'
+    },
     "intelligenceSummary": {"title": "智商检测", "correct": "答案测试：匹配 {answer}", "incorrect": "答案测试：未匹配 {answer}", "result": "答案测试：{status}", "matchRate": "匹配率 {rate}% · {count} 次", "unscored": "自定义题目 · 未评分", "noScoredResults": "匹配率 — · 暂无有效评分", "rateHint": "统计最近展示的 {count} 条记录中，同题、同模型、同思考强度的已评分结果；请求异常、检测中和自定义题目不计入。仅代表这些测试题的答案匹配情况。", "recent": "最近 {count} 次检测（左旧右新）", "finished": "检测完成时间", "started": "检测开始时间"},
     "intelligenceSchedule": {"title": "定时智商检测", "hint": "保存此账号的自动检测计划。与手动检测共用题目评分和历史格子，使用账号当前出口；测试会消耗上游额度。不会根据答错停号或恢复账号状态。", "active": "已保存：自动检测已启用", "paused": "当前自动检测已关闭", "next": "下次检测：", "last": "上次执行：", "timezone": "计划时区：", "period": "检测周期", "every1": "每 1 分钟", "every30": "每 30 分钟", "hourly": "每小时", "every6h": "每 6 小时", "daily": "每天零点", "customCron": "自定义 Cron", "cron": "Cron 表达式", "cronHint": "标准 5 字段，例如 */30 * * * *，不要附加说明；最短间隔 1 分钟。", "keep": "保留自动检测记录数", "keepHint": "只清理超出数量的自动检测记录，手动检测历史保留。", "enable": "启用自动检测（点击保存后生效）", "saved": "计划已保存，下次检测时间已更新。", "failed": "自动检测配置暂时不可用，请重试。", "invalidCron": "Cron 格式无效。请使用预设周期或填写 */30 * * * *，不要附加中文说明。", "required": "请填写测试模型和题目。", "invalidKeep": "保留记录数须为 1–1000 的整数。", "automatic": "自动", "manual": "手动"},
     "allGPTPlans": "全部 GPT 档位",

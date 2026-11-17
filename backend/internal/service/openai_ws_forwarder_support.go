@@ -273,31 +273,14 @@ func markOpenAIWSClientVisibleFailure(c *gin.Context, eventType string, payload 
 	if eventType != "error" && eventType != "response.failed" {
 		return
 	}
-	prefix := "error"
-	if eventType == "response.failed" {
-		prefix = "response.error"
-	}
-	code := strings.TrimSpace(gjson.GetBytes(payload, prefix+".code").String())
-	errType := strings.TrimSpace(gjson.GetBytes(payload, prefix+".type").String())
-	message := strings.TrimSpace(gjson.GetBytes(payload, prefix+".message").String())
-	if eventType == "response.failed" && code == "" && errType == "" && message == "" {
-		prefix = "error"
-		code = strings.TrimSpace(gjson.GetBytes(payload, prefix+".code").String())
-		errType = strings.TrimSpace(gjson.GetBytes(payload, prefix+".type").String())
-		message = strings.TrimSpace(gjson.GetBytes(payload, prefix+".message").String())
-	}
-	status := int(gjson.GetBytes(payload, prefix+".status_code").Int())
-	if status == 0 {
-		status = int(gjson.GetBytes(payload, prefix+".status").Int())
-	}
-	if status == 0 && eventType == "error" {
-		status = int(gjson.GetBytes(payload, "status").Int())
-	}
-	if status == 0 {
-		status = openAIWSErrorHTTPStatusFromRaw(code, errType)
-	}
+	code, errType, message := parseOpenAIWSErrorEventFields(payload)
+	status := openAIStreamFailureStatus(payload, message)
+
 	if errType == "" {
 		errType = "upstream_error"
+		if status == http.StatusBadRequest {
+			errType = "invalid_request_error"
+		}
 	}
 	if code == "" {
 		code = strings.ReplaceAll(eventType, ".", "_")
@@ -742,6 +725,10 @@ func (s *OpenAIGatewayService) resolveAccountByPreviousResponseIDForCapability(
 }
 
 func classifyOpenAIWSAcquireError(err error) string {
+	if errors.Is(err, errOpenAIWSEdgeBackoff) {
+		return openAIWSEdgeBackoffReason
+	}
+
 	if err == nil {
 		return "acquire_conn"
 	}
@@ -1057,4 +1044,42 @@ func (s *OpenAIGatewayService) applyCodexWSV2TurnShape(
 	}
 	projectCodexOutboundHeaders(wsHeaders, true)
 	return nil
+}
+
+func (s *OpenAIGatewayService) openAIWSV2PreOutputAccountFailover(
+	c *gin.Context,
+	account *Account,
+	headers http.Header,
+	payload []byte,
+	errCodeRaw, errTypeRaw, errMsgRaw string,
+	replayUnsafe bool,
+	clientDisconnected bool,
+) *UpstreamFailoverError {
+	if s == nil || account == nil || replayUnsafe || clientDisconnected {
+		return nil
+	}
+	if c != nil && c.Writer != nil && c.Writer.Written() {
+		return nil
+	}
+	if hit, _, _ := detectOpenAICyberPolicy(payload); hit {
+		return nil
+	}
+	statusCode := 0
+	switch {
+	case isOpenAIUpstreamCapacityShedEvent(payload):
+		statusCode = http.StatusServiceUnavailable
+	case isOpenAIWSRateLimitError(errCodeRaw, errTypeRaw, errMsgRaw):
+		statusCode = http.StatusTooManyRequests
+	default:
+		return nil
+	}
+	message := strings.TrimSpace(errMsgRaw)
+	if message == "" {
+		message = extractOpenAISSEErrorMessage(payload)
+	}
+	message = s.recordOpenAIStreamUpstreamError(c, account, false, "", "failover", payload, message)
+	if statusCode == http.StatusTooManyRequests {
+		return s.newOpenAIWSRateLimitFailoverError(account, headers, payload, message)
+	}
+	return s.newOpenAIAccountFailoverError(account, statusCode, headers, payload, message, false, false)
 }

@@ -41,6 +41,7 @@
       <button
         type="button"
         class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-orange-600 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-orange-400 dark:hover:bg-orange-900/30"
+        data-testid="openai-quota-reset"
         :disabled="resetting || loading || !canReset"
         :title="resetButtonTitle"
         @click="openResetConfirm"
@@ -95,9 +96,22 @@
           ]"
         />
       </button>
+      <button
+        v-if="!isShadow"
+        type="button" role="switch" data-testid="auto-reset-credit-enabled-toggle"
+        :aria-checked="autoResetEnabled" :disabled="autoResetToggling || resetting"
+        :title="autoResetNeedsConfirmation ? t('admin.accounts.autoResetSafety.legacy') : t('admin.accounts.autoResetSafety.label')"
+        :class="['inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50', autoResetEnabled ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300']"
+        @click="handleAutoResetToggle"
+      >
+        {{ t('admin.accounts.autoResetSafety.label') }} · {{ autoResetEnabled ? t('common.enabled') : t('common.disabled') }}
+      </button>
       <OpenAIReferralCell :account="account" />
     </div>
 
+    <div v-if="autoResetNeedsConfirmation" class="text-[10px] text-amber-600 dark:text-amber-400" data-testid="auto-reset-reconfirm-hint">
+      {{ t('admin.accounts.autoResetSafety.legacy') }}
+    </div>
     <div v-if="creditsCacheWarning" class="text-[10px] text-amber-600 dark:text-amber-400">
       {{ t('admin.accounts.openaiQuotaReset.pointsCachePersistFailed') }}
     </div>
@@ -209,6 +223,13 @@
       @confirm="confirmEnableCredits"
       @cancel="showCreditsConfirm = false"
     />
+    <ConfirmDialog
+      :show="showAutoResetConfirm"
+      :title="t('admin.accounts.autoResetSafety.confirmTitle')"
+      :message="autoResetConfirmMessage"
+      :confirm-text="t('common.confirm')" :cancel-text="t('common.cancel')" danger
+      @confirm="confirmAutoReset" @cancel="showAutoResetConfirm = false"
+    />
   </div>
 </template>
 
@@ -220,6 +241,7 @@ import {
   refreshOpenAIQuota,
   resetOpenAIQuota,
   setOpenAICreditsEnabled,
+  setOpenAIAutoResetCreditEnabled,
   type OpenAIQuotaUsage,
   type OpenAIQuotaResetResult
 } from '@/api/admin/accounts'
@@ -251,6 +273,58 @@ const resetMessage = ref<string | null>(null)
 const resetWarning = ref<string | null>(null)
 const showResetConfirm = ref(false)
 const showResetCreditDetails = ref(false)
+const showAutoResetConfirm = ref(false)
+const autoResetConfirmAccountID = ref<number | null>(null)
+const autoResetToggling = ref(false)
+const autoResetEnabledOverride = ref<boolean | null>(null)
+const autoResetEnabled = computed(() => autoResetEnabledOverride.value ?? (
+  props.account.extra?.auto_reset_credit_enabled === true &&
+  props.account.extra?.auto_reset_credit_opt_in_version === 1
+))
+const autoResetNeedsConfirmation = computed(() => !isShadow.value &&
+  autoResetEnabledOverride.value === null && props.account.extra?.auto_reset_credit_enabled === true &&
+  props.account.extra?.auto_reset_credit_opt_in_version !== 1)
+const autoResetConfirmMessage = computed(() => t('admin.accounts.autoResetSafety.confirmMessage', {
+  threshold5h: Math.round((props.account.extra?.auto_reset_credit_5h_threshold ?? 1) * 100),
+  threshold7d: Math.round((props.account.extra?.auto_reset_credit_7d_threshold ?? 1) * 100)
+}))
+let autoResetRequestGeneration = 0
+const applyAutoResetEnabled = async (enabled: boolean) => {
+  if (autoResetToggling.value || resetting.value || isShadow.value) return
+  const generation = autoResetRequestGeneration
+  const isCurrent = () => props.account.id === accountID && autoResetRequestGeneration === generation
+  const accountID = props.account.id
+  autoResetToggling.value = true
+  error.value = null
+  try {
+    const updated = await setOpenAIAutoResetCreditEnabled(accountID, enabled)
+    if (!isCurrent()) return
+    autoResetEnabledOverride.value = updated.extra?.auto_reset_credit_enabled === true && updated.extra?.auto_reset_credit_opt_in_version === 1
+    emit('account-updated', updated)
+  } catch (e) {
+    if (isCurrent()) error.value = extractErrorMessage(e)
+  } finally {
+    if (isCurrent()) autoResetToggling.value = false
+  }
+}
+const handleAutoResetToggle = () => {
+  if (autoResetToggling.value || resetting.value) return
+  if (autoResetEnabled.value) { void applyAutoResetEnabled(false); return }
+  autoResetConfirmAccountID.value = props.account.id
+  showAutoResetConfirm.value = true
+}
+const confirmAutoReset = () => {
+  showAutoResetConfirm.value = false
+  if (autoResetConfirmAccountID.value !== props.account.id) return
+  void applyAutoResetEnabled(true)
+}
+watch(() => [props.account.id, props.account.extra] as const, () => {
+  autoResetRequestGeneration++
+  autoResetEnabledOverride.value = null
+  autoResetToggling.value = false
+  showAutoResetConfirm.value = false
+  autoResetConfirmAccountID.value = null
+})
 const creditsCacheWarning = ref(false)
 
 const readCachedCredits = (account: Account) => {
@@ -287,7 +361,7 @@ const updateCredits = (usage: OpenAIQuotaUsage | null) => {
 type AutoResetCreditState = NonNullable<NonNullable<Account['extra']>['codex_auto_reset_credit_state']>
 const validAutoResetStatuses = new Set(['checking', 'available', 'resetting', 'success', 'no_credit', 'failed'])
 const autoResetState = computed<AutoResetCreditState | null>(() => {
-  if (props.account.extra?.auto_reset_credit_enabled !== true) return null
+  if (!autoResetEnabled.value) return null
   const state = props.account.extra?.codex_auto_reset_credit_state
   if (!state || typeof state !== 'object' || !validAutoResetStatuses.has(String(state.status))) return null
   return state
@@ -381,7 +455,15 @@ const resetCreditExpirations = computed(() =>
 )
 const primaryResetCreditExpiry = computed(() => resetCreditExpirations.value[0] ?? '')
 const hiddenResetCreditCount = computed(() => Math.max(resetCreditExpirations.value.length - 1, 0))
-const canReset = computed(() => availableResetCount.value > 0 && !isShadow.value)
+const autoResetInProgress = computed(() => {
+  const state = props.account.extra?.codex_auto_reset_credit_state
+  if (!state || (state.status !== 'checking' && state.status !== 'resetting')) return false
+  const checked = Date.parse(state.checked_at ?? '')
+  const age = Date.now() - checked
+  return Number.isFinite(age) && age >= 0 && age < 120000
+})
+const canReset = computed(() => availableResetCount.value > 0 && !isShadow.value &&
+  !autoResetEnabled.value && !autoResetToggling.value && !autoResetInProgress.value)
 
 const resetCreditDetailsTitle = computed(() =>
   resetCreditExpirations.value
@@ -398,6 +480,8 @@ const resetCreditDetailsToggleLabel = computed(() => {
 
 const resetButtonTitle = computed(() => {
   if (isShadow.value) return t('admin.accounts.openaiQuotaReset.resetTooltipShadow')
+  if (autoResetEnabled.value) return t('admin.accounts.autoResetSafety.manualBlocked')
+  if (autoResetToggling.value || autoResetInProgress.value) return t('admin.accounts.autoResetSafety.inProgress')
   if (!data.value) return t('admin.accounts.openaiQuotaReset.resetTooltipNeedQuery')
   if (!canReset.value) return t('admin.accounts.openaiQuotaReset.resetTooltipNoCredits')
   return t('admin.accounts.openaiQuotaReset.resetTooltipReady')

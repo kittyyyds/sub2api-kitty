@@ -1,6 +1,16 @@
 // Kitty UI messages plus Custom-only feature messages.
 export default {
   "accounts": {
+    autoResetSafety: {
+      label: 'Use reset credits automatically',
+      confirmTitle: 'Enable automatic reset credits?',
+      confirmMessage: 'Current thresholds: 5 hours {threshold5h}%, 7 days {threshold7d}%. At either threshold, the system automatically consumes an available reset credit. Credits may have monetary value. Explicit confirmation is required. Disabling does not cancel a reset already submitted upstream.',
+      legacy: 'Previous setting requires confirmation; automatic resets are currently off',
+      enabled: 'Automatic reset credits enabled',
+      disabled: 'Automatic reset credits disabled',
+      manualBlocked: 'Disable automatic resets before using a reset credit manually',
+      inProgress: 'The setting is being saved or an automatic reset is still running. Try again shortly.'
+    },
     "intelligenceSummary": {"title": "Intelligence test", "correct": "Answer test: matched {answer}", "incorrect": "Answer test: did not match {answer}", "result": "Answer test: {status}", "matchRate": "Match {rate}% · {count} tests", "unscored": "Custom question · Unscored", "noScoredResults": "Match — · No scored results", "rateHint": "Scored results for the same question, model and reasoning effort among the {count} displayed records. Errors, running tests and custom questions are excluded. This measures answer matches on these test questions only.", "recent": "Last {count} tests (oldest to newest)", "finished": "Test finished at", "started": "Test started at"},
     "intelligenceSchedule": {"title": "Scheduled intelligence test", "hint": "Save an automatic test for this account. Results share manual scoring and history, using its current egress. Tests consume upstream quota. Wrong answers do not pause or recover the account.", "active": "Saved: automatic testing is enabled", "paused": "Automatic testing is disabled", "next": "Next run:", "last": "Last attempt:", "timezone": "Schedule timezone:", "period": "Interval", "every1": "Every minute", "every30": "Every 30 minutes", "hourly": "Every hour", "every6h": "Every 6 hours", "daily": "Daily at midnight", "customCron": "Custom Cron", "cron": "Cron expression", "cronHint": "Five fields, e.g. */30 * * * *. No description text. Minimum interval: 1 minute.", "keep": "Automatic records to keep", "keepHint": "Only excess automatic records are removed; manual history is retained.", "enable": "Enable automatic testing (takes effect after saving)", "saved": "Schedule saved. The next run has been updated.", "failed": "Could not load or save the automatic schedule. Try again.", "invalidCron": "Invalid Cron. Choose a preset or enter */30 * * * * without description text.", "required": "Enter a text model and question.", "invalidKeep": "Keep count must be an integer from 1 to 1000.", "automatic": "Automatic", "manual": "Manual"},
     "allGPTPlans": "All GPT tiers",

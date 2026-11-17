@@ -24,7 +24,7 @@ func applyAccountPlanFilter(ctx context.Context, q *dbent.AccountQuery) *dbent.A
 	}
 	return q.Where(dbaccount.PlatformEQ(service.PlatformOpenAI), dbaccount.TypeEQ(service.AccountTypeOAuth), func(s *entsql.Selector) {
 		s.Where(entsql.P(func(b *entsql.Builder) {
-			b.WriteString("regexp_replace(lower(COALESCE(NULLIF(").Ident(s.C(dbaccount.FieldCredentials)).WriteString("->>'plan_type',''),(SELECT p.credentials->>'plan_type' FROM accounts p WHERE p.id=").Ident(s.C("parent_account_id")).WriteString(" AND p.deleted_at IS NULL))), '[[:space:]_-]+', '', 'g') IN (")
+			b.WriteString("regexp_replace(lower(COALESCE(NULLIF(regexp_replace(").Ident(s.C(dbaccount.FieldCredentials)).WriteString("->>'plan_type', '^[[:space:]]+|[[:space:]]+$', '', 'g'),''),(SELECT p.credentials->>'plan_type' FROM accounts p WHERE p.id=").Ident(s.C("parent_account_id")).WriteString(" AND p.deleted_at IS NULL))), '[[:space:]_-]+', '', 'g') IN (")
 			for i, a := range aliases {
 				if i > 0 {
 					b.Comma()

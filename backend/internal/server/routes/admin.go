@@ -488,6 +488,7 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.DELETE("/:id/temp-unschedulable", h.Admin.Account.ClearTempUnschedulable)
 		accounts.POST("/:id/schedulable", h.Admin.Account.SetSchedulable)
 		accounts.POST("/:id/openai-credits", h.Admin.Account.SetOpenAICreditsEnabled)
+		accounts.POST("/:id/auto-reset-credit-enabled", h.Admin.Account.SetOpenAIAutoResetCreditEnabled)
 		accounts.POST("/models/sync-upstream-preview", h.Admin.Account.SyncUpstreamModelsPreview)
 		accounts.POST("/models/sync-upstream-batch", h.Admin.Account.BatchSyncUpstreamModels)
 		accounts.GET("/:id/models", h.Admin.Account.GetAvailableModels)

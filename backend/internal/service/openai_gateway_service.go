@@ -325,6 +325,7 @@ type OpenAIForwardResult struct {
 	wsReplayInput                []json.RawMessage
 	wsReplayInputExists          bool
 	wsAccountFailoverReplayInput []json.RawMessage
+	upstreamFailed               bool
 	streamReadIncomplete         bool
 }
 
@@ -338,7 +339,7 @@ func (r *OpenAIForwardResult) HasHostedSearchRounds() bool {
 // that may clear model-scoped transient state. The zero value remains a success
 // for existing non-WS callers.
 func (r *OpenAIForwardResult) SucceededForScheduling() bool {
-	if r != nil && r.streamReadIncomplete {
+	if r != nil && (r.upstreamFailed || r.streamReadIncomplete) {
 		return false
 	}
 	if r == nil || !r.OpenAIWSMode || r.UpstreamTerminalEvent == "" {
@@ -516,6 +517,7 @@ type OpenAIGatewayService struct {
 	videoTaskWorkerDone   chan struct{}
 
 	openaiWSPoolOnce               sync.Once
+	openaiWSEdgeBackoffOnce        sync.Once
 	openaiWSStateStoreOnce         sync.Once
 	openaiSchedulerOnce            sync.Once
 	openaiProxyStreamCircuitOnce   sync.Once
@@ -523,6 +525,7 @@ type OpenAIGatewayService struct {
 	openaiModelTransientOnce       sync.Once
 	agentIdentityTaskMu            sync.Mutex
 	openaiWSPool                   *openAIWSConnPool
+	openaiWSEdgeBackoff            *openAIWSEdgeBackoff
 	openaiWSStateStore             OpenAIWSStateStore
 	openaiScheduler                OpenAIAccountScheduler
 	openaiWSPassthroughDialer      openAIWSClientDialer
@@ -868,6 +871,7 @@ func classifyOpenAIWSReconnectReason(err error) (string, bool) {
 		"upgrade_required",
 		"ws_unsupported",
 		"auth_failed",
+		openAIWSEdgeBackoffReason,
 		"invalid_encrypted_content",
 		"previous_response_not_found":
 		return reason, false

@@ -76,8 +76,9 @@ type openAIWSAcquireRequest struct {
 	// HeadersFactory is evaluated inside dialConn. It exists so credentials
 	// whose authorization is per-dial (Agent Identity) are never cached in
 	// lastAcquire or delayed prewarm state.
-	HeadersFactory func(context.Context, http.Header) (http.Header, error)
-	ProxyURL       string
+	HeadersFactory  func(context.Context, http.Header) (http.Header, error)
+	BeforeFreshDial openAIWSFreshDialHook
+	ProxyURL        string
 	// ProxyID is part of the pool identity. Two proxy records may intentionally
 	// share a URL while still representing independent concurrency buckets.
 	ProxyID         int64
@@ -1196,6 +1197,7 @@ retryAcquire:
 		return nil, errOpenAIWSConnQueueFull
 	}
 	var evicted []*openAIWSConn
+	var replacement *openAIWSConn
 	ap := p.getOrCreatePool(accountID, req)
 	ap.mu.Lock()
 	acquireGeneration := ap.generation
@@ -1398,9 +1400,15 @@ retryAcquire:
 	if !req.ForceNewConn && len(ap.conns)+ap.creating >= effectiveMaxConns {
 		affine := p.pickLeastBusyConnWithRoutingAffinityLocked(ap, compatibility, routingAffinity, proxyKey)
 		if idle := p.pickOldestIdleConnWithoutHandshakeCompatibilityLocked(ap, compatibility); idle != nil {
-			delete(ap.conns, idle.id)
-			evicted = append(evicted, idle)
-			p.metrics.scaleDownTotal.Add(1)
+			if req.BeforeFreshDial != nil {
+				if idle.tryAcquire() {
+					replacement = idle
+				}
+			} else {
+				delete(ap.conns, idle.id)
+				evicted = append(evicted, idle)
+				p.metrics.scaleDownTotal.Add(1)
+			}
 		} else if affine == nil {
 			compatible := p.pickLeastBusyConnLocked(ap, "", compatibility, proxyKey)
 			if compatible != nil {
@@ -1434,20 +1442,55 @@ retryAcquire:
 
 	if req.ForceNewConn && len(ap.conns)+ap.creating >= effectiveMaxConns {
 		if idle := p.pickOldestIdleConnLocked(ap); idle != nil {
-			delete(ap.conns, idle.id)
-			evicted = append(evicted, idle)
-			p.metrics.scaleDownTotal.Add(1)
+			if req.BeforeFreshDial != nil {
+				if idle.tryAcquire() {
+					replacement = idle
+				}
+			} else {
+				delete(ap.conns, idle.id)
+				evicted = append(evicted, idle)
+				p.metrics.scaleDownTotal.Add(1)
+			}
 		}
 	}
 
-	if len(ap.conns)+ap.creating < effectiveMaxConns {
+	if replacement != nil || len(ap.conns)+ap.creating < effectiveMaxConns {
 		connPick := time.Since(pickStartedAt)
 		p.recordConnPickDuration(connPick)
 		ap.creating++
 		ap.mu.Unlock()
 		closeOpenAIWSConns(evicted)
 
-		conn, dialErr := p.dialConn(ctx, req)
+		var beforeDial func(context.Context) error
+		if replacement != nil {
+			beforeDial = func(dialCtx context.Context) error {
+				ap.mu.Lock()
+				if err := dialCtx.Err(); err != nil {
+					ap.mu.Unlock()
+					return err
+				}
+				if ap.generation != acquireGeneration || ap.conns[replacement.id] != replacement {
+					ap.mu.Unlock()
+					return errOpenAIWSConnClosed
+				}
+				if replacement.waiters.Load() > 0 || p.isConnPinnedLocked(ap, replacement.id) {
+					ap.mu.Unlock()
+					return errOpenAIWSConnQueueFull
+				}
+				delete(ap.conns, replacement.id)
+				p.metrics.scaleDownTotal.Add(1)
+				ap.signalChangedLocked()
+				ap.mu.Unlock()
+				replacement.close()
+				return nil
+			}
+		}
+		conn, dialErr := p.dialConnBeforeOpen(ctx, req, beforeDial)
+		if replacement != nil {
+			// A refused/canceled admission must make the original socket
+			// available again. On admission it has already been retired.
+			replacement.release()
+		}
 
 		ap = p.getOrCreatePool(accountID, req)
 		ap.mu.Lock()
@@ -1464,8 +1507,10 @@ retryAcquire:
 			return nil, errOpenAIWSConnClosed
 		}
 		if dialErr != nil {
-			ap.prewarmFails++
-			ap.prewarmFailAt = time.Now()
+			if !errors.Is(dialErr, errOpenAIWSEdgeBackoff) {
+				ap.prewarmFails++
+				ap.prewarmFailAt = time.Now()
+			}
 			ap.signalChangedLocked()
 			ap.mu.Unlock()
 			return nil, dialErr
@@ -1590,7 +1635,7 @@ func (p *openAIWSConnPool) recordLastSuccessfulAcquire(accountID int64, generati
 		ap.mu.Unlock()
 		return
 	}
-	ap.lastAcquire = cloneOpenAIWSAcquireRequestPtr(&req)
+	ap.lastAcquire = cloneOpenAIWSPersistentAcquireRequest(&req)
 	ap.mu.Unlock()
 }
 
@@ -2259,6 +2304,12 @@ func (p *openAIWSConnPool) UnpinConn(accountID int64, connID string) {
 }
 
 func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequest) (*openAIWSConn, error) {
+	return p.dialConnBeforeOpen(ctx, req, nil)
+}
+
+// beforeDial retires a reserved replacement only after the request-local dial
+// admission succeeds. Cookie and prewarm callers retain their existing path.
+func (p *openAIWSConnPool) dialConnBeforeOpen(ctx context.Context, req openAIWSAcquireRequest, beforeDial func(context.Context) error) (*openAIWSConn, error) {
 	if p == nil || p.clientDialer == nil {
 		return nil, errors.New("openai ws client dialer is nil")
 	}
@@ -2270,29 +2321,62 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 			return nil, err
 		}
 	}
+	var conn openAIWSClientConn
+	var status int
+	var handshakeHeaders http.Header
+	var edgeLease *openAIWSEdgeDialLease
+	if req.BeforeFreshDial != nil {
+		edgeLease, err = req.BeforeFreshDial(ctx, openAIWSFreshDialInfo{
+			Request: req, Headers: headers, Config: p.cfg, Dialer: p.clientDialer,
+		})
+		if err != nil {
+			edgeLease.Finish(err, time.Now())
+			return nil, err
+		}
+		if edgeLease != nil {
+			ctx = edgeLease.Context()
+		}
+	}
+	if req.BeforeFreshDial != nil {
+		if err := ctx.Err(); err != nil {
+			edgeLease.Finish(err, time.Now())
+			return nil, err
+		}
+	}
+	if beforeDial != nil {
+		if err := beforeDial(ctx); err != nil {
+			edgeLease.Finish(err, time.Now())
+			return nil, err
+		}
+	}
 	dialCtx, cancelDial := context.WithTimeout(ctx, p.dialTimeout())
 	defer cancelDial()
-	conn, status, handshakeHeaders, err := dialOpenAIWSForAccount(dialCtx, p.cfg, req, headers, p.clientDialer)
+	conn, status, handshakeHeaders, err = dialOpenAIWSForAccount(dialCtx, p.cfg, req, headers, p.clientDialer)
 	if err != nil {
 		var handshakeErr *openAIWSHandshakeError
 		var responseBody []byte
 		if errors.As(err, &handshakeErr) && handshakeErr != nil {
 			responseBody = append([]byte(nil), handshakeErr.Body...)
 		}
-		return nil, &openAIWSDialError{
+		dialErr := &openAIWSDialError{
 			StatusCode:      status,
 			ResponseHeaders: cloneHeader(handshakeHeaders),
 			ResponseBody:    responseBody,
 			Err:             err,
 		}
+		edgeLease.Finish(dialErr, time.Now())
+		return nil, dialErr
 	}
 	if conn == nil {
-		return nil, &openAIWSDialError{
+		dialErr := &openAIWSDialError{
 			StatusCode:      status,
 			ResponseHeaders: cloneHeader(handshakeHeaders),
 			Err:             errors.New("openai ws dialer returned nil connection"),
 		}
+		edgeLease.Finish(dialErr, time.Now())
+		return nil, dialErr
 	}
+	edgeLease.Finish(nil, time.Now())
 	id := p.nextConnID(req.Account.ID)
 	pooledConn := newOpenAIWSConnWithProxy(id, req.Account.ID, conn, handshakeHeaders, openAIWSRequestProxyKey(req))
 	pooledConn.handshakeCompatibility = normalizeOpenAIWSHandshakeCompatibility(req.Account, headers)
@@ -2477,6 +2561,16 @@ func cloneOpenAIWSAcquireRequestPtr(req *openAIWSAcquireRequest) *openAIWSAcquir
 	}
 	copied := cloneOpenAIWSAcquireRequest(*req)
 	return &copied
+}
+
+// Authentication factories remain refreshable during prewarm. A caller's
+// short backoff eligibility and identity must never be retained in pool state.
+func cloneOpenAIWSPersistentAcquireRequest(req *openAIWSAcquireRequest) *openAIWSAcquireRequest {
+	copied := cloneOpenAIWSAcquireRequestPtr(req)
+	if copied != nil {
+		copied.BeforeFreshDial = nil
+	}
+	return copied
 }
 
 func sameOpenAIWSPrewarmTarget(a, b openAIWSAcquireRequest) bool {

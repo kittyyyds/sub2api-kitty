@@ -385,8 +385,16 @@ func (s *OpenAIQuotaService) resetCredit(ctx context.Context, accountID int64, c
 		if loadErr != nil {
 			return nil, infraerrors.Newf(http.StatusNotFound, "OPENAI_QUOTA_ACCOUNT_NOT_FOUND", "account not found: %v", loadErr)
 		}
+		if acc == nil {
+			return nil, ErrAccountNotFound
+		}
 		if acc.IsShadow() {
 			return nil, ErrSparkShadowResetNotSupported
+		}
+		if !targeted {
+			if err := validateOpenAIManualReset(acc, time.Now()); err != nil {
+				return nil, err
+			}
 		}
 	}
 

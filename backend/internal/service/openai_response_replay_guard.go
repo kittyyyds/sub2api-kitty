@@ -2,16 +2,17 @@ package service
 
 import (
 	"bytes"
+	"errors"
+	"io"
+	"net"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
 
-// Ported from the source fork for the in-request encrypted-content recovery
-// (openai_messages_encrypted_recovery.go). Only the replay boundary is kept;
-// the source's partial-usage results for compat streams are not ported.
-//
 // Upstream work and downstream delivery are independent replay boundaries.
 // Keep only a monotonic bit: no payload is retained, and a later sparse/zero
 // terminal cannot erase already observed work or metered usage.
@@ -67,4 +68,71 @@ func (g *openAIResponseReplayGuard) CanReplay(c *gin.Context) bool {
 		return false
 	}
 	return c == nil || c.Request == nil || c.Request.Context().Err() == nil
+}
+
+func openAIResponseReplayGuardForSSE(body string) openAIResponseReplayGuard {
+	var guard openAIResponseReplayGuard
+	forEachOpenAISSEFrame(body, func(eventType string, payload []byte) {
+		guard.Observe(payload, eventType)
+	})
+	return guard
+}
+
+// Preserve only already known usage. This does not introduce estimates or
+// change pricing, and cyber-policy usage keeps its existing settlement path.
+func openAICompatPartialForwardResult(c *gin.Context, resp *http.Response, usage OpenAIUsage, responseID, originalModel, billingModel, upstreamModel string, startTime time.Time) *OpenAIForwardResult {
+	if !openAIUsageHasTokens(&usage) || GetOpsCyberPolicy(c) != nil {
+		return nil
+	}
+	result := &OpenAIForwardResult{
+		ResponseID: responseID, Usage: usage, Model: originalModel,
+		BillingModel: billingModel, UpstreamModel: upstreamModel,
+		UpstreamResponseModel:         observedUpstreamResponseModel(c),
+		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		UpstreamResponseServiceTier:   observedUpstreamResponseServiceTier(c),
+		Duration:                      time.Since(startTime),
+		upstreamFailed:                true,
+	}
+	if resp != nil {
+		result.RequestID, result.UpstreamHeaders = resp.Header.Get("x-request-id"), resp.Header
+	}
+	return result
+}
+
+// Record a fixed vocabulary only. Raw transport errors can contain destination
+// URLs/addresses; neither they nor response/request payloads belong here.
+func recordOpenAIStreamReadFailure(c *gin.Context, account *Account, upstreamRequestID string, cause error) {
+	if c == nil || c.Request == nil || !shouldClassifyOpenAIUpstreamStreamReadError(cause, c.Request.Context()) {
+		return
+	}
+	code, message := classifyOpenAIUpstreamStreamReadError(cause)
+	reason := code
+	var netErr net.Error
+	switch {
+	case errors.As(cause, &netErr) && netErr.Timeout():
+		reason = "upstream_stream_read_timeout"
+	case errors.Is(cause, io.ErrUnexpectedEOF):
+		reason = "upstream_stream_unexpected_eof"
+	case errors.Is(cause, net.ErrClosed):
+		reason = "upstream_stream_connection_closed"
+	}
+	event := OpsUpstreamErrorEvent{
+		ProxyID: opsUpstreamProxyID(account), ProxyName: opsUpstreamProxyName(account),
+		Platform: PlatformOpenAI, UpstreamStatusCode: http.StatusBadGateway,
+		UpstreamRequestID: strings.TrimSpace(upstreamRequestID),
+		Kind:              "stream_read_error", Stage: "response_body", Reason: reason, Message: message,
+	}
+	if account != nil {
+		event.Platform, event.AccountID, event.AccountName = account.Platform, account.ID, account.Name
+	}
+	setOpsUpstreamError(c, http.StatusBadGateway, message, "")
+	appendOpsUpstreamError(c, event)
+}
+
+// Match parseSSEUsageBytesWithType: a zero terminal must not erase metered
+// progress from an earlier frame. A nonzero terminal remains authoritative.
+func retainOpenAITerminalUsage(dst *OpenAIUsage, terminal OpenAIUsage) {
+	if dst != nil && (openAIUsageHasTokens(&terminal) || !openAIUsageHasTokens(dst)) {
+		*dst = terminal
+	}
 }

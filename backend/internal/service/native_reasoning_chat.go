@@ -460,11 +460,8 @@ func (n *nativeReasoningChat) finish(ctx context.Context, c *gin.Context, respon
 	_ = n.runtime.engine.Commit(commitCtx, n.request, NativeReasoningReplayCompletion{Response: native, DeliveredAssistant: assistant, DeliveredComplete: true, ToolNameReverse: n.toolReverse, SourceInput: n.sourceInput})
 }
 
-// nativeReasoningTargetChatIdentity is the seam for the source fork's
-// gpt-6.1-sol Chat identity bridge (openai_gpt61_sol_chat_identity.go), which
-// this fork does not port. Without it the target model has no explicit
-// session/thread evidence, so its model-scoped authorization is never eligible
-// and those requests keep the plain compat conversion.
-func nativeReasoningTargetChatIdentity(_ *gin.Context, _ []byte) (session, thread string, valid bool) {
-	return "", "", false
+// Explicit session/thread evidence is necessary, but server-side user/model
+// authorization remains the authority for capture and replay.
+func nativeReasoningTargetChatIdentity(c *gin.Context, body []byte) (session, thread string, valid bool) {
+	return gpt61SolChatExplicitIdentity(c, body)
 }

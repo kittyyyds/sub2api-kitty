@@ -594,6 +594,10 @@ func (s *stubAdminService) SetAccountSchedulable(ctx context.Context, id int64, 
 	return &account, nil
 }
 
+func (s *stubAdminService) SetOpenAIAutoResetCreditEnabled(ctx context.Context, id int64, enabled bool) (*service.Account, error) {
+	return &service.Account{ID: id, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Extra: map[string]any{service.OpenAIAutoResetCreditEnabledExtraKey: enabled}}, nil
+}
+
 func (s *stubAdminService) SetOpenAICreditsEnabled(ctx context.Context, id int64, enabled bool) (*service.Account, error) {
 	account := service.Account{ID: id, Name: "account", Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Status: service.StatusActive,
 		Extra: map[string]any{service.OpenAICreditsEnabledExtraKey: enabled}}
