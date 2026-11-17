@@ -83,6 +83,10 @@ func openAIStreamClientErrorFields(payload []byte, errType, message string) gin.
 	if normalized, ok := normalizeOpenAIUpstreamError(payload); ok {
 		if normalized.Code != "" {
 			fields["code"] = normalized.Code
+		} else if normalized.Type == "invalid_json_schema" {
+			// Standard envelopes use invalid_request_error as their type. Keep
+			// a provider's explicit schema classification in the code as well.
+			fields["code"] = normalized.Type
 		}
 		if normalized.Param != "" {
 			fields["param"] = normalized.Param

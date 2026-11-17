@@ -32,9 +32,9 @@ func OpenAIUpstreamErrorClientMessage(payload []byte, message string) string {
 	if hit, _, _ := detectOpenAICyberPolicy(payload); hit {
 		return message
 	}
-	for _, path := range []string{"response.error.type", "error.type", "response.error.code", "error.code", "code"} {
+	for _, path := range []string{"response.error.type", "error.type", "response.error.code", "error.code", "code", "type"} {
 		switch strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, path).String())) {
-		case "invalid_request_error", "invalid_request", "invalid_argument", "validation_error",
+		case "invalid_request_error", "invalid_request", "invalid_argument", "validation_error", "invalid_json_schema",
 			"context_length_exceeded", "model_not_found", "invalid_parameter", "missing_required_parameter",
 			"content_policy_violation", "content_policy", "safety", "safety_error", "cyber_policy":
 			return message

@@ -330,6 +330,16 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(account *Acc
 	if openAIEncryptedContentErrorIsRequestScoped(account, upstreamMsg, upstreamBody) {
 		return false
 	}
+	modelUnavailable := isOpenAIModelUnavailableError(statusCode, upstreamBody)
+	if modelUnavailable {
+		// A semantic model error does not authorize replay after model/tool
+		// work or real usage, even if an intermediary wrapped it in HTTP 502.
+		var guard openAIResponseReplayGuard
+		guard.Observe(upstreamBody, "response.failed")
+		if !guard.CanReplay(nil) {
+			return false
+		}
+	}
 	if isOpenAIHTTPUpstreamAccessStateError(statusCode, upstreamMsg, upstreamBody) {
 		return true
 	}
@@ -346,7 +356,7 @@ func (s *OpenAIGatewayService) shouldFailoverOpenAIUpstreamResponse(account *Acc
 	// retry signal. Managed gateway instances always have an account repository;
 	// their handler can exclude this account and actually select another one.
 	if s != nil && s.accountRepo != nil && account != nil && account.IsOpenAICompatible() && statusCode == http.StatusBadRequest &&
-		isOpenAICompatibleModelNotFound400(upstreamBody) {
+		(isOpenAICompatibleModelNotFound400(upstreamBody) || modelUnavailable) {
 		return true
 	}
 	if s.shouldFailoverUpstreamError(statusCode) {
@@ -399,7 +409,8 @@ func newOpenAIUpstreamFailoverError(
 	retryableOnSameAccount bool,
 	observedHTTPStatus ...int,
 ) *UpstreamFailoverError {
-	requestScopedCapacity := isOpenAIRequestScopedCapacityShed(upstreamMsg, responseBody)
+	modelUnavailable := isOpenAIModelUnavailableError(statusCode, responseBody)
+	requestScopedCapacity := !modelUnavailable && isOpenAIRequestScopedCapacityShed(upstreamMsg, responseBody)
 	failoverErr := &UpstreamFailoverError{
 		StatusCode:             statusCode,
 		ResponseBody:           responseBody,
@@ -430,7 +441,18 @@ func newOpenAIUpstreamFailoverError(
 		failoverErr.ClientStatusCode = http.StatusRequestEntityTooLarge
 		failoverErr.ClientMessage = OpenAIRequestBodyTooLargeClientMessage
 	}
-	if isOpenAIHTTPUpstreamAccessStateError(statusCode, upstreamMsg, responseBody) {
+	if modelUnavailable {
+		// Model support can differ by account/provider. Preserve existing
+		// next-account routing, but never retry this deterministic rejection on
+		// the same account or present an exhausted request as an upstream 502.
+		failoverErr.RetryableOnSameAccount = false
+		failoverErr.RequestScopedTransient = false
+		failoverErr.Scope = GatewayFailureScopeAccount
+		failoverErr.Reason = OpenAIModelUnavailableReason
+		failoverErr.NextAccountAction = NextAccountRetry
+		failoverErr.ClientStatusCode = http.StatusBadRequest
+		failoverErr.ClientMessage = OpenAIModelUnavailableClientMessage
+	} else if isOpenAIHTTPUpstreamAccessStateError(statusCode, upstreamMsg, responseBody) {
 		failoverErr.RetryableOnSameAccount = false
 		failoverErr.RequestScopedTransient = false
 		failoverErr.Stage = GatewayFailureStageAccountAuth
@@ -615,6 +637,20 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 	requestBody []byte,
 	requestedModel ...string,
 ) (*OpenAIForwardResult, error) {
+	return s.handleErrorResponseWithPolicyChecked(ctx, resp, c, account, requestBody, false, requestedModel...)
+}
+
+// policyChecked belongs to this response's call chain. It prevents a duplicate
+// state update after the shared CC pipeline has already evaluated the policy.
+func (s *OpenAIGatewayService) handleErrorResponseWithPolicyChecked(
+	ctx context.Context,
+	resp *http.Response,
+	c *gin.Context,
+	account *Account,
+	requestBody []byte,
+	policyChecked bool,
+	requestedModel ...string,
+) (*OpenAIForwardResult, error) {
 	body := s.readUpstreamErrorBody(resp)
 	body = s.redactAgentIdentitySensitiveBody(ctx, account, body)
 
@@ -697,6 +733,24 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		return nil, fmt.Errorf("upstream context limit: %d", resp.StatusCode)
 	}
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
+	if isOpenAIModelUnavailableError(resp.StatusCode, body) {
+		model := firstRequestedModel(requestedModel)
+		if model == "" {
+			model, _, _ = extractOpenAIRequestMetaFromBody(requestBody)
+			model = canonicalOpenAIAccountSchedulingModel(account, model)
+		}
+		// Native Responses has no prior CC policy check. Preserve its bounded
+		// account-state update even when usage/output forbids replay. Responses
+		// converted to Chat already ran failoverOpenAIUpstreamHTTPError once.
+		if !policyChecked && account != nil && account.IsOpenAI() {
+			_ = s.handleOpenAIAccountUpstreamError(ctx, account, resp.StatusCode, resp.Header, body, model)
+		}
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{ProxyID: opsUpstreamProxyID(account), ProxyName: opsUpstreamProxyName(account),
+			Platform: account.Platform, AccountID: account.ID, AccountName: account.Name,
+			UpstreamStatusCode: resp.StatusCode, UpstreamRequestID: resp.Header.Get("x-request-id"), Kind: "http_error", Message: OpenAIModelUnavailableClientMessage})
+		writeOpenAIModelUnavailableTerminal(c, resp.StatusCode, openAIModelErrorResponses)
+		return openAIModelUnavailablePartialResult(c, resp, body, model), fmt.Errorf("upstream model unavailable: HTTP %d", resp.StatusCode)
+	}
 
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 		logger.LegacyPrintf("service.openai_gateway",
@@ -967,6 +1021,17 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 		upstreamDetail = truncateString(string(body), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+	if isOpenAIModelUnavailableError(resp.StatusCode, body) {
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{ProxyID: opsUpstreamProxyID(account), ProxyName: opsUpstreamProxyName(account),
+			Platform: account.Platform, AccountID: account.ID, AccountName: account.Name,
+			UpstreamStatusCode: resp.StatusCode, UpstreamRequestID: resp.Header.Get("x-request-id"), Kind: "http_error", Message: OpenAIModelUnavailableClientMessage})
+		writeOpenAIModelUnavailableTerminal(c, resp.StatusCode, openAIModelErrorProtocol(c))
+		model := ""
+		if len(requestedModel) > 0 {
+			model = requestedModel[0]
+		}
+		return openAIModelUnavailablePartialResult(c, resp, body, model), fmt.Errorf("upstream model unavailable: HTTP %d", resp.StatusCode)
+	}
 
 	// Apply error passthrough rules
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(

@@ -324,6 +324,7 @@ type OpenAIForwardResult struct {
 	hostedSearchRoundCosts       []*CostBreakdown
 	wsReplayInput                []json.RawMessage
 	wsReplayInputExists          bool
+	wsReplayInputComplete        bool
 	wsAccountFailoverReplayInput []json.RawMessage
 	upstreamFailed               bool
 	streamReadIncomplete         bool

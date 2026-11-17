@@ -683,7 +683,12 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 					if status == http.StatusBadRequest {
 						errType = "invalid_request_error"
 					}
-					MarkOpsStreamFailure(c, errType, openAIStreamFailedEventErrorCode(dataBytes), failedMessage, status)
+					if isOpenAIModelUnavailableTerminalEvent(dataBytes) {
+						setOpsUpstreamError(c, resp.StatusCode, OpenAIModelUnavailableClientMessage, "")
+						MarkOpsStreamFailure(c, "invalid_request_error", "model_not_found", OpenAIModelUnavailableClientMessage, http.StatusBadRequest)
+					} else {
+						MarkOpsStreamFailure(c, errType, openAIStreamFailedEventErrorCode(dataBytes), failedMessage, status)
+					}
 				}
 				forceFlushFailedEvent = true
 				sawFailedEvent = true
@@ -2153,6 +2158,9 @@ func buildOpenAIResponseFailedEvent(responseID, model string, createdAt int64, s
 			`,"response":{"object":"response","created_at":` + strconv.FormatInt(createdAt, 10) +
 			`,"status":"failed","output":[],"error":{"code":"upstream_error","message":"Upstream response failed"}}}`)
 	}
+	if normalized, changed := normalizeOpenAIModelUnavailableClientEvent(payload); changed {
+		return normalized
+	}
 	return payload
 }
 
@@ -2167,6 +2175,9 @@ func sanitizeOpenAIResponseFailedEventForClient(payload []byte, eventType string
 		return payload, false
 	}
 	updated := payload
+	if normalized, changed := normalizeOpenAIModelUnavailableClientEvent(updated); changed {
+		return normalized, true
+	}
 	clientMessage := OpenAIUpstreamErrorClientMessage(payload, extractOpenAISSEErrorMessage(payload))
 	billingFailure := IsUpstreamBillingError(openAIStreamFailureStatus(updated, extractOpenAISSEErrorMessage(updated)), updated)
 	if billingFailure || clientMessage == OpenAIUpstreamFailureClientMessage {
@@ -2289,13 +2300,22 @@ func sanitizeOpenAIResponseFailedEventForClient(payload []byte, eventType string
 }
 
 func (s *OpenAIGatewayService) writeOpenAINonStreamingProtocolError(resp *http.Response, c *gin.Context, message string, source ...[]byte) error {
-	message = sanitizeUpstreamErrorMessage(strings.TrimSpace(message))
-	if message == "" {
-		message = "Upstream returned an invalid non-streaming response"
-	}
 	var payload []byte
 	if len(source) > 0 {
 		payload = source[0]
+	}
+	if isOpenAIModelUnavailableTerminalEvent(payload) {
+		writeOpenAIModelUnavailableTerminal(c, resp.StatusCode, openAIModelErrorResponses)
+		return fmt.Errorf("upstream model unavailable")
+	}
+	if upstreamErr := openAIImageGenerationUserError(payload); upstreamErr != nil {
+		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+		writeOpenAIImageGenerationUserError(c, upstreamErr)
+		return upstreamErr
+	}
+	message = sanitizeUpstreamErrorMessage(strings.TrimSpace(message))
+	if message == "" {
+		message = "Upstream returned an invalid non-streaming response"
 	}
 	clientMessage := OpenAIUpstreamErrorClientMessage(payload, message)
 	status, errType := openAIStreamFailureStatus(payload, message), "upstream_error"
@@ -2313,13 +2333,8 @@ func (s *OpenAIGatewayService) writeOpenAINonStreamingProtocolError(resp *http.R
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	errorBody := gin.H{"type": errType, "message": clientMessage}
-	if normalized, ok := normalizeOpenAIUpstreamError(payload); ok && status == http.StatusBadRequest {
-		if normalized.Code != "" {
-			errorBody["code"] = normalized.Code
-		}
-		if normalized.Param != "" {
-			errorBody["param"] = normalized.Param
-		}
+	if status == http.StatusBadRequest {
+		errorBody = openAIStreamClientErrorFields(payload, errType, clientMessage)
 	}
 	c.JSON(status, gin.H{
 		"error": errorBody,

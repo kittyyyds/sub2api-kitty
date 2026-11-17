@@ -21,7 +21,7 @@ func TestOpenAIWSIngressWebSearchActivation(t *testing.T) {
 	const search = `,"tools":[{"type":"web_search","external_web_access":false}]`
 	const userInput = `[{"type":"message","role":"user","content":"continue"}]`
 	const toolOutput = `[{"type":"function_call_output","call_id":"fc_lookup","output":"42"}]`
-	const firstOutput = `[{"type":"reasoning","id":"rs_first","summary":[{"type":"summary_text","text":"Keep this reasoning"}]},{"type":"message","id":"msg_first","role":"assistant","content":[{"type":"output_text","text":"Keep this answer"}]},{"type":"function_call","id":"fc_lookup","call_id":"fc_lookup","name":"lookup","arguments":"{}"}]`
+	const firstOutput = `[{"type":"reasoning","id":"rs_first","summary":[{"type":"summary_text","text":"Keep this reasoning"}],"encrypted_content":"synthetic-owned-reasoning"},{"type":"message","id":"msg_first","role":"assistant","content":[{"type":"output_text","text":"Keep this answer"}]},{"type":"function_call","id":"fc_lookup","call_id":"fc_lookup","name":"lookup","arguments":"{}"}]`
 	for _, tc := range []struct {
 		name          string
 		accountType   string
@@ -38,6 +38,7 @@ func TestOpenAIWSIngressWebSearchActivation(t *testing.T) {
 		{name: "empty OAuth prewarm", accountType: AccountTypeOAuth, firstFields: `,"generate":false`, nextFields: search, nextInput: userInput, wantReconnect: true, wantTypes: []string{"message"}},
 		{name: "Lite search history injection", accountType: AccountTypeOAuth, firstFields: `,"generate":false`, nextFields: `,"client_metadata":{"ws_request_header_x_openai_internal_codex_responses_lite":"true"}`, nextInput: `[{"type":"web_search_call","id":"ws_history","status":"completed","action":{"type":"search","query":"example"}},{"type":"message","role":"user","content":"continue"}]`, wantReconnect: true, wantTypes: []string{"web_search_call", "message", "additional_tools"}},
 		{name: "tool continuation preserves all output", accountType: AccountTypeOAuth, firstFields: `,"tools":[{"type":"function","name":"lookup","parameters":{"type":"object"}}]`, firstInput: `[{"type":"message","role":"user","content":"Run lookup for my original question"}]`, firstOutput: firstOutput, nextFields: search, nextInput: toolOutput, wantReconnect: true, wantTypes: []string{"message", "reasoning", "message", "function_call", "function_call_output"}},
+		{name: "summary alone cannot prove full reasoning", accountType: AccountTypeOAuth, firstInput: userInput, firstOutput: strings.Replace(firstOutput, `,"encrypted_content":"synthetic-owned-reasoning"`, "", 1), nextFields: search, nextInput: toolOutput, wantFailClose: true},
 		{name: "search initialized socket", accountType: AccountTypeOAuth, firstFields: search, nextFields: search, nextInput: userInput},
 		{name: "API key provider", accountType: AccountTypeAPIKey, firstFields: `,"generate":false`, nextFields: search, nextInput: userInput},
 		{name: "function called web_search", accountType: AccountTypeOAuth, nextFields: `,"tools":[{"type":"function","name":"web_search","parameters":{"type":"object"}}]`, nextInput: userInput},
@@ -108,8 +109,15 @@ func TestOpenAIWSIngressWebSearchActivation(t *testing.T) {
 			}
 			read := func(id string) {
 				_, event, err := client.Read(ctx)
+				if err != nil {
+					select {
+					case upstreamErr := <-serverErr:
+						require.NoError(t, upstreamErr, "server rejected the continuation")
+					default:
+					}
+				}
 				require.NoError(t, err)
-				require.Equal(t, id, gjson.GetBytes(event, "response.id").String())
+				require.Equal(t, id, gjson.GetBytes(event, "response.id").String(), "event=%s", event)
 			}
 			input := tc.firstInput
 			if input == "" {
@@ -122,6 +130,17 @@ func TestOpenAIWSIngressWebSearchActivation(t *testing.T) {
 				previous = "resp_first"
 			}
 			write(fmt.Sprintf(`,"previous_response_id":%q`, previous)+tc.nextFields, tc.nextInput)
+			if tc.name == "Lite search history injection" {
+				// The final Lite contract now rejects hosted search history
+				// explicitly; dropping that history to reconnect is unsafe.
+				_, event, err := client.Read(ctx)
+				require.NoError(t, err)
+				require.Equal(t, "unsupported_parameter", gjson.GetBytes(event, "error.code").String())
+				require.Equal(t, "input[0].type", gjson.GetBytes(event, "error.param").String())
+				require.Len(t, first.writes, 1)
+				require.Equal(t, 1, dialer.DialCount())
+				return
+			}
 			if tc.wantFailClose {
 				_, _, err := client.Read(ctx)
 				require.Error(t, err)
@@ -156,6 +175,7 @@ func TestOpenAIWSIngressWebSearchActivation(t *testing.T) {
 			if tc.firstOutput != "" {
 				require.Contains(t, string(forwarded), "Run lookup for my original question")
 				require.Contains(t, string(forwarded), "Keep this reasoning")
+				require.Contains(t, string(forwarded), "synthetic-owned-reasoning")
 				require.Contains(t, string(forwarded), "Keep this answer")
 				require.Contains(t, string(forwarded), `"output":"42"`)
 			}

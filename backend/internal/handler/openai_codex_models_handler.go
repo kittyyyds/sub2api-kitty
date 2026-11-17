@@ -7,8 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"go.uber.org/zap"
 )
 
 // CodexModels serves the Codex models manifest for Codex clients.
@@ -49,6 +51,7 @@ func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
 				return
 			}
 			if !apiKey.Group.CodexModelsManifestConfig.FallbackToScheduler {
+				recordCodexModelsManifestFailure(c, pinnedErr, service.CodexModelsStagePinnedFetch)
 				if errors.Is(pinnedErr, service.ErrNoPinnedCodexModelsAccounts) {
 					h.errorResponse(c, http.StatusServiceUnavailable, "upstream_error", "No available pinned OpenAI accounts")
 					return
@@ -61,6 +64,10 @@ func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
 			// 让 ops 错误日志携带实际拉取成功的首个固定账号。
 			setOpsSelectedAccount(c, pinnedAccount.ID, pinnedAccount.Platform)
 			if err := h.gatewayService.MergeGroupConfiguredCodexModels(c.Request.Context(), apiKey.Group, pinnedManifest, ifNoneMatch); err != nil {
+				if c.Request.Context().Err() != nil {
+					return
+				}
+				recordCodexModelsManifestFailure(c, err, service.CodexModelsStageConfiguredMerge)
 				h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to build Codex models manifest")
 				return
 			}
@@ -82,6 +89,7 @@ func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
 			if c.Request.Context().Err() != nil {
 				return
 			}
+			recordCodexModelsManifestFailure(c, err, service.CodexModelsStageConfiguredBuild)
 			h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to build Codex models manifest")
 			return
 		}
@@ -106,6 +114,7 @@ func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
 				return
 			}
 			if lastUpstreamErr != nil {
+				recordCodexModelsManifestFailure(c, lastUpstreamErr, service.CodexModelsStageUpstreamFetch)
 				h.errorResponse(c, infraerrors.Code(lastUpstreamErr), "upstream_error", infraerrors.Message(lastUpstreamErr))
 				return
 			}
@@ -128,18 +137,25 @@ func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
 				lastUpstreamErr = err
 				continue
 			}
+			recordCodexModelsManifestFailure(c, err, service.CodexModelsStageUpstreamFetch)
 			h.errorResponse(c, infraerrors.Code(err), "upstream_error", infraerrors.Message(err))
 			return
 		}
 		if err := h.gatewayService.CompleteAPIKeyCodexModelsManifestForClient(manifest, account); err != nil {
+			recordCodexModelsManifestFailure(c, err, service.CodexModelsStageMetadataCompletion)
 			h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to complete Codex models manifest")
 			return
 		}
 		if err := service.ApplyPinnedCodexModelsMapping(manifest, account, apiKey.Group); err != nil {
+			recordCodexModelsManifestFailure(c, err, service.CodexModelsStageAccountMapping)
 			h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to apply model mappings")
 			return
 		}
 		if err := h.gatewayService.MergeGroupConfiguredCodexModels(c.Request.Context(), apiKey.Group, manifest, ifNoneMatch); err != nil {
+			if c.Request.Context().Err() != nil {
+				return
+			}
+			recordCodexModelsManifestFailure(c, err, service.CodexModelsStageConfiguredMerge)
 			h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to build Codex models manifest")
 			return
 		}
@@ -149,5 +165,20 @@ func (h *OpenAIGatewayHandler) CodexModels(c *gin.Context) {
 
 		writeOpenAIModelsResponse(c, manifest)
 		return
+	}
+}
+
+// Keep build failure evidence without publishing repository/provider error text.
+// Only a final failed request reaches here, so recovered attempts do not become
+// final failures and successful catalogs retain their existing Ops semantics.
+func recordCodexModelsManifestFailure(c *gin.Context, err error, fallback service.CodexModelsFailureStage) {
+	if c == nil || err == nil || (c.Request != nil && c.Request.Context().Err() != nil) {
+		return
+	}
+	stage, class := service.CodexModelsFailureMetadata(err, fallback)
+	service.SetOpsLocalErrorType(c, "api_error", "codex_models_"+stage+"_"+class)
+	if c.Request != nil {
+		logger.FromContext(c.Request.Context()).Warn("codex.models_manifest.failed",
+			zap.String("manifest_failure_stage", stage), zap.String("manifest_failure_class", class))
 	}
 }

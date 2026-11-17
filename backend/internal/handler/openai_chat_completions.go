@@ -68,6 +68,16 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
+	isResponsesShape := !gjson.GetBytes(body, "messages").Exists() && gjson.GetBytes(body, "input").Exists()
+	previousResponseID := ""
+	if isResponsesShape {
+		if err := service.ValidateOpenAIContinuationInput(body); err != nil {
+			service.WriteOpenAIContinuationContextError(c, err)
+			return
+		}
+		previousResponseID = strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String())
+		service.SetOpenAIHTTPResponseOwner(c, subject.UserID, apiKey.ID)
+	}
 
 	modelResult := gjson.GetBytes(body, "model")
 	if !modelResult.Exists() || modelResult.Type != gjson.String || modelResult.String() == "" {
@@ -175,7 +185,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithSchedulerForCapability(
 			c.Request.Context(),
 			apiKey.GroupID,
-			"",
+			previousResponseID,
 			sessionHash,
 			forwardModel,
 			failedAccountIDs,
@@ -203,7 +213,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				return
 			}
 			if len(failedAccountIDs) == 0 {
-				cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel)
+				cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, forwardModel, reqModel)
 				cls = classifySelectionFailureError(err, cls)
 				if !cls.ModelNotFound {
 					markOpsRoutingCapacityLimitedIfNoAvailable(c, err)
@@ -224,7 +234,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				h.handleOpenAIQueueFull(c, streamStarted)
 				return
 			}
-			cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel)
+			cls := classifyOpenAICompatibleNoAccountErrorFromGin(c, h.gatewayService, apiKey, forwardModel, reqModel)
 			if !cls.ModelNotFound {
 				markOpsRoutingCapacityLimited(c)
 			}
@@ -388,6 +398,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 							}
 							continue
 						}
+					}
+					if isResponsesShape && requestPlatform == service.PlatformOpenAI && !service.OpenAIContinuationMaySwitchAccount(body) {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
 					}
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					service.RecordStrictFailoverFailure(c.Request.Context(), account.ID, failoverErr)

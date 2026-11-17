@@ -67,6 +67,13 @@ func AnthropicToResponsesWithOptions(req *AnthropicRequest, options AnthropicToR
 	parallelToolCalls := true
 	out.ParallelToolCalls = &parallelToolCalls
 	out.Text = &ResponsesText{Verbosity: "medium"}
+	if req.OutputConfig != nil {
+		format, err := anthropicOutputFormatToResponsesTextFormat(req.OutputConfig.Format)
+		if err != nil {
+			return nil, err
+		}
+		out.Text.Format = format
+	}
 
 	if req.MaxTokens > 0 {
 		v := req.MaxTokens

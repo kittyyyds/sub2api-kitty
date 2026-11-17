@@ -63,7 +63,11 @@ func shouldStripOpenAIResponsesNonPairCallID(itemType string) bool {
 }
 
 func sanitizeOpenAIResponsesInputItemIDs(body []byte) ([]byte, bool, error) {
-	input := parseRawJSONView(body).Get("input")
+	root := parseRawJSONView(body)
+	if openAIItemIDObjectHasDuplicateKeys(root) {
+		return body, false, nil
+	}
+	input := root.Get("input")
 	if !input.IsArray() {
 		return body, false, nil
 	}
@@ -75,9 +79,14 @@ func sanitizeOpenAIResponsesInputItemIDs(body []byte) ([]byte, bool, error) {
 	}
 
 	items := make([]inputItem, 0)
+	ambiguous := false
 	input.ForEach(func(_, item gjson.Result) bool {
 		parsed := inputItem{raw: item.Raw}
 		if item.IsObject() {
+			if openAIItemIDObjectHasDuplicateKeys(item) {
+				ambiguous = true
+				return false
+			}
 			itemType := item.Get("type")
 			id := item.Get("id")
 			trimmedItemType := strings.TrimSpace(itemType.String())
@@ -89,6 +98,11 @@ func sanitizeOpenAIResponsesInputItemIDs(body []byte) ([]byte, bool, error) {
 		items = append(items, parsed)
 		return true
 	})
+	if ambiguous {
+		// Different JSON readers may select different duplicate type/call_id
+		// values. Never remove an identity field based on that ambiguity.
+		return body, false, nil
+	}
 	hasSanitization := false
 	for _, item := range items {
 		if item.stripID || item.stripCallID {
@@ -124,4 +138,23 @@ func sanitizeOpenAIResponsesInputItemIDs(body []byte) ([]byte, bool, error) {
 		rebuiltItems = append(rebuiltItems, string(itemBody))
 	}
 	return replaceOpenAIRawInput(body, input, rebuiltItems), true, nil
+}
+
+// Inspect only the objects used by this rewrite; this is not the bounded
+// continuation-proof parser and introduces no new customer request limits.
+func openAIItemIDObjectHasDuplicateKeys(object gjson.Result) bool {
+	if !object.IsObject() {
+		return false
+	}
+	keys := make(map[string]struct{})
+	duplicate := false
+	object.ForEach(func(key, _ gjson.Result) bool {
+		if _, exists := keys[key.Str]; exists {
+			duplicate = true
+			return false
+		}
+		keys[key.Str] = struct{}{}
+		return true
+	})
+	return duplicate
 }

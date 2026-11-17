@@ -47,11 +47,8 @@ func (r *oauthReliabilityNativeSettlementRateRepo) SetRateLimited(context.Contex
 }
 
 func TestOAuthReliabilityContractNativeWSHandlerSettlesMeteredFailureOnce(t *testing.T) {
-	for _, completed := range []bool{false, true} {
-		name := "disconnect"
-		if completed {
-			name = "completed_control"
-		}
+	for _, name := range []string{"disconnect", "completed_control", "schema_error"} {
+		completed := name == "completed_control"
 		t.Run(name, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			cert := wsPartialSettlementTLS(t)
@@ -85,12 +82,18 @@ func TestOAuthReliabilityContractNativeWSHandlerSettlesMeteredFailureOnce(t *tes
 				accountIDsMu.Lock()
 				selectedTokens = append(selectedTokens, r.Header.Get("Authorization"))
 				accountIDsMu.Unlock()
+				if name == "schema_error" {
+					_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","code":"invalid_json_schema","param":"text.format.schema","message":"uniqueItems is unsupported in this strict schema"}`))
+				}
 				for i := 0; i < 29; i++ {
 					rateService.HandleUpstreamError(context.Background(), &accounts[0], http.StatusTooManyRequests, nil, nil)
 				}
 				_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"response.in_progress","response":{"id":"resp_native_partial","model":"gpt-6-astra","usage":{"input_tokens":11,"output_tokens":3,"input_tokens_details":{"cached_tokens":2}}}}`))
 				if completed {
 					_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"response.completed","response":{"id":"resp_native_partial","model":"gpt-6-astra","status":"completed","output":[],"usage":{"input_tokens":11,"output_tokens":3,"input_tokens_details":{"cached_tokens":2}}}}`))
+				}
+				if name == "schema_error" {
+					_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"response.failed","response":{"id":"resp_native_partial","model":"gpt-6-astra","status":"failed","error":{"type":"invalid_request_error","code":"invalid_json_schema","param":"text.format.schema","message":"uniqueItems is unsupported in this strict schema"},"usage":{"input_tokens":11,"output_tokens":3,"input_tokens_details":{"cached_tokens":2}}}}`))
 				}
 			}))
 			upstream.TLS = &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"http/1.1"}}
@@ -156,7 +159,7 @@ func TestOAuthReliabilityContractNativeWSHandlerSettlesMeteredFailureOnce(t *tes
 					break
 				}
 				seen = append(seen, string(event))
-				if gjson.GetBytes(event, "type").String() == "response.completed" {
+				if eventType := gjson.GetBytes(event, "type").String(); eventType == "response.completed" || eventType == "response.failed" {
 					_ = client.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "done"))
 					_ = client.Close()
 					break
@@ -177,6 +180,11 @@ func TestOAuthReliabilityContractNativeWSHandlerSettlesMeteredFailureOnce(t *tes
 			require.Contains(t, strings.Join(seen, "\n"), "response.in_progress")
 			if !completed {
 				require.NotContains(t, strings.Join(seen, "\n"), "response.completed")
+			}
+			if name == "schema_error" {
+				require.Contains(t, strings.Join(seen, "\n"), "invalid_json_schema")
+				require.Contains(t, strings.Join(seen, "\n"), "text.format.schema")
+				require.Contains(t, strings.Join(seen, "\n"), "response.failed")
 			}
 			var usage *service.UsageLog
 			select {

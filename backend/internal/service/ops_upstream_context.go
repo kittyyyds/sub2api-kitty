@@ -353,6 +353,7 @@ func snapshotOpsStreamErrorContext(c *gin.Context, streamErr *OpsStreamError) {
 					continue
 				}
 				copyOfEvent := *event
+				copyOfEvent.ReplayBoundary = cloneOpsReplayBoundary(event.ReplayBoundary)
 				streamErr.UpstreamErrors = append(streamErr.UpstreamErrors, &copyOfEvent)
 			}
 		}
@@ -430,6 +431,61 @@ func setOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage
 	}
 }
 
+// OpsRecordedUpstreamMessageForClient returns the sanitized upstream error
+// message recorded during this request's upstream attempts, or "" when no real
+// upstream detail exists. Fallback writers use it to surface the true failure
+// reason instead of a generic "Upstream request failed".
+func OpsRecordedUpstreamMessageForClient(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	raw, ok := c.Get(OpsUpstreamErrorMessageKey)
+	if !ok {
+		return ""
+	}
+	msg, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(SanitizeUpstreamErrorMessage(msg))
+}
+
+// OpsReplayUsageSource identifies the source already used by the forwarding
+// attempt. It is diagnostic only; it never grants replay or changes billing.
+type OpsReplayUsageSource string
+
+const (
+	OpsReplayUsageAbsent    OpsReplayUsageSource = "absent"
+	OpsReplayUsageUpstream  OpsReplayUsageSource = "upstream"
+	OpsReplayUsageEstimated OpsReplayUsageSource = "estimated"
+)
+
+// OpsReplayBoundary is an observed snapshot of one reader's replay boundary.
+// A nil snapshot means unknown. Present booleans deliberately retain false in
+// JSON; RetryRequested records a candidate, not an executed retry.
+type OpsReplayBoundary struct {
+	UpstreamProgressObserved bool                 `json:"upstream_progress_observed"`
+	ClientOutputStarted      bool                 `json:"client_output_started"`
+	TerminalSeen             bool                 `json:"terminal_seen"`
+	UsageSource              OpsReplayUsageSource `json:"usage_source"`
+	RetryRequested           bool                 `json:"retry_requested"`
+}
+
+func cloneOpsReplayBoundary(boundary *OpsReplayBoundary) *OpsReplayBoundary {
+	if boundary == nil {
+		return nil
+	}
+	switch boundary.UsageSource {
+	case OpsReplayUsageAbsent, OpsReplayUsageUpstream, OpsReplayUsageEstimated:
+		out := *boundary
+		return &out
+	default:
+		// Do not persist arbitrary strings or turn an unobserved source into
+		// "absent". The entire untrusted snapshot remains unknown.
+		return nil
+	}
+}
+
 // OpsUpstreamErrorEvent describes one upstream error attempt during a single gateway request.
 // It is stored in ops_error_logs.upstream_errors as a JSON array.
 type OpsUpstreamErrorEvent struct {
@@ -454,6 +510,10 @@ type OpsUpstreamErrorEvent struct {
 	// DroppedEarlierAttempts is set on the oldest retained event when queue
 	// bounds forced earlier attempts of the same request to be discarded.
 	DroppedEarlierAttempts int `json:"dropped_earlier_attempts,omitempty"`
+
+	// ReplayBoundary belongs to this exact attempt, never the request's last
+	// context event. Existing/uninstrumented protocols leave it nil.
+	ReplayBoundary *OpsReplayBoundary `json:"replay_boundary,omitempty"`
 
 	// Outcome
 	UpstreamStatusCode int    `json:"upstream_status_code,omitempty"`
@@ -522,6 +582,7 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 	}
 
 	evCopy := ev
+	evCopy.ReplayBoundary = cloneOpsReplayBoundary(ev.ReplayBoundary)
 	existing = append(existing, &evCopy)
 	c.Set(OpsUpstreamErrorsKey, existing)
 

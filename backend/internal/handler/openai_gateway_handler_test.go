@@ -999,7 +999,7 @@ func TestOpenAIResponses_FunctionCallOutputHTTPGuidanceDoesNotSuggestPreviousRes
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", strings.NewReader(
-		`{"model":"gpt-5.1","stream":false,"input":[{"type":"function_call_output","output":"{}"}]}`,
+		`{"model":"gpt-5.1","stream":false,"input":[{"type":"function_call_output","call_id":"call_missing","output":"{}"}]}`,
 	))
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -1018,7 +1018,9 @@ func TestOpenAIResponses_FunctionCallOutputHTTPGuidanceDoesNotSuggestPreviousRes
 	h.Responses(c)
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
-	require.Contains(t, w.Body.String(), "Responses WebSocket v2")
+	require.Equal(t, "continuation_context_missing", gjson.Get(w.Body.String(), "error.code").String())
+	require.Equal(t, "input", gjson.Get(w.Body.String(), "error.param").String())
+	require.Contains(t, w.Body.String(), "matching preceding call or valid continuation context")
 	require.NotContains(t, w.Body.String(), "reuse previous_response_id")
 }
 
@@ -2175,17 +2177,7 @@ func TestOpenAIResponses_APIKeyPassthroughPool5xxRetriesThenExhaustsMaxSwitches(
 		nil,
 		nil,
 	)
-	h := NewOpenAIGatewayHandler(
-		gatewaySvc,
-		service.NewConcurrencyService(nil),
-		billingCacheSvc,
-		service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg),
-		nil,
-		nil,
-
-		nil,
-		cfg,
-	)
+	h := NewOpenAIGatewayHandler(gatewaySvc, service.NewConcurrencyService(nil), billingCacheSvc, service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg), nil, nil, nil, cfg)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -2276,17 +2268,7 @@ func TestOpenAIResponses_APIKeyPassthroughPoolAuthFailureRetriesThenSwitchesToHe
 				nil,
 				nil,
 			)
-			h := NewOpenAIGatewayHandler(
-				gatewaySvc,
-				service.NewConcurrencyService(nil),
-				billingCacheSvc,
-				service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg),
-				nil,
-				nil,
-
-				nil,
-				cfg,
-			)
+			h := NewOpenAIGatewayHandler(gatewaySvc, service.NewConcurrencyService(nil), billingCacheSvc, service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg), nil, nil, nil, cfg)
 
 			rec := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(rec)
@@ -2358,17 +2340,7 @@ func TestOpenAIResponses_APIKeyPassthroughSSERateLimitUsesConfiguredPoolRetry(t 
 		nil,
 		nil,
 	)
-	h := NewOpenAIGatewayHandler(
-		gatewaySvc,
-		service.NewConcurrencyService(nil),
-		billingCacheSvc,
-		service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg),
-		nil,
-		nil,
-
-		nil,
-		cfg,
-	)
+	h := NewOpenAIGatewayHandler(gatewaySvc, service.NewConcurrencyService(nil), billingCacheSvc, service.NewAPIKeyService(nil, nil, nil, nil, nil, nil, cfg), nil, nil, nil, cfg)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

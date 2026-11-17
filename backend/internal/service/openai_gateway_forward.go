@@ -86,6 +86,12 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 	if _, err := s.prepareCodexAccountIdentitySource(ctx, c, account); err != nil {
 		return nil, err
 	}
+	if account != nil && account.Platform == PlatformOpenAI {
+		if err := ValidateOpenAIContinuationInput(body); err != nil {
+			writeOpenAIContinuationContextError(c, err)
+			return nil, err
+		}
+	}
 	if err := s.validateOpenAIResponseAuthOwner(ctx, c, account, gjson.GetBytes(body, "previous_response_id").String()); err != nil {
 		writeOpenAIResponseAuthOwnerError(c, err)
 		return nil, err
@@ -177,19 +183,18 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 			body = reasoningBody
 		}
 	}
-	responsesLite := account.IsOpenAI() && isOpenAIResponsesLiteHeader(c.GetHeader(responsesLiteHeader))
+	_, liteModel := resolveOpenAIForwardMappedModels(account, gjson.GetBytes(body, "model").String(), isOpenAIResponsesCompactPath(c))
+	if isOpenAIResponsesCompactPath(c) {
+		if fallback := s.resolveOpenAICompactFallbackModel(account, gjson.GetBytes(body, "model").String()); fallback != "" {
+			liteModel = fallback
+		}
+	}
+	responsesLite := openAIResponsesLiteForNormalization(account, liteModel, c.GetHeader(responsesLiteHeader), body)
 	if responsesLite {
+		recordOpenAIFinalProtocolDiagnostic(c, account, liteModel, c.GetHeader(responsesLiteHeader), body)
 		liteBody, changed, liteErr := normalizeOpenAIResponsesLitePayloadForAccount(body, account)
 		if liteErr != nil {
-			param := "tools"
-			var validationErr *openAIResponsesLiteValidationError
-			if errors.As(liteErr, &validationErr) {
-				param = validationErr.param
-			}
-			setOpsUpstreamError(c, http.StatusBadRequest, liteErr.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
-				"type": "invalid_request_error", "message": liteErr.Error(), "param": param,
-			}})
+			writeOpenAIProtocolValidationError(c, liteErr, false)
 			return nil, liteErr
 		}
 		if changed {
@@ -205,8 +210,8 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 		body, err = flattenOpenAIResponsesNamespaces(c, body)
 		if err != nil {
 			setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
-			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
-				"type": "invalid_request_error", "message": err.Error(), "param": "tools",
+			writeOpenAIResponsesErrorJSON(c, http.StatusBadRequest, gin.H{"error": gin.H{
+				"type": "invalid_request_error", "message": err.Error(), "param": openAIProtocolValidationParam(err),
 			}})
 			return nil, err
 		}
@@ -537,10 +542,6 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Upstream model resolved: %s -> %s (account: %s, type: %s, isCodexCLI: %v)", billingModel, upstreamModel, account.Name, account.Type, isCodexCLI)
 		}
 	}
-	if strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String()) == "minimal" {
-		markPatchSet("reasoning.effort", "none")
-		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
-	}
 	if strings.TrimSpace(gjson.GetBytes(body, "text.format.type").String()) == "json_schema" ||
 		strings.TrimSpace(gjson.GetBytes(body, "response_format.type").String()) == "json_schema" {
 		decoded, decodeErr := ensureReqBody()
@@ -854,7 +855,12 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 		markPatchSet("max_output_tokens", clampedCap)
 	}
 	if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 &&
-		!account.IsOpenAIApiKey() && gjson.GetBytes(body, "previous_response_id").Exists() {
+		!account.IsOpenAIApiKey() && strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String()) != "" {
+		if account.Platform == PlatformOpenAI {
+			contextErr := &OpenAIContinuationContextError{Param: "previous_response_id"}
+			writeOpenAIContinuationContextError(c, contextErr)
+			return nil, contextErr
+		}
 		markPatchDelete("previous_response_id")
 	}
 	if openAIRequestBodyMayContainEmptyBase64InputImage(body) {
@@ -956,7 +962,7 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 		requestView = newOpenAIRequestView(body)
 		reqBody = nil
 	}
-	// Run after orphan-output filtering and all request-map rebuilds so a
+	// Run after all request-map rebuilds so a
 	// compaction trigger cannot remain ahead of surviving history items.
 	if normalizedBody, changed, normalizeErr := NormalizeCompactionTriggerInputOrder(body); normalizeErr != nil {
 		return nil, fmt.Errorf("normalize compaction trigger order: %w", normalizeErr)
@@ -1004,6 +1010,10 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 		imageBillingModel = imageCfg.Model
 		imageSizeTier = imageCfg.SizeTier
 		imageInputSize = imageCfg.InputSize
+	}
+	if validationErr := validateOpenAIOAuthFinalRequest(c, account, upstreamModel, c.GetHeader(responsesLiteHeader), body); validationErr != nil {
+		writeOpenAIProtocolValidationError(c, validationErr, false)
+		return nil, validationErr
 	}
 	// Get access token
 	token, _, err := s.GetAccessToken(ctx, account)
@@ -1064,24 +1074,10 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 				)
 				return false
 			}
-			if HasFunctionCallOutput(wsReqBody) {
-				logOpenAIWSModeInfo(
-					"reconnect_prev_response_recovery_skip account_id=%d attempt=%d reason=has_function_call_output previous_response_id_present=true",
-					account.ID,
-					attempt,
-				)
-				return false
-			}
-			delete(wsReqBody, "previous_response_id")
-			wsPrevResponseRecoveryTried = true
-			logOpenAIWSModeInfo(
-				"reconnect_prev_response_recovery account_id=%d attempt=%d action=drop_previous_response_id retry=1 previous_response_id=%s previous_response_id_kind=%s",
-				account.ID,
-				attempt,
-				truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen),
-				normalizeOpenAIWSLogValue(ClassifyOpenAIPreviousResponseIDKind(previousResponseID)),
-			)
-			return true
+			// This is a caller-supplied anchor. Even an input with no tools can
+			// be only a delta; the local delta-chain recovery above is the only
+			// case with independently retained complete request history.
+			return false
 		}
 		recoverInvalidEncryptedContent := func(attempt int) bool {
 			if wsInvalidEncryptedContentRecoveryTried {
@@ -1108,9 +1104,8 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 			}
 			previousResponseID := openAIWSPayloadString(wsReqBody, "previous_response_id")
 			hasFunctionCallOutput := HasFunctionCallOutput(wsReqBody)
-			if previousResponseID != "" && !hasFunctionCallOutput {
-				delete(wsReqBody, "previous_response_id")
-			}
+			// Invalid encrypted reasoning is independently repairable; it does
+			// not prove that an explicit response anchor can be discarded.
 			wsInvalidEncryptedContentRecoveryTried = true
 			logOpenAIWSModeInfo(
 				"reconnect_invalid_encrypted_content_recovery account_id=%d attempt=%d action=drop_encrypted_reasoning_items retry=1 previous_response_id_present=%v previous_response_id=%s previous_response_id_kind=%s has_function_call_output=%v dropped_previous_response_id=%v",
@@ -1120,7 +1115,7 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 				truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen),
 				normalizeOpenAIWSLogValue(ClassifyOpenAIPreviousResponseIDKind(previousResponseID)),
 				hasFunctionCallOutput,
-				previousResponseID != "" && !hasFunctionCallOutput,
+				false,
 			)
 			return true
 		}
@@ -1190,10 +1185,15 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 				wsPrevResponseRecoveryTried = true
 				continue
 			}
-			// previous_response_not_found 说明续链锚点不可用：
-			// 对非 function_call_output 场景，允许一次“去掉 previous_response_id 后重放”。
-			if reason == "previous_response_not_found" && recoverPrevResponseNotFound(attempt) {
-				continue
+			if strings.TrimPrefix(reason, "prewarm_") == "previous_response_not_found" {
+				if recoverPrevResponseNotFound(attempt) {
+					continue
+				}
+				if openAIWSPayloadString(wsReqBody, "previous_response_id") != "" {
+					contextErr := &OpenAIContinuationContextError{Param: "previous_response_id"}
+					writeOpenAIContinuationContextError(c, contextErr)
+					return wsResult, contextErr
+				}
 			}
 			if reason == "invalid_encrypted_content" && recoverInvalidEncryptedContent(attempt) {
 				continue
@@ -1317,6 +1317,10 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 	rejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
 	diagnosticUpstreamAttempt := 0
 	for {
+		if validationErr := validateOpenAIOAuthFinalRequest(c, account, upstreamModel, c.GetHeader(responsesLiteHeader), body); validationErr != nil {
+			writeOpenAIProtocolValidationError(c, validationErr, false)
+			return nil, validationErr
+		}
 		// Build upstream request
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 		var headerGuard *openAIFirstOutputHeaderGuard
@@ -1486,7 +1490,9 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 					resp.StatusCode,
 				)
 			}
-			return s.handleErrorResponse(ctx, resp, c, account, body, resolveOpenAIErrorSchedulingModel(billingModel, upstreamModel))
+			partial, terminalErr := s.handleErrorResponse(ctx, resp, c, account, body, resolveOpenAIErrorSchedulingModel(billingModel, upstreamModel))
+			stampOpenAIModelErrorPartialResult(c, partial, body, originalModel, billingModel, upstreamModel, reqStream, startTime)
+			return partial, terminalErr
 		}
 		defer func() { _ = resp.Body.Close() }()
 
@@ -1555,7 +1561,9 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 							!shouldDisable && account.IsPoolMode() && (account.IsPoolModeRetryableStatus(compactResp.StatusCode) || isOpenAITransientProcessingError(compactResp.StatusCode, signal.message, compactBody)),
 						)
 					}
-					return s.handleErrorResponse(ctx, compactResp, c, account, body, resolveOpenAIErrorSchedulingModel(billingModel, upstreamModel))
+					partial, terminalErr := s.handleErrorResponse(ctx, compactResp, c, account, body, resolveOpenAIErrorSchedulingModel(billingModel, upstreamModel))
+					stampOpenAIModelErrorPartialResult(c, partial, body, originalModel, billingModel, upstreamModel, reqStream, startTime)
+					return partial, terminalErr
 				}
 				var partial *OpenAIForwardResult
 				if streamResult != nil {

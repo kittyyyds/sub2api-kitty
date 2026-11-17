@@ -167,6 +167,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		DeferReasoningEffortValidation: true,
 	})
 	if err != nil {
+		writeAnthropicOutputFormatValidationError(c, err)
 		return nil, fmt.Errorf("convert anthropic to responses: %w", err)
 	}
 
@@ -229,9 +230,19 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		return nil, fmt.Errorf("marshal responses request: %w", err)
 	}
 
+	responsesLite := openAIResponsesLiteForNormalization(account, upstreamModel, c.GetHeader(responsesLiteHeader), responsesBody)
+	if responsesLite {
+		recordOpenAIFinalProtocolDiagnostic(c, account, upstreamModel, c.GetHeader(responsesLiteHeader), responsesBody)
+		normalized, _, normalizeErr := normalizeOpenAIResponsesLitePayloadForAccount(responsesBody, account)
+		if normalizeErr != nil {
+			writeOpenAIProtocolValidationError(c, normalizeErr, true)
+			return nil, normalizeErr
+		}
+		responsesBody = normalized
+	}
 	if account.UsesOpenAICodexProtocol() && account.Platform != PlatformGrok {
 		var reqBody map[string]any
-		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
+		if err := decodeOpenAIJSONUseNumber(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
 		}
 		// Codex OAuth（非 VM）：Messages 客户端按官方请求形态整体合成。
@@ -243,7 +254,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			wireProfilePtr = &wireProfile
 		}
 		if isCodexOAuthAccount(account) && s.codexFullSynthesisEnabled() {
-			synthOptions := s.newCodexSynthOptions(c, account, body, wireProfile, false, false, false, nil)
+			synthOptions := s.newCodexSynthOptions(c, account, body, wireProfile, responsesLite, false, false, nil)
 			result, synthErr := synthesizeCodexOAuthRequest(reqBody, account, upstreamModel, synthOptions)
 			if result.WebSearchInjected {
 				MarkOpenAIResponsesValidationSearchSource(c, OpenAIResponsesValidationSearchSynthesis)
@@ -264,6 +275,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		}
 		synthesized := synthResult != nil && synthResult.Modified
 		codexResult := applyCodexOAuthTransformWithOptions(reqBody, codexOAuthTransformOptions{
+			ResponsesLite:           responsesLite,
 			SkipDefaultInstructions: true,
 			NativeItemIDs:           isCodexOAuthAccount(account),
 			PreserveToolCallIDs:     true,
@@ -341,7 +353,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	if account.Type == AccountTypeAPIKey {
 		if trimmedKey := strings.TrimSpace(promptCacheKey); trimmedKey != "" {
 			var reqBody map[string]any
-			if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
+			if err := decodeOpenAIJSONUseNumber(responsesBody, &reqBody); err != nil {
 				return nil, fmt.Errorf("unmarshal for prompt cache key injection: %w", err)
 			}
 			if existing, ok := reqBody["prompt_cache_key"].(string); !ok || strings.TrimSpace(existing) == "" {
@@ -408,6 +420,10 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		}
 	}
 
+	if validationErr := validateOpenAIOAuthFinalRequest(c, account, upstreamModel, c.GetHeader(responsesLiteHeader), responsesBody); validationErr != nil {
+		writeOpenAIProtocolValidationError(c, validationErr, true)
+		return nil, validationErr
+	}
 	// 5. Get access token
 	token, _, err := s.getRequestCredential(ctx, c, account)
 	if err != nil {
@@ -584,7 +600,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 				return nil, foErr
 			}
 			// Non-failover error: return Anthropic-formatted error to client
-			return s.handleAnthropicErrorResponse(resp, c, account, billingModel)
+			partial, terminalErr := s.handleAnthropicErrorResponse(resp, c, account, billingModel)
+			stampOpenAIModelErrorPartialResult(c, partial, responsesBody, originalModel, billingModel, upstreamModel, clientStream, startTime)
+			return partial, terminalErr
 		}
 		if account.Platform == PlatformGrok && account.Type == AccountTypeOAuth {
 			s.updateGrokUsageFromResponse(withGrokTeamRateLimitModel(ctx, upstreamModel), account, resp.Header, resp.StatusCode)
@@ -774,6 +792,10 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 			return nil, s.newOpenAIStreamFailoverErrorWithModel(c, account, false, requestID, payload, message, upstreamModel, resp.Header)
 		}
 		message = s.recordOpenAIStreamUpstreamError(c, account, false, requestID, "http_error", payload, message)
+		if isOpenAIModelUnavailableTerminalEvent(payload) {
+			writeOpenAIModelUnavailableTerminal(c, resp.StatusCode, openAIModelErrorMessages)
+			return partialResult(), fmt.Errorf("upstream model unavailable")
+		}
 		// 统一走语义状态推断 + body 归一化（与 /v1/responses 路径一致），
 		// 使按错误码配置的透传规则可命中。
 		if status, errType, errMsg, matched := applyOpenAIStreamFailedErrorPassthroughRule(
@@ -795,7 +817,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 		if status == http.StatusBadRequest {
 			errType = "invalid_request_error"
 		}
-		writeAnthropicError(c, status, errType, OpenAIUpstreamErrorClientMessage(payload, message))
+		c.JSON(status, gin.H{"type": "error", "error": openAIStreamClientErrorFields(payload, errType, OpenAIUpstreamErrorClientMessage(payload, message))})
 		return partialResult(), fmt.Errorf("upstream response failed: %s", message)
 	}
 	if strings.TrimSpace(finalResponse.Status) == "completed" {
@@ -1372,6 +1394,14 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 					return true
 				}
 				message = s.recordOpenAIStreamUpstreamError(c, account, false, requestID, "http_error", payloadBytes, message)
+				if isOpenAIModelUnavailableTerminalEvent(payloadBytes) {
+					if !clientDisconnected {
+						writeOpenAIModelUnavailableTerminal(c, resp.StatusCode, openAIModelErrorMessages)
+						clientOutputStarted = true
+					}
+					streamNonFailoverErr = fmt.Errorf("upstream model unavailable")
+					return true
+				}
 				errStatus, errType, errMsg := openAIStreamFailureStatus(payloadBytes, message), "api_error", message
 				if errStatus == http.StatusBadRequest {
 					errType = "invalid_request_error"
@@ -1394,12 +1424,13 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 				}
 				if !clientDisconnected {
 					if !clientOutputStarted {
-						writeAnthropicError(c, errStatus, errType, clientMsg)
+						c.JSON(errStatus, gin.H{"type": "error", "error": openAIStreamClientErrorFields(payloadBytes, errType, clientMsg)})
 						clientOutputStarted = true
 					} else {
 						writeStreamHeaders()
 						MarkOpsStreamFailure(c, errType, openAIStreamFailedEventErrorCode(payloadBytes), errMsg, errStatus)
-						if _, err := fmt.Fprint(c.Writer, buildAnthropicStreamErrorSSE(errType, clientMsg)); err == nil {
+						errorPayload, _ := json.Marshal(gin.H{"type": "error", "error": openAIStreamClientErrorFields(payloadBytes, errType, clientMsg)})
+						if _, err := fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", errorPayload); err == nil {
 							c.Writer.Flush()
 						}
 					}
@@ -1751,6 +1782,11 @@ func copyOpenAIUsageFromResponsesUsage(usage *apicompat.ResponsesUsage, observed
 		result.CacheReadKnown = len(observed) > 0 && !result.cacheReadMediaObserved && observed[0].CacheReadKnown &&
 			observed[0].CacheReadInputTokens == result.CacheReadInputTokens &&
 			observed[0].ImageInputTokens == 0 && observed[0].ImageOutputTokens == 0 && observed[0].ImageCacheReadTokens == 0
+	}
+	// The raw reader may already have observed billable usage on an earlier
+	// progress event. A typed all-zero terminal must not erase that evidence.
+	if len(observed) > 0 && !openAIUsageHasTokens(&result) && openAIUsageHasTokens(&observed[0]) {
+		return observed[0]
 	}
 	return result
 }

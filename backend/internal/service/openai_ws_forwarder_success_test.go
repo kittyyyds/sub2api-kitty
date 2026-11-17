@@ -1581,6 +1581,33 @@ func TestOpenAIGatewayService_PrewarmReadHonorsParentContext(t *testing.T) {
 	require.Less(t, elapsed, 180*time.Millisecond, "预热读取应受父 context 取消控制，不应阻塞到 read_timeout")
 }
 
+func TestKitty32OpenAIWSPrewarmPreservesFailureClassification(t *testing.T) {
+	for _, tc := range []struct{ name, event, reason string }{
+
+		{"request", `{"type":"error","error":{"code":"invalid_request_error","type":"invalid_request_error","message":"invalid field"}}`, "policy_violation"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &OpenAIGatewayService{cfg: &config.Config{}}
+			svc.cfg.Gateway.OpenAIWS.PrewarmGenerateEnabled = true
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			SetOpenAIClientTransport(c, OpenAIClientTransportHTTP)
+			account := &Account{Extra: astraHealthyTestExtra(nil),
+				ID: 11, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+			capture := &openAIWSCaptureConn{events: [][]byte{[]byte(tc.event)}}
+			lease := &openAIWSConnLease{conn: newOpenAIWSConn("conn", account.ID, capture, nil)}
+			err := svc.performOpenAIWSGeneratePrewarm(context.Background(), lease, OpenAIWSProtocolDecision{Transport: OpenAIUpstreamTransportResponsesWebsocketV2}, map[string]any{"model": "gpt-5.5"}, "", nil, account, nil, 0, c)
+			require.Error(t, err)
+			var terminal *openAIWSPrewarmTerminalError
+			require.ErrorAs(t, err, &terminal)
+			require.True(t, openAIWSKnownParameterError(terminal.payload))
+			require.Equal(t, http.StatusBadRequest, openAIStreamFailureStatus(terminal.payload, ""))
+			var retry *openAIWSFallbackError
+			require.False(t, errors.As(err, &retry), "known parameter failure cannot become a transport retry")
+		})
+	}
+}
+
 func TestOpenAIGatewayService_Forward_WSv2_TurnMetadataInPayloadOnConnReuse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -750,7 +750,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						return
 					}
 				}
-				cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel, requestPlatform)
+				cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, forwardModel, reqModel, requestPlatform)
 				cls = classifySelectionFailureError(err, cls)
 				if !cls.ModelNotFound {
 					markOpsRoutingCapacityLimitedIfNoAvailable(c, err)
@@ -770,7 +770,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				h.handleOpenAIQueueFull(c, streamStarted)
 				return
 			}
-			cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, reqModel, reqModel, requestPlatform)
+			cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, forwardModel, reqModel, requestPlatform)
 			if !cls.ModelNotFound {
 				markOpsRoutingCapacityLimited(c)
 			}
@@ -1001,6 +1001,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 							}
 							continue
 						}
+					}
+					if requestPlatform == service.PlatformOpenAI && !service.OpenAIContinuationMaySwitchAccount(body) {
+						// Valid native history can forbid account migration. Retain
+						// the upstream failure instead of inventing an input error.
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
 					}
 					h.gatewayService.RecordOpenAIAccountSwitch()
 					service.RecordStrictFailoverFailure(c.Request.Context(), account.ID, failoverErr)
@@ -1372,7 +1378,15 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		if failoverClientGone(c) {
 			return
 		}
-		currentRoutingModel := routingModel
+		// Account eligibility must see the channel target that is forwarded below.
+		// Otherwise an eligible ingress alias can route to an unavailable target.
+		currentRoutingModel := openAIChannelForwardModel(channelMappingMsg, routingModel)
+		if requestPlatform == service.PlatformOpenAI {
+			// OpenAI accounts convert Messages through Responses or Chat; both
+			// normalize this identity before applying the account model mapping.
+			// Keep the raw body for effort extraction and other providers' native aliases.
+			currentRoutingModel = service.NormalizeOpenAICompatRequestedModel(currentRoutingModel)
+		}
 		if effectiveMappedModel != "" {
 			currentRoutingModel = effectiveMappedModel
 		}
@@ -1710,6 +1724,9 @@ func (h *OpenAIGatewayHandler) anthropicStreamingAwareError(c *gin.Context, stat
 
 // handleAnthropicFailoverExhausted maps upstream failover errors to Anthropic format.
 func (h *OpenAIGatewayHandler) handleAnthropicFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, streamStarted bool) {
+	if writeOpenAIModelUnavailableExhausted(c, failoverErr, streamStarted, true) {
+		return
+	}
 	if failoverErr != nil {
 		copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
 	}
@@ -1744,36 +1761,12 @@ func (h *OpenAIGatewayHandler) ensureAnthropicErrorResponse(c *gin.Context, stre
 }
 
 func (h *OpenAIGatewayHandler) validateFunctionCallOutputRequest(c *gin.Context, body []byte, reqLog *zap.Logger) bool {
-	if !gjson.GetBytes(body, `input.#(type=="function_call_output")`).Exists() {
-		return true
-	}
-
-	validation := service.ValidateFunctionCallOutputContextBytes(body)
-	if !validation.HasFunctionCallOutput {
-		return true
-	}
-
-	previousResponseID := gjson.GetBytes(body, "previous_response_id").String()
-	if strings.TrimSpace(previousResponseID) != "" || validation.HasToolCallContext {
-		return true
-	}
-
-	if validation.HasFunctionCallOutputMissingCallID {
-		reqLog.Warn("openai.request_validation_failed",
-			zap.String("reason", "function_call_output_missing_call_id"),
-		)
-		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "function_call_output requires call_id on HTTP requests; continuation via previous_response_id is only supported on Responses WebSocket v2")
+	if err := service.ValidateOpenAIContinuationInput(body); err != nil {
+		reqLog.Warn("openai.request_validation_failed", zap.String("reason", "continuation_context_missing"))
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "code": "continuation_context_missing", "param": "input", "message": err.Error()}})
 		return false
 	}
-	if validation.HasItemReferenceForAllCallIDs {
-		return true
-	}
-
-	reqLog.Warn("openai.request_validation_failed",
-		zap.String("reason", "function_call_output_missing_item_reference"),
-	)
-	h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "function_call_output requires item_reference ids matching each call_id on HTTP requests; continuation via previous_response_id is only supported on Responses WebSocket v2")
-	return false
+	return true
 }
 
 func normalizeCodexDelegationBootstrap(body []byte) ([]byte, bool) {
@@ -2784,8 +2777,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "previous_response_id must be a response.id (resp_*), not a message id")
 		return
 	}
-	firstMessageToolCoverage := service.AnalyzeToolCallOutputContextCoverageBytes(firstMessage)
-	previousResponseCanMove := !firstMessageToolCoverage.HasFunctionCallOutput || firstMessageToolCoverage.ContextCoversAllCallIDs
+	// Matching inline tools do not prove an explicit anchor's whole history.
+	// Keep the existing previous-response owner selection for every anchor.
+	previousResponseCanMove := previousResponseID == ""
 	reqLog = reqLog.With(
 		zap.Bool("ws_ingress", true),
 		zap.String("session_initial_model", reqModel),
@@ -2946,6 +2940,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 		releaseAccountSlot()
 		if !failoverErr.ShouldRetryNextAccount() {
+			closeOpenAIWSFailoverExhausted(c, wsConn, failoverErr)
+			return false
+		}
+		if account.Platform == service.PlatformOpenAI && !service.OpenAIContinuationMaySwitchAccount(wsAttemptMessage) {
 			closeOpenAIWSFailoverExhausted(c, wsConn, failoverErr)
 			return false
 		}
@@ -3444,17 +3442,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		}
 
 		wsFirstMessage := wsAttemptMessage
-		// 切组/会话失配防护：previous_response_id 未在当前分组命中粘连账号（StickyPreviousHit=false），
-		// 说明该会话链不属于本次调度到的账号，原样转发会触发上游会话链鉴权失败（“鉴权失败，请检查 API Key”）。
-		// 故剥离首包里的 previous_response_id，改用首包内 input 重建上下文；带 function_call_output 的
-		// 工具续链无法重建，保持原样。仅作用于首轮首包，后续 turn 的续链由 WS 转发层既有逻辑处理。
-		if previousResponseID != "" && !scheduleDecision.StickyPreviousHit && previousResponseCanMove {
-			wsFirstMessage = service.RemovePreviousResponseIDFromBody(wsFirstMessage)
-			reqLog.Debug("openai.websocket_previous_response_id_stripped_cross_group",
-				zap.Int64("account_id", account.ID),
-				zap.String("schedule_layer", scheduleDecision.Layer),
-			)
-		}
+		// Preserve explicit native continuation. A missing scheduler affinity is
+		// not proof that the caller supplied the full preceding conversation.
+		// Existing response-origin validation distinguishes unknown native IDs
+		// from known IDs owned by another credential or downstream user.
 
 		// WebSocket 首包可能很大，hash 必须在 hooks 外算成字符串，避免 AfterTurn 闭包保活请求体。
 		requestPayloadHash = service.HashUsageRequestPayload(wsFirstMessage)
@@ -3799,6 +3790,9 @@ func (h *OpenAIGatewayHandler) handleConcurrencyError(c *gin.Context, err error,
 func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, streamStarted bool) {
 	if failoverErr == nil {
 		h.handleFailoverExhaustedSimple(c, http.StatusBadGateway, streamStarted)
+		return
+	}
+	if writeOpenAIModelUnavailableExhausted(c, failoverErr, streamStarted, false) {
 		return
 	}
 	copyFailoverRetryAfter(c, failoverErr.ResponseHeaders)
@@ -4317,6 +4311,9 @@ func openAIWSNextAttemptMessage(current, retryPayload []byte, retryCurrentTurn b
 }
 
 func closeOpenAIWSFailoverExhausted(c *gin.Context, conn *coderws.Conn, failoverErr *service.UpstreamFailoverError) {
+	if closeOpenAIWSModelUnavailable(c, conn, failoverErr) {
+		return
+	}
 	intendedStatus := http.StatusBadGateway
 	errorType := "upstream_error"
 	errorCode := "upstream_ws_failover_exhausted"
