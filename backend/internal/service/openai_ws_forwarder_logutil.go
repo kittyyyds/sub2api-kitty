@@ -199,26 +199,34 @@ func openAIWSMessageLikelyContainsToolCalls(message []byte) bool {
 }
 
 func parseOpenAIWSResponseUsageFromCompletedEvent(message []byte, usage *OpenAIUsage) {
+	parseOpenAIWSResponseUsageWithObservation(message, usage)
+}
+
+// Observe explicit upstream usage (including zero) without changing Kitty's
+// existing accumulator, cache evidence, terminal reset or billing policy.
+func parseOpenAIWSResponseUsageWithObservation(message []byte, usage *OpenAIUsage) bool {
 	if usage == nil || len(message) == 0 {
-		return
+		return false
 	}
 	if openAIStreamEventTypeIsTerminal(effectiveOpenAISSEEventType(message, "")) {
 		usage.CacheReadKnown = false
 	}
 	if !bytes.Contains(message, []byte(`"usage"`)) {
-		return
+		return false
 	}
 	if parsedUsage, ok := extractOpenAIUsageFromJSONBytes(message); ok {
 		mergeOpenAICacheUsageEvidence(*usage, &parsedUsage)
 		if openAIStreamEventTypeIsTerminal(effectiveOpenAISSEEventType(message, "")) {
 			if !openAIUsageHasTokens(&parsedUsage) && openAIUsageHasTokens(usage) {
-				return
+				return true
 			}
 			*usage = parsedUsage
 		} else {
 			mergeOpenAIUsageNonZero(usage, parsedUsage)
 		}
+		return true
 	}
+	return false
 }
 
 func parseOpenAIWSErrorEventFields(message []byte) (code string, errType string, errMessage string) {

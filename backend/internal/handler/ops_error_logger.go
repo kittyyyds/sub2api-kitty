@@ -1294,6 +1294,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService, execution ...gin.HandlerF
 			entry.ClientIP = &clientIP
 		}
 
+		service.AttachOpenAIWSReadDiagnostic(c, entry)
 		enqueueOpsErrorLog(ops, entry)
 	}
 }
@@ -1410,6 +1411,7 @@ func logOpsRecoveredUpstream(c *gin.Context, ops *service.OpsService, finalStatu
 		entry.ClientIP = &clientIP
 	}
 	applyOpsLatencyFieldsFromContext(c, entry)
+	service.AttachOpenAIWSReadDiagnostic(c, entry)
 	enqueueOpsErrorLog(ops, entry)
 }
 
@@ -1599,6 +1601,9 @@ func logOpsStreamErrorValue(c *gin.Context, ops *service.OpsService, wireStatus 
 		entry.ClientIP = &clientIP
 	}
 
+	if !streamErr.RequestScoped && streamErr.Turn == 0 {
+		service.AttachOpenAIWSReadDiagnostic(c, entry)
+	}
 	enqueueOpsErrorLog(ops, entry)
 }
 
