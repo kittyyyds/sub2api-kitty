@@ -140,6 +140,15 @@ describe('AppHeader customer shortcuts', () => {
     wrapper.unmount()
   })
 
+  it('groups the header balance by thousands, matching the dashboard account card', async () => {
+    const { wrapper } = await mountHeader('user')
+    authStore.user!.balance = 997969.0194
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('$997,969.02')
+    expect(wrapper.text()).not.toContain('$997969.02')
+    wrapper.unmount()
+  })
+
   it('does not duplicate pricing or documentation links in the customer header', async () => {
     const { wrapper } = await mountHeader('user')
     expect(wrapper.find('a[href="/model-plaza?embedded=1"]').exists()).toBe(false)

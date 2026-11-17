@@ -30,6 +30,10 @@ vi.mock('../AppHeader.vue', () => ({
   default: { template: '<header data-testid="header" />' }
 }))
 
+vi.mock('../CustomerPageTabs.vue', () => ({
+  default: { template: '<nav data-testid="page-tabs" />' }
+}))
+
 const directory = dirname(fileURLToPath(import.meta.url))
 const sourceRoot = resolve(directory, '../../..')
 const appSource = readFileSync(resolve(sourceRoot, 'App.vue'), 'utf8')
@@ -61,6 +65,21 @@ describe('default SUB2API application layout', () => {
 
     wrapper.unmount()
     expect(document.body.className).toBe('existing-body-class')
+  })
+
+  it('puts the related-page tabs above customer content and leaves them out for administrators', () => {
+    const customer = mount(AppLayout, {
+      slots: { default: '<section data-testid="content">content</section>' }
+    })
+    expect(Array.from(customer.get('main').element.children).map(child => child.getAttribute('data-testid'))).toEqual(['page-tabs', 'content'])
+    customer.unmount()
+
+    auth.isAdmin = true
+    const admin = mount(AppLayout, {
+      slots: { default: '<section data-testid="content">content</section>' }
+    })
+    expect(admin.find('[data-testid="page-tabs"]').exists()).toBe(false)
+    admin.unmount()
   })
 
   it('scopes the homepage-matched console theme without mutating the body', () => {

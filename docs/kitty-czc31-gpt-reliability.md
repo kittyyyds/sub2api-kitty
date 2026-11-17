@@ -1,8 +1,9 @@
-# Kitty .30：GPT 兼容、续接与用卡安全
+# Kitty .31：GPT 兼容、续接与用卡安全
 
 日期：2026-11-17。来源：codex。
 
-此批以 Kitty .29（6aa245fbd34f5801ded2a0846be07eaf5f324109）为基线，定向吸收
+本批在已上线的仪表盘 Kitty .30（409183ad07f0baa0dd0df56b2d70438376ade1c5）上合入十一项更新。
+GPT 实现及验证以 Kitty .29（6aa245fbd34f5801ded2a0846be07eaf5f324109）为原始基线，定向吸收
 zuchengchen/sub2api 固定提交 c08452d95d3264e8e06e27e0c2c5258b0fd725de
 （czc-v2026.11.17.4 / 0.2.19.52）。保留 Kitty 自有账号类型、代理分池、计费、母子账号和界面。
 

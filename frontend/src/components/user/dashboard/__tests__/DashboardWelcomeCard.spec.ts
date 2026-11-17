@@ -1,15 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, RouterLinkStub } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { ref } from 'vue'
 import DashboardWelcomeCard from '../DashboardWelcomeCard.vue'
 import { homeMessages } from '@/i18n/homeOverview'
 
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 8, 19)) })
+const canUseBatchImage = ref(false)
+const refreshBatchImageAccess = vi.fn()
+vi.mock('@/composables/useBatchImageAccess', () => ({
+  useBatchImageAccess: () => ({ canUseBatchImage, refreshBatchImageAccess })
+}))
+
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 8, 19)); canUseBatchImage.value = false; refreshBatchImageAccess.mockClear() })
 afterEach(() => { vi.useRealTimers(); localStorage.clear() })
 function render(rechargeEnabled = true, isSimple = false, username = '张三') {
   return mount(DashboardWelcomeCard, {
     props: { accountId: 82001, username, rechargeEnabled, isSimple },
-    global: { plugins: [createI18n({ legacy: false, locale: 'zh', messages: { zh: { homeOverview: homeMessages.zh } } })], stubs: { Icon: true, RouterLink: RouterLinkStub, CustomerContactDialog: { props: ['show'], emits: ['close'], template: '<div v-if="show" role="dialog"><button @click="$emit(\'close\')">关闭</button></div>' } } },
+    // The shortcut labels come from the dashboard namespace, which this spec does not load.
+    global: { plugins: [createI18n({ legacy: false, locale: 'zh', missingWarn: false, fallbackWarn: false, messages: { zh: { homeOverview: homeMessages.zh } } })], stubs: { Icon: true, RouterLink: RouterLinkStub, CustomerContactDialog: { props: ['show'], emits: ['close'], template: '<div v-if="show" role="dialog"><button @click="$emit(\'close\')">关闭</button></div>' } } },
   })
 }
 describe('welcome card actions and clock', () => {
@@ -53,7 +61,7 @@ describe('welcome card actions and clock', () => {
   })
   it('opens the existing support component and links to the balance purchase page', async () => {
     const wrapper = render()
-    expect(wrapper.getComponent(RouterLinkStub).props('to')).toBe('/purchase')
+    expect(wrapper.getComponent('.home-welcome-recharge').props('to')).toBe('/purchase')
     await wrapper.get('.home-welcome-contact').trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     await wrapper.get('[role="dialog"] button').trigger('click')
@@ -63,10 +71,24 @@ describe('welcome card actions and clock', () => {
   it('respects payment and simple-mode permissions', () => {
     for (const [enabled, simple] of [[false, false], [true, true]]) {
       const wrapper = render(enabled, simple)
-      expect(wrapper.findComponent(RouterLinkStub).exists()).toBe(false)
+      expect(wrapper.find('.home-welcome-recharge').exists()).toBe(false)
+      expect(wrapper.findAllComponents(RouterLinkStub).map(link => link.props('to'))).not.toContain('/purchase')
       expect(wrapper.find('.home-welcome-contact').exists()).toBe(true)
       wrapper.unmount()
     }
+  })
+  it('keeps the shortcuts beside the main actions and offers batch images only with access', async () => {
+    const wrapper = render()
+    const links = () => wrapper.findAllComponents(RouterLinkStub).map(link => link.props('to'))
+    expect(links()).toEqual(['/keys', '/usage', '/redeem', '/purchase'])
+    expect(wrapper.get('[data-testid="home-shortcuts"]').findAll('a')).toHaveLength(3)
+    expect(refreshBatchImageAccess).toHaveBeenCalledTimes(1)
+    canUseBatchImage.value = true
+    await wrapper.vm.$nextTick()
+    expect(links()).toEqual(['/keys', '/usage', '/batch-image', '/redeem', '/purchase'])
+    // The tab above the card already says "overview".
+    expect(wrapper.find('.home-welcome-badge').exists()).toBe(false)
+    wrapper.unmount()
   })
   it('updates a page kept open across midnight and stops its timer on unmount', async () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 8, 23, 59, 50))

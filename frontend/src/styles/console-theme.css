@@ -371,6 +371,10 @@ html.dark.kitty-console-theme,
 .kitty-customer-shell .sidebar-category { flex: 0 0 20px; min-height: 20px; padding-block: 0; font-size: 11px; letter-spacing: .04em; }
 .kitty-customer-shell .sidebar:has([data-customer-section]) > .sidebar-footer { display: grid; gap: 4px; padding: 12px 14px; }
 .kitty-customer-shell .sidebar:has([data-customer-section]) > .sidebar-footer .sidebar-link { min-height: 36px; margin: 0; padding-block: 6px; font-size: 14px; }
+/* Expanded: theme switch and collapse share one row so the menu keeps the height. */
+.kitty-customer-shell .sidebar:not(.is-collapsed):has([data-customer-section]) > .sidebar-footer { grid-template-columns: minmax(0,1fr) 36px; }
+.kitty-customer-shell .sidebar:not(.is-collapsed):has([data-customer-section]) > .sidebar-footer > :last-child { justify-content: center; padding-inline: 0; }
+.kitty-customer-shell .sidebar:not(.is-collapsed):has([data-customer-section]) > .sidebar-footer > :last-child .sidebar-label { display: none; }
 .kitty-customer-shell .sidebar.is-collapsed:has([data-customer-section]) .sidebar-link { justify-content: center; padding-inline: 0; }
 .kitty-console-theme .console-user-avatar { color: var(--kc-on-action); background: var(--kc-action); background-image: none; box-shadow: none; }
 .kitty-console-theme :is(.btn-primary,.btn-secondary,.btn-ghost) { transition-duration: 180ms; transition-timing-function: var(--kc-ease); }

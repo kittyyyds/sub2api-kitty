@@ -229,8 +229,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       requiresAdmin: false,
       title: 'Dashboard',
-      titleKey: 'dashboard.title',
-      descriptionKey: 'dashboard.welcomeMessage'
+      titleKey: 'dashboard.title'
     }
   },
   {

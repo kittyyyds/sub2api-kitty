@@ -99,7 +99,7 @@
             >
               <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
               <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-              <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone"><span aria-hidden="true">{{ item.badge.emoji }}</span>{{ item.badge.label }}</span></span>
+              <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone">{{ item.badge.label }}</span></span>
               <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
             </router-link>
           </template>
@@ -127,7 +127,7 @@
           >
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone"><span aria-hidden="true">{{ item.badge.emoji }}</span>{{ item.badge.label }}</span></span>
+            <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone">{{ item.badge.label }}</span></span>
             <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
           </router-link>
         </div>
@@ -146,12 +146,12 @@
             :target="item.path === '/creative-canvas' ? '_blank' : undefined"
             :rel="item.path === '/creative-canvas' ? 'noopener noreferrer' : undefined"
             class="sidebar-link mb-1"
-            :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
+            :class="{ 'sidebar-link-active': (item.activePaths ?? [item.path]).some(isActive), 'sidebar-link-collapsed': sidebarCollapsed }"
             :title="sidebarCollapsed ? item.label : undefined" :aria-label="item.label"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined" @click="handleMenuItemClick(item.path)">
             <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
             <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
-            <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone"><span aria-hidden="true">{{ item.badge.emoji }}</span>{{ item.badge.label }}</span></span>
+            <span class="sidebar-label sidebar-label-with-badge" :class="{ 'sidebar-label-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'"><span class="sidebar-label-text">{{ item.label }}</span><span v-if="item.badge && !sidebarCollapsed" class="sidebar-promo-badge" :class="'sidebar-promo-badge-' + item.badge.tone" :data-sidebar-promo="item.badge.tone">{{ item.badge.label }}</span></span>
             <span v-if="navBadge(item)" class="sidebar-nav-badge" :class="{ 'sidebar-nav-badge-collapsed': sidebarCollapsed }" data-testid="sidebar-nav-badge">{{ sidebarCollapsed ? '' : navBadgeText(item) }}</span>
           </router-link>
           <template v-if="section.id === 'other'">
@@ -229,8 +229,9 @@ import {
   isReservedCustomerFeatureId,
   type NativeCustomFeatureId
 } from '@/features/customer-console/nativeFeatureRegistry'
+import { mergeCustomerNavGroups } from '@/features/customer-console/navGroups'
 
-type SidebarPromoTone = 'hot' | 'deal' | 'rebate'
+type SidebarPromoTone = 'hot' | 'deal'
 import { getCustomMenuLabel } from '@/utils/customMenu'
 
 interface NavItem {
@@ -254,7 +255,6 @@ interface NavItem {
   featureFlag?: () => boolean | undefined
   badge?: {
     label: string
-    emoji: string
     tone: SidebarPromoTone
   }
   /** Optional count shown as a red badge (a dot while the sidebar is collapsed). */
@@ -846,7 +846,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/batch-image', label: t('nav.batchImage'), icon: BatchImageIcon, hideInSimpleMode: true, featureFlag: flagBatchImageAccess },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
-    { path: '/creative-canvas', label: t('nav.creativeCanvas'), icon: FolderIcon, badge: { label: t('nav.canvasMediaBadge'), emoji: '🎨', tone: 'hot' } },
+    { path: '/creative-canvas', label: t('nav.creativeCanvas'), icon: FolderIcon, badge: { label: t('nav.canvasMediaBadge'), tone: 'hot' } },
     { path: '/video-tasks', label: '视频任务', icon: OrderIcon, hideInSimpleMode: true },
     { path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon, hideInSimpleMode: true, featureFlag: flagAvailableChannels },
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
@@ -862,7 +862,6 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
       featureFlag: flagPayment,
       badge: {
         label: t('nav.limitedOffer'),
-        emoji: '🎁',
         tone: 'deal'
       }
     },
@@ -878,12 +877,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
       label: t('nav.affiliate'),
       icon: UsersIcon,
       hideInSimpleMode: true,
-      featureFlag: flagAffiliate,
-      badge: {
-        label: t('nav.affiliateBadge'),
-        emoji: '💸',
-        tone: 'rebate'
-      }
+      featureFlag: flagAffiliate
     },
     { path: '/support-tickets', label: t('nav.supportTickets'), icon: SupportTicketIcon, featureFlag: flagUserSupportTickets, countBadge: () => supportTicketStore.userUnread },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
@@ -913,16 +907,20 @@ const customerNavSections = computed(() => {
     { path: '/model-plaza?embedded=1', label: t('nav.modelPricing'), icon: CurrencyDollarIcon, featureFlag: makeSidebarFlag(FeatureFlags.modelPlaza) },
     { ...buildNativeFeatureNavItem('docs'), label: t('nav.usageDocs') },
   ].filter(item => !item.featureFlag || item.featureFlag() !== false)
+    .map(item => ({ ...item, label: item.path === '/purchase' ? t('nav.recharge') : item.label }))
+  // Related pages share one entry; the page itself offers the tabs (see navGroups).
+  const entries = mergeCustomerNavGroups(items, group => t(group.labelKey))
   const definitions = [
     { id: 'overview', label: '', icon: DashboardIcon, paths: ['/dashboard'] },
-    { id: 'api', label: 'API', icon: KeyIcon, paths: ['/keys','/test-results','/gpt-direct','/available-channels','/usage','/model-plaza?embedded=1','/monitor','/custom/docs'] },
+    { id: 'api', label: 'API', icon: KeyIcon, paths: ['/keys','/test-results','/gpt-direct','/monitor','/available-channels','/usage','/model-plaza?embedded=1','/custom/docs'] },
     { id: 'media', label: t('nav.mediaSection'), icon: FolderIcon, paths: ['/creative-canvas','/video-tasks'] },
     { id: 'billing', label: t('nav.billing'), icon: CreditCardIcon, paths: ['/billing','/subscriptions','/purchase','/orders','/coupons','/invoices','/redeem','/affiliate'] },
-    { id: 'other', label: t('nav.otherSection'), icon: UserIcon, paths: ['/guide','/community','/settings/mcp','/profile','/support-tickets', ...customMenuItemsForUser.value.map(item => `/custom/${item.id}`)] },
+    // The header already carries the community entry on every screen size.
+    { id: 'other', label: t('nav.otherSection'), icon: UserIcon, paths: ['/guide','/settings/mcp','/profile','/support-tickets', ...customMenuItemsForUser.value.map(item => `/custom/${item.id}`)] },
   ]
   return definitions.map(section => ({
     id: section.id, label: section.label, icon: section.icon,
-    items: section.paths.flatMap(path => items.filter(item => item.path === path).map(item => ({...item, label: path === '/purchase' ? t('nav.recharge') : item.label}))),
+    items: section.paths.flatMap(path => entries.filter(item => item.path === path)),
   }))
 })
 
