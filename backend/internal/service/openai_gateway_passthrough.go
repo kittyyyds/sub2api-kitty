@@ -362,6 +362,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	agentTaskRecoveryTried := false
 	compactModelFallbackRetried := false
 	rejectedFieldRetryState := openAIResponsesRejectedFieldRetryStateForRequest(c, body)
+	diagnosticUpstreamAttempt := 0
 	var resp *http.Response
 	var usage *OpenAIUsage
 	var firstTokenMs *int
@@ -383,6 +384,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 
 		upstreamStart := time.Now()
+		diagnosticUpstreamAttempt++
 		resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
@@ -396,6 +398,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			probeBody := s.readUpstreamErrorBody(resp)
 			_ = resp.Body.Close()
 			resp.Body = io.NopCloser(bytes.NewReader(probeBody))
+			appendOpenAIResponsesValidationDiagnostic(c, account, body, probeBody, resp, diagnosticUpstreamAttempt)
 			if retryBody, reason, changed, retryErr := normalizeOpenAIResponsesRejectedFieldRetryBody(resp.StatusCode, body, probeBody); retryErr != nil {
 				return nil, fmt.Errorf("normalize passthrough rejected Responses field retry body: %w", retryErr)
 			} else if changed && rejectedFieldRetryState.Allow(retryBody) {

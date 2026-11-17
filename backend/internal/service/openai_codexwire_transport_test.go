@@ -99,7 +99,9 @@ func TestCodexWireHTTPEligibleMatrix(t *testing.T) {
 
 func TestDoOpenAIUpstreamFinalFallthroughUsesCodexWire(t *testing.T) {
 	upstream := &codexWireRecordingUpstream{}
-	svc := &OpenAIGatewayService{cfg: codexWireTestConfig(true), httpUpstream: upstream}
+	cfg := codexWireTestConfig(true)
+	cfg.Gateway.OpenAIRequestCompressionEnabled = true
+	svc := &OpenAIGatewayService{cfg: cfg, httpUpstream: upstream}
 	plain := `{"model":"gpt-5","input":[],"stream":true}`
 
 	resp, err := svc.doOpenAIUpstream(codexWireResponsesRequest(t, plain), "", codexWireTestAccount())
@@ -165,7 +167,7 @@ func TestDoOpenAIUpstreamKeepsLegacyTransportForIneligibleAccounts(t *testing.T)
 func TestCompressCodexResponsesRequestBody(t *testing.T) {
 	plain := []byte(`{"model":"gpt-5","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}],"stream":true}`)
 	req := codexWireResponsesRequest(t, string(plain))
-	compressCodexResponsesRequestBody(req)
+	require.NoError(t, compressCodexResponsesRequestBody(req))
 	require.Equal(t, "zstd", req.Header.Get("Content-Encoding"))
 	body, err := io.ReadAll(req.Body)
 	require.NoError(t, err)
@@ -191,7 +193,7 @@ func TestCompressCodexResponsesRequestBody(t *testing.T) {
 	} {
 		other, err := http.NewRequest(http.MethodPost, path, strings.NewReader(`{"a":1}`))
 		require.NoError(t, err)
-		compressCodexResponsesRequestBody(other)
+		require.NoError(t, compressCodexResponsesRequestBody(other))
 		require.Empty(t, other.Header.Get("Content-Encoding"), path)
 		raw, _ := io.ReadAll(other.Body)
 		require.Equal(t, `{"a":1}`, string(raw), path)
@@ -199,7 +201,7 @@ func TestCompressCodexResponsesRequestBody(t *testing.T) {
 
 	encoded := codexWireResponsesRequest(t, `{"model":"gpt-5"}`)
 	encoded.Header.Set("Content-Encoding", "gzip")
-	compressCodexResponsesRequestBody(encoded)
+	require.NoError(t, compressCodexResponsesRequestBody(encoded))
 	require.Equal(t, "gzip", encoded.Header.Get("Content-Encoding"))
 	raw, _ := io.ReadAll(encoded.Body)
 	require.Equal(t, `{"model":"gpt-5"}`, string(raw))

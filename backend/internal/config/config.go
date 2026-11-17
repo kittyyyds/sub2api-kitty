@@ -1376,6 +1376,9 @@ type GatewayConfig struct {
 	// OpenAIPassthroughAllowTimeoutHeaders: OpenAI 透传模式是否放行客户端超时头
 	// 关闭（默认）可避免 x-stainless-timeout 等头导致上游提前断流。
 	OpenAIPassthroughAllowTimeoutHeaders bool `mapstructure:"openai_passthrough_allow_timeout_headers"`
+	// Opt in only for the final Codex OAuth Responses HTTP lane. TLS/VM/WS
+	// identity and compression remain independent; plain JSON is the default.
+	OpenAIRequestCompressionEnabled bool `mapstructure:"openai_request_compression_enabled"`
 	// OpenAICompactModel: /responses/compact 上游使用的模型。
 	// compact 端点支持模型滞后于普通 /responses 时，可用该配置降级规避上游错误。
 	OpenAICompactModel string `mapstructure:"openai_compact_model"`
@@ -2908,6 +2911,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.disable_codex_originator_normalization", false)
 	viper.SetDefault("gateway.codex_image_generation_bridge_enabled", false)
 	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
+	viper.SetDefault("gateway.openai_request_compression_enabled", false)
 	viper.SetDefault("gateway.openai_compact_model", "gpt-5.5")
 	viper.SetDefault("gateway.prism_browser.enabled", false)
 	viper.SetDefault("gateway.prism_browser.base_url", "http://127.0.0.1:8319/v1")

@@ -33,6 +33,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 // forwardOpenAIResponsesAttempt is one Forward attempt on account.
 func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context, c *gin.Context, account *Account, body []byte) (forwardResult *OpenAIForwardResult, smartWSError error) {
+	beginOpenAIResponsesValidation(c, body)
 	defer func() {
 		outcome := ""
 		disconnected := forwardResult != nil && forwardResult.ClientDisconnect
@@ -659,6 +660,9 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 			}
 			synthOptions := s.newCodexSynthOptions(c, account, body, requestWireProfile, responsesLite, isCompactRequest, officialCodexClient, attemptFingerprintIDs)
 			result, synthErr := synthesizeCodexOAuthRequest(decoded, account, upstreamModel, synthOptions)
+			if result.WebSearchInjected {
+				MarkOpenAIResponsesValidationSearchSource(c, OpenAIResponsesValidationSearchSynthesis)
+			}
 			if synthErr != nil {
 				writeCodexSynthError(c, synthErr, reqStream)
 				return nil, synthErr
@@ -705,6 +709,9 @@ func (s *OpenAIGatewayService) forwardOpenAIResponsesAttempt(ctx context.Context
 				ResponsesLite:                       responsesLite,
 				WireProfile:                         wireProfilePtr,
 			})
+		}
+		if codexResult.WebSearchHistoryInjected {
+			MarkOpenAIResponsesValidationSearchSource(c, OpenAIResponsesValidationSearchHistory)
 		}
 		if codexResult.Error != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": codexResult.Error.Error()}})

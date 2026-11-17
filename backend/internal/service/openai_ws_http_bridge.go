@@ -458,6 +458,9 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	if writeClientMessage == nil {
 		return nil, errors.New("client websocket writer is nil")
 	}
+	// Each WS turn has independent diagnostic provenance. A bridge payload
+	// may already be transformed, so do not guess client ownership of tools.
+	ResetOpenAIResponsesValidationSearchSources(c)
 	responseModelObserver := &upstreamResponseModelObserver{}
 
 	body, err := prepareOpenAIWSHTTPBridgeBody(account, payload)

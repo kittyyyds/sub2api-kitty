@@ -73,6 +73,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 	defaultMappedModel string,
 	compatPromptCacheTenantIsolated bool,
 ) (_ *OpenAIForwardResult, smartWSError error) {
+	beginOpenAIResponsesValidation(c, body)
 	ctx, smartWSAttempt := beginGroupSmartWSAttempt(ctx, c)
 	defer func() { smartWSError = finishGroupSmartWSAttempt(smartWSAttempt, smartWSError) }()
 	// Native reasoning replay (native_reasoning_chat.go) binds to the inbound
@@ -296,6 +297,9 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		if isCodexOAuthAccount(account) && s.codexFullSynthesisEnabled() {
 			synthOptions := s.newCodexSynthOptions(c, account, body, wireProfile, false, false, false, fpIDs)
 			result, synthErr := synthesizeCodexOAuthRequest(reqBody, account, upstreamModel, synthOptions)
+			if result.WebSearchInjected {
+				MarkOpenAIResponsesValidationSearchSource(c, OpenAIResponsesValidationSearchSynthesis)
+			}
 			if synthErr != nil {
 				if errors.Is(synthErr, ErrCodexSynthContextWindowExceeded) {
 					writeChatCompletionsError(c, http.StatusBadRequest, "context_length_exceeded", codexSynthContextLengthMessage)
@@ -316,6 +320,9 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 			OmitPromotedSystemMessagesFromInput: !isResponsesShape && !isJSONObjectFormat,
 			WireProfile:                         wireProfilePtr,
 		})
+		if codexResult.WebSearchHistoryInjected {
+			MarkOpenAIResponsesValidationSearchSource(c, OpenAIResponsesValidationSearchHistory)
+		}
 		if codexResult.Error != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": codexResult.Error.Error()}})
 			return nil, codexResult.Error
@@ -402,6 +409,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 	cancelUpstream := func() {}
 	defer func() { cancelUpstream() }()
 	var resp *http.Response
+	diagnosticUpstreamAttempt := 0
 	for {
 		cancelUpstream()
 		upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
@@ -436,6 +444,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 		if bindErr != nil {
 			return nil, bindErr
 		}
+		diagnosticUpstreamAttempt++
 		resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 		if nativeChat.preSendFallback(err) {
 			continue
@@ -449,6 +458,7 @@ func (s *OpenAIGatewayService) forwardAsChatCompletions(
 
 		// 8. Handle error response with failover
 		respBody, upstreamMsg, completeErrorBody := s.readOpenAIUpstreamErrorWithCompleteness(resp)
+		appendOpenAIResponsesValidationDiagnostic(c, account, responsesBody, respBody, resp, diagnosticUpstreamAttempt)
 		if nativeChat.rejectedFallback(ctx, c, resp.StatusCode, respBody, completeErrorBody) {
 			_ = resp.Body.Close()
 			continue

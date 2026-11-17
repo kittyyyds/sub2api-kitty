@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -53,8 +54,11 @@ func (s *OpenAIGatewayService) doOpenAIUpstreamOnce(request *http.Request, proxy
 		if err != nil {
 			return nil, err
 		}
-		request = prepareCodexWireHTTPRequest(request, account)
-		return s.httpUpstream.DoWithTLS(request, proxyURL, account.ID, account.Concurrency, profile)
+		prepared, err := prepareCodexWireHTTPRequest(s.cfg, request, account)
+		if err != nil {
+			return nil, err
+		}
+		return s.httpUpstream.DoWithTLS(prepared, proxyURL, account.ID, account.Concurrency, profile)
 	}
 	return s.httpUpstream.Do(request, proxyURL, account.ID, account.Concurrency)
 }
@@ -101,15 +105,17 @@ func resolveCodexWireHTTPProfile(cfg *config.Config, request *http.Request, acco
 }
 
 // prepareCodexWireHTTPRequest 标记 business 客户端（h2 时每请求独立连接）并
-// 按官方 CLI 压缩 Responses 请求体。请求头内容仍由现有构建逻辑负责。
-func prepareCodexWireHTTPRequest(request *http.Request, account *Account) *http.Request {
+// 仅按独立配置选择请求压缩。身份头/TLS、VM 和 WS 仍由既有路径负责。
+func prepareCodexWireHTTPRequest(cfg *config.Config, request *http.Request, account *Account) (*http.Request, error) {
 	// Each OAuth API attempt builds a fresh official HTTP client. Scope the
 	// marker to this clone, including explicitly clearing it on other accounts.
 	if business := codexBusinessHTTPAccount(account); business || CodexBusinessHTTPFromContext(request.Context()) {
 		request = request.Clone(WithCodexBusinessHTTP(request.Context(), business))
 	}
-	compressCodexResponsesRequestBody(request)
-	return request
+	if err := maybeCompressCodexResponsesRequest(cfg, request, account); err != nil {
+		return nil, err
+	}
+	return request, nil
 }
 
 // resolveCodexHTTPSTLSProfile 为 codex lane 的 HTTP 请求解析 TLS 指纹。
@@ -141,53 +147,83 @@ func resolveCodexHTTPSTLSProfile(cfg *config.Config, account *Account) *tlsfinge
 	return codexwire.NativeHTTPProfile()
 }
 
-// compressCodexResponsesRequestBody 复刻官方 Codex CLI 的 HTTP 请求压缩：
-// enable_request_compression 默认开启（codex-rs features/lib.rs:1449），
-// ChatGPT OAuth + OpenAI provider 的 Responses 请求体用 zstd level 3 压缩并
-// 设置 content-encoding: zstd（http-client/request.rs:209）。
-// 压缩后重写 Body/GetBody，重试克隆请求可复放同样的压缩字节。
-// 只在 codexwire 出站上调用：VM 桥和智能 WS 拿到的仍是原始请求体。
-func compressCodexResponsesRequestBody(request *http.Request) {
-	// 官方只在 Responses HTTP executor 压缩请求体（responses_request_compression）。
-	if request == nil || request.URL == nil || !strings.HasSuffix(strings.TrimRight(request.URL.Path, "/"), "/responses") {
-		return
+// maybeCompressCodexUpstreamRequest exposes the shared policy for regression
+// checks. Production calls it only through the final codexwire HTTP lane, after
+// VM and smart-WS dispatch have been excluded; never mutate their input bodies.
+func (s *OpenAIGatewayService) maybeCompressCodexUpstreamRequest(request *http.Request, account *Account) error {
+	if s == nil {
+		return nil
 	}
-	if request.Body == nil || request.Body == http.NoBody {
-		return
+	return maybeCompressCodexResponsesRequest(s.cfg, request, account)
+}
+
+func maybeCompressCodexResponsesRequest(cfg *config.Config, request *http.Request, account *Account) error {
+	setOpenAIRequestCompressionPolicy(request, "ineligible")
+	if !codexWireHTTPEligible(cfg, request, account) || resolveCodexHTTPSTLSProfile(cfg, account) == nil {
+		return nil
+	}
+	if !strings.HasSuffix(strings.TrimRight(request.URL.Path, "/"), "/responses") || request.Body == nil || request.Body == http.NoBody {
+		return nil
 	}
 	if strings.TrimSpace(request.Header.Get("Content-Encoding")) != "" {
-		return
+		setOpenAIRequestCompressionPolicy(request, "existing_encoding")
+		return nil
+	}
+	if !cfg.Gateway.OpenAIRequestCompressionEnabled {
+		setOpenAIRequestCompressionPolicy(request, "disabled")
+		return nil
+	}
+	if err := compressCodexResponsesRequestBody(request); err != nil {
+		return err
+	}
+	if request.Header.Get("Content-Encoding") == "zstd" {
+		setOpenAIRequestCompressionPolicy(request, "zstd")
+	}
+	return nil
+}
+
+// compressCodexResponsesRequestBody is the low-level opt-in encoder. Preserve
+// exact Body/GetBody bytes and framing for bounded authentication recovery.
+// A failed body read is an error, never an empty request sent to the upstream.
+func compressCodexResponsesRequestBody(request *http.Request) error {
+	if request == nil || request.URL == nil || !strings.HasSuffix(strings.TrimRight(request.URL.Path, "/"), "/responses") {
+		return nil
+	}
+	if request.Body == nil || request.Body == http.NoBody || strings.TrimSpace(request.Header.Get("Content-Encoding")) != "" {
+		return nil
 	}
 	raw, err := io.ReadAll(request.Body)
 	_ = request.Body.Close()
-	restore := func(body []byte) {
-		request.Body = io.NopCloser(bytes.NewReader(body))
-		request.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
-		request.ContentLength = int64(len(body))
+	if err != nil {
+		return fmt.Errorf("read Codex request body for compression: %w", err)
 	}
-	if err != nil || len(raw) == 0 {
+	if len(raw) == 0 {
 		request.Body = http.NoBody
 		request.GetBody = func() (io.ReadCloser, error) { return http.NoBody, nil }
 		request.ContentLength = 0
-		return
+		return nil
 	}
 	var buf bytes.Buffer
 	zw, err := zstd.NewWriter(&buf, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	if err != nil {
-		restore(raw)
-		return
+		return fmt.Errorf("prepare Codex request compression: %w", err)
 	}
 	if _, err := zw.Write(raw); err != nil {
 		_ = zw.Close()
-		restore(raw)
-		return
+		return fmt.Errorf("compress Codex request body: %w", err)
 	}
 	if err := zw.Close(); err != nil {
-		restore(raw)
-		return
+		return fmt.Errorf("finish Codex request compression: %w", err)
 	}
-	restore(buf.Bytes())
+	body := buf.Bytes()
+	request.Body = io.NopCloser(bytes.NewReader(body))
+	request.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
+	request.ContentLength = int64(len(body))
+	if request.Header == nil {
+		request.Header = make(http.Header)
+	}
 	request.Header.Set("Content-Encoding", "zstd")
+	return nil
 }
 
 // doOpenAIAccountTestUpstream 让 OpenAI OAuth 账号测试与真实转发使用同一出站路径。
@@ -221,7 +257,11 @@ func (s *AccountTestService) doOpenAIAccountTestUpstream(
 		}
 		// 压缩放在预算登记之后：检测预算按原始请求体长度估算。
 		return executeQualityTestHTTP(request, account.ID, func(r *http.Request) (*http.Response, error) {
-			return s.httpUpstream.DoWithTLS(prepareCodexWireHTTPRequest(r, account), proxyURL, account.ID, account.Concurrency, profile)
+			prepared, err := prepareCodexWireHTTPRequest(s.cfg, r, account)
+			if err != nil {
+				return nil, err
+			}
+			return s.httpUpstream.DoWithTLS(prepared, proxyURL, account.ID, account.Concurrency, profile)
 		})
 	}
 	if useTLSFallback {

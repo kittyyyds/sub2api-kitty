@@ -92,6 +92,7 @@ func openAIMessagesRecoveryJSONUnambiguous(value gjson.Result, depth int) bool {
 // the existing account/task/continuation retry paths for this inbound request.
 func (s *OpenAIGatewayService) sendOpenAIMessagesResponsesRequest(
 	ctx context.Context, c *gin.Context, account *Account, request *http.Request, proxyURL string,
+	diagnosticBody []byte,
 ) (*http.Response, error, bool) {
 	// doOpenAIUpstream can replace Body/GetBody with compressed bytes. Capture
 	// the fully constructed, uncompressed request before that transport step.
@@ -101,6 +102,7 @@ func (s *OpenAIGatewayService) sendOpenAIMessagesResponsesRequest(
 		return resp, err, false
 	}
 	responseBody, _, complete := s.readOpenAIUpstreamErrorWithCompleteness(resp)
+	appendOpenAIResponsesValidationDiagnostic(c, account, diagnosticBody, responseBody, resp, 1)
 	if !complete || !openAIMessagesEncryptedRejection(resp.StatusCode, responseBody) {
 		return resp, nil, false
 	}
@@ -151,6 +153,7 @@ func (s *OpenAIGatewayService) sendOpenAIMessagesResponsesRequest(
 		return resp, err, false
 	}
 	responseBody, _, complete = s.readOpenAIUpstreamErrorWithCompleteness(resp)
+	appendOpenAIResponsesValidationDiagnostic(c, account, retryBody, responseBody, resp, 2)
 	return resp, nil, complete && openAIMessagesEncryptedRejection(resp.StatusCode, responseBody)
 }
 

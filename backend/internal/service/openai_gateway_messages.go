@@ -34,6 +34,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (_ *OpenAIForwardResult, smartWSError error) {
+	beginOpenAIResponsesValidation(c, body)
 	ctx, smartWSAttempt := beginGroupSmartWSAttempt(ctx, c)
 	defer func() { smartWSError = finishGroupSmartWSAttempt(smartWSAttempt, smartWSError) }()
 	// 工具 Schema 清洗必须先于所有分流：下游每条路径（原生 Anthropic 直通、
@@ -244,6 +245,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		if isCodexOAuthAccount(account) && s.codexFullSynthesisEnabled() {
 			synthOptions := s.newCodexSynthOptions(c, account, body, wireProfile, false, false, false, nil)
 			result, synthErr := synthesizeCodexOAuthRequest(reqBody, account, upstreamModel, synthOptions)
+			if result.WebSearchInjected {
+				MarkOpenAIResponsesValidationSearchSource(c, OpenAIResponsesValidationSearchSynthesis)
+			}
 			if synthErr != nil {
 				message := synthErr.Error()
 				if errors.Is(synthErr, ErrCodexSynthContextWindowExceeded) {
@@ -265,6 +269,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			PreserveToolCallIDs:     true,
 			WireProfile:             wireProfilePtr,
 		})
+		if codexResult.WebSearchHistoryInjected {
+			MarkOpenAIResponsesValidationSearchSource(c, OpenAIResponsesValidationSearchHistory)
+		}
 		if codexResult.Error != nil {
 			writeAnthropicError(c, http.StatusBadRequest, "invalid_request_error", codexResult.Error.Error())
 			return nil, codexResult.Error
@@ -488,7 +495,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			}
 		}
 		if openAIMessagesEncryptedRecoveryApplies(account) {
-			resp, err, encryptedRejection = s.sendOpenAIMessagesResponsesRequest(ctx, c, account, upstreamReq, proxyURL)
+			resp, err, encryptedRejection = s.sendOpenAIMessagesResponsesRequest(ctx, c, account, upstreamReq, proxyURL, responsesBody)
 		} else {
 			resp, err = s.doOpenAIUpstream(upstreamReq, proxyURL, account)
 		}
@@ -531,6 +538,9 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	// 8. Handle error response with failover
 	if resp.StatusCode >= 400 {
 		respBody, upstreamMsg := s.readOpenAIUpstreamError(resp)
+		if !openAIMessagesEncryptedRecoveryApplies(account) {
+			appendOpenAIResponsesValidationDiagnostic(c, account, responsesBody, respBody, resp, 1)
+		}
 		if encryptedRejection {
 			return handleOpenAIMessagesEncryptedRejection(ctx, c, account, resp, upstreamMsg)
 		}
